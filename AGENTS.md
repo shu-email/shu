@@ -30,6 +30,17 @@ Windows and Linux. It is written in Go with
 - Background work (sync, indexing, model calls) runs off the UI thread
   and publishes results to the window; it never touches view state
   directly.
+- The engine is the only writer to the cache. `mail/` holds accounts,
+  IMAP/SMTP, MIME and the `Service` the UI calls; `store/` is the SQLite
+  implementation of the `mail.Store` interface and owns the schema,
+  migrations, FTS5 index and outbox. Views read through `Service` and
+  never open a connection or write a row themselves.
+- `locales/` holds the catalogs and their generated accessors. Every
+  user-visible string comes from there, in en and zh-Hans together.
+- Passwords live only in `mygo.Secrets`; the database keeps accounts,
+  folders, message headers and bodies, attachment metadata and the
+  outbox. Attachment bytes go to the cache directory, keyed by content
+  hash, never into SQLite.
 
 ## Before changing MyGo UI
 

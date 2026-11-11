@@ -1,0 +1,10 @@
+From: Newsletter <news@example.com>
+To: bob@example.com
+Subject: HTML only
+Message-ID: <html-1@example.com>
+Date: Wed, 04 Jan 2023 09:00:00 +0000
+Content-Type: text/html; charset=utf-8
+
+<html><head><style>p{color:red}</style><title>t</title></head>
+<body><h1>Weekly</h1><p>One <b>bold</b> idea.</p><ul><li>First</li><li>Second</li></ul>
+<script>alert("no")</script></body></html>

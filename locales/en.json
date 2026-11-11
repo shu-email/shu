@@ -28,7 +28,10 @@
   "@searchFolder": {
     "description": "The search field that searches one folder.",
     "placeholders": {
-      "folder": { "type": "String", "example": "Inbox" }
+      "folder": {
+        "type": "String",
+        "example": "Inbox"
+      }
     }
   },
   "noMessageSelected": "No message selected",
@@ -43,14 +46,181 @@
   "@unreadCount": {
     "description": "The unread badge of a folder.",
     "placeholders": {
-      "count": { "type": "int", "example": "3" }
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
     }
   },
   "messageCount": "{count, plural, =0 {No messages} one {# message} other {# messages}}",
   "@messageCount": {
     "description": "The number of messages in a folder.",
     "placeholders": {
-      "count": { "type": "int", "example": "3" }
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
     }
-  }
+  },
+  "accountsTitle": "Accounts",
+  "accountsIntro": "Add your email account to start reading mail.",
+  "accountName": "Display name",
+  "accountNamePlaceholder": "Your name",
+  "email": "Email address",
+  "password": "Password",
+  "passwordKeep": "Leave blank to keep the saved password.",
+  "passwordAppNote": "Gmail and Outlook need an app password when two-factor authentication is on.",
+  "imapSection": "Incoming mail (IMAP)",
+  "smtpSection": "Outgoing mail (SMTP)",
+  "host": "Server",
+  "port": "Port",
+  "security": "Security",
+  "tlsImplicit": "TLS",
+  "tlsStartTLS": "STARTTLS",
+  "provider": "Provider",
+  "providerCustom": "Custom",
+  "testAndSave": "Test and save",
+  "save": "Save",
+  "cancel": "Cancel",
+  "deleteAccount": "Delete account",
+  "deleteAccountTitle": "Delete account?",
+  "deleteAccountConfirm": "Delete this account and its cached mail? The mail stays on the server.",
+  "addAccount": "Add account",
+  "manageAccounts": "Manage accounts…",
+  "accountsMenu": "Accounts",
+  "settings": "Settings",
+  "language": "Language",
+  "followSystem": "Follow system",
+  "testConnecting": "Testing the connection…",
+  "saving": "Saving…",
+  "saveFailed": "Could not save the account: {error}",
+  "testFailed": "Could not connect: {error}",
+  "accountSaved": "Account saved",
+  "editAccount": "Edit account",
+  "back": "Back",
+  "done": "Done",
+  "noFolders": "No mailboxes yet.",
+  "loading": "Loading…",
+  "emptyFolder": "This folder is empty.",
+  "searchNoResults": "No messages match “{query}”.",
+  "syncFailed": "Could not sync: {error}",
+  "retry": "Retry",
+  "syncing": "Syncing…",
+  "attachment": "Attachment",
+  "saveAs": "Save as",
+  "saveFileFailed": "Could not save the file: {error}",
+  "noBody": "This message has no text.",
+  "bodyLoading": "Loading message…",
+  "bodyFailed": "Could not load the message: {error}",
+  "showHTML": "Show HTML",
+  "showPlain": "Show plain text",
+  "forwardedHeader": "---------- Forwarded message ----------",
+  "onWrote": "On {date}, {sender} wrote:",
+  "from": "From",
+  "to": "To",
+  "cc": "Cc",
+  "attachments": "Attachments",
+  "subject": "Subject",
+  "send": "Send",
+  "sending": "Sending…",
+  "sendFailed": "Could not send: {error}",
+  "sentCopyWarning": "Sent, but the copy could not be saved.",
+  "composeTitle": "New message",
+  "replyTitle": "Reply",
+  "replyAllTitle": "Reply all",
+  "forwardTitle": "Forward",
+  "pendingSends": "Unsent messages",
+  "deliveryUnknown": "{count, plural, one {# message has an unknown delivery state} other {# messages have an unknown delivery state}}",
+  "deliveryUnknownDetail": "Shu did not resend automatically, to avoid sending twice.",
+  "retrySend": "Retry",
+  "dismiss": "Dismiss",
+  "star": "Star",
+  "unstar": "Unstar",
+  "searchMessages": "Search messages",
+  "read": "Read",
+  "unread": "Unread",
+  "@saveFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "keychain unavailable"
+      }
+    }
+  },
+  "@testFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "connection refused"
+      }
+    }
+  },
+  "@searchNoResults": {
+    "placeholders": {
+      "query": {
+        "type": "String",
+        "example": "invoice"
+      }
+    }
+  },
+  "@syncFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "timeout"
+      }
+    }
+  },
+  "@saveFileFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "permission denied"
+      }
+    }
+  },
+  "@bodyFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "timeout"
+      }
+    }
+  },
+  "@onWrote": {
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "Jan 3, 2023"
+      },
+      "sender": {
+        "type": "String",
+        "example": "Maya"
+      }
+    }
+  },
+  "@sendFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "authentication failed"
+      }
+    }
+  },
+  "@deliveryUnknown": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "folders": "Folders",
+  "archiveMessage": "Archive message",
+  "deleteMessage": "Delete message",
+  "junkMessage": "Move to junk",
+  "starMessage": "Star message",
+  "unstarMessage": "Unstar message",
+  "noRecipients": "Add at least one recipient.",
+  "body": "Body"
 }

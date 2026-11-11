@@ -6,8 +6,8 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// The icons are Lucide's (https://lucide.dev, ISC), kept as the SVG files
-// they ship and parsed once at startup.
+// The icons are Lucide's (https://lucide.dev, ISC) from lucide-static
+// v1.72.0, kept as the SVG files they ship and parsed once at startup.
 //
 //go:embed icons/*.svg
 var iconFS embed.FS
@@ -41,4 +41,9 @@ var (
 	flagIcon        = mustIcon("flag")
 	chevronDownIcon = mustIcon("chevron-down")
 	downloadIcon    = mustIcon("download")
+	settingsIcon    = mustIcon("settings")
+	plusIcon        = mustIcon("plus")
+	closeIcon       = mustIcon("x")
+	checkIcon       = mustIcon("check")
+	alertIcon       = mustIcon("circle-alert")
 )

@@ -236,7 +236,11 @@ func summaryFromFetch(buf *imapclient.FetchMessageBuffer, withPreview bool) Mess
 			Peek:      true,
 		}
 		if body := buf.FindBodySection(section); len(body) > 0 {
-			m.Preview = preview(normalizeText(string(body)))
+			text := normalizeText(string(body))
+			if strings.HasPrefix(strings.TrimSpace(text), "<") {
+				text = HTMLToText(text)
+			}
+			m.Preview = preview(text)
 		}
 	}
 	m.HasAttachments = attachmentsInStructure(buf.BodyStructure)
@@ -353,7 +357,7 @@ func (s *Service) syncFolder(ctx context.Context, a Account, password, folder st
 		batch.Reset = true
 	}
 	if total > 0 {
-		messages, flags, err := fetchSummaries(c, set, true)
+		messages, flags, err := fetchSummaries(c, set, false)
 		if err != nil {
 			return err
 		}
@@ -381,6 +385,21 @@ func (s *Service) syncFolder(ctx context.Context, a Account, password, folder st
 			_, flags, err := fetchSummaries(c, recentSeqSet(total, limit), false)
 			if err == nil {
 				batch.Flags = flags
+			}
+		}
+	}
+	// Previews are a nicety: a server that cannot do a partial body
+	// fetch should not fail the sync.
+	if total > 0 && len(batch.Messages) > 0 {
+		if previews, _, err := fetchSummaries(c, set, true); err == nil {
+			byUID := make(map[UID]string, len(previews))
+			for _, p := range previews {
+				byUID[p.UID] = p.Preview
+			}
+			for i := range batch.Messages {
+				if p := byUID[batch.Messages[i].UID]; p != "" {
+					batch.Messages[i].Preview = p
+				}
 			}
 		}
 	}

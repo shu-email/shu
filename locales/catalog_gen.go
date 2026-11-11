@@ -395,3 +395,853 @@ func MessageCount(count int) string { return In(i18n.Locale()).MessageCount(coun
 func (msgs Messages) MessageCount(count int) string {
 	return Catalog.Format(msgs.locale, "messageCount", map[string]any{"count": count})
 }
+
+// AccountsTitle says "Accounts"
+// in the language the app shows.
+func AccountsTitle() string { return In(i18n.Locale()).AccountsTitle() }
+
+// AccountsTitle says "Accounts"
+// in the language of msgs.
+func (msgs Messages) AccountsTitle() string {
+	return Catalog.Format(msgs.locale, "accountsTitle", nil)
+}
+
+// AccountsIntro says "Add your email account to start reading mail."
+// in the language the app shows.
+func AccountsIntro() string { return In(i18n.Locale()).AccountsIntro() }
+
+// AccountsIntro says "Add your email account to start reading mail."
+// in the language of msgs.
+func (msgs Messages) AccountsIntro() string {
+	return Catalog.Format(msgs.locale, "accountsIntro", nil)
+}
+
+// AccountName says "Display name"
+// in the language the app shows.
+func AccountName() string { return In(i18n.Locale()).AccountName() }
+
+// AccountName says "Display name"
+// in the language of msgs.
+func (msgs Messages) AccountName() string {
+	return Catalog.Format(msgs.locale, "accountName", nil)
+}
+
+// AccountNamePlaceholder says "Your name"
+// in the language the app shows.
+func AccountNamePlaceholder() string { return In(i18n.Locale()).AccountNamePlaceholder() }
+
+// AccountNamePlaceholder says "Your name"
+// in the language of msgs.
+func (msgs Messages) AccountNamePlaceholder() string {
+	return Catalog.Format(msgs.locale, "accountNamePlaceholder", nil)
+}
+
+// Email says "Email address"
+// in the language the app shows.
+func Email() string { return In(i18n.Locale()).Email() }
+
+// Email says "Email address"
+// in the language of msgs.
+func (msgs Messages) Email() string {
+	return Catalog.Format(msgs.locale, "email", nil)
+}
+
+// Password says "Password"
+// in the language the app shows.
+func Password() string { return In(i18n.Locale()).Password() }
+
+// Password says "Password"
+// in the language of msgs.
+func (msgs Messages) Password() string {
+	return Catalog.Format(msgs.locale, "password", nil)
+}
+
+// PasswordKeep says "Leave blank to keep the saved password."
+// in the language the app shows.
+func PasswordKeep() string { return In(i18n.Locale()).PasswordKeep() }
+
+// PasswordKeep says "Leave blank to keep the saved password."
+// in the language of msgs.
+func (msgs Messages) PasswordKeep() string {
+	return Catalog.Format(msgs.locale, "passwordKeep", nil)
+}
+
+// PasswordAppNote says "Gmail and Outlook need an app password when two-factor authentication is on."
+// in the language the app shows.
+func PasswordAppNote() string { return In(i18n.Locale()).PasswordAppNote() }
+
+// PasswordAppNote says "Gmail and Outlook need an app password when two-factor authentication is on."
+// in the language of msgs.
+func (msgs Messages) PasswordAppNote() string {
+	return Catalog.Format(msgs.locale, "passwordAppNote", nil)
+}
+
+// ImapSection says "Incoming mail (IMAP)"
+// in the language the app shows.
+func ImapSection() string { return In(i18n.Locale()).ImapSection() }
+
+// ImapSection says "Incoming mail (IMAP)"
+// in the language of msgs.
+func (msgs Messages) ImapSection() string {
+	return Catalog.Format(msgs.locale, "imapSection", nil)
+}
+
+// SmtpSection says "Outgoing mail (SMTP)"
+// in the language the app shows.
+func SmtpSection() string { return In(i18n.Locale()).SmtpSection() }
+
+// SmtpSection says "Outgoing mail (SMTP)"
+// in the language of msgs.
+func (msgs Messages) SmtpSection() string {
+	return Catalog.Format(msgs.locale, "smtpSection", nil)
+}
+
+// Host says "Server"
+// in the language the app shows.
+func Host() string { return In(i18n.Locale()).Host() }
+
+// Host says "Server"
+// in the language of msgs.
+func (msgs Messages) Host() string {
+	return Catalog.Format(msgs.locale, "host", nil)
+}
+
+// Port says "Port"
+// in the language the app shows.
+func Port() string { return In(i18n.Locale()).Port() }
+
+// Port says "Port"
+// in the language of msgs.
+func (msgs Messages) Port() string {
+	return Catalog.Format(msgs.locale, "port", nil)
+}
+
+// Security says "Security"
+// in the language the app shows.
+func Security() string { return In(i18n.Locale()).Security() }
+
+// Security says "Security"
+// in the language of msgs.
+func (msgs Messages) Security() string {
+	return Catalog.Format(msgs.locale, "security", nil)
+}
+
+// TlsImplicit says "TLS"
+// in the language the app shows.
+func TlsImplicit() string { return In(i18n.Locale()).TlsImplicit() }
+
+// TlsImplicit says "TLS"
+// in the language of msgs.
+func (msgs Messages) TlsImplicit() string {
+	return Catalog.Format(msgs.locale, "tlsImplicit", nil)
+}
+
+// TlsStartTLS says "STARTTLS"
+// in the language the app shows.
+func TlsStartTLS() string { return In(i18n.Locale()).TlsStartTLS() }
+
+// TlsStartTLS says "STARTTLS"
+// in the language of msgs.
+func (msgs Messages) TlsStartTLS() string {
+	return Catalog.Format(msgs.locale, "tlsStartTLS", nil)
+}
+
+// Provider says "Provider"
+// in the language the app shows.
+func Provider() string { return In(i18n.Locale()).Provider() }
+
+// Provider says "Provider"
+// in the language of msgs.
+func (msgs Messages) Provider() string {
+	return Catalog.Format(msgs.locale, "provider", nil)
+}
+
+// ProviderCustom says "Custom"
+// in the language the app shows.
+func ProviderCustom() string { return In(i18n.Locale()).ProviderCustom() }
+
+// ProviderCustom says "Custom"
+// in the language of msgs.
+func (msgs Messages) ProviderCustom() string {
+	return Catalog.Format(msgs.locale, "providerCustom", nil)
+}
+
+// TestAndSave says "Test and save"
+// in the language the app shows.
+func TestAndSave() string { return In(i18n.Locale()).TestAndSave() }
+
+// TestAndSave says "Test and save"
+// in the language of msgs.
+func (msgs Messages) TestAndSave() string {
+	return Catalog.Format(msgs.locale, "testAndSave", nil)
+}
+
+// Save says "Save"
+// in the language the app shows.
+func Save() string { return In(i18n.Locale()).Save() }
+
+// Save says "Save"
+// in the language of msgs.
+func (msgs Messages) Save() string {
+	return Catalog.Format(msgs.locale, "save", nil)
+}
+
+// Cancel says "Cancel"
+// in the language the app shows.
+func Cancel() string { return In(i18n.Locale()).Cancel() }
+
+// Cancel says "Cancel"
+// in the language of msgs.
+func (msgs Messages) Cancel() string {
+	return Catalog.Format(msgs.locale, "cancel", nil)
+}
+
+// DeleteAccount says "Delete account"
+// in the language the app shows.
+func DeleteAccount() string { return In(i18n.Locale()).DeleteAccount() }
+
+// DeleteAccount says "Delete account"
+// in the language of msgs.
+func (msgs Messages) DeleteAccount() string {
+	return Catalog.Format(msgs.locale, "deleteAccount", nil)
+}
+
+// DeleteAccountTitle says "Delete account?"
+// in the language the app shows.
+func DeleteAccountTitle() string { return In(i18n.Locale()).DeleteAccountTitle() }
+
+// DeleteAccountTitle says "Delete account?"
+// in the language of msgs.
+func (msgs Messages) DeleteAccountTitle() string {
+	return Catalog.Format(msgs.locale, "deleteAccountTitle", nil)
+}
+
+// DeleteAccountConfirm says "Delete this account and its cached mail? The mail stays on the server."
+// in the language the app shows.
+func DeleteAccountConfirm() string { return In(i18n.Locale()).DeleteAccountConfirm() }
+
+// DeleteAccountConfirm says "Delete this account and its cached mail? The mail stays on the server."
+// in the language of msgs.
+func (msgs Messages) DeleteAccountConfirm() string {
+	return Catalog.Format(msgs.locale, "deleteAccountConfirm", nil)
+}
+
+// AddAccount says "Add account"
+// in the language the app shows.
+func AddAccount() string { return In(i18n.Locale()).AddAccount() }
+
+// AddAccount says "Add account"
+// in the language of msgs.
+func (msgs Messages) AddAccount() string {
+	return Catalog.Format(msgs.locale, "addAccount", nil)
+}
+
+// ManageAccounts says "Manage accounts…"
+// in the language the app shows.
+func ManageAccounts() string { return In(i18n.Locale()).ManageAccounts() }
+
+// ManageAccounts says "Manage accounts…"
+// in the language of msgs.
+func (msgs Messages) ManageAccounts() string {
+	return Catalog.Format(msgs.locale, "manageAccounts", nil)
+}
+
+// AccountsMenu says "Accounts"
+// in the language the app shows.
+func AccountsMenu() string { return In(i18n.Locale()).AccountsMenu() }
+
+// AccountsMenu says "Accounts"
+// in the language of msgs.
+func (msgs Messages) AccountsMenu() string {
+	return Catalog.Format(msgs.locale, "accountsMenu", nil)
+}
+
+// Settings says "Settings"
+// in the language the app shows.
+func Settings() string { return In(i18n.Locale()).Settings() }
+
+// Settings says "Settings"
+// in the language of msgs.
+func (msgs Messages) Settings() string {
+	return Catalog.Format(msgs.locale, "settings", nil)
+}
+
+// Language says "Language"
+// in the language the app shows.
+func Language() string { return In(i18n.Locale()).Language() }
+
+// Language says "Language"
+// in the language of msgs.
+func (msgs Messages) Language() string {
+	return Catalog.Format(msgs.locale, "language", nil)
+}
+
+// FollowSystem says "Follow system"
+// in the language the app shows.
+func FollowSystem() string { return In(i18n.Locale()).FollowSystem() }
+
+// FollowSystem says "Follow system"
+// in the language of msgs.
+func (msgs Messages) FollowSystem() string {
+	return Catalog.Format(msgs.locale, "followSystem", nil)
+}
+
+// TestConnecting says "Testing the connection…"
+// in the language the app shows.
+func TestConnecting() string { return In(i18n.Locale()).TestConnecting() }
+
+// TestConnecting says "Testing the connection…"
+// in the language of msgs.
+func (msgs Messages) TestConnecting() string {
+	return Catalog.Format(msgs.locale, "testConnecting", nil)
+}
+
+// Saving says "Saving…"
+// in the language the app shows.
+func Saving() string { return In(i18n.Locale()).Saving() }
+
+// Saving says "Saving…"
+// in the language of msgs.
+func (msgs Messages) Saving() string {
+	return Catalog.Format(msgs.locale, "saving", nil)
+}
+
+// SaveFailed says "Could not save the account: {error}"
+// in the language the app shows.
+func SaveFailed(error string) string { return In(i18n.Locale()).SaveFailed(error) }
+
+// SaveFailed says "Could not save the account: {error}"
+// in the language of msgs.
+func (msgs Messages) SaveFailed(error string) string {
+	return Catalog.Format(msgs.locale, "saveFailed", map[string]any{"error": error})
+}
+
+// TestFailed says "Could not connect: {error}"
+// in the language the app shows.
+func TestFailed(error string) string { return In(i18n.Locale()).TestFailed(error) }
+
+// TestFailed says "Could not connect: {error}"
+// in the language of msgs.
+func (msgs Messages) TestFailed(error string) string {
+	return Catalog.Format(msgs.locale, "testFailed", map[string]any{"error": error})
+}
+
+// AccountSaved says "Account saved"
+// in the language the app shows.
+func AccountSaved() string { return In(i18n.Locale()).AccountSaved() }
+
+// AccountSaved says "Account saved"
+// in the language of msgs.
+func (msgs Messages) AccountSaved() string {
+	return Catalog.Format(msgs.locale, "accountSaved", nil)
+}
+
+// EditAccount says "Edit account"
+// in the language the app shows.
+func EditAccount() string { return In(i18n.Locale()).EditAccount() }
+
+// EditAccount says "Edit account"
+// in the language of msgs.
+func (msgs Messages) EditAccount() string {
+	return Catalog.Format(msgs.locale, "editAccount", nil)
+}
+
+// Back says "Back"
+// in the language the app shows.
+func Back() string { return In(i18n.Locale()).Back() }
+
+// Back says "Back"
+// in the language of msgs.
+func (msgs Messages) Back() string {
+	return Catalog.Format(msgs.locale, "back", nil)
+}
+
+// Done says "Done"
+// in the language the app shows.
+func Done() string { return In(i18n.Locale()).Done() }
+
+// Done says "Done"
+// in the language of msgs.
+func (msgs Messages) Done() string {
+	return Catalog.Format(msgs.locale, "done", nil)
+}
+
+// NoFolders says "No mailboxes yet."
+// in the language the app shows.
+func NoFolders() string { return In(i18n.Locale()).NoFolders() }
+
+// NoFolders says "No mailboxes yet."
+// in the language of msgs.
+func (msgs Messages) NoFolders() string {
+	return Catalog.Format(msgs.locale, "noFolders", nil)
+}
+
+// Loading says "Loading…"
+// in the language the app shows.
+func Loading() string { return In(i18n.Locale()).Loading() }
+
+// Loading says "Loading…"
+// in the language of msgs.
+func (msgs Messages) Loading() string {
+	return Catalog.Format(msgs.locale, "loading", nil)
+}
+
+// EmptyFolder says "This folder is empty."
+// in the language the app shows.
+func EmptyFolder() string { return In(i18n.Locale()).EmptyFolder() }
+
+// EmptyFolder says "This folder is empty."
+// in the language of msgs.
+func (msgs Messages) EmptyFolder() string {
+	return Catalog.Format(msgs.locale, "emptyFolder", nil)
+}
+
+// SearchNoResults says "No messages match “{query}”."
+// in the language the app shows.
+func SearchNoResults(query string) string { return In(i18n.Locale()).SearchNoResults(query) }
+
+// SearchNoResults says "No messages match “{query}”."
+// in the language of msgs.
+func (msgs Messages) SearchNoResults(query string) string {
+	return Catalog.Format(msgs.locale, "searchNoResults", map[string]any{"query": query})
+}
+
+// SyncFailed says "Could not sync: {error}"
+// in the language the app shows.
+func SyncFailed(error string) string { return In(i18n.Locale()).SyncFailed(error) }
+
+// SyncFailed says "Could not sync: {error}"
+// in the language of msgs.
+func (msgs Messages) SyncFailed(error string) string {
+	return Catalog.Format(msgs.locale, "syncFailed", map[string]any{"error": error})
+}
+
+// Retry says "Retry"
+// in the language the app shows.
+func Retry() string { return In(i18n.Locale()).Retry() }
+
+// Retry says "Retry"
+// in the language of msgs.
+func (msgs Messages) Retry() string {
+	return Catalog.Format(msgs.locale, "retry", nil)
+}
+
+// Syncing says "Syncing…"
+// in the language the app shows.
+func Syncing() string { return In(i18n.Locale()).Syncing() }
+
+// Syncing says "Syncing…"
+// in the language of msgs.
+func (msgs Messages) Syncing() string {
+	return Catalog.Format(msgs.locale, "syncing", nil)
+}
+
+// Attachment says "Attachment"
+// in the language the app shows.
+func Attachment() string { return In(i18n.Locale()).Attachment() }
+
+// Attachment says "Attachment"
+// in the language of msgs.
+func (msgs Messages) Attachment() string {
+	return Catalog.Format(msgs.locale, "attachment", nil)
+}
+
+// SaveAs says "Save as"
+// in the language the app shows.
+func SaveAs() string { return In(i18n.Locale()).SaveAs() }
+
+// SaveAs says "Save as"
+// in the language of msgs.
+func (msgs Messages) SaveAs() string {
+	return Catalog.Format(msgs.locale, "saveAs", nil)
+}
+
+// SaveFileFailed says "Could not save the file: {error}"
+// in the language the app shows.
+func SaveFileFailed(error string) string { return In(i18n.Locale()).SaveFileFailed(error) }
+
+// SaveFileFailed says "Could not save the file: {error}"
+// in the language of msgs.
+func (msgs Messages) SaveFileFailed(error string) string {
+	return Catalog.Format(msgs.locale, "saveFileFailed", map[string]any{"error": error})
+}
+
+// NoBody says "This message has no text."
+// in the language the app shows.
+func NoBody() string { return In(i18n.Locale()).NoBody() }
+
+// NoBody says "This message has no text."
+// in the language of msgs.
+func (msgs Messages) NoBody() string {
+	return Catalog.Format(msgs.locale, "noBody", nil)
+}
+
+// BodyLoading says "Loading message…"
+// in the language the app shows.
+func BodyLoading() string { return In(i18n.Locale()).BodyLoading() }
+
+// BodyLoading says "Loading message…"
+// in the language of msgs.
+func (msgs Messages) BodyLoading() string {
+	return Catalog.Format(msgs.locale, "bodyLoading", nil)
+}
+
+// BodyFailed says "Could not load the message: {error}"
+// in the language the app shows.
+func BodyFailed(error string) string { return In(i18n.Locale()).BodyFailed(error) }
+
+// BodyFailed says "Could not load the message: {error}"
+// in the language of msgs.
+func (msgs Messages) BodyFailed(error string) string {
+	return Catalog.Format(msgs.locale, "bodyFailed", map[string]any{"error": error})
+}
+
+// ShowHTML says "Show HTML"
+// in the language the app shows.
+func ShowHTML() string { return In(i18n.Locale()).ShowHTML() }
+
+// ShowHTML says "Show HTML"
+// in the language of msgs.
+func (msgs Messages) ShowHTML() string {
+	return Catalog.Format(msgs.locale, "showHTML", nil)
+}
+
+// ShowPlain says "Show plain text"
+// in the language the app shows.
+func ShowPlain() string { return In(i18n.Locale()).ShowPlain() }
+
+// ShowPlain says "Show plain text"
+// in the language of msgs.
+func (msgs Messages) ShowPlain() string {
+	return Catalog.Format(msgs.locale, "showPlain", nil)
+}
+
+// ForwardedHeader says "---------- Forwarded message ----------"
+// in the language the app shows.
+func ForwardedHeader() string { return In(i18n.Locale()).ForwardedHeader() }
+
+// ForwardedHeader says "---------- Forwarded message ----------"
+// in the language of msgs.
+func (msgs Messages) ForwardedHeader() string {
+	return Catalog.Format(msgs.locale, "forwardedHeader", nil)
+}
+
+// OnWrote says "On {date}, {sender} wrote:"
+// in the language the app shows.
+func OnWrote(date string, sender string) string { return In(i18n.Locale()).OnWrote(date, sender) }
+
+// OnWrote says "On {date}, {sender} wrote:"
+// in the language of msgs.
+func (msgs Messages) OnWrote(date string, sender string) string {
+	return Catalog.Format(msgs.locale, "onWrote", map[string]any{"date": date, "sender": sender})
+}
+
+// From says "From"
+// in the language the app shows.
+func From() string { return In(i18n.Locale()).From() }
+
+// From says "From"
+// in the language of msgs.
+func (msgs Messages) From() string {
+	return Catalog.Format(msgs.locale, "from", nil)
+}
+
+// To says "To"
+// in the language the app shows.
+func To() string { return In(i18n.Locale()).To() }
+
+// To says "To"
+// in the language of msgs.
+func (msgs Messages) To() string {
+	return Catalog.Format(msgs.locale, "to", nil)
+}
+
+// Cc says "Cc"
+// in the language the app shows.
+func Cc() string { return In(i18n.Locale()).Cc() }
+
+// Cc says "Cc"
+// in the language of msgs.
+func (msgs Messages) Cc() string {
+	return Catalog.Format(msgs.locale, "cc", nil)
+}
+
+// Attachments says "Attachments"
+// in the language the app shows.
+func Attachments() string { return In(i18n.Locale()).Attachments() }
+
+// Attachments says "Attachments"
+// in the language of msgs.
+func (msgs Messages) Attachments() string {
+	return Catalog.Format(msgs.locale, "attachments", nil)
+}
+
+// Subject says "Subject"
+// in the language the app shows.
+func Subject() string { return In(i18n.Locale()).Subject() }
+
+// Subject says "Subject"
+// in the language of msgs.
+func (msgs Messages) Subject() string {
+	return Catalog.Format(msgs.locale, "subject", nil)
+}
+
+// Send says "Send"
+// in the language the app shows.
+func Send() string { return In(i18n.Locale()).Send() }
+
+// Send says "Send"
+// in the language of msgs.
+func (msgs Messages) Send() string {
+	return Catalog.Format(msgs.locale, "send", nil)
+}
+
+// Sending says "Sending…"
+// in the language the app shows.
+func Sending() string { return In(i18n.Locale()).Sending() }
+
+// Sending says "Sending…"
+// in the language of msgs.
+func (msgs Messages) Sending() string {
+	return Catalog.Format(msgs.locale, "sending", nil)
+}
+
+// SendFailed says "Could not send: {error}"
+// in the language the app shows.
+func SendFailed(error string) string { return In(i18n.Locale()).SendFailed(error) }
+
+// SendFailed says "Could not send: {error}"
+// in the language of msgs.
+func (msgs Messages) SendFailed(error string) string {
+	return Catalog.Format(msgs.locale, "sendFailed", map[string]any{"error": error})
+}
+
+// SentCopyWarning says "Sent, but the copy could not be saved."
+// in the language the app shows.
+func SentCopyWarning() string { return In(i18n.Locale()).SentCopyWarning() }
+
+// SentCopyWarning says "Sent, but the copy could not be saved."
+// in the language of msgs.
+func (msgs Messages) SentCopyWarning() string {
+	return Catalog.Format(msgs.locale, "sentCopyWarning", nil)
+}
+
+// ComposeTitle says "New message"
+// in the language the app shows.
+func ComposeTitle() string { return In(i18n.Locale()).ComposeTitle() }
+
+// ComposeTitle says "New message"
+// in the language of msgs.
+func (msgs Messages) ComposeTitle() string {
+	return Catalog.Format(msgs.locale, "composeTitle", nil)
+}
+
+// ReplyTitle says "Reply"
+// in the language the app shows.
+func ReplyTitle() string { return In(i18n.Locale()).ReplyTitle() }
+
+// ReplyTitle says "Reply"
+// in the language of msgs.
+func (msgs Messages) ReplyTitle() string {
+	return Catalog.Format(msgs.locale, "replyTitle", nil)
+}
+
+// ReplyAllTitle says "Reply all"
+// in the language the app shows.
+func ReplyAllTitle() string { return In(i18n.Locale()).ReplyAllTitle() }
+
+// ReplyAllTitle says "Reply all"
+// in the language of msgs.
+func (msgs Messages) ReplyAllTitle() string {
+	return Catalog.Format(msgs.locale, "replyAllTitle", nil)
+}
+
+// ForwardTitle says "Forward"
+// in the language the app shows.
+func ForwardTitle() string { return In(i18n.Locale()).ForwardTitle() }
+
+// ForwardTitle says "Forward"
+// in the language of msgs.
+func (msgs Messages) ForwardTitle() string {
+	return Catalog.Format(msgs.locale, "forwardTitle", nil)
+}
+
+// PendingSends says "Unsent messages"
+// in the language the app shows.
+func PendingSends() string { return In(i18n.Locale()).PendingSends() }
+
+// PendingSends says "Unsent messages"
+// in the language of msgs.
+func (msgs Messages) PendingSends() string {
+	return Catalog.Format(msgs.locale, "pendingSends", nil)
+}
+
+// DeliveryUnknown says "{count, plural, one {# message has an unknown delivery state} other {# messages have an unknown delivery state}}"
+// in the language the app shows.
+func DeliveryUnknown(count int) string { return In(i18n.Locale()).DeliveryUnknown(count) }
+
+// DeliveryUnknown says "{count, plural, one {# message has an unknown delivery state} other {# messages have an unknown delivery state}}"
+// in the language of msgs.
+func (msgs Messages) DeliveryUnknown(count int) string {
+	return Catalog.Format(msgs.locale, "deliveryUnknown", map[string]any{"count": count})
+}
+
+// DeliveryUnknownDetail says "Shu did not resend automatically, to avoid sending twice."
+// in the language the app shows.
+func DeliveryUnknownDetail() string { return In(i18n.Locale()).DeliveryUnknownDetail() }
+
+// DeliveryUnknownDetail says "Shu did not resend automatically, to avoid sending twice."
+// in the language of msgs.
+func (msgs Messages) DeliveryUnknownDetail() string {
+	return Catalog.Format(msgs.locale, "deliveryUnknownDetail", nil)
+}
+
+// RetrySend says "Retry"
+// in the language the app shows.
+func RetrySend() string { return In(i18n.Locale()).RetrySend() }
+
+// RetrySend says "Retry"
+// in the language of msgs.
+func (msgs Messages) RetrySend() string {
+	return Catalog.Format(msgs.locale, "retrySend", nil)
+}
+
+// Dismiss says "Dismiss"
+// in the language the app shows.
+func Dismiss() string { return In(i18n.Locale()).Dismiss() }
+
+// Dismiss says "Dismiss"
+// in the language of msgs.
+func (msgs Messages) Dismiss() string {
+	return Catalog.Format(msgs.locale, "dismiss", nil)
+}
+
+// Star says "Star"
+// in the language the app shows.
+func Star() string { return In(i18n.Locale()).Star() }
+
+// Star says "Star"
+// in the language of msgs.
+func (msgs Messages) Star() string {
+	return Catalog.Format(msgs.locale, "star", nil)
+}
+
+// Unstar says "Unstar"
+// in the language the app shows.
+func Unstar() string { return In(i18n.Locale()).Unstar() }
+
+// Unstar says "Unstar"
+// in the language of msgs.
+func (msgs Messages) Unstar() string {
+	return Catalog.Format(msgs.locale, "unstar", nil)
+}
+
+// SearchMessages says "Search messages"
+// in the language the app shows.
+func SearchMessages() string { return In(i18n.Locale()).SearchMessages() }
+
+// SearchMessages says "Search messages"
+// in the language of msgs.
+func (msgs Messages) SearchMessages() string {
+	return Catalog.Format(msgs.locale, "searchMessages", nil)
+}
+
+// Read says "Read"
+// in the language the app shows.
+func Read() string { return In(i18n.Locale()).Read() }
+
+// Read says "Read"
+// in the language of msgs.
+func (msgs Messages) Read() string {
+	return Catalog.Format(msgs.locale, "read", nil)
+}
+
+// Unread says "Unread"
+// in the language the app shows.
+func Unread() string { return In(i18n.Locale()).Unread() }
+
+// Unread says "Unread"
+// in the language of msgs.
+func (msgs Messages) Unread() string {
+	return Catalog.Format(msgs.locale, "unread", nil)
+}
+
+// Folders says "Folders"
+// in the language the app shows.
+func Folders() string { return In(i18n.Locale()).Folders() }
+
+// Folders says "Folders"
+// in the language of msgs.
+func (msgs Messages) Folders() string {
+	return Catalog.Format(msgs.locale, "folders", nil)
+}
+
+// ArchiveMessage says "Archive message"
+// in the language the app shows.
+func ArchiveMessage() string { return In(i18n.Locale()).ArchiveMessage() }
+
+// ArchiveMessage says "Archive message"
+// in the language of msgs.
+func (msgs Messages) ArchiveMessage() string {
+	return Catalog.Format(msgs.locale, "archiveMessage", nil)
+}
+
+// DeleteMessage says "Delete message"
+// in the language the app shows.
+func DeleteMessage() string { return In(i18n.Locale()).DeleteMessage() }
+
+// DeleteMessage says "Delete message"
+// in the language of msgs.
+func (msgs Messages) DeleteMessage() string {
+	return Catalog.Format(msgs.locale, "deleteMessage", nil)
+}
+
+// JunkMessage says "Move to junk"
+// in the language the app shows.
+func JunkMessage() string { return In(i18n.Locale()).JunkMessage() }
+
+// JunkMessage says "Move to junk"
+// in the language of msgs.
+func (msgs Messages) JunkMessage() string {
+	return Catalog.Format(msgs.locale, "junkMessage", nil)
+}
+
+// StarMessage says "Star message"
+// in the language the app shows.
+func StarMessage() string { return In(i18n.Locale()).StarMessage() }
+
+// StarMessage says "Star message"
+// in the language of msgs.
+func (msgs Messages) StarMessage() string {
+	return Catalog.Format(msgs.locale, "starMessage", nil)
+}
+
+// UnstarMessage says "Unstar message"
+// in the language the app shows.
+func UnstarMessage() string { return In(i18n.Locale()).UnstarMessage() }
+
+// UnstarMessage says "Unstar message"
+// in the language of msgs.
+func (msgs Messages) UnstarMessage() string {
+	return Catalog.Format(msgs.locale, "unstarMessage", nil)
+}
+
+// NoRecipients says "Add at least one recipient."
+// in the language the app shows.
+func NoRecipients() string { return In(i18n.Locale()).NoRecipients() }
+
+// NoRecipients says "Add at least one recipient."
+// in the language of msgs.
+func (msgs Messages) NoRecipients() string {
+	return Catalog.Format(msgs.locale, "noRecipients", nil)
+}
+
+// Body says "Body"
+// in the language the app shows.
+func Body() string { return In(i18n.Locale()).Body() }
+
+// Body says "Body"
+// in the language of msgs.
+func (msgs Messages) Body() string {
+	return Catalog.Format(msgs.locale, "body", nil)
+}

@@ -1,0 +1,335 @@
+package store
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+
+	"shu/mail"
+)
+
+// summaryColumns are the message list fields.
+const summaryColumns = `m.server_uid, f.name, COALESCE(m.message_id, ''), COALESCE(m.in_reply_to, ''),
+	COALESCE(m.references_json, ''), COALESCE(m.from_name, ''), COALESCE(m.from_email, ''),
+	COALESCE(m.to_json, ''), COALESCE(m.cc_json, ''), COALESCE(m.reply_to_json, ''),
+	COALESCE(m.subject, ''), COALESCE(m.preview, ''), m.date, m.size,
+	m.seen, m.flagged, m.has_attachments`
+
+func summaryRow(r []any) mail.Summary {
+	return mail.Summary{
+		UID:            mail.UID(number(r[0])),
+		Folder:         text(r[1]),
+		MessageID:      text(r[2]),
+		InReplyTo:      text(r[3]),
+		References:     decodeStrings(text(r[4])),
+		From:           mail.Address{Name: text(r[5]), Email: text(r[6])},
+		To:             decodeAddresses(text(r[7])),
+		Cc:             decodeAddresses(text(r[8])),
+		ReplyTo:        decodeAddresses(text(r[9])),
+		Subject:        text(r[10]),
+		Preview:        text(r[11]),
+		Date:           unix(r[12]),
+		Size:           number(r[13]),
+		Seen:           truth(r[14]),
+		Flagged:        truth(r[15]),
+		HasAttachments: truth(r[16]),
+	}
+}
+
+func encodeJSON(v any) string {
+	if v == nil {
+		return ""
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return ""
+	}
+	if string(b) == "null" || string(b) == "[]" {
+		return ""
+	}
+	return string(b)
+}
+
+func decodeStrings(s string) []string {
+	if s == "" {
+		return nil
+	}
+	var out []string
+	if json.Unmarshal([]byte(s), &out) != nil {
+		return nil
+	}
+	return out
+}
+
+func decodeAddresses(s string) []mail.Address {
+	if s == "" {
+		return nil
+	}
+	var out []mail.Address
+	if json.Unmarshal([]byte(s), &out) != nil {
+		return nil
+	}
+	return out
+}
+
+// ListMessages reads the cache: the newest headers of a folder, all
+// starred messages across folders ("starred"), or search results.
+func (s *Store) ListMessages(ctx context.Context, accountID, folder, query string, limit int) ([]mail.Summary, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	q, args := listQuery(accountID, folder, query, limit)
+	rows, err := s.query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]mail.Summary, 0, len(rows.Values))
+	for _, r := range rows.Values {
+		out = append(out, summaryRow(r))
+	}
+	return out, nil
+}
+
+// GetMessage reads a cached message and its attachments.
+func (s *Store) GetMessage(ctx context.Context, accountID, folder string, uid mail.UID) (mail.Message, bool, error) {
+	rows, err := s.query(ctx, `SELECT `+summaryColumns+`,
+		COALESCE(m.body_text, ''), COALESCE(m.body_html, ''), m.body_truncated,
+		COALESCE(m.raw_headers, ''), m.cached_at, m.id
+		FROM messages m JOIN folders f ON f.id = m.folder_id
+		WHERE f.account_id = ? AND f.name = ? AND m.server_uid = ?`,
+		accountID, folder, int64(uid))
+	if err != nil {
+		return mail.Message{}, false, err
+	}
+	if len(rows.Values) == 0 {
+		return mail.Message{}, false, nil
+	}
+	r := rows.Values[0]
+	msg := mail.Message{
+		Summary:       summaryRow(r[:17]),
+		BodyText:      text(r[17]),
+		BodyHTML:      text(r[18]),
+		BodyTruncated: truth(r[19]),
+		RawHeaders:    text(r[20]),
+		CachedAt:      unix(r[21]),
+		BodyCached:    r[22] != nil,
+	}
+	messageID := number(r[22])
+	attachments, err := s.attachments(ctx, messageID)
+	if err != nil {
+		return mail.Message{}, false, err
+	}
+	msg.Attachments = attachments
+	return msg, true, nil
+}
+
+func (s *Store) attachments(ctx context.Context, messageID int64) ([]mail.Attachment, error) {
+	rows, err := s.query(ctx, `SELECT part, COALESCE(filename, ''), COALESCE(content_type, ''),
+		COALESCE(size, 0), COALESCE(content_hash, ''), COALESCE(cache_path, '')
+		FROM attachments WHERE message_id = ? ORDER BY rowid`, messageID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]mail.Attachment, 0, len(rows.Values))
+	for _, r := range rows.Values {
+		out = append(out, mail.Attachment{
+			Part:        text(r[0]),
+			Filename:    text(r[1]),
+			ContentType: text(r[2]),
+			Size:        number(r[3]),
+			ContentHash: text(r[4]),
+			CachePath:   text(r[5]),
+		})
+	}
+	return out, nil
+}
+
+// SaveMessage stores a fetched message with its body and attachments.
+func (s *Store) SaveMessage(ctx context.Context, accountID, folder string, m mail.Message) error {
+	folderID, err := s.folderID(ctx, accountID, folder)
+	if err != nil {
+		return err
+	}
+	stmts := []stmtType{
+		stmt(`INSERT INTO messages (
+				folder_id, server_uid, message_id, in_reply_to, references_json,
+				from_name, from_email, to_json, cc_json, reply_to_json,
+				subject, preview, date, size, seen, flagged, has_attachments,
+				body_text, body_html, body_truncated, raw_headers, cached_at, deleted)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+			ON CONFLICT (folder_id, server_uid) DO UPDATE SET
+				message_id=excluded.message_id, in_reply_to=excluded.in_reply_to,
+				references_json=excluded.references_json,
+				from_name=excluded.from_name, from_email=excluded.from_email,
+				to_json=excluded.to_json, cc_json=excluded.cc_json, reply_to_json=excluded.reply_to_json,
+				subject=excluded.subject, preview=excluded.preview, date=excluded.date, size=excluded.size,
+				seen=excluded.seen OR messages.seen,
+				flagged=excluded.flagged OR messages.flagged,
+				has_attachments=excluded.has_attachments,
+				body_text=excluded.body_text, body_html=excluded.body_html,
+				body_truncated=excluded.body_truncated, raw_headers=excluded.raw_headers,
+				cached_at=excluded.cached_at, deleted=0`,
+			folderID, int64(m.UID), m.MessageID, m.InReplyTo, encodeJSON(m.References),
+			m.From.Name, m.From.Email, encodeJSON(m.To), encodeJSON(m.Cc), encodeJSON(m.ReplyTo),
+			m.Subject, m.Preview, unixPtr(m.Date), m.Size, boolInt(m.Seen), boolInt(m.Flagged),
+			boolInt(m.HasAttachments), m.BodyText, m.BodyHTML, boolInt(m.BodyTruncated),
+			m.RawHeaders, unixPtr(m.CachedAt)),
+	}
+	var id int64
+	rows, err := s.query(ctx, `SELECT id FROM messages WHERE folder_id = ? AND server_uid = ?`, folderID, int64(m.UID))
+	if err != nil {
+		return err
+	}
+	if len(rows.Values) == 1 {
+		id = number(rows.Values[0][0])
+	}
+	if id != 0 {
+		stmts = append(stmts, stmt(`DELETE FROM attachments WHERE message_id = ?`, id))
+		for _, a := range m.Attachments {
+			stmts = append(stmts, stmt(`INSERT INTO attachments
+				(message_id, part, filename, content_type, size, content_hash, cache_path)
+				VALUES (?, ?, ?, ?, ?, ?, ?)`,
+				id, a.Part, a.Filename, a.ContentType, a.Size, a.ContentHash, a.CachePath))
+		}
+	}
+	// A new row's attachments need its id, which only the insert knows.
+	if id == 0 {
+		for _, a := range m.Attachments {
+			stmts = append(stmts, stmt(`INSERT INTO attachments
+				(message_id, part, filename, content_type, size, content_hash, cache_path)
+				SELECT id, ?, ?, ?, ?, ?, ? FROM messages WHERE folder_id = ? AND server_uid = ?`,
+				a.Part, a.Filename, a.ContentType, a.Size, a.ContentHash, a.CachePath, folderID, int64(m.UID)))
+		}
+	}
+	return s.transaction(ctx, stmts)
+}
+
+// ApplySync writes one folder sync batch and advances its cursor, all or
+// nothing.
+func (s *Store) ApplySync(ctx context.Context, accountID string, b mail.SyncBatch) error {
+	folderID, err := s.folderID(ctx, accountID, b.Folder.Name)
+	if err != nil {
+		return err
+	}
+	stmts := make([]stmtType, 0, len(b.Messages)+len(b.Flags)+4)
+	if b.Reset {
+		stmts = append(stmts, stmt(`DELETE FROM messages WHERE folder_id = ?`, folderID))
+	}
+	for _, m := range b.Messages {
+		stmts = append(stmts, stmt(`INSERT INTO messages (
+				folder_id, server_uid, message_id, in_reply_to, references_json,
+				from_name, from_email, to_json, cc_json, reply_to_json,
+				subject, preview, date, size, seen, flagged, has_attachments, deleted)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+			ON CONFLICT (folder_id, server_uid) DO UPDATE SET
+				message_id=excluded.message_id, in_reply_to=excluded.in_reply_to,
+				references_json=excluded.references_json,
+				from_name=excluded.from_name, from_email=excluded.from_email,
+				to_json=excluded.to_json, cc_json=excluded.cc_json, reply_to_json=excluded.reply_to_json,
+				subject=excluded.subject, preview=excluded.preview, date=excluded.date,
+				size=excluded.size, seen=excluded.seen, flagged=excluded.flagged,
+				has_attachments=excluded.has_attachments, deleted=0`,
+			folderID, int64(m.UID), m.MessageID, m.InReplyTo, encodeJSON(m.References),
+			m.From.Name, m.From.Email, encodeJSON(m.To), encodeJSON(m.Cc), encodeJSON(m.ReplyTo),
+			m.Subject, m.Preview, unixPtr(m.Date), m.Size, boolInt(m.Seen), boolInt(m.Flagged),
+			boolInt(m.HasAttachments)))
+	}
+	for _, f := range b.Flags {
+		stmts = append(stmts, stmt(`UPDATE messages SET seen = ?, flagged = ?
+			WHERE folder_id = ? AND server_uid = ?`,
+			boolInt(f.Seen), boolInt(f.Flagged), folderID, int64(f.UID)))
+	}
+	stmts = append(stmts, stmt(`UPDATE folders SET
+			uidvalidity = ?, last_uid = ?, unread = ?, total = ?, synced_at = ?
+			WHERE id = ?`,
+		int64(b.Folder.UIDValidity), int64(b.Folder.LastUID), b.Folder.Unread, b.Folder.Total,
+		unixPtr(b.Folder.SyncedAt), folderID))
+	return s.transaction(ctx, stmts)
+}
+
+// SetFlag updates a flag and, for \Seen, adjusts the folder's unread
+// count in the same transaction.
+func (s *Store) SetFlag(ctx context.Context, accountID, folder string, uid mail.UID, flag mail.Flag, on bool) error {
+	folderID, err := s.folderID(ctx, accountID, folder)
+	if err != nil {
+		return err
+	}
+	column := ""
+	switch flag {
+	case mail.FlagSeen:
+		column = "seen"
+	case mail.FlagFlagged:
+		column = "flagged"
+	default:
+		return fmt.Errorf("store: flag %q is not cached", flag)
+	}
+	stmts := []stmtType{
+		stmt(`UPDATE messages SET `+column+` = ? WHERE folder_id = ? AND server_uid = ?`,
+			boolInt(on), folderID, int64(uid)),
+	}
+	if flag == mail.FlagSeen {
+		rows, err := s.query(ctx, `SELECT seen FROM messages WHERE folder_id = ? AND server_uid = ?`, folderID, int64(uid))
+		if err != nil {
+			return err
+		}
+		if len(rows.Values) == 1 && truth(rows.Values[0][0]) != on {
+			if on {
+				stmts = append(stmts, stmt(`UPDATE folders SET unread = MAX(0, unread - 1) WHERE id = ?`, folderID))
+			} else {
+				stmts = append(stmts, stmt(`UPDATE folders SET unread = unread + 1 WHERE id = ?`, folderID))
+			}
+		}
+	}
+	return s.transaction(ctx, stmts)
+}
+
+// MarkDeleted hides or restores a message while the server confirms a
+// move.
+func (s *Store) MarkDeleted(ctx context.Context, accountID, folder string, uid mail.UID, deleted bool) error {
+	folderID, err := s.folderID(ctx, accountID, folder)
+	if err != nil {
+		return err
+	}
+	_, err = s.exec(ctx, `UPDATE messages SET deleted = ? WHERE folder_id = ? AND server_uid = ?`,
+		boolInt(deleted), folderID, int64(uid))
+	return err
+}
+
+// DeleteMessage removes a message once the server confirmed it moved.
+func (s *Store) DeleteMessage(ctx context.Context, accountID, folder string, uid mail.UID) error {
+	folderID, err := s.folderID(ctx, accountID, folder)
+	if err != nil {
+		return err
+	}
+	stmts := []stmtType{stmt(`DELETE FROM messages WHERE folder_id = ? AND server_uid = ?`, folderID, int64(uid))}
+	rows, err := s.query(ctx, `SELECT seen FROM messages WHERE folder_id = ? AND server_uid = ?`, folderID, int64(uid))
+	if err != nil {
+		return err
+	}
+	if len(rows.Values) == 1 && !truth(rows.Values[0][0]) {
+		stmts = append(stmts, stmt(`UPDATE folders SET unread = MAX(0, unread - 1), total = MAX(0, total - 1) WHERE id = ?`, folderID))
+	} else {
+		stmts = append(stmts, stmt(`UPDATE folders SET total = MAX(0, total - 1) WHERE id = ?`, folderID))
+	}
+	return s.transaction(ctx, stmts)
+}
+
+// SetAttachmentCache records where an attachment's bytes are cached.
+func (s *Store) SetAttachmentCache(ctx context.Context, accountID, folder string, uid mail.UID, part, hash, path string) error {
+	folderID, err := s.folderID(ctx, accountID, folder)
+	if err != nil {
+		return err
+	}
+	_, err = s.exec(ctx, `UPDATE attachments SET content_hash = ?, cache_path = ?
+		WHERE part = ? AND message_id = (
+			SELECT id FROM messages WHERE folder_id = ? AND server_uid = ?)`,
+		hash, path, part, folderID, int64(uid))
+	return err
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}

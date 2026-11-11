@@ -1,0 +1,638 @@
+# Implementing Shu's core email features
+
+## Context
+
+Shu currently has only a UI skeleton: `main.go` (431 lines, 3 Go files) draws the
+three-pane interface, all data comes from `demoMessages()`, every button is inert,
+and there is no account, network, persistence or message-parsing code. This round
+turns it into a client that can actually send and receive mail: multiple accounts,
+IMAP fetching and reading, the common actions (star/archive/junk/delete), compose
+and send, reply/forward, and plain-text/HTML dual-mode display of HTML bodies.
+
+Persistence uses **MyGo's built-in SQLite plugin**
+(`github.com/egoist/mygo/plugins/sqlite`, shipped with v0.9.0 at the pinned
+version, a Zig native module, precompiled, no cgo) as the single-file primary
+store. Passwords still live only in the OS keychain. The UI can therefore read the
+cache on startup and incrementally sync in the background, and the plugin's
+bundled FTS5 (with the trigram tokenizer) gives us substring search over CJK mail
+without a second storage layer.
+
+The repository's latest `AGENTS.md` additionally requires: the mail engine must not
+depend on `mygo/ui`; user-visible strings must go through the i18n catalog; tests
+may only use local fake IMAP/SMTP servers; dev-build data directories are isolated
+from real installs (`mygo dev` already renames the app to `shu Dev` and appends
+`.dev` to the identifier, so `PathUserData` is isolated for free).
+
+## Confirmed scope
+
+In this round:
+
+- Multiple accounts (IMAP/SMTP, manual server configuration + common provider presets)
+- Folder list (special-use first, name heuristics as fallback), unread counts
+- Message list (cached headers + incremental sync of new mail), local FTS search,
+  manual sync
+- Reading bodies (MIME parsing, plain text; HTML rendered on demand in an untrusted webview)
+- Mark read on open; toggle star; archive/junk/delete (IMAP move)
+- Compose, send (SMTP), APPEND to Sent after sending, with a crash-recoverable outbox
+- Reply, reply-all, forward (plain-text quoting)
+- Attachment list and "Save as"
+- en / zh-Hans, following the system locale with a manual override
+
+Explicitly out of scope: OAuth (Gmail/Outlook need app passwords), IDLE/background
+polling, conversation threading (the schema leaves room for a `threads` migration,
+but v1 ships none and the UI has no threading), draft autosave, rich-text compose,
+PGP/S-MIME, inline image rendering, storing raw `.eml` blobs.
+
+## Architecture and package boundaries
+
+Following the new `AGENTS.md`: protocol/storage/sync do not import
+`github.com/egoist/mygo/ui`; the UI calls the engine through plain service values,
+and the engine returns data only.
+
+```
+shu/
+  main.go              app struct, window assembly, root view
+  sidebar.go           account switcher + folders
+  messagelist.go       list header, search, virtual list and rows
+  reading.go           reading pane, header, attachments, actions
+  accounts.go          account settings/first-run views
+  compose.go           compose window (mygo.NewWindow)
+  htmlview.go          webview lifecycle + HTML sanitizing/CSP
+  icons.go             icons (add the Lucide v1.72.0 version comment)
+  locales/             en.json, zh-Hans.json, catalog_gen.go (generated)
+  mail/                pure protocol/models/service, no ui or sqlite dependency
+    account.go         Account/Server/TLSMode, provider presets, validation
+    message.go         Summary/Message/Folder/Outgoing and other models
+    store.go           Store interface (the cache, outbox and account boundary)
+    service.go         Service: account CRUD, cache-first reads, sync, send
+    imap.go            LIST/STATUS, SELECT, FETCH, STORE, MOVE/COPY, APPEND
+    smtp.go            go-mail send + the raw message back
+    mime.go            go-message parsing, bodies/attachments, HTML→text
+    specialuse.go      special-use mapping and name fallback
+    *_test.go          fake IMAP/SMTP, MIME, service tests
+  store/               SQLite implementation, imports mail's models, no ui dependency
+    store.go           Open, pragmas, migration array, transaction helpers
+    accounts.go        accounts and kv
+    folders.go         folders rows and sync cursors
+    messages.go        message headers/bodies, attachments, tombstones
+    search.go          FTS5 query builders and the LIKE fallback
+    outbox.go          send queue states and crash recovery
+    *_test.go          temp-db/in-memory-db tests
+  testdata/            fake message fixtures shared by mail and store tests
+```
+
+package main keeps the single `app` struct, splits files by concern, and adds no
+extra abstraction layers. Update the Architecture section of `AGENTS.md` in the
+same change to record the new `mail/`, `store/` and `locales/` layout.
+
+## Persistence: SQLite
+
+### Decision
+
+MyGo's `plugins/sqlite` (no third-party driver, no new entry in `go.mod`), called
+directly as `sqlite.Open(ctx, path, sqlite.OpenOptions{})` — no `mygo.Use` needed,
+no `accounts.json`. It is a framework native module, so the no-cgo build stays
+as-is; foreign keys are on by default and it exposes a busy timeout; and the
+bundled SQLite includes FTS5 with the trigram tokenizer, which is what makes CJK
+search work.
+
+- Database: `mygo.App.Path(mygo.PathUserData)/shu.db` (`shu Dev/shu.db` in dev).
+- One connection, opened at startup and `Close`d on shutdown. The handle is safe
+  from any goroutine and serializes internally, but by discipline **only the
+  engine writes** (see write discipline below); the UI reads through the service.
+- `PRAGMA journal_mode=WAL` (ignore failure for in-memory DBs),
+  `PRAGMA busy_timeout=5000`, foreign keys on, sequential migrations keyed on
+  `PRAGMA user_version` and run inside a transaction.
+- Passwords never enter the database: `mygo.Secrets` with key
+  `account:<id>:password`; `mail.Service` takes a `SecretStore` interface
+  (`mygo.Secrets` in production, an in-memory fake in tests).
+- The server is the source of truth; the local database is a cache and an offline
+  copy. Server semantics such as `UIDVALIDITY` are stored and compared, never
+  interpreted or used for reasoning about message identity.
+
+### What lives where
+
+| Data | Where | Why |
+| --- | --- | --- |
+| Accounts, servers, settings (`kv`) | DB | Small, transactional, needed before any network call |
+| Folders + sync cursor (`uidvalidity`, `last_uid`) | DB | Cursor must move in the same transaction as the data it describes |
+| Message headers, flags, preview, bodies (text + HTML) | DB | Transactional consistency and trigger-maintained FTS index |
+| Attachment metadata | DB | Listing and rendering need it while offline |
+| Attachment bytes | Disk cache, path in `attachments.cache_path` | Keeps the database small; deduped by content hash, LRU-cleaned |
+| Outbox entries and their state | DB | Sending must survive a crash and never double-send |
+| Passwords, API keys | Keychain only | Established rule, never in the DB or the repo |
+
+Bodies are stored inline in the `messages` row: consistency
+in one transaction, and the FTS triggers keep the index in step. The cost is a
+larger database, kept in check by three guardrails: the list phase fetches headers
+only, bodies are fetched on demand with a size cap and a `body_truncated` flag, and
+each account has a sync cap (`defaultSyncCap = 2000` headers per account for this
+round; the visible window is 50 and paging comes later). Raw `.eml` is not stored;
+an export/blob area can be added later without touching v1.
+
+### Schema v1
+
+```sql
+CREATE TABLE accounts (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL, username TEXT NOT NULL,
+  imap_host TEXT NOT NULL, imap_port INTEGER NOT NULL, imap_tls TEXT NOT NULL,
+  smtp_host TEXT NOT NULL, smtp_port INTEGER NOT NULL, smtp_tls TEXT NOT NULL);
+
+-- Misc app settings; active_account lives here.
+CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+
+-- The IMAP folder row carries the sync cursor, so a sync either advances both
+-- the cursor and the data or neither.
+CREATE TABLE folders (
+  id INTEGER PRIMARY KEY,
+  account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  name TEXT NOT NULL, delimiter TEXT, special_use TEXT,
+  unread INTEGER NOT NULL DEFAULT 0, total INTEGER NOT NULL DEFAULT 0,
+  uidvalidity INTEGER NOT NULL DEFAULT 0, last_uid INTEGER NOT NULL DEFAULT 0,
+  synced_at INTEGER,
+  UNIQUE (account_id, name));
+
+CREATE TABLE messages (
+  id INTEGER PRIMARY KEY,
+  folder_id INTEGER NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+  server_uid INTEGER NOT NULL,
+  message_id TEXT, in_reply_to TEXT, references_json TEXT,
+  from_name TEXT, from_email TEXT,
+  to_json TEXT, cc_json TEXT, reply_to_json TEXT,
+  subject TEXT, preview TEXT, date INTEGER, size INTEGER,
+  seen INTEGER NOT NULL DEFAULT 0, flagged INTEGER NOT NULL DEFAULT 0,
+  has_attachments INTEGER NOT NULL DEFAULT 0,
+  body_text TEXT, body_html TEXT, body_truncated INTEGER NOT NULL DEFAULT 0,
+  raw_headers TEXT, cached_at INTEGER,
+  deleted INTEGER NOT NULL DEFAULT 0, -- tombstone until the server confirms
+  UNIQUE (folder_id, server_uid));
+
+CREATE INDEX messages_list ON messages (folder_id, date DESC);
+CREATE INDEX messages_message_id ON messages (message_id) WHERE message_id IS NOT NULL;
+
+CREATE TABLE attachments (
+  message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  part TEXT NOT NULL,
+  filename TEXT, content_type TEXT, size INTEGER,
+  content_hash TEXT, cache_path TEXT,
+  PRIMARY KEY (message_id, part));
+
+-- At-most-once sending: a row is marked 'sending' before SMTP is dialed and
+-- 'sent' afterwards; a 'sending' row found at startup is reported as unknown
+-- rather than resent.
+CREATE TABLE outbox (
+  id TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  raw TEXT NOT NULL, envelope_json TEXT NOT NULL,
+  state TEXT NOT NULL,             -- pending | sending | sent | failed
+  attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT,
+  created_at INTEGER NOT NULL, sent_at INTEGER);
+```
+
+`threads`/`thread_refs` are deliberately absent: v1 has no threading, and the
+migration array is where they will arrive (with `messages.message_id` already
+indexed to make that cheap). AI artifacts (`model`, body hash, summary) get their
+own table later for the same reason.
+
+### Search: FTS5 with trigram
+
+```sql
+CREATE VIRTUAL TABLE messages_fts USING fts5(
+  subject, from_name, from_email, body_text,
+  content='messages', content_rowid='id', tokenize='trigram');
+
+CREATE TRIGGER messages_ai AFTER INSERT ON messages BEGIN
+  INSERT INTO messages_fts(rowid, subject, from_name, from_email, body_text)
+  VALUES (new.id, new.subject, new.from_name, new.from_email, new.body_text);
+END;
+-- messages_ad (delete) and messages_au (update: delete + insert) mirror it.
+```
+
+- The tokenizer must be `trigram`: the default `unicode61` cannot segment Chinese,
+  while trigram indexes sliding three-character windows (and makes substring
+  search fast for Latin text too). That is the whole reason to prefer it here.
+- A trigram query needs at least three characters. Queries shorter than that fall
+  back to `LIKE` on `subject`/`from_name`, which is cheap at this size.
+- Search is scoped to the current account (and folder when one is selected), capped
+  at 100 results, and served entirely from the cache — no network.
+- List paging never goes through FTS: it uses `messages_list`
+  (`folder_id, date DESC`).
+- A store test asserts a two-character and a three-character Chinese query both
+  find a known message, so a downgraded SQLite build fails loudly instead of
+  silently returning nothing.
+
+### Write discipline
+
+- **The engine is the only writer.** One connection, WAL, all writes from the
+  engine's background jobs; views read through the service and never open a
+  connection of their own.
+- **Changeset transactions.** A sync pulls a batch of server changes, writes the
+  whole batch in one transaction, and only in that same transaction advances the
+  folder cursor (`last_uid`, `uidvalidity`, `unread`, `synced_at`). A crash can
+  therefore leave the old state or the new state, never a cursor that claims data
+  that was not written.
+- **Tombstones for deletes.** Local actions that remove mail first set
+  `deleted = 1` and hide the row, then confirm with the server (MOVE/STORE), and
+  only then delete the row. A failed confirmation restores the row and surfaces
+  the error.
+- **Optimistic UI, authoritative server.** Star/move update the database and the
+  UI first, then call IMAP; on failure the change is rolled back from the server
+  response and one sync reconciles.
+- **Outbox for sends.** `Send` inserts the row and the composed raw message in one
+  transaction, flips it to `sending`, dials SMTP, then records `sent` and appends
+  the copy. Startup reports any leftover `sending` row as "delivery unknown" with
+  a manual retry, so the client never sends twice automatically.
+- **Migrations are an explicit array.** `var migrations = [][]string{...}` stepped
+  by `user_version`, forward only, one entry per version, each run in a
+  transaction; no ORM and no auto-migrate. A migration test opens an empty
+  database, asserts the target `user_version` and the presence of every table and
+  index, then reopens it to prove idempotence.
+
+### Attachment files on disk
+
+- Bytes live under `mygo.App.Path(mygo.PathCache)/attachments/<content-hash>`
+  (dev: `shu Dev`), written once per hash, so identical attachments dedupe.
+- `attachments` rows carry `content_hash` and `cache_path`; a row with a null
+  `cache_path` means "metadata only, fetch the bytes when needed".
+- A size budget (default 200 MB) with LRU cleanup by file mtime runs after a sync;
+  removing a file nulls `cache_path`, the database stays consistent.
+- File names on disk never come from the message; "Save as" is the only place a
+  human-chosen name is used, and it is sanitized.
+
+### Cache first + incremental sync
+
+- Startup/folder switch: read `folders` and the newest 50 rows of the current
+  folder from SQLite, show them immediately; then `SyncAccount` + `SyncFolder` in
+  the background.
+- `SyncAccount`: `LIST` (`ReturnSpecialUse`, `ReturnStatus`) refreshes folders,
+  unread counts and the delimiter; one transaction upserts `folders`.
+- `SyncFolder`: after `SELECT`, compare `UIDVALIDITY`:
+  - changed → drop that folder's cached rows (the server reset the folder) and
+    refetch up to the sync cap;
+  - unchanged or absent → `UID FETCH (last_uid+1):*` for new mail, plus
+    `FETCH ... (UID FLAGS)` on cached UIDs to refresh seen/flagged. The batch and
+    the new `last_uid` land in one transaction.
+- Opening a message: read the cached body first; otherwise `FetchMessage` the whole
+  message, parse it, write it, and mark `\Seen` on IMAP (a failure does not block
+  display; it is returned as `FetchResult.SeenErr`).
+- Offline: cached display + an error banner (Retry); browsing cached mail is never
+  blocked.
+
+### Why not the alternatives
+
+- **A KV store (bbolt/Badger)**: threading, filtered listing and full-text search
+  would all be hand-built; mail is a query-heavy workload.
+- **Raw `.eml` files as primary storage**: at 100k messages, index rebuilds and
+  consistency are a nightmare; it is a good export format, not a primary store.
+- **An ORM (GORM and friends)**: a handful of tables, so hand-written SQL plus an
+  explicit migration array is smaller, faster and easier to review.
+- **FTS `unicode61` or plain `LIKE` everywhere**: the first cannot search Chinese,
+  the second cannot scale past the cached window; trigram FTS plus a short-query
+  `LIKE` fallback covers both.
+
+### Tests
+
+The SQLite native module is prepared into the MyGo module's `.mygo/native` by
+`go tool mygo generate` (which calls `generateNative` internally); if
+`sqlite.Load()` reports "not built", `store` tests `t.Skip` with a hint to run
+that command, matching MyGo's own plugin tests. `mail` and UI tests do not depend
+on SQLite.
+
+## Dependencies (approved)
+
+- `github.com/emersion/go-imap/v2 v2.0.0-beta.8` (client + `imapserver` for tests)
+- `github.com/emersion/go-message v0.18.2` (MIME read/write, charset)
+- `github.com/wneessen/go-mail v0.8.2` (SMTP, UTF-8, attachments, context)
+- `github.com/egoist/mygo/plugins/sqlite` (ships with MyGo v0.9.0, no new external dependency)
+- Test-only: `github.com/emersion/go-smtp` (local fake SMTP server)
+- `golang.org/x/net/html` (HTML→plain text; already an indirect dependency, now direct)
+
+MyGo stays pinned at v0.9.0: no version upgrade in this round, and no incidental
+changes to existing MyGo API usage (per `AGENTS.md`, upgrades happen in their own
+commit).
+
+## Mail engine `mail/`
+
+Connection strategy: one short connection (TLS + LOGIN) per network operation,
+closed when done; `SyncFolder` does LIST/SELECT/FETCH within one connection,
+`FetchMessage` does FETCH + STORE within one connection. Pre-alpha favors simple
+and reliable; connection reuse/IDLE come later. Every method takes a
+`context.Context`; the UI passes a 30s timeout; cancellation closes the connection.
+
+`Service` exposes (UI tests substitute a same-named interface `mailService`):
+
+```go
+// Accounts (writes SQLite, writes the password to the keychain)
+Accounts(ctx) ([]Account, activeID string, error)
+AddAccount(ctx, a Account, password string) error
+UpdateAccount(ctx, a Account, password string) error   // password "" keeps the existing one
+RemoveAccount(ctx, id string) error
+SetActive(ctx, id string) error
+TestConnection(ctx, a Account, password string) error  // IMAP login + SMTP dial/auth, sends nothing
+
+// Cache reads (fast, work offline)
+CachedFolders(ctx, accountID string) ([]Folder, error)
+CachedMessages(ctx, accountID, folder, query string, limit int) ([]Summary, error)
+CachedMessage(ctx, accountID, folder string, uid UID) (FetchResult, bool, error)
+
+// Network sync (writes the cache)
+SyncAccount(ctx, accountID string) ([]Folder, error)
+SyncFolder(ctx, accountID, folder string, limit int) error
+FetchMessage(ctx, accountID, folder string, uid UID, markSeen bool) (FetchResult, error)
+
+// Actions and sending
+SetFlag(ctx, accountID, folder string, uid UID, flag Flag, on bool) error
+Move(ctx, accountID, folder string, uid UID, dest string) error
+Send(ctx, accountID string, out Outgoing) (SendResult, error) // outbox → SMTP → APPEND to Sent
+PendingSends(ctx, accountID string) ([]PendingSend, error)     // crash recovery surface
+```
+
+IMAP details:
+
+- `imapclient.Options{WordDecoder: &mime.WordDecoder{CharsetReader: charset.Reader}, TLSConfig: s.tlsConfig}`;
+  `DialTLS` / `DialStartTLS`, `WaitGreeting`, `Login`. Only implicit TLS and
+  STARTTLS are supported; "no TLS" is not exposed to users, and tests use a
+  self-signed certificate with trust injected via `Service.TLSConfig`.
+- special-use mapping `\Inbox \Sent \Drafts \Trash \Junk \Archive \Flagged`, with
+  fallback matching Inbox/Sent/Sent Items/Drafts/Trash/Deleted Items/Junk/Spam/Archive/All Mail;
+  skip `\Noselect`.
+- Listing: `Fetch` requests `Envelope`, `Flags`, `InternalDate`, `RFC822Size`,
+  `BodyStructure`, plus a partial `BODY.PEEK[TEXT]<0.256>` as the preview (empty
+  preview when unsupported); results are written to the cache newest first.
+- Starred: a virtual folder, `UIDSearch(FLAGGED)` then fetch by UID.
+- Body: `FetchItemBodySection{Peek: true}` for the whole message, iterated with
+  go-message's `mail.CreateReader`; read `Message-ID`, `References`, `Reply-To`,
+  `To`, `Cc`, `Date`; bodies are stored up to 1 MB per part with
+  `body_truncated = 1` past that; attachments collect filename, type, size and
+  bytes (cap 25 MB per message).
+- Move: prefer `MOVE`; otherwise `COPY` + `STORE \Deleted` + `UIDExpunge` (with
+  UIDPLUS) or `EXPUNGE`.
+- Sent: `APPEND` (`\Seen`) to the server's Sent folder; with no Sent folder return
+  `SendResult{Copied: false}` and the UI says "Sent, but the copy could not be
+  saved".
+
+SMTP: go-mail `NewMsg` + `FromFormat/To/Cc/Subject/SetBodyString(text/plain; charset=utf-8)`
++ `SetDate/SetMessageID` + `In-Reply-To/References`;
+`NewClient(host, WithPort, WithUsername, WithPassword, WithSMTPAuth, WithTLSPolicy(mandatory)/WithSSL, WithTLSConfig, WithTimeout)`,
+then `DialAndSendWithContext`. The raw message from `msg.WriteTo(&buf)` is stored
+in the outbox and reused for APPEND.
+
+MIME: prefer `text/plain`; when only HTML exists, extract text with
+`x/net/html` (skip script/style/head, break on block elements, collapse blank
+lines). Keep the original HTML for the webview.
+
+## UI changes (package main)
+
+### State and async model
+
+`app` gains: `svc mailService`, `win *mygo.Window`, `run func(func())`,
+`update func(func())`, `accounts`, `active`, `folders`, `folder`,
+`all []mail.Summary`, `bodies map[UID]FetchResult`, `loading/err`, `gen uint64`,
+`syncAt time.Time`, `showAccounts`, `compose []*composeState`, `htmlOn`,
+`webview *mygo.WebView`, `closed bool`.
+
+- Production: `run = func(f){ go f() }`, `update = win.Update`, `win.OnClosed` sets
+  `closed` and cancels pending work.
+- Tests: `run`/`update` execute synchronously and fake services return immediately,
+  so there are no races and no sleeping.
+- Every account/folder/selection change increments `gen`; background results check
+  `gen` and `closed` on the main thread and drop stale ones.
+- The first frame shows the cache (`CachedFolders`/`CachedMessages`), then syncs in
+  the background and refreshes; a failed sync only adds an error banner and never
+  clears the cache.
+- Background jobs must not capture `*ui.Context` or `ui.Element`; capture
+  `c.Services()` up front when URLs or the clipboard are needed.
+
+### i18n (lands with the feature, not after)
+
+- Add `"i18n": {"dir": "locales", "source": "en"}` to `mygo.json`.
+- Create `locales/en.json` and `locales/zh-Hans.json` (ARB-style ICU
+  MessageFormat, with `@@locale` and `@key` metadata) covering every existing UI
+  string and the new strings kept in the UI, using plurals (unreadCount,
+  messageCount).
+- Run `go tool mygo generate` to produce `locales/catalog_gen.go`; all views call
+  the generated functions (for example `locales.Compose()`) instead of hardcoding.
+- The settings view offers a language choice: Follow system / English / 简体中文,
+  calling `mygo.App.SetLocale("")`/`"en"`/`"zh-Hans"` (MyGo persists the choice).
+- Tests set `i18n.SetLocaleFunc(func() string { return "en" })` in `TestMain` so
+  machine language cannot affect assertions; add a test that both catalogs have
+  the same key set. Unit-test Chinese rendering through
+  `locales.In("zh-Hans").X()`.
+
+### Multiple accounts and account settings
+
+- The sidebar account header becomes a clickable anchor; `ui.Menu` lists all
+  accounts (current one checked), `Add account…`, `Manage accounts…`; selecting an
+  account persists `active`, loads that account's cache first, then syncs.
+- `accounts.go` is a full-window view: shown automatically on first run (no
+  accounts), reachable from the menu for management. Fields: display name, email,
+  password, IMAP host/port/TLS, SMTP host/port/TLS, provider preset
+  (Gmail/iCloud/Outlook/Fastmail/Yahoo/Custom, auto-filling servers); "Test and
+  save" runs `TestConnection` in the background with progress/inline errors; an
+  empty password while editing means unchanged; deletion requires
+  `mygo.Dialog.Message` confirmation (an explicitly destructive action) and clears
+  the SQLite rows (cascaded) and the keychain entry.
+- Password note: Gmail/Outlook with two-factor auth require an app password (no
+  OAuth this round).
+
+### Folders and message list
+
+- The sidebar is generated from cached `folders`, hiding absent ones; the unread
+  badge comes from the cached STATUS. Starred is a virtual entry (FLAGGED). Remove
+  the fake Labels section.
+- The list title follows the current folder; the search field calls
+  `CachedMessages(query)` and hits FTS5 (subject/from/body), with the short-query
+  `LIKE` fallback.
+- `ui.List` stays virtualized with stable identity via `ListState.Key`
+  (key = accountID/folder/UID); after a switch, restore the selection by UID where
+  possible.
+- States: loading skeleton, empty folder, error banner + Retry; the sync button
+  refreshes and preserves the selection.
+- Remove the currently inert Filter/More buttons (do not ship dead controls).
+
+### Reading pane
+
+- Selection changes come from `List.OnChange` (with a guarded job): read the cached
+  body first, otherwise fetch in the background; show a placeholder while loading
+  and an error + Retry on failure.
+- The header shows the real sender, address, To, and time (`c.Now()` plus the
+  relative-time rules); body paragraphs are `Selectable()`; attachment cards offer
+  "Save as" (`mygo.Dialog.Save` + writing the file).
+- Opening a message marks `\Seen` and updates SQLite, the row and the Inbox unread
+  count in step.
+- HTML mode: plain text by default; when an HTML body exists show a
+  "Show HTML/Show plain text" toggle. HTML is rendered by an on-demand
+  `win.NewWebView({Page:{Untrusted:true}})` with `ui.WebView` in the body slot;
+  before loading, inject the CSP
+  `default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; form-action 'none'; base-uri 'none'`,
+  strip `<script>` and event attributes; `Page.OnWillNavigate` cancels navigation
+  and opens http(s) links via `c.Services().OpenURL`. Windowless tests only check
+  the toggle state and the sanitizing function, not rendering.
+
+### Common actions
+
+- Star: `SetFlag(\Flagged)`, optimistically update the database/UI, roll back and
+  report on failure.
+- Archive/junk/delete: `Move` to the matching folder; disable the button when the
+  target does not exist; on success remove the row, select the next message and
+  update the unread badges. The row goes through the tombstone path, so a failure
+  leaves the message visible.
+- Reply/reply-all/forward: open a compose window with To/Subject/quoted body
+  prefilled; reply-all excludes the user's own address and dedupes; forward leaves
+  the recipients empty. Set `In-Reply-To/References`.
+- Every send, delete and move is triggered only by a user click and is always
+  visible in the UI.
+
+### Compose and send
+
+- `mygo.NewWindow` (720×620, min 520×420, no StateKey, multiple windows allowed)
+  hosts `compose.view`; To/Cc/Subject use `ui.TextInput`, the body is an
+  auto-sizing `ui.TextArea`; a Send button and a `ui.Cmd+Enter` shortcut.
+- Recipients are validated with `net/mail.ParseAddressList`; the button is disabled
+  while sending; on failure the window stays open with an inline error and the
+  outbox row is left `failed` with its error; on success the window closes and
+  Sent/the current folder refresh.
+- Closing the window cancels the sending context; the outbox row remains so a
+  restart can report "delivery unknown" instead of silently losing the message.
+
+## Testing discipline
+
+Tests are part of each change, not a later phase:
+
+- Every commit in the steps below ships the tests for what it adds. A feature with
+  no tests is not done, and a bug found during the work gets a regression test in
+  the same commit.
+- Test each layer at its own level: `store` against a real (temp/in-memory)
+  database, `mail` against fake IMAP/SMTP servers, UI through `ui.NewTester`, and
+  pure functions (HTML→text, sanitizing, address parsing, cursor math, query
+  builders) as table-driven unit tests.
+- Failure paths are first-class: network and auth errors, cancelled contexts,
+  `UIDVALIDITY` resets, `sqlite.Load()` not built, downgraded SQLite without FTS5,
+  outbox crash recovery, and rollback after a failed move.
+- Tests stay deterministic: no wall clock (`tt.Advance`, injected clock), no
+  network beyond `127.0.0.1` fakes, no display, no real account or keychain. Run
+  without cgo: `CGO_ENABLED=0 go test ./...`.
+- Keep fixtures in `testdata/` as real message bytes so MIME and store tests share
+  them; prefer small hand-written fixtures over generated blobs.
+- Use `go test -cover ./...` as a signal for the changed packages and mention
+  uncovered branches in the commit body; it is not a gate.
+
+## Key file list
+
+Modified:
+
+- `main.go`: new `app` fields, SQLite service wiring, sync/async helpers, root view
+  dispatch by state (account settings/three panes), remove `demoMessages`
+- `icons.go`: add 5 icons (settings/plus/x/check/circle-alert) and record the Lucide
+  version in the header comment
+- `mygo.json`: i18n configuration
+- `main_test.go`: switch to the fake service; update `TestMailboxChoice` (the list
+  must change after switching)
+- `AGENTS.md`: Architecture section records the `mail/`, `store/` and `locales/`
+  layout, the SQLite choice and the engine-only write rule
+- `go.mod` / `go.sum`
+
+New: `mail/` (models/Store interface/Service/IMAP/SMTP/MIME/special-use + tests),
+`store/` (SQLite open and migrations, accounts/kv, folders, messages,
+attachments, FTS search, outbox + tests), `testdata/` fixtures, and under package
+main `sidebar.go`, `messagelist.go`, `reading.go`, `accounts.go`, `compose.go`,
+`htmlview.go`, `mailservice.go` (the interface and fake may live in tests),
+`locales/en.json`, `locales/zh-Hans.json`, the generated `locales/catalog_gen.go`,
+and 5 `icons/*.svg`.
+
+Reused as-is: the three-pane layout and `ui.List`/`ui.Sidebar`/`ui.Scroll`/`ui.Toolbar`,
+the icon pipeline, the Tester pattern, `mygo.Window.Update`, `mygo.Secrets`,
+`mygo.App.Path`, `ui.PopoverMenuButton`/`ui.Menu`, `mygo.Dialog`,
+`mygo/plugins/sqlite`.
+
+## Implementation steps (split by commit)
+
+Each step ships with its tests (see Testing discipline).
+
+1. `feat: add i18n catalogs and localize the shell`: config, catalogs, generated
+   code, migrate existing strings, catalog-parity test, stabilize test assertions.
+2. `feat: add the SQLite store`: open/pragmas/migration array, accounts and kv,
+   folders with sync cursors, message headers/bodies, attachments, tombstones,
+   outbox, FTS5 trigram + triggers with the LIKE fallback, store tests including a
+   CJK search test.
+3. `feat: add the mail engine`: dependencies, models, Store interface, keychain,
+   IMAP/SMTP/MIME, fake-server tests.
+4. `feat: add account setup and multi-account switching`: account view, menu,
+   persistence, language choice.
+5. `feat: load cached mail and sync folders`: dynamic sidebar, cached list,
+   incremental sync with changeset transactions, FTS search, unread, empty/error
+   states.
+6. `feat: add reading and common message actions`: body loading, seen, attachment
+   save-as and disk cache, star/archive/junk/delete with tombstones.
+7. `feat: add compose, send, reply and forward`: compose window, outbox, SMTP, Sent
+   copy, reply prefill, crash recovery surface.
+8. `feat: render HTML mail in an isolated web view`: sanitizing, CSP, navigation
+   blocking, dual-mode toggle.
+
+Every commit must build, pass tests, and leave `gofmt` clean.
+
+## Testing and verification
+
+Automated:
+
+- `store/store_test.go`: migrations from empty (`user_version`, tables, indexes,
+  idempotent reopen), account/kv round-trips, folder cursor advance in the same
+  transaction as the batch, UIDVALIDITY reset, message upsert, tombstone
+  confirm/rollback, foreign-key cascades, attachment metadata and hash dedup, outbox
+  state transitions and crash recovery, FTS5 CJK search (2- and 3-character
+  queries) plus its LIKE fallback, LRU cleanup; skip with a hint to run
+  `go tool mygo generate` when `sqlite.Load()` is not ready.
+- `mail/mime_test.go`: fixtures from `testdata/` for plain text, HTML-only,
+  multipart/alternative, attachments, encoded subjects/charsets, truncated bodies.
+- `mail/imap_test.go`: an `imapserver` + in-memory `Session` fake on `127.0.0.1:0`
+  (self-signed certificate + STARTTLS) covering LIST/special-use, incremental sync,
+  UIDVALIDITY change, FETCH+mark seen, STORE, MOVE (with and without capability),
+  APPEND, and cancelled contexts; `mail.Store` is an in-memory fake and never
+  touches SQLite.
+- `mail/smtp_test.go`: a `go-smtp` fake server recording messages, covering
+  success, auth failure, and raw headers (To/Cc/Subject/In-Reply-To).
+- `mail/config_test.go`: in-memory Store + in-memory SecretStore, verifying account
+  CRUD, secret cleanup on delete, and error paths.
+- UI: `ui.NewTester` + a fake `mailService`, synchronous `run/update`, fixed
+  locale; covering first-run onboarding, multi-account switching, cache-first
+  first screen, folder switching, search, selecting a message to load the body
+  and mark it read, retry after an error, star/move with rollback, compose send
+  success/failure/unknown, reply prefill, HTML toggle; both light and dark
+  appearance; the 1000×640 minimum size.
+
+Manual:
+
+- `gofmt -w` the changed files; `go tool mygo generate` (prepares both the i18n
+  and the SQLite native module); `go tool mygo i18n check` (if available).
+- `go vet ./...`, `go tool mygo vet .`, `CGO_ENABLED=0 go test ./...` and
+  `go test -cover ./...` for the changed packages.
+- `go tool mygo dev` with a throwaway test account (app password) to walk through
+  login, reading, starring, archiving, replying, sending and the HTML toggle; the
+  dev data directory is `shu Dev` and never touches a real install; commit no
+  credentials and no real mail.
+
+## Risks and caveats
+
+- SQLite native module: `go test`/`go run` rely on the precompiled `.mygo/native`
+  libraries prepared by `go tool mygo generate` (or `mygo dev`); when unprepared,
+  `store` tests skip and the app must not run before that step. The build still
+  needs no cgo/Zig.
+- FTS5/trigram depends on the bundled SQLite build. A startup smoke query plus a
+  CJK store test fail loudly if a future plugin version drops it; keep the `LIKE`
+  fallback so search degrades instead of breaking.
+- Bodies inline make the database grow; the sync cap, on-demand bodies and the
+  `body_truncated` flag are the guardrails. Revisit with a size metric on a large
+  account before raising the cap.
+- go-imap v2 is still beta: pin `v2.0.0-beta.8` and verify field names such as
+  `FetchItemBodySection`/`StatusOptions` against the source after `go get`; degrade
+  to an empty preview when partial fetches fail.
+- UIDVALIDITY is compared, never interpreted: the only allowed conclusion from a
+  change is "this folder's cache is stale, drop and refetch".
+- `mygo.Tester`'s locale differs from the global `i18n.Locale()`: tests override the
+  global in `TestMain` and unit-test Chinese via `locales.In("zh-Hans")`.
+- The webview only ever receives sanitized HTML: Untrusted + CSP + navigation
+  blocking are three layers of defense; remote images and scripts are forbidden.
+- One short connection per network operation adds latency; the cache-first first
+  screen hides most of it, and session reuse/IDLE come later.
+- The keychain is unavailable in some Linux environments: report a clear error,
+  never fall back to plaintext.

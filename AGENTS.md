@@ -17,6 +17,20 @@ Windows and Linux. It is written in Go with
   only after an explicit user action, and is always visible and reviewable
   by the user.
 
+## Architecture
+
+- The app starts as a single `package main`, but the mail engine is not
+  UI code. Protocol (IMAP/SMTP), sync, storage and AI code must never
+  import `github.com/egoist/mygo/ui`; the UI reaches the engine through a
+  plain service value it calls, and the engine reports back with data,
+  not elements.
+- When a subsystem (sync, store, ai) grows past a file or two, move it
+  into its own package in the same change, keep the boundary above, and
+  update this section to describe the new layout.
+- Background work (sync, indexing, model calls) runs off the UI thread
+  and publishes results to the window; it never touches view state
+  directly.
+
 ## Before changing MyGo UI
 
 - Check the pinned MyGo version and read its source before using an API:
@@ -55,6 +69,8 @@ real clock.
 - Handle errors rather than ignoring them. Do not panic for failures a
   user can cause or fix; `mustIcon` and other startup-only helpers may
   panic on programmer errors.
+- User-visible strings go through the i18n catalog, never hardcoded in a
+  view, so en and zh-Hans stay in step from the start.
 
 ## Native UI
 
@@ -100,7 +116,9 @@ real clock.
   `currentColor`, and do not edit the artwork. Name the Go variable after
   the Lucide icon, adding `Icon` (`chevron-down.svg` → `chevronDownIcon`).
 - Add icons at the Lucide version already in `icons/` unless the change is
-  a deliberate upgrade of all of them.
+  a deliberate upgrade of all of them. The version in use is recorded in
+  the header comment of `icons.go`; update it in the same change whenever
+  icons are added from a newer Lucide release.
 
 ## Testing
 
@@ -113,6 +131,10 @@ real clock.
   `ui.NewTester` has its own clock; advance it with `tt.Advance`.
 - For rendering changes, check the light and dark appearances, not just
   the default one.
+- Mail tests run against fake IMAP/SMTP servers only — never a real
+  account, not even a test mailbox on a real provider. Development builds
+  use a separate data directory from any real install, so a dev run can
+  never move, mark or delete a user's real mail.
 
 ## Privacy and security
 
@@ -122,6 +144,10 @@ real clock.
   config files or the repository. Never commit keys, tokens or real mail.
 - Do not add analytics, crash reporting or update checks that send data
   without the user's consent.
+- All text sent to a model provider passes through a single egress point
+  in the AI package, so masking, logging and user approval can be
+  enforced in one place. AI output is a draft: it is never sent, filed or
+  deleted without the user's explicit action.
 
 ## Commits
 

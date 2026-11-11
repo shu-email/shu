@@ -6,6 +6,8 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
+	"shu/locales"
 )
 
 // message is one message shown in the list and the reading pane.
@@ -72,14 +74,14 @@ func (a *app) titleBar(c *ui.Context, t *ui.Theme, bar ui.TitleBar, height float
 			Children(func() {
 				ui.Text(c, "S").FontSize(14).Bold().TextColor(ui.RGB(255, 255, 255))
 			})
-		ui.Text(c, "Shu").FontSize(15).Bold()
+		ui.Text(c, locales.AppName()).FontSize(15).Bold()
 		ui.Spacer(c)
-		ui.SearchField(c, &a.query).Width(300).Placeholder("Search mail").Label("Search mail")
-		a.iconButton(c, refreshIcon, "Sync", "Sync mail")
+		ui.SearchField(c, &a.query).Width(300).Placeholder(locales.SearchMail()).Label(locales.SearchMailLabel())
+		a.iconButton(c, refreshIcon, locales.Sync(), locales.SyncMail())
 		ui.PrimaryButton(c, "").Children(func() {
 			ui.Icon(c, composeIcon).FontSize(14)
-			ui.Text(c, "Compose")
-		}).Label("Compose").Tooltip("New message")
+			ui.Text(c, locales.Compose())
+		}).Label(locales.Compose()).Tooltip(locales.NewMessage())
 	})
 }
 
@@ -96,26 +98,26 @@ func (a *app) sidebar(c *ui.Context, t *ui.Theme) {
 			ui.Icon(c, chevronDownIcon).FontSize(12).TextColor(t.TextMuted)
 		})
 		ui.Sidebar(c, &a.mailbox, func() {
-			ui.SidebarSection(c, "Mailboxes", nil, func() {
-				ui.SidebarItem(c, "inbox", inboxIcon, "Inbox").Children(func() {
+			ui.SidebarSection(c, locales.Mailboxes(), nil, func() {
+				ui.SidebarItem(c, "inbox", inboxIcon, locales.Inbox()).Children(func() {
 					ui.Badge(c, "3").Background(t.Accent).TextColor(t.AccentText)
 				})
-				ui.SidebarItem(c, "starred", starIcon, "Starred")
-				ui.SidebarItem(c, "sent", sentIcon, "Sent")
-				ui.SidebarItem(c, "drafts", draftIcon, "Drafts").Children(func() {
+				ui.SidebarItem(c, "starred", starIcon, locales.Starred())
+				ui.SidebarItem(c, "sent", sentIcon, locales.Sent())
+				ui.SidebarItem(c, "drafts", draftIcon, locales.Drafts()).Children(func() {
 					ui.Badge(c, "2")
 				})
-				ui.SidebarItem(c, "archive", archiveIcon, "Archive")
-				ui.SidebarItem(c, "junk", spamIcon, "Junk")
-				ui.SidebarItem(c, "trash", trashIcon, "Trash")
+				ui.SidebarItem(c, "archive", archiveIcon, locales.Archive())
+				ui.SidebarItem(c, "junk", spamIcon, locales.Junk())
+				ui.SidebarItem(c, "trash", trashIcon, locales.Trash())
 			})
-			ui.SidebarSection(c, "Labels", nil, func() {
-				ui.SidebarItem(c, "work", tagIcon, "Work")
-				ui.SidebarItem(c, "personal", tagIcon, "Personal")
-				ui.SidebarItem(c, "receipts", tagIcon, "Receipts")
-				ui.SidebarItem(c, "travel", tagIcon, "Travel")
+			ui.SidebarSection(c, locales.Labels(), nil, func() {
+				ui.SidebarItem(c, "work", tagIcon, locales.Work())
+				ui.SidebarItem(c, "personal", tagIcon, locales.Personal())
+				ui.SidebarItem(c, "receipts", tagIcon, locales.Receipts())
+				ui.SidebarItem(c, "travel", tagIcon, locales.Travel())
 			})
-		}).Grow(1).Label("Mailboxes")
+		}).Grow(1).Label(locales.Mailboxes())
 	})
 }
 
@@ -124,14 +126,14 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 	ui.Column(c).Width(384).Shrink(0).MinWidth(0).Background(t.Background).Children(func() {
 		ui.Row(c).Height(48).Shrink(0).Padding(0, 14).Gap(8).AlignItems(ui.Center).
 			BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
-			ui.Text(c, "Inbox").FontSize(17).Bold()
+			ui.Text(c, locales.Inbox()).FontSize(17).Bold()
 			ui.Badge(c, fmt.Sprint(a.unread())).Background(t.Accent).TextColor(t.AccentText)
 			ui.Spacer(c)
-			a.iconButton(c, filterIcon, "Filter", "Filter messages")
-			a.iconButton(c, moreIcon, "More", "More actions")
+			a.iconButton(c, filterIcon, locales.Filter(), locales.FilterMessages())
+			a.iconButton(c, moreIcon, locales.More(), locales.MoreActions())
 		})
 		ui.Row(c).Shrink(0).Gap(8).AlignItems(ui.Center).Padding(10, 14, 8, 14).Children(func() {
-			ui.SearchField(c, &a.query).Grow(1).Placeholder("Search Inbox").Label("Search Inbox")
+			ui.SearchField(c, &a.query).Grow(1).Placeholder(locales.SearchFolder(locales.Inbox())).Label(locales.SearchFolder(locales.Inbox()))
 		})
 		a.list.Key = func(i int) any { return a.messages[i].id }
 		a.list.Label = func(i int) string { return a.messages[i].sender + " " + a.messages[i].subject }
@@ -205,23 +207,23 @@ func (a *app) messageRow(row ui.ListRow) {
 func (a *app) readingPane(c *ui.Context, t *ui.Theme) {
 	ui.Column(c).Grow(1).MinWidth(0).Background(t.Background).Children(func() {
 		ui.Toolbar(c, func() {
-			a.toolButton(c, archiveIcon, "Archive")
-			a.toolButton(c, trashIcon, "Delete")
-			a.toolButton(c, spamIcon, "Junk")
-			a.toolButton(c, flagIcon, "Flag")
+			a.toolButton(c, archiveIcon, locales.Archive())
+			a.toolButton(c, trashIcon, locales.Delete())
+			a.toolButton(c, spamIcon, locales.Junk())
+			a.toolButton(c, flagIcon, locales.Flag())
 			toolDivider(c, t)
-			a.toolButton(c, replyIcon, "Reply")
-			a.toolButton(c, replyAllIcon, "Reply All")
-			a.toolButton(c, forwardIcon, "Forward")
+			a.toolButton(c, replyIcon, locales.Reply())
+			a.toolButton(c, replyAllIcon, locales.ReplyAll())
+			a.toolButton(c, forwardIcon, locales.Forward())
 			ui.Spacer(c)
-			a.toolButton(c, moreIcon, "More")
-		}).Height(48).Padding(6, 12).Label("Message actions").
+			a.toolButton(c, moreIcon, locales.More())
+		}).Height(48).Padding(6, 12).Label(locales.MessageActions()).
 			BorderWidth(0, 0, 1, 0).BorderColor(t.Border)
 
 		if a.selected < 0 || a.selected >= len(a.messages) {
 			ui.Column(c).Fill().Center().Gap(6).Children(func() {
 				ui.Icon(c, inboxIcon).FontSize(36).TextColor(t.TextMuted)
-				ui.Text(c, "No message selected").FontSize(15).TextColor(t.TextMuted)
+				ui.Text(c, locales.NoMessageSelected()).FontSize(15).TextColor(t.TextMuted)
 			})
 			return
 		}
@@ -259,7 +261,7 @@ func (a *app) senderHeader(c *ui.Context, t *ui.Theme, m message) {
 		})
 		ui.Column(c).Shrink(0).AlignItems(ui.End).Gap(1).Children(func() {
 			ui.Text(c, m.time).FontSize(12).TextColor(t.TextMuted)
-			ui.Text(c, "to me").FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, locales.ToMe()).FontSize(11).TextColor(t.TextMuted)
 		})
 	})
 }
@@ -413,7 +415,7 @@ func main() {
 	a := newApp()
 	mygo.App.WhenReady(func() {
 		mygo.NewWindow(mygo.WindowOptions{
-			Title:           "Shu",
+			Title:           locales.AppName(),
 			Width:           1220,
 			Height:          800,
 			MinWidth:        1000,

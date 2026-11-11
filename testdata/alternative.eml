@@ -1,0 +1,16 @@
+From: =?UTF-8?Q?Maya_Chen?= <maya@example.com>
+To: Bob <bob@example.com>
+Subject: =?UTF-8?B?6aG555uu6L+b5bqm?=
+Message-ID: <alt-1@example.com>
+Date: Thu, 05 Jan 2023 12:00:00 +0000
+Content-Type: multipart/alternative; boundary="b1"
+
+--b1
+Content-Type: text/plain; charset=utf-8
+
+Plain version.
+--b1
+Content-Type: text/html; charset=utf-8
+
+<html><body><p>HTML <b>version</b>.</p><script>alert(1)</script></body></html>
+--b1--

@@ -198,3 +198,6 @@ type SyncBatch struct {
 	Messages []Message
 	Flags    []FlagUpdate
 }
+
+// nowUTC is the clock of the cache's timestamps.
+func nowUTC() time.Time { return time.Now().UTC() }

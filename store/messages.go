@@ -176,12 +176,17 @@ func (s *Store) SaveMessage(ctx context.Context, accountID, folder string, m mai
 			m.RawHeaders, unixPtr(m.CachedAt)),
 	}
 	var id int64
-	rows, err := s.query(ctx, `SELECT id FROM messages WHERE folder_id = ? AND server_uid = ?`, folderID, int64(m.UID))
+	var wasSeen bool
+	rows, err := s.query(ctx, `SELECT id, seen FROM messages WHERE folder_id = ? AND server_uid = ?`, folderID, int64(m.UID))
 	if err != nil {
 		return err
 	}
 	if len(rows.Values) == 1 {
 		id = number(rows.Values[0][0])
+		wasSeen = truth(rows.Values[0][1])
+	}
+	if m.Seen && !wasSeen {
+		stmts = append(stmts, stmt(`UPDATE folders SET unread = MAX(0, unread - 1) WHERE id = ?`, folderID))
 	}
 	if id != 0 {
 		stmts = append(stmts, stmt(`DELETE FROM attachments WHERE message_id = ?`, id))

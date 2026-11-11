@@ -1,0 +1,56 @@
+{
+  "@@locale": "en",
+  "appName": "Shu",
+  "searchMail": "Search mail",
+  "searchMailLabel": "Search mail",
+  "sync": "Sync",
+  "syncMail": "Sync mail",
+  "compose": "Compose",
+  "newMessage": "New message",
+  "mailboxes": "Mailboxes",
+  "inbox": "Inbox",
+  "starred": "Starred",
+  "sent": "Sent",
+  "drafts": "Drafts",
+  "archive": "Archive",
+  "junk": "Junk",
+  "trash": "Trash",
+  "labels": "Labels",
+  "work": "Work",
+  "personal": "Personal",
+  "receipts": "Receipts",
+  "travel": "Travel",
+  "filter": "Filter",
+  "filterMessages": "Filter messages",
+  "more": "More",
+  "moreActions": "More actions",
+  "searchFolder": "Search {folder}",
+  "@searchFolder": {
+    "description": "The search field that searches one folder.",
+    "placeholders": {
+      "folder": { "type": "String", "example": "Inbox" }
+    }
+  },
+  "noMessageSelected": "No message selected",
+  "messageActions": "Message actions",
+  "delete": "Delete",
+  "flag": "Flag",
+  "reply": "Reply",
+  "replyAll": "Reply All",
+  "forward": "Forward",
+  "toMe": "to me",
+  "unreadCount": "{count, plural, =0 {No unread messages} one {# unread message} other {# unread messages}}",
+  "@unreadCount": {
+    "description": "The unread badge of a folder.",
+    "placeholders": {
+      "count": { "type": "int", "example": "3" }
+    }
+  },
+  "messageCount": "{count, plural, =0 {No messages} one {# message} other {# messages}}",
+  "@messageCount": {
+    "description": "The number of messages in a folder.",
+    "placeholders": {
+      "count": { "type": "int", "example": "3" }
+    }
+  }
+}

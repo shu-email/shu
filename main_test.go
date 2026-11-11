@@ -3,8 +3,14 @@ package main
 import (
 	"testing"
 
+	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 )
+
+func TestMain(m *testing.M) {
+	i18n.SetLocaleFunc(func() string { return "en" })
+	m.Run()
+}
 
 // The view runs without a window in tests, which click and type as a user
 // would.

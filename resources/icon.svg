@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <!-- Shu app icon: an open book, two pages. Background is Shu indigo. -->
-  <rect width="1024" height="1024" fill="#252161"/>
-  <path fill="#ffffff" d="M528 396 C600 300 722 234 846 244 C872 430 862 580 838 692 C745 692 615 740 528 796 Z"/>
-  <path fill="#ffffff" d="M496 396 C424 300 302 234 178 244 C152 430 162 580 186 692 C279 692 409 740 496 796 Z"/>
-</svg>

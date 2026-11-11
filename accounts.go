@@ -182,7 +182,7 @@ func (a *app) accountsView(c *ui.Context) {
 func (a *app) accountFields(c *ui.Context, t *ui.Theme) {
 	f := &a.accountForm
 	a.section(c, locales.Provider(), func() {
-		ui.Select(c, &f.Provider, providerNames()).Fill().Label(locales.Provider()).
+		ui.Select(c, &f.Provider, providerNames()).FillWidth().Label(locales.Provider()).
 			OnChange(func() {
 				for _, p := range mail.Providers {
 					if p.Name == f.Provider {
@@ -192,34 +192,47 @@ func (a *app) accountFields(c *ui.Context, t *ui.Theme) {
 				}
 			})
 	})
-	ui.Row(c).Gap(12).Children(func() {
-		a.field(c, locales.AccountName(), ui.TextInput(c, &f.Name).
-			Placeholder(locales.AccountNamePlaceholder()).Label(locales.AccountName()))
-		a.field(c, locales.Email(), ui.TextInput(c, &f.Email).
-			Placeholder("name@example.com").Label(locales.Email()))
+	a.field(c, locales.AccountName(), func() ui.Element {
+		return ui.TextInput(c, &f.Name).
+			Placeholder(locales.AccountNamePlaceholder()).Label(locales.AccountName())
+	})
+	a.field(c, locales.Email(), func() ui.Element {
+		return ui.TextInput(c, &f.Email).Placeholder("name@example.com").Label(locales.Email())
 	})
 	ui.Column(c).Gap(4).Children(func() {
 		ui.Text(c, locales.Password()).FontSize(11).Bold().TextColor(t.TextMuted)
-		ui.TextInput(c, &f.Password).Password().Label(locales.Password()).
-			Placeholder(locales.PasswordKeep())
+		pw := ui.TextInput(c, &f.Password).Password().Label(locales.Password())
 		if f.editing {
+			pw.Placeholder(locales.PasswordKeep())
 			ui.Text(c, locales.PasswordKeep()).FontSize(11).TextColor(t.TextMuted)
 		}
 		ui.Text(c, locales.PasswordAppNote()).FontSize(11).TextColor(t.TextMuted)
 	})
 	a.section(c, locales.ImapSection(), func() {
-		ui.Row(c).Gap(12).Children(func() {
-			a.field(c, locales.Host(), ui.TextInput(c, &f.Host).Label(locales.Host()))
-			a.field(c, locales.Port(), ui.TextInput(c, &f.Port).Width(110).Label(locales.Port()))
+		a.field(c, locales.Host(), func() ui.Element {
+			return ui.TextInput(c, &f.Host).Label(locales.Host())
 		})
-		a.field(c, locales.Security(), ui.Select(c, &f.TLS, tlsNames()).Width(180).Label(locales.Security()))
+		ui.Row(c).Gap(12).Children(func() {
+			a.fixedField(c, locales.Port(), 140, func() ui.Element {
+				return ui.TextInput(c, &f.Port).Label(locales.Port())
+			})
+			a.fixedField(c, locales.Security(), 220, func() ui.Element {
+				return ui.Select(c, &f.TLS, tlsNames()).Label(locales.Security())
+			})
+		})
 	})
 	a.section(c, locales.SmtpSection(), func() {
-		ui.Row(c).Gap(12).Children(func() {
-			a.field(c, locales.Host(), ui.TextInput(c, &f.SMTPHost).Label(locales.Host()))
-			a.field(c, locales.Port(), ui.TextInput(c, &f.SMTPPort).Width(110).Label(locales.Port()))
+		a.field(c, locales.Host(), func() ui.Element {
+			return ui.TextInput(c, &f.SMTPHost).Label(locales.Host())
 		})
-		a.field(c, locales.Security(), ui.Select(c, &f.SMTPTLS, tlsNames()).Width(180).Label(locales.Security()))
+		ui.Row(c).Gap(12).Children(func() {
+			a.fixedField(c, locales.Port(), 140, func() ui.Element {
+				return ui.TextInput(c, &f.SMTPPort).Label(locales.Port())
+			})
+			a.fixedField(c, locales.Security(), 220, func() ui.Element {
+				return ui.Select(c, &f.SMTPTLS, tlsNames()).Label(locales.Security())
+			})
+		})
 	})
 }
 
@@ -233,12 +246,23 @@ func (a *app) section(c *ui.Context, title string, fn func()) {
 	})
 }
 
-// field labels one input.
-func (a *app) field(c *ui.Context, label string, input ui.Element) {
+// field labels one input and fills the form's width. The input is built
+// inside the field, as MyGo elements attach to the scope that builds them.
+func (a *app) field(c *ui.Context, label string, build func() ui.Element) {
 	t := c.Theme()
-	ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
+	ui.Column(c).Gap(4).Children(func() {
 		ui.Text(c, label).FontSize(11).Bold().TextColor(t.TextMuted)
-		input.Fill()
+		build().FillWidth()
+	})
+}
+
+// fixedField places a labelled input at an explicit width, so a row of
+// fields keeps its shape.
+func (a *app) fixedField(c *ui.Context, label string, width float32, build func() ui.Element) {
+	t := c.Theme()
+	ui.Column(c).Width(width).Gap(4).Children(func() {
+		ui.Text(c, label).FontSize(11).Bold().TextColor(t.TextMuted)
+		build().FillWidth()
 	})
 }
 

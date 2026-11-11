@@ -20,9 +20,10 @@ func (a *app) readingPane(c *ui.Context, t *ui.Theme) {
 		a.readingToolbar(c, t)
 		m, msg := a.current()
 		if m == nil {
-			ui.Column(c).Fill().Center().Gap(6).Children(func() {
-				ui.Icon(c, inboxIcon).FontSize(36).TextColor(t.TextMuted)
+			ui.Column(c).Fill().Center().Gap(8).Children(func() {
+				ui.Icon(c, mailOpenIcon).FontSize(36).TextColor(t.TextMuted)
 				ui.Text(c, locales.NoMessageSelected()).FontSize(15).TextColor(t.TextMuted)
+				ui.Text(c, locales.ShortcutsHint()).FontSize(11).TextColor(t.TextMuted.Alpha(0.7)).TextAlign(ui.Center)
 			})
 			return
 		}
@@ -76,6 +77,11 @@ func (a *app) readingToolbar(c *ui.Context, t *ui.Theme) {
 			starLabel = locales.UnstarMessage()
 		}
 		a.toolButton(c, starIcon, starLabel, has, func() { a.toggleStar() })
+		readLabel, readIcon := locales.MarkRead(), mailOpenIcon
+		if a.selected >= 0 && a.selected < len(a.all) && a.all[a.selected].Seen {
+			readLabel, readIcon = locales.MarkUnread(), mailIcon
+		}
+		a.toolButton(c, readIcon, readLabel, has, func() { a.toggleRead() })
 		a.toolDivider(c)
 		a.toolButton(c, replyIcon, locales.Reply(), has, func() { a.reply(false) })
 		a.toolButton(c, replyAllIcon, locales.ReplyAll(), has, func() { a.reply(true) })
@@ -498,4 +504,75 @@ func withPrefix(subject, prefix string) string {
 		return strings.TrimSpace(prefix)
 	}
 	return prefix + trimmed
+}
+
+// stepMessage moves the choice by delta rows, as J and K do.
+func (a *app) stepMessage(delta int) {
+	if len(a.all) == 0 {
+		return
+	}
+	next := a.selected + delta
+	if a.selected < 0 {
+		next = 0
+	}
+	next = max(0, min(next, len(a.all)-1))
+	a.list.Choose(next)
+	a.list.ScrollTo(next, ui.Center)
+	a.bodyErr = ""
+	a.reloadBody()
+}
+
+// toggleRead marks the chosen message read or unread, optimistically.
+func (a *app) toggleRead() {
+	if a.selected < 0 || a.selected >= len(a.all) {
+		return
+	}
+	idx := a.selected
+	m := a.all[idx]
+	key := summaryKey(m)
+	on := !m.Seen
+	accountID, folder, uid := a.active, m.Folder, m.UID
+	folderIndex := -1
+	for i := range a.folders {
+		if a.folders[i].Name == folder {
+			folderIndex = i
+		}
+	}
+	if on {
+		a.all[idx].Seen = true
+		if folderIndex >= 0 {
+			a.folders[folderIndex].Unread = max(0, a.folders[folderIndex].Unread-1)
+		}
+	} else {
+		a.all[idx].Seen = false
+		if folderIndex >= 0 {
+			a.folders[folderIndex].Unread++
+		}
+	}
+	g := a.gen
+	a.run(func() {
+		ctx, cancel := a.ctx()
+		defer cancel()
+		err := a.svc.SetFlag(ctx, accountID, folder, uid, mail.FlagSeen, on)
+		a.post(func() {
+			if a.stale(g) {
+				return
+			}
+			if err != nil {
+				for i := range a.all {
+					if summaryKey(a.all[i]) == key {
+						a.all[i].Seen = !on
+					}
+				}
+				if folderIndex >= 0 {
+					if on {
+						a.folders[folderIndex].Unread++
+					} else {
+						a.folders[folderIndex].Unread = max(0, a.folders[folderIndex].Unread-1)
+					}
+				}
+				a.err = err.Error()
+			}
+		})
+	})
 }

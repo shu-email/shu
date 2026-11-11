@@ -1245,3 +1245,53 @@ func Body() string { return In(i18n.Locale()).Body() }
 func (msgs Messages) Body() string {
 	return Catalog.Format(msgs.locale, "body", nil)
 }
+
+// SearchResults says "Search results"
+// in the language the app shows.
+func SearchResults() string { return In(i18n.Locale()).SearchResults() }
+
+// SearchResults says "Search results"
+// in the language of msgs.
+func (msgs Messages) SearchResults() string {
+	return Catalog.Format(msgs.locale, "searchResults", nil)
+}
+
+// MarkRead says "Mark read"
+// in the language the app shows.
+func MarkRead() string { return In(i18n.Locale()).MarkRead() }
+
+// MarkRead says "Mark read"
+// in the language of msgs.
+func (msgs Messages) MarkRead() string {
+	return Catalog.Format(msgs.locale, "markRead", nil)
+}
+
+// MarkUnread says "Mark unread"
+// in the language the app shows.
+func MarkUnread() string { return In(i18n.Locale()).MarkUnread() }
+
+// MarkUnread says "Mark unread"
+// in the language of msgs.
+func (msgs Messages) MarkUnread() string {
+	return Catalog.Format(msgs.locale, "markUnread", nil)
+}
+
+// ComposeBodyPlaceholder says "Write a message…"
+// in the language the app shows.
+func ComposeBodyPlaceholder() string { return In(i18n.Locale()).ComposeBodyPlaceholder() }
+
+// ComposeBodyPlaceholder says "Write a message…"
+// in the language of msgs.
+func (msgs Messages) ComposeBodyPlaceholder() string {
+	return Catalog.Format(msgs.locale, "composeBodyPlaceholder", nil)
+}
+
+// ShortcutsHint says "J / K move · E archive · S star · U unread · R reply"
+// in the language the app shows.
+func ShortcutsHint() string { return In(i18n.Locale()).ShortcutsHint() }
+
+// ShortcutsHint says "J / K move · E archive · S star · U unread · R reply"
+// in the language of msgs.
+func (msgs Messages) ShortcutsHint() string {
+	return Catalog.Format(msgs.locale, "shortcutsHint", nil)
+}

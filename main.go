@@ -37,14 +37,16 @@ type app struct {
 	folder   string
 	query    string
 
-	all        []mail.Summary
-	selected   int
-	list       ui.ListState
-	bodies     map[string]mail.FetchResult
-	bodyLocked bool
-	bodyErr    string
-	loading    bool
-	err        string
+	all         []mail.Summary
+	selected    int
+	list        ui.ListState
+	searchField ui.Handle
+	focusList   bool
+	bodies      map[string]mail.FetchResult
+	bodyLocked  bool
+	bodyErr     string
+	loading     bool
+	err         string
 
 	pending          []mail.PendingSend
 	pendingDismissed bool
@@ -73,10 +75,11 @@ type app struct {
 // newApp makes the state the tests and main use.
 func newApp(svc mailService) *app {
 	return &app{
-		svc:      svc,
-		run:      func(f func()) { go f() },
-		selected: -1,
-		bodies:   map[string]mail.FetchResult{},
+		svc:       svc,
+		run:       func(f func()) { go f() },
+		selected:  -1,
+		focusList: true,
+		bodies:    map[string]mail.FetchResult{},
 	}
 }
 
@@ -280,6 +283,9 @@ func (a *app) loadMessages(g uint64) {
 			}
 			a.all = msgs
 			a.restoreSelection(key)
+			if a.selected < 0 && len(a.all) > 0 && query == "" {
+				a.selected = 0
+			}
 			a.reloadBody()
 		})
 	})
@@ -611,15 +617,28 @@ func (a *app) mailView(c *ui.Context) {
 	t := c.Theme()
 	bar := c.TitleBar()
 	top := max(bar.Bottom, 52)
+	c.OnShortcut(ui.Cmd, ui.KeyK, func() { a.searchField.Focus(c) })
+	c.OnShortcut(ui.Cmd, ui.KeyN, func() { a.openCompose(nil) })
+	c.OnShortcut(ui.Cmd, ui.KeyR, func() { a.refresh() })
 	ui.Column(c).Fill().Background(t.Background).Children(func() {
 		a.titleBar(c, t, bar, top)
-		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
+		panes := ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
 			a.sidebar(c, t)
 			ui.Box(c).Width(1).Shrink(0).Background(t.Border)
 			a.messageList(c, t)
 			ui.Box(c).Width(1).Shrink(0).Background(t.Border)
 			a.readingPane(c, t)
 		})
+		// Unmodified shortcuts live in the three panes' focus subtree, so
+		// typing in the search field is never taken for a command.
+		panes.OnShortcut(0, ui.KeyJ, func() { a.stepMessage(1) })
+		panes.OnShortcut(0, ui.KeyK, func() { a.stepMessage(-1) })
+		panes.OnShortcut(0, ui.KeyU, func() { a.toggleRead() })
+		panes.OnShortcut(0, ui.KeyS, func() { a.toggleStar() })
+		panes.OnShortcut(0, ui.KeyE, func() { a.moveSelected(mail.SpecialArchive) })
+		panes.OnShortcut(0, ui.KeyR, func() { a.reply(false) })
+		panes.OnShortcut(0, ui.KeyF, func() { a.forward() })
+		panes.OnShortcut(0, ui.KeyDelete, func() { a.moveSelected(mail.SpecialTrash) })
 	})
 }
 
@@ -635,8 +654,10 @@ func (a *app) titleBar(c *ui.Context, t *ui.Theme, bar ui.TitleBar, height float
 		})
 		ui.Text(c, locales.AppName()).FontSize(15).Bold()
 		ui.Spacer(c)
-		ui.SearchField(c, &a.query).Width(300).Placeholder(locales.SearchMail()).
-			Label(locales.SearchMailLabel()).
+		ui.SearchField(c, &a.query).Width(300).
+			Placeholder(locales.SearchFolder(a.folderLabel(a.folder))).
+			Label(locales.SearchMailLabel()).Bind(&a.searchField).
+			OnClick(func() { a.focusList = false }).
 			OnChange(func() { a.search() })
 		if a.loading {
 			ui.Spinner(c).Size(14, 14)

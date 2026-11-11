@@ -224,6 +224,23 @@ func (f *fakeService) markSeen(accountID, folder string, uid mail.UID, seen bool
 			f.messages[key] = list
 		}
 	}
+	f.recount(accountID, folder)
+}
+
+// recount keeps the fake folder's unread count in step with its rows.
+func (f *fakeService) recount(accountID, folder string) {
+	unread := 0
+	for _, m := range f.messages[listKey(accountID, folder)] {
+		if !m.Seen {
+			unread++
+		}
+	}
+	for i := range f.folders[accountID] {
+		if f.folders[accountID][i].Name == folder {
+			f.folders[accountID][i].Unread = unread
+			f.folders[accountID][i].Total = len(f.messages[listKey(accountID, folder)])
+		}
+	}
 }
 
 func (f *fakeService) SetFlag(ctx context.Context, accountID, folder string, uid mail.UID, flag mail.Flag, on bool) error {
@@ -244,6 +261,9 @@ func (f *fakeService) SetFlag(ctx context.Context, accountID, folder string, uid
 			list[i].Seen = on
 		}
 		f.messages[key] = list
+	}
+	if flag == mail.FlagSeen {
+		f.recount(accountID, folder)
 	}
 	return nil
 }

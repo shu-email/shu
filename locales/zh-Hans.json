@@ -119,5 +119,10 @@
   "starMessage": "为邮件加星标",
   "unstarMessage": "取消邮件星标",
   "noRecipients": "请至少添加一位收件人。",
-  "body": "正文"
+  "body": "正文",
+  "searchResults": "搜索结果",
+  "markRead": "标记为已读",
+  "markUnread": "标记为未读",
+  "composeBodyPlaceholder": "写点什么…",
+  "shortcutsHint": "J / K 移动 · E 归档 · S 星标 · U 未读 · R 回复"
 }

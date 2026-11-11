@@ -92,11 +92,12 @@ func (cs *composeState) view(c *ui.Context) {
 	ui.Column(c).Fill().Background(t.Background).Padding(18, 20).Gap(10).
 		OnShortcut(ui.Cmd, ui.KeyEnter, cs.send).
 		OnShortcut(0, ui.KeyEscape, cs.close).Children(func() {
-		cs.input(c, locales.To(), &cs.to)
-		cs.input(c, locales.Cc(), &cs.cc)
-		cs.input(c, locales.Subject(), &cs.subject)
+		cs.row(c, locales.To(), "name@example.com", &cs.to)
+		cs.row(c, locales.Cc(), "", &cs.cc)
+		cs.row(c, locales.Subject(), "", &cs.subject)
+		ui.Divider(c)
 		ui.TextArea(c, &cs.body).Grow(1).MinHeight(220).Label(locales.Body()).
-			Placeholder(locales.Compose())
+			Placeholder(locales.ComposeBodyPlaceholder())
 		if cs.err != "" {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Icon(c, alertIcon).FontSize(14).TextColor(t.Warning)
@@ -118,12 +119,13 @@ func (cs *composeState) view(c *ui.Context) {
 	})
 }
 
-// input is a labelled text field.
-func (cs *composeState) input(c *ui.Context, label string, value *string) {
+// row is a compact compose field with its label inline, as mail apps
+// show recipients and the subject.
+func (cs *composeState) row(c *ui.Context, label, placeholder string, value *string) {
 	t := c.Theme()
-	ui.Column(c).Gap(3).Children(func() {
-		ui.Text(c, label).FontSize(11).Bold().TextColor(t.TextMuted)
-		ui.TextInput(c, value).Label(label)
+	ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, label).FontSize(12).TextColor(t.TextMuted).Width(52)
+		ui.TextInput(c, value).Grow(1).Label(label).Placeholder(placeholder)
 	})
 }
 

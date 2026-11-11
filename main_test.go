@@ -120,10 +120,13 @@ func TestSelectingMessageLoadsBodyAndMarksRead(t *testing.T) {
 func TestSearch(t *testing.T) {
 	a, _ := sampleApp(t)
 	tt := ui.NewTester(a.view, 1220, 800)
-	if err := tt.Click("Search messages"); err != nil {
+	if err := tt.Click("Search mail"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Type("GitHub")
+	if !tt.HasText("Search results") {
+		t.Errorf("search title missing: %q", tt.Texts())
+	}
 	if !tt.HasText("Pull request #128") {
 		t.Errorf("search result missing: %q", tt.Texts())
 	}
@@ -448,6 +451,8 @@ func TestAttachmentSaveAs(t *testing.T) {
 		Attachments: []mail.Attachment{{Part: "2", Filename: "report.txt", ContentType: "text/plain", Size: 4}},
 	}
 	fs.attachment = mail.Attachment{Part: "2", Filename: "report.txt"}
+	delete(a.bodies, summaryKey(m))
+	a.reloadBody()
 	path := filepath.Join(t.TempDir(), "report.txt")
 	a.saveFile = func(parent *mygo.Window, name string) (string, error) { return path, nil }
 	tt := ui.NewTester(a.view, 1220, 800)
@@ -466,5 +471,70 @@ func TestAttachmentSaveAs(t *testing.T) {
 	}
 	if string(data) != "data" {
 		t.Errorf("saved bytes = %q", data)
+	}
+}
+
+// The first message opens with the folder, and J/K move the choice.
+func TestKeyboardNavigation(t *testing.T) {
+	a, _ := sampleApp(t)
+	tt := ui.NewTester(a.view, 1220, 800)
+	if a.selected != 0 {
+		t.Fatalf("selected = %d after opening the folder", a.selected)
+	}
+	tt.Key(0, ui.KeyJ)
+	if a.selected != 1 {
+		t.Fatalf("selected = %d after J", a.selected)
+	}
+	if !tt.HasText("Body of [shu-email/shu] Pull request #128") {
+		t.Errorf("J did not open the next body: %q", tt.Texts())
+	}
+	tt.Key(0, ui.KeyK)
+	if a.selected != 0 {
+		t.Errorf("selected = %d after K", a.selected)
+	}
+	// U marks the chosen message unread again.
+	tt.Key(0, ui.KeyU)
+	if a.all[0].Seen {
+		t.Error("U did not mark the message unread")
+	}
+	if got := a.folderUnread("INBOX"); got != 1 {
+		t.Errorf("inbox unread = %d after U", got)
+	}
+}
+
+// Plain shortcuts do not fire while the search field has the focus.
+func TestShortcutsDoNotStealTyping(t *testing.T) {
+	a, _ := sampleApp(t)
+	tt := ui.NewTester(a.view, 1220, 800)
+	if err := tt.Click("Design review — Thursday at 10"); err != nil {
+		t.Fatal(err)
+	}
+	selected := a.selected
+	if err := tt.Click("Search mail"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Type("de")
+	if a.query != "de" {
+		t.Errorf("query = %q", a.query)
+	}
+	if a.selected != selected {
+		t.Errorf("typing moved the selection from %d to %d", selected, a.selected)
+	}
+	if len(a.all) == 0 || !strings.Contains(a.all[0].Subject, "Design review") {
+		t.Errorf("typing E archived the message: %+v", a.all)
+	}
+}
+
+// Cmd+K focuses the search field from the mail panes.
+func TestCmdKFocusesSearch(t *testing.T) {
+	a, _ := sampleApp(t)
+	tt := ui.NewTester(a.view, 1220, 800)
+	if err := tt.Click("Design review — Thursday at 10"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Key(ui.Cmd, ui.KeyK)
+	tt.Type("GitHub")
+	if a.query != "GitHub" {
+		t.Errorf("query = %q after Cmd+K and typing", a.query)
 	}
 }

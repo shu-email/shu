@@ -46,4 +46,6 @@ var (
 	closeIcon       = mustIcon("x")
 	checkIcon       = mustIcon("check")
 	alertIcon       = mustIcon("circle-alert")
+	mailIcon        = mustIcon("mail")
+	mailOpenIcon    = mustIcon("mail-open")
 )

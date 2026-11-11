@@ -222,5 +222,10 @@
   "starMessage": "Star message",
   "unstarMessage": "Unstar message",
   "noRecipients": "Add at least one recipient.",
-  "body": "Body"
+  "body": "Body",
+  "searchResults": "Search results",
+  "markRead": "Mark read",
+  "markUnread": "Mark unread",
+  "composeBodyPlaceholder": "Write a message…",
+  "shortcutsHint": "J / K move · E archive · S star · U unread · R reply"
 }

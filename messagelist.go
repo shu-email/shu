@@ -18,12 +18,6 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 			BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
 			a.listHeader(c, t)
 		})
-		ui.Row(c).Shrink(0).Gap(8).AlignItems(ui.Center).Padding(8, 14, 8, 14).Children(func() {
-			ui.SearchField(c, &a.query).Grow(1).
-				Placeholder(locales.SearchFolder(a.folderLabel(a.folder))).
-				Label(locales.SearchMessages()).
-				OnChange(func() { a.search() })
-		})
 		if a.err != "" {
 			a.errorBanner(c, t)
 		}
@@ -53,13 +47,28 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 				a.reloadBody()
 			}).
 			Rows(a.messageRow)
+		// Put the keyboard in the list once mail loads, so J/K work
+		// without a first click. A search field that took the focus keeps
+		// it.
+		if a.focusList && len(a.all) > 0 && !a.searchField.Focused(c) {
+			a.focusList = false
+			a.list.Handle.Focus(c)
+		}
 	})
 }
 
-// listHeader draws the folder title and the unread badge.
+// listHeader draws the folder title and the unread badge, or the number
+// of results while searching.
 func (a *app) listHeader(c *ui.Context, t *ui.Theme) {
-	ui.Text(c, a.folderLabel(a.folder)).FontSize(17).Bold().SingleLine()
-	if n := a.unread(); n > 0 {
+	query := strings.TrimSpace(a.query)
+	title := a.folderLabel(a.folder)
+	if query != "" {
+		title = locales.SearchResults()
+	}
+	ui.Text(c, title).FontSize(17).Bold().SingleLine()
+	if query != "" {
+		ui.Badge(c, fmt.Sprint(len(a.all))).Background(t.Surface).TextColor(t.TextMuted)
+	} else if n := a.unread(); n > 0 {
 		ui.Badge(c, fmt.Sprint(n)).Background(t.Accent).TextColor(t.AccentText)
 	}
 	ui.Spacer(c)

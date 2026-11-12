@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"runtime"
 	"strings"
 	"time"
 
@@ -105,16 +106,22 @@ func (cs *composeState) view(c *ui.Context) {
 			})
 		}
 		ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+			ui.Spacer(c)
+			key := "Ctrl+Enter"
+			if runtime.GOOS == "darwin" {
+				key = "⌘↩"
+			}
+			ui.Text(c, locales.SendHint(key)).FontSize(11).TextColor(t.TextMuted)
+			if cs.note != "" {
+				ui.Text(c, cs.note).FontSize(12).TextColor(t.TextMuted)
+			}
+			ui.Button(c, locales.Cancel()).OnClick(func() { cs.close() })
 			label := locales.Send()
 			if cs.sending {
 				label = locales.Sending()
 			}
 			ui.PrimaryButton(c, label).Label(locales.Send()).Disabled(cs.sending).
 				OnClick(func() { cs.send() })
-			ui.Button(c, locales.Cancel()).OnClick(func() { cs.close() })
-			if cs.note != "" {
-				ui.Text(c, cs.note).FontSize(12).TextColor(t.TextMuted)
-			}
 		})
 	})
 }

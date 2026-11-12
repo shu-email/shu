@@ -1325,3 +1325,53 @@ func ClearSelection() string { return In(i18n.Locale()).ClearSelection() }
 func (msgs Messages) ClearSelection() string {
 	return Catalog.Format(msgs.locale, "clearSelection", nil)
 }
+
+// Archived says "Archived"
+// in the language the app shows.
+func Archived() string { return In(i18n.Locale()).Archived() }
+
+// Archived says "Archived"
+// in the language of msgs.
+func (msgs Messages) Archived() string {
+	return Catalog.Format(msgs.locale, "archived", nil)
+}
+
+// Deleted says "Deleted"
+// in the language the app shows.
+func Deleted() string { return In(i18n.Locale()).Deleted() }
+
+// Deleted says "Deleted"
+// in the language of msgs.
+func (msgs Messages) Deleted() string {
+	return Catalog.Format(msgs.locale, "deleted", nil)
+}
+
+// MovedToJunk says "Moved to junk"
+// in the language the app shows.
+func MovedToJunk() string { return In(i18n.Locale()).MovedToJunk() }
+
+// MovedToJunk says "Moved to junk"
+// in the language of msgs.
+func (msgs Messages) MovedToJunk() string {
+	return Catalog.Format(msgs.locale, "movedToJunk", nil)
+}
+
+// SendHint says "{key} to send"
+// in the language the app shows.
+func SendHint(key string) string { return In(i18n.Locale()).SendHint(key) }
+
+// SendHint says "{key} to send"
+// in the language of msgs.
+func (msgs Messages) SendHint(key string) string {
+	return Catalog.Format(msgs.locale, "sendHint", map[string]any{"key": key})
+}
+
+// SearchClear says "Clear search"
+// in the language the app shows.
+func SearchClear() string { return In(i18n.Locale()).SearchClear() }
+
+// SearchClear says "Clear search"
+// in the language of msgs.
+func (msgs Messages) SearchClear() string {
+	return Catalog.Format(msgs.locale, "searchClear", nil)
+}

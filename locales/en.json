@@ -238,5 +238,18 @@
         "example": "3"
       }
     }
+  },
+  "archived": "Archived",
+  "deleted": "Deleted",
+  "movedToJunk": "Moved to junk",
+  "sendHint": "{key} to send",
+  "searchClear": "Clear search",
+  "@sendHint": {
+    "placeholders": {
+      "key": {
+        "type": "String",
+        "example": "⌘↩"
+      }
+    }
   }
 }

@@ -18,12 +18,16 @@ type Address struct {
 	Email string `json:"email"`
 }
 
-// String writes the address as a header does.
+// String writes the address for a text field, quoting the name only when
+// it needs it.
 func (a Address) String() string {
 	if a.Name == "" {
 		return a.Email
 	}
-	return (&mail.Address{Name: a.Name, Address: a.Email}).String()
+	if strings.ContainsAny(a.Name, `"<>(),;:\[]@`) {
+		return (&mail.Address{Name: a.Name, Address: a.Email}).String()
+	}
+	return a.Name + " <" + a.Email + ">"
 }
 
 // ParseAddress parses one address, keeping its name.

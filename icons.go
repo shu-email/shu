@@ -40,6 +40,7 @@ var (
 	refreshIcon     = mustIcon("refresh-cw")
 	flagIcon        = mustIcon("flag")
 	chevronDownIcon = mustIcon("chevron-down")
+	chevronLeftIcon = mustIcon("chevron-left")
 	downloadIcon    = mustIcon("download")
 	settingsIcon    = mustIcon("settings")
 	plusIcon        = mustIcon("plus")

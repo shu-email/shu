@@ -35,6 +35,13 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 					ui.Icon(c, inboxIcon).FontSize(30).TextColor(t.TextMuted)
 				}
 				ui.Text(c, msg).FontSize(13).TextColor(t.TextMuted).TextAlign(ui.Center)
+				if strings.TrimSpace(a.query) != "" {
+					ui.Button(c, locales.SearchClear()).OnClick(func() {
+						a.query = ""
+						a.sel.Clear()
+						a.search()
+					})
+				}
 			})
 			return
 		}

@@ -127,5 +127,10 @@
   "shortcutsHint": "J / K 移动 · E 归档 · S 星标 · U 未读 · R 回复",
   "undo": "撤销",
   "selectedCount": "{count, plural, other {已选择 # 封邮件}}",
-  "clearSelection": "清除选择"
+  "clearSelection": "清除选择",
+  "archived": "已归档",
+  "deleted": "已删除",
+  "movedToJunk": "已移到垃圾邮件",
+  "sendHint": "按 {key} 发送",
+  "searchClear": "清除搜索"
 }

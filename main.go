@@ -1452,6 +1452,10 @@ func (q *noteClicks) deliver(open func(id string)) {
 	}
 }
 
+// seedDev, set by seed_e2e.go in the dev builds it is linked into, has
+// the engine use local mail servers when SHU_SEED=1 asks for them.
+var seedDev func(ctx context.Context, svc *mail.Service) error
+
 func main() {
 	// Registered before Run, as the click on a notification that launched
 	// the app is delivered while it starts.
@@ -1479,6 +1483,11 @@ func main() {
 		// What a draft has attached is the user's data, not a cache that
 		// the system may clear: it is kept beside the database.
 		svc.SetDataDir(dataDir)
+		if seedDev != nil {
+			if err := seedDev(ctx, svc); err != nil {
+				log.Fatalf("seed: %v", err)
+			}
+		}
 		a := newApp(svc)
 		a.ai = ai.NewService(db, aiKeychain{})
 		win := mygo.NewWindow(mygo.WindowOptions{

@@ -27,10 +27,12 @@ behavior change and run without a display.
 - Drive only the dev build, `shu Dev`. It keeps its data apart from a real
   install (`~/Library/Application Support/shu Dev` on macOS). Never attach
   agent-desktop to a release build: its buttons act on real mail.
-- Never add a real account to the dev build. If it has none, stop and ask
-  the user.
+- Never add a real account to the dev build. Check with the seeded
+  account (below); if a check needs anything else, stop and ask the user.
 - Do not press Send, Delete, Move to Junk, Empty Trash or any AI button
-  (summary, triage, draft reply) unless the user asked for that step. AI
+  (summary, triage, draft reply) unless the user asked for that step, or
+  the account is the seeded one, where only the AI buttons stay off
+  limits. AI
   buttons send mail text to the user's model provider.
 - Leave the app as you found it: clear the search (`fill <field> ""`),
   go back to the folder you started in, move the keyboard focus back to
@@ -59,8 +61,25 @@ Note `front` (macOS), then start the app as a background job:
 
 ```sh
 rm -f "$SOCK"   # a stopped app leaves its socket behind
-GOFLAGS=-tags=e2e MYGO_AUTOMATION="$SOCK" go tool mygo dev -background -lang en
+GOFLAGS=-tags=e2e SHU_SEED=1 MYGO_AUTOMATION="$SOCK" go tool mygo dev -background -lang en
 ```
+
+`SHU_SEED=1` (`seed_e2e.go`) starts local IMAP and SMTP servers inside the
+app, which keep their mail in memory, and adds the account
+`dev@example.com` (Dev Seed) on them. Each launch removes that account and
+adds it again, so every run starts from the same mailbox
+(`internal/fakemail/seed.go`): a conversation across the inbox and Sent,
+one across the inbox and Archive, a newsletter with remote images, a mail
+with two attachments, one in Chinese, a long one, a draft, junk, trash and
+more inbox mail than the first sync keeps. Drafts and changes made in it
+are gone at the next launch. Its watcher and syncs reach only these
+servers: the engine then trusts their certificate and no other, so other
+accounts of the dev build fail to connect for the run.
+
+Sending is safe here: the SMTP server delivers nothing and writes each
+message it takes to `${XDG_RUNTIME_DIR:-$TMPDIR}/shu-seed/sent/NNN.eml`,
+which a check reads to confirm what was sent. The folder is emptied at
+each launch.
 
 `-background` starts the app, and restarts it after each rebuild, without
 bringing it to the front. `-lang en` fixes the language for this run only

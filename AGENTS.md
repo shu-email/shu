@@ -182,6 +182,8 @@ CGO_ENABLED=0 go test ./... # run the tests
 go tool mygo build        # build a release app
 GOFLAGS=-tags=e2e MYGO_AUTOMATION="$SOCK" go tool mygo dev -background
                           # run it for go tool mygo-automation to drive
+GOFLAGS=-tags=e2e SHU_SEED=1 go tool mygo dev
+                          # run it with a seeded account on local servers
 ```
 
 To check a UI change in the running app, follow
@@ -266,8 +268,11 @@ real clock.
   `ui.NewTester` has its own clock; advance it with `tt.Advance`.
 - For rendering changes, check the light and dark appearances, not just
   the default one.
-- Mail tests run against fake IMAP/SMTP servers only — never a real
-  account, not even a test mailbox on a real provider. Development builds
+- Mail tests run against fake IMAP/SMTP servers only (`internal/fakemail`)
+  — never a real account, not even a test mailbox on a real provider.
+  The dev build's seeded account (`seed_e2e.go`) runs on the same
+  servers; only test files and e2e-tagged files may import that package,
+  and CI checks that release builds leave it out. Development builds
   use a separate data directory from any real install, so a dev run can
   never move, mark or delete a user's real mail.
 

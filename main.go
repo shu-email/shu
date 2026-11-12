@@ -1205,49 +1205,79 @@ func (a *app) mailView(c *ui.Context) {
 		// does.
 		c.OnShortcut(0, ui.KeyEscape, a.cancelSignIn)
 	}
-	ui.Column(c).Fill().Background(t.Background).Children(func() {
-		a.titleBar(c, t, bar, top)
-		panes := ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-			// The panes are keyed, so that they keep their identity, and
-			// their transitions, as the sidebar comes and goes before them.
-			if a.sidebarOpen {
-				ui.Row(c.Key("sidebar")).Shrink(0).AlignItems(ui.Stretch).ClipX().
-					Transition(sidebarMotion).Children(func() {
-					a.sidebar(c, t)
-					ui.Box(c).Width(1).Shrink(0).Background(t.Border)
-				})
+	// Where the window shows its material (macOS, Windows 11), the sidebar
+	// lets it through and the panes draw their own background over it.
+	vibrant := c.Vibrancy()
+	if vibrant {
+		c.Root().Background(ui.Transparent)
+	}
+	ui.Row(c).Fill().AlignItems(ui.Stretch).Children(func() {
+		// The sidebar runs the window's full height, under the window
+		// controls, as a native sidebar does. The panes are keyed, so that
+		// they keep their identity, and their transitions, as it comes and
+		// goes before them.
+		if a.sidebarOpen {
+			side := ui.Row(c.Key("sidebar")).Shrink(0).AlignItems(ui.Stretch).ClipX().
+				Transition(sidebarMotion)
+			if !vibrant {
+				side.Background(t.Surface)
 			}
-			ui.Row(c.Key("list-pane")).Shrink(0).AlignItems(ui.Stretch).
-				Transition(paneMotion).Children(func() {
-				a.messageList(c, t)
+			side.Children(func() {
+				ui.Column(c).Width(222).Shrink(0).Children(func() {
+					ui.Box(c).Height(top).Shrink(0).DragWindow()
+					a.sidebar(c, t, vibrant)
+				})
 				ui.Box(c).Width(1).Shrink(0).Background(t.Border)
 			})
-			ui.Row(c.Key("reading-pane")).Grow(1).MinWidth(0).AlignItems(ui.Stretch).
-				Transition(paneMotion).Children(func() {
-				a.readingPane(c, t)
+			a.paneShortcuts(side)
+		}
+		ui.Column(c.Key("content")).Grow(1).MinWidth(0).Background(t.Background).
+			Transition(paneMotion).Children(func() {
+			a.titleBar(c, t, bar, top)
+			panes := ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
+				ui.Row(c.Key("list-pane")).Shrink(0).AlignItems(ui.Stretch).Children(func() {
+					a.messageList(c, t)
+					ui.Box(c).Width(1).Shrink(0).Background(t.Border)
+				})
+				ui.Row(c.Key("reading-pane")).Grow(1).MinWidth(0).AlignItems(ui.Stretch).Children(func() {
+					a.readingPane(c, t)
+				})
 			})
+			a.paneShortcuts(panes)
 		})
-		// Unmodified shortcuts live in the three panes' focus subtree, so
-		// typing in the search field is never taken for a command.
-		panes.OnShortcut(0, ui.KeyJ, func() { a.stepMessage(1) })
-		panes.OnShortcut(0, ui.KeyK, func() { a.stepMessage(-1) })
-		panes.OnShortcut(0, ui.KeyU, func() { a.toggleRead() })
-		panes.OnShortcut(0, ui.KeyS, func() { a.toggleStar() })
-		panes.OnShortcut(0, ui.KeyE, func() { a.moveSelected(mail.SpecialArchive) })
-		// R answers as the settings say, and Shift+R the other way.
-		panes.OnShortcut(0, ui.KeyR, func() { a.reply(a.replyOrder()[0]) })
-		panes.OnShortcut(ui.Shift, ui.KeyR, func() { a.reply(a.replyOrder()[1]) })
-		panes.OnShortcut(0, ui.KeyF, func() { a.forward() })
-		panes.OnShortcut(0, ui.KeyDelete, func() { a.deleteSelected() })
 	})
 	a.accountModal(c)
 	aiReviewModal(c, &a.review)
 }
 
-// titleBar draws the search field, sync and compose.
+// paneShortcuts gives the sidebar and the panes the unmodified shortcuts.
+// They live in those panes' focus subtrees, so typing in the search field
+// is never taken for a command.
+func (a *app) paneShortcuts(panes ui.Element) {
+	panes.OnShortcut(0, ui.KeyJ, func() { a.stepMessage(1) })
+	panes.OnShortcut(0, ui.KeyK, func() { a.stepMessage(-1) })
+	panes.OnShortcut(0, ui.KeyU, func() { a.toggleRead() })
+	panes.OnShortcut(0, ui.KeyS, func() { a.toggleStar() })
+	panes.OnShortcut(0, ui.KeyE, func() { a.moveSelected(mail.SpecialArchive) })
+	// R answers as the settings say, and Shift+R the other way.
+	panes.OnShortcut(0, ui.KeyR, func() { a.reply(a.replyOrder()[0]) })
+	panes.OnShortcut(ui.Shift, ui.KeyR, func() { a.reply(a.replyOrder()[1]) })
+	panes.OnShortcut(0, ui.KeyF, func() { a.forward() })
+	panes.OnShortcut(0, ui.KeyDelete, func() { a.deleteSelected() })
+}
+
+// titleBar draws the search field, sync and compose over the panes. The
+// window controls on the left sit over the sidebar; with it hidden, the
+// bar makes room for them, in step with the sidebar folding.
 func (a *app) titleBar(c *ui.Context, t *ui.Theme, bar ui.TitleBar, height float32) {
-	ui.Row(c).Height(height).Shrink(0).AlignItems(ui.Center).Gap(10).
-		Padding(0, max(bar.Right, 0)+14, 0, max(bar.Left, 0)+14).
+	left := float32(0)
+	if !a.sidebarOpen {
+		left = max(bar.Left, 0)
+	}
+	row := ui.Row(c.Key("title-bar"))
+	left = row.AnimateTo("inset", left, paneSpring)
+	row.Height(height).Shrink(0).AlignItems(ui.Center).Gap(10).
+		Padding(0, max(bar.Right, 0)+14, 0, left+14).
 		BorderWidth(0, 0, 1, 0).BorderColor(t.Border).
 		DragWindow().Children(func() {
 		label := locales.HideSidebar()
@@ -1279,8 +1309,8 @@ func (a *app) titleBar(c *ui.Context, t *ui.Theme, bar ui.TitleBar, height float
 }
 
 // sidebar draws the account switcher and the folders.
-func (a *app) sidebar(c *ui.Context, t *ui.Theme) {
-	ui.Column(c).Width(222).Shrink(0).Background(t.Surface).Children(func() {
+func (a *app) sidebar(c *ui.Context, t *ui.Theme, vibrant bool) {
+	ui.Column(c).Grow(1).MinHeight(0).Children(func() {
 		ui.Row(c).Padding(10, 12, 4, 12).Gap(8).AlignItems(ui.Center).Children(func() {
 			acc := a.activeAccount()
 			name, email := "", ""
@@ -1354,6 +1384,9 @@ func (a *app) sidebar(c *ui.Context, t *ui.Theme) {
 				}
 			})
 		}).Grow(1).Label(locales.Mailboxes())
+		if vibrant {
+			changed.Background(ui.Transparent)
+		}
 		if changed.Changed() {
 			a.aim = nil
 			a.selectFolder()
@@ -1510,7 +1543,10 @@ func main() {
 			StateKey:        "main",
 			TitleBarStyle:   mygo.TitleBarHiddenInset,
 			BackgroundColor: "light-dark(#ffffff, #18181b)",
-			Content:         ui.View(a.view),
+			// The sidebar's material: AppKit's on macOS, Mica on Windows
+			// 11. The view draws a background where there is none.
+			Vibrancy: mygo.VibrancySidebar,
+			Content:  ui.View(a.view),
 		})
 		a.attach(win)
 		chosen := mygo.App.ChosenLocale()

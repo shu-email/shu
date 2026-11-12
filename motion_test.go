@@ -44,8 +44,7 @@ func findText(t *testing.T, tt *ui.Tester, s string) ui.Rect {
 }
 
 // The sidebar folds away and the list slides into its place over the
-// spring, not at once; shown again half way, it comes back from where it
-// was, and the list ends where it started.
+// spring, not at once, and back as the sidebar opens again.
 func TestSidebarMotion(t *testing.T) {
 	withMotion(t)
 	a, _ := sampleMessageApp(t)
@@ -54,25 +53,28 @@ func TestSidebarMotion(t *testing.T) {
 	start := findText(t, tt, row).X
 	click(t, tt, locales.HideSidebar())
 	tt.Advance(80 * time.Millisecond)
-	mid := findText(t, tt, row).X
-	if !(mid < start && mid > start-200) {
+	if mid := findText(t, tt, row).X; !(mid < start && mid > start-200) {
 		t.Errorf("list at x=%v mid-way, from %v: it did not slide", mid, start)
 	}
+	tt.Advance(time.Second)
+	if tt.HasText(locales.Mailboxes()) {
+		t.Errorf("sidebar still shows once folded: %q", tt.Texts())
+	}
+	end := findText(t, tt, row).X
+	if end >= start-200 {
+		t.Errorf("list at x=%v with the sidebar hidden, from %v", end, start)
+	}
 	click(t, tt, locales.ShowSidebar())
+	tt.Advance(80 * time.Millisecond)
+	if mid := findText(t, tt, row).X; !(mid > end && mid < start) {
+		t.Errorf("list at x=%v mid-way back, between %v and %v", mid, end, start)
+	}
 	tt.Advance(time.Second)
 	if x := findText(t, tt, row).X; x != start {
 		t.Errorf("list at x=%v after the sidebar came back, want %v", x, start)
 	}
 	if !tt.HasText(locales.Mailboxes()) {
 		t.Errorf("sidebar missing: %q", tt.Texts())
-	}
-	click(t, tt, locales.HideSidebar())
-	tt.Advance(time.Second)
-	if tt.HasText(locales.Mailboxes()) {
-		t.Errorf("sidebar still shows once folded: %q", tt.Texts())
-	}
-	if x := findText(t, tt, row).X; x >= start-200 {
-		t.Errorf("list at x=%v with the sidebar hidden, from %v", x, start)
 	}
 }
 

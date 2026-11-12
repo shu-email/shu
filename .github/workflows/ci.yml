@@ -43,26 +43,13 @@ jobs:
       - run: go vet ./...
       - name: Check stored elements and goroutine captures
         run: go tool mygo vet .
-      # Tests that need the SQLite native module skip when it cannot be
-      # loaded, which locally is friendlier but in CI would let the store,
-      # draft and watcher suites pass without running. Fail on that skip.
+      # SHU_REQUIRE_SQLITE turns sqlitetest.Require's skip into a failure,
+      # so the store, draft and watcher suites cannot pass without running.
       - name: Test
         env:
           CGO_ENABLED: "0"
-        run: |
-          log="$RUNNER_TEMP/test.log"
-          status=0
-          go test -v ./... > "$log" 2>&1 || status=$?
-          grep -E '^(ok|FAIL|--- (FAIL|SKIP)|panic:)' "$log" || true
-          if [ "$status" -ne 0 ]; then
-            cat "$log"
-            exit "$status"
-          fi
-          if grep -q 'sqlite native module is not ready' "$log"; then
-            echo "::error::tests skipped because the SQLite native module did not load"
-            grep -B1 'sqlite native module is not ready' "$log"
-            exit 1
-          fi
+          SHU_REQUIRE_SQLITE: "1"
+        run: go test ./...
 
   build:
     name: Build (${{ matrix.name }})

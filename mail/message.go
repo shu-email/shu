@@ -86,6 +86,10 @@ type Summary struct {
 	Seen           bool      `json:"seen"`
 	Flagged        bool      `json:"flagged"`
 	HasAttachments bool      `json:"hasAttachments"`
+	// DraftID is set on the row of a local draft, which has no folder or
+	// UID of its own: the draft is on this device, whatever the server
+	// holds of it.
+	DraftID string `json:"draftID,omitempty"`
 }
 
 // Message is a summary with the parts the reading pane needs.
@@ -152,6 +156,10 @@ type Outgoing struct {
 	InReplyTo  string    `json:"inReplyTo,omitempty"`
 	References []string  `json:"references,omitempty"`
 	MessageID  string    `json:"messageID,omitempty"`
+	// DraftID names the draft the message was written as. Send removes
+	// that draft once the server took the message. It is no part of the
+	// envelope, so the outbox does not keep it.
+	DraftID string `json:"-"`
 }
 
 // MoveResult is where a message went and its UID there, when the server

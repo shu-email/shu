@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -22,12 +23,24 @@ type Service struct {
 	cacheDir  string
 	tlsConfig *tls.Config
 	clock     func() time.Time
+
+	// Drafts are saved while a sync uploads them. draftMu makes each
+	// read-then-write of a draft row one step, draftSync lets one job at
+	// a time change the server's Drafts folder, and draftsReplaced
+	// remembers the drafts another mail client replaced (see draft.go).
+	draftMu        sync.Mutex
+	draftSync      chan struct{}
+	draftsReplaced map[string]bool
 }
 
 // NewService wires the cache, the keychain and the attachment cache
 // directory.
 func NewService(store Store, secrets SecretStore, cacheDir string) *Service {
-	return &Service{store: store, secrets: secrets, cacheDir: cacheDir, clock: time.Now}
+	return &Service{
+		store: store, secrets: secrets, cacheDir: cacheDir, clock: time.Now,
+		draftSync:      make(chan struct{}, 1),
+		draftsReplaced: map[string]bool{},
+	}
 }
 
 // SetTLSConfig replaces the TLS configuration, for tests that trust a

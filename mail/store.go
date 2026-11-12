@@ -9,8 +9,9 @@ import (
 var ErrNotFound = errors.New("mail: not found")
 
 // Store is the engine's cache: accounts and their settings, folders and
-// their sync cursors, message headers and bodies, attachments, and the
-// outbox. The engine is the only writer; the UI reads through Service.
+// their sync cursors, message headers and bodies, attachments, the outbox
+// and the drafts. The engine is the only writer; the UI reads through
+// Service.
 type Store interface {
 	// Accounts and settings.
 	Accounts(ctx context.Context) ([]Account, error)
@@ -40,6 +41,18 @@ type Store interface {
 	Outbox(ctx context.Context, id string) (PendingSend, error)
 	PendingSends(ctx context.Context, accountID string) ([]PendingSend, error)
 	SetOutboxState(ctx context.Context, id, state, lastError string) error
+
+	// Drafts. Drafts lists an account's rows newest first, those awaiting
+	// deletion on the server included. SaveDraft creates a row as given,
+	// at revision 1, or writes the content of an existing one and raises
+	// its revision; it returns the stored row. SetDraftSync writes the
+	// sync state and the Message-ID of an existing row, never its content
+	// or revision, and reports ErrNotFound when the row is gone.
+	Drafts(ctx context.Context, accountID string) ([]Draft, error)
+	Draft(ctx context.Context, id string) (Draft, bool, error)
+	SaveDraft(ctx context.Context, d Draft) (Draft, error)
+	SetDraftSync(ctx context.Context, d Draft) error
+	DeleteDraft(ctx context.Context, id string) error
 }
 
 // SecretStore keeps account passwords. production uses mygo.Secrets, tests

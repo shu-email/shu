@@ -35,6 +35,13 @@ Windows and Linux. It is written in Go with
   implementation of the `mail.Store` interface and owns the schema,
   migrations, FTS5 index and outbox. Views read through `Service` and
   never open a connection or write a row themselves.
+- A draft lives in the database, and that copy is the truth; the message
+  in the server's Drafts folder mirrors it for other mail clients.
+  `Service.SaveDraft` writes the row and never touches the network, so
+  writing works offline. `Service.SyncDrafts` is the separate step that
+  uploads, removes and reconciles with what other clients did; it can
+  fail and run again. Views save on every change and ask for a sync; they
+  never decide what the server holds.
 - `ai/` is the AI layer: provider settings, the excerpt that decides what
   part of a message may leave the device, the features (summary, triage,
   draft reply) and `Service.send`, the single egress point every model
@@ -45,9 +52,9 @@ Windows and Linux. It is written in Go with
 - `locales/` holds the catalogs and their generated accessors. Every
   user-visible string comes from there, in en and zh-Hans together.
 - Passwords live only in `mygo.Secrets`; the database keeps accounts,
-  folders, message headers and bodies, attachment metadata and the
-  outbox. Attachment bytes go to the cache directory, keyed by content
-  hash, never into SQLite.
+  folders, message headers and bodies, attachment metadata, the outbox
+  and the drafts. Attachment bytes go to the cache directory, keyed by
+  content hash, never into SQLite.
 
 ## Before changing MyGo UI
 

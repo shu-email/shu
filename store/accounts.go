@@ -61,8 +61,8 @@ func (s *Store) SaveAccount(ctx context.Context, a mail.Account) error {
 	return err
 }
 
-// DeleteAccount removes an account and, by cascade, its folders, messages
-// and outbox.
+// DeleteAccount removes an account and, by cascade, its folders, messages,
+// outbox and drafts.
 func (s *Store) DeleteAccount(ctx context.Context, id string) error {
 	return s.transaction(ctx, []stmtType{
 		stmt(`DELETE FROM accounts WHERE id = ?`, id),

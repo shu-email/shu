@@ -19,6 +19,10 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 			BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
 			a.listHeader(c, t)
 		})
+		searching := strings.TrimSpace(a.query) != ""
+		if searching {
+			a.searchBar(c, t)
+		}
 		if a.undo != nil {
 			a.undoBanner(c, t)
 		}
@@ -39,11 +43,10 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 					ui.Icon(c, inboxIcon).FontSize(30).TextColor(t.TextMuted)
 				}
 				ui.Text(c, msg).FontSize(13).TextColor(t.TextMuted).TextAlign(ui.Center)
-				searching := strings.TrimSpace(a.query) != ""
+				if searching && !a.loading {
+					a.noResults(c, t)
+				}
 				if older := a.emptyOlder(); older != endNone {
-					if searching {
-						ui.Text(c, locales.SearchedHere()).FontSize(12).TextColor(t.TextMuted).TextAlign(ui.Center)
-					}
 					a.olderControls(c, t, older)
 				}
 				if searching {
@@ -76,11 +79,22 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 				return a.endText(end)
 			}
 			m := a.all[i]
-			if a.folder == draftsFolder {
+			if a.draftsList() {
 				who, title := a.rowHeading(m)
 				return who + " " + title
 			}
-			return m.From.Name + " " + m.Subject
+			parts := []string{m.From.Name + " " + m.Subject}
+			account, folder := a.rowPlace(m)
+			if folder != "" {
+				parts = append(parts, locales.InFolder(folder))
+			}
+			if account != "" {
+				parts = append(parts, locales.InAccount(account))
+			}
+			if reason := a.rowReason(i); reason != "" {
+				parts = append(parts, reason)
+			}
+			return strings.Join(parts, ", ")
 		}
 		a.list.Header = func(i int) bool { return i >= n }
 		a.list.Selected = &a.selected
@@ -147,8 +161,11 @@ func (a *app) listHeader(c *ui.Context, t *ui.Theme) {
 			// the number the sidebar shows: the rows read so far are only
 			// the newest pages. Other lists count their rows read.
 			n, more := a.unread(), a.pager.more
-			if a.isServerFolder(a.folder) {
+			switch {
+			case a.isServerFolder(a.folder):
 				n, more = a.folderUnread(a.folder), false
+			case a.isUnified():
+				n, more = a.unifiedUnread(), false
 			}
 			if n > 0 {
 				label := fmt.Sprint(n)
@@ -169,7 +186,7 @@ func (a *app) listHeader(c *ui.Context, t *ui.Theme) {
 			// Drafts are the user's own unsent text: there is nothing in
 			// them to triage, and no reason to send them to a model.
 			ui.Button(c, "").Label(locales.TriageInbox()).Tooltip(locales.TriageInbox()).Padding(4, 6).
-				Disabled(len(a.all) == 0 || a.folder == draftsFolder).OnClick(a.triageList).
+				Disabled(len(a.all) == 0 || a.draftsList()).OnClick(a.triageList).
 				Children(func() { ui.Icon(c, sparklesIcon).FontSize(15) })
 		}
 	})
@@ -192,10 +209,14 @@ func (a *app) isServerFolder(id string) bool {
 
 // listSummary is the line under the folder title. A folder's counts are
 // of its messages, as the server keeps them, in either view, with how
-// many of them are on this device when not all are. Other lists count
-// their rows read, and say when there are more.
+// many of them are on this device when not all are; the unified inbox's
+// are each account's unread mail. Other lists count their rows read, and
+// say when there are more, and a search where it looked.
 func (a *app) listSummary() string {
 	query := strings.TrimSpace(a.query)
+	if query == "" && a.isUnified() {
+		return a.unifiedCounts()
+	}
 	if query == "" && a.folder != "starred" && a.folder != draftsFolder {
 		for _, f := range a.folders {
 			if f.Name == a.folder {
@@ -203,15 +224,21 @@ func (a *app) listSummary() string {
 			}
 		}
 	}
+	var count string
 	switch more := a.pager.more; {
 	case a.threaded() && more:
-		return locales.ConversationCountMore(len(a.all))
+		count = locales.ConversationCountMore(len(a.all))
 	case a.threaded():
-		return locales.ConversationCount(len(a.all))
+		count = locales.ConversationCount(len(a.all))
 	case more:
-		return locales.MessageCountMore(len(a.all))
+		count = locales.MessageCountMore(len(a.all))
+	default:
+		count = locales.MessageCount(len(a.all))
 	}
-	return locales.MessageCount(len(a.all))
+	if query != "" {
+		return count + " · " + a.scopeWhere()
+	}
+	return count
 }
 
 // unread counts the unread rows of the list: messages, or conversations
@@ -240,7 +267,7 @@ func (a *app) emptyState() string {
 	case len(a.all) > 0:
 		return ""
 	case strings.TrimSpace(a.query) != "":
-		return locales.SearchNoResults(strings.TrimSpace(a.query))
+		return noResultsText(a.query)
 	case a.emptyOlder() != endNone:
 		return locales.NoneHere()
 	default:
@@ -346,6 +373,7 @@ func (a *app) messageRow(row ui.ListRow) {
 	if conv := a.convAt(row.Index); conv != nil {
 		unread, flagged, attached, count = conv.Unread, conv.Flagged, conv.HasAttachments, conv.Count
 	}
+	reason := a.rowReason(row.Index)
 
 	muted := t.TextMuted
 	nameColor := t.Text
@@ -357,10 +385,7 @@ func (a *app) messageRow(row ui.ListRow) {
 		dotColor = t.AccentText
 		starColor = t.AccentText
 	}
-	meta := ""
-	if (a.folder == "starred" || strings.TrimSpace(a.query) != "") && m.DraftID == "" {
-		meta = a.folderLabel(m.Folder)
-	}
+	account, meta := a.rowPlace(m)
 	who, title := a.rowHeading(m)
 	ui.Box(c).Padding(9, 14).BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Start).Children(func() {
@@ -379,7 +404,10 @@ func (a *app) messageRow(row ui.ListRow) {
 						countBadge(c, count, muted)
 					}
 					if meta != "" {
-						ui.Text(c, meta).FontSize(11).TextColor(muted).Shrink(0).SingleLine()
+						ui.Text(c, meta).FontSize(11).TextColor(muted).Shrink(0).MaxWidth(110).SingleLine()
+					}
+					if account != "" {
+						accountTag(c, account, muted)
 					}
 					if attached {
 						ui.Icon(c, paperclipIcon).FontSize(11).TextColor(muted).Label(locales.HasAttachments())
@@ -398,16 +426,34 @@ func (a *app) messageRow(row ui.ListRow) {
 				} else {
 					ui.Text(c, m.Preview).FontSize(12).SingleLine().TextColor(muted)
 				}
+				if reason != "" {
+					ui.Row(c).Gap(4).AlignItems(ui.Center).MinWidth(0).Children(func() {
+						ui.Icon(c, searchIcon).FontSize(10).TextColor(muted)
+						ui.Text(c, reason).FontSize(11).SingleLine().TextColor(muted).Shrink(1)
+					})
+				}
 			})
 		})
 	})
+}
+
+// rowReason says why a search found row i: where in the message, or in
+// which messages of the conversation, its terms are.
+func (a *app) rowReason(i int) string {
+	if strings.TrimSpace(a.query) == "" || i < 0 || i >= len(a.all) {
+		return ""
+	}
+	if conv := a.convAt(i); conv != nil {
+		return convMatchedLine(*conv)
+	}
+	return matchedLine(a.all[i].Matched)
 }
 
 // rowHeading is the two lines that head a row: who and what. In Drafts
 // every row is from the user, so whom the draft is to tells the rows
 // apart; a draft may have neither that nor a subject yet.
 func (a *app) rowHeading(m mail.Summary) (who, title string) {
-	if a.folder != draftsFolder {
+	if !a.draftsList() {
 		return displayName(m.From), m.Subject
 	}
 	if who = recipients(m.To); who == "" {

@@ -117,6 +117,26 @@ type fakeService struct {
 	olderErr   error
 	olderReset bool
 	cacheErr   error
+	// acts records every call that reads a body, changes a flag, moves a
+	// message or sends, each with the account it reached:
+	// "a2 SetFlag INBOX/1 \Flagged true".
+	acts []string
+}
+
+// act records a call with its account.
+func (f *fakeService) act(accountID, format string, args ...any) {
+	f.acts = append(f.acts, accountID+" "+fmt.Sprintf(format, args...))
+}
+
+// actsOf are the calls that reached an account, without its name.
+func (f *fakeService) actsOf(accountID string) []string {
+	var out []string
+	for _, a := range f.acts {
+		if rest, ok := strings.CutPrefix(a, accountID+" "); ok {
+			out = append(out, rest)
+		}
+	}
+	return out
 }
 
 // bulkFlag is one SetFlags call.
@@ -259,8 +279,9 @@ func (f *fakeService) MessagePage(ctx context.Context, q mail.ListQuery) (mail.M
 				list = f.everyMessage(accountID)
 			}
 			for _, m := range list {
-				if f.inScope(q.Scope, m) && f.found(accountID, m, q.Search) {
-					m.Account = accountID
+				m.Account = accountID
+				if fields, ok := f.found(accountID, m, q.Search); ok && f.inScope(q.Scope, m) {
+					m.Matched = fields
 					all = append(all, m)
 				}
 			}
@@ -347,15 +368,51 @@ func (f *fakeService) inScope(sc mail.Scope, m mail.Summary) bool {
 	return true
 }
 
-// found reports whether a message matches every term of a search's text,
-// the one part of a search the window asks for.
-func (f *fakeService) found(accountID string, m mail.Summary, s mail.Search) bool {
-	for _, term := range s.Text {
-		if !f.matches(accountID, m, strings.ToLower(strings.TrimSpace(term))) {
-			return false
+// found reports whether a message matches every part of a search, as the
+// engine does, and the parts of it its terms were found in.
+func (f *fakeService) found(accountID string, m mail.Summary, s mail.Search) (mail.Field, bool) {
+	body := m.Preview
+	if b, ok := f.bodies[bodyKey(accountID, m.Folder, m.UID)]; ok {
+		body += " " + b.BodyText
+	}
+	var to []string
+	for _, a := range append(append([]mail.Address(nil), m.To...), m.Cc...) {
+		to = append(to, a.Name, a.Email)
+	}
+	text := map[mail.Field]string{
+		mail.FieldSubject: m.Subject, mail.FieldFrom: m.From.Name + " " + m.From.Email,
+		mail.FieldTo: strings.Join(to, " "), mail.FieldBody: body,
+	}
+	var fields mail.Field
+	look := func(terms []string, in mail.Field) bool {
+		for _, term := range terms {
+			term = strings.ToLower(strings.TrimSpace(term))
+			hit := false
+			for part, s := range text {
+				if in.Has(part) && strings.Contains(strings.ToLower(s), term) {
+					fields |= part
+					hit = true
+				}
+			}
+			if !hit {
+				return false
+			}
+		}
+		return true
+	}
+	ok := look(s.Text, mail.FieldAny) && look(s.From, mail.FieldFrom) && look(s.To, mail.FieldTo) &&
+		look(s.Subject, mail.FieldSubject) && look(s.Body, mail.FieldBody) &&
+		(s.Since.IsZero() || !m.Date.Before(s.Since)) && (s.Before.IsZero() || m.Date.Before(s.Before)) &&
+		(!s.Unread || !m.Seen) && (!s.Starred || m.Flagged) && (!s.Attachment || m.HasAttachments)
+	if ok && strings.TrimSpace(s.In) != "" {
+		ok = false
+		for _, folder := range f.folders[accountID] {
+			if folder.Name == m.Folder && folder.NamedBy(s.In) {
+				ok = true
+			}
 		}
 	}
-	return true
+	return fields, ok
 }
 
 func (f *fakeService) matches(accountID string, m mail.Summary, q string) bool {
@@ -445,6 +502,7 @@ func (f *fakeService) FetchOlder(ctx context.Context, accountID, folder string, 
 }
 
 func (f *fakeService) FetchMessage(ctx context.Context, accountID, folder string, uid mail.UID, markSeen bool) (mail.FetchResult, error) {
+	f.act(accountID, "FetchMessage %s/%d %v", folder, uid, markSeen)
 	s, ok := f.find(accountID, folder, uid)
 	if !ok {
 		return mail.FetchResult{}, mail.ErrNotFound
@@ -494,6 +552,7 @@ func (f *fakeService) recount(accountID, folder string) {
 
 func (f *fakeService) SetFlag(ctx context.Context, accountID, folder string, uid mail.UID, flag mail.Flag, on bool) error {
 	f.flagCalls = append(f.flagCalls, string(flag))
+	f.act(accountID, "SetFlag %s/%d %s %v", folder, uid, flag, on)
 	if f.flagErr != nil {
 		return f.flagErr
 	}
@@ -517,10 +576,25 @@ func (f *fakeService) SetFlag(ctx context.Context, accountID, folder string, uid
 	return nil
 }
 
+// hasFolder refuses a move to a folder the account does not have, as a
+// server does: one account's folder named for another's mail.
+func (f *fakeService) hasFolder(accountID, name string) error {
+	for _, folder := range f.folders[accountID] {
+		if folder.Name == name {
+			return nil
+		}
+	}
+	return fmt.Errorf("fake: %s has no folder %q", accountID, name)
+}
+
 func (f *fakeService) Move(ctx context.Context, accountID, folder string, uid mail.UID, dest string) (mail.MoveResult, error) {
 	f.moved = append(f.moved, folder+"->"+dest)
+	f.act(accountID, "Move %s/%d->%s", folder, uid, dest)
 	if f.moveErr != nil {
 		return mail.MoveResult{}, f.moveErr
+	}
+	if err := f.hasFolder(accountID, dest); err != nil {
+		return mail.MoveResult{}, err
 	}
 	key := listKey(accountID, folder)
 	list := f.messages[key]
@@ -543,6 +617,7 @@ func (f *fakeService) Move(ctx context.Context, accountID, folder string, uid ma
 
 func (f *fakeService) MoveBack(ctx context.Context, accountID, from, to string, uid mail.UID) error {
 	f.moveBacks = append(f.moveBacks, from+"->"+to)
+	f.act(accountID, "MoveBack %s/%d->%s", from, uid, to)
 	key := listKey(accountID, from)
 	list := f.messages[key]
 	for i := range list {
@@ -565,6 +640,7 @@ func (f *fakeService) MoveBack(ctx context.Context, accountID, from, to string, 
 }
 
 func (f *fakeService) Send(ctx context.Context, accountID string, out mail.Outgoing) (mail.SendResult, error) {
+	f.act(accountID, "Send %s", out.Subject)
 	if f.sendErr != nil {
 		return mail.SendResult{}, f.sendErr
 	}
@@ -1065,13 +1141,22 @@ func (f *fakeService) conversations(accountID string, q mail.ListQuery) []mail.C
 			c.Latest = m
 		}
 	}
-	search := len(q.Search.Text) > 0
+	search := !q.Search.IsZero()
 	if search {
 		// A conversation is found by any of its messages, in any folder.
 		sort.SliceStable(every, func(i, j int) bool { return newer(every[i], every[j]) })
 		for _, m := range every {
-			if c := byThread[m.Thread]; c != nil && f.found(accountID, m, q.Search) {
-				c.Matches = append(c.Matches, mail.MessageRef{Folder: m.Folder, UID: m.UID})
+			c := byThread[m.Thread]
+			if c == nil {
+				continue
+			}
+			if fields, ok := f.found(accountID, m, q.Search); ok {
+				ref := mail.MessageRef{Folder: m.Folder, UID: m.UID}
+				c.Matches = append(c.Matches, ref)
+				c.Found = append(c.Found, mail.Match{MessageRef: ref, Fields: fields})
+				if ref.Folder == c.Latest.Folder && ref.UID == c.Latest.UID {
+					c.Latest.Matched = fields
+				}
 			}
 		}
 	}
@@ -1126,6 +1211,7 @@ func (f *fakeService) SetFlags(ctx context.Context, accountID string, msgs []mai
 		call.refs = append(call.refs, r.Folder+"/"+itoa(r.UID))
 	}
 	f.bulkFlags = append(f.bulkFlags, call)
+	f.act(accountID, "SetFlags %s %s %v", strings.Join(call.refs, ","), flag, on)
 	if f.flagErr != nil {
 		return f.flagErr
 	}
@@ -1173,9 +1259,13 @@ func (f *fakeService) moveOne(accountID, from string, uid mail.UID, to string, n
 func (f *fakeService) MoveMessages(ctx context.Context, accountID string, msgs []mail.MessageRef, dest string) ([]mail.MoveResult, error) {
 	for _, r := range msgs {
 		f.movedRefs = append(f.movedRefs, r.Folder+"/"+itoa(r.UID)+"->"+dest)
+		f.act(accountID, "MoveMessages %s/%d->%s", r.Folder, r.UID, dest)
 	}
 	if f.moveErr != nil {
 		return nil, f.moveErr
+	}
+	if err := f.hasFolder(accountID, dest); err != nil {
+		return nil, err
 	}
 	var out []mail.MoveResult
 	for _, r := range msgs {
@@ -1193,6 +1283,7 @@ func (f *fakeService) MoveBackMessages(ctx context.Context, accountID string, mo
 	lost := 0
 	for _, r := range moved {
 		f.moveBacks = append(f.moveBacks, r.Folder+"->"+r.From)
+		f.act(accountID, "MoveBackMessages %s/%d->%s", r.Folder, r.DestUID, r.From)
 		if r.DestUID == 0 || !f.moveOne(accountID, r.Folder, r.DestUID, r.From, r.UID) {
 			lost++
 		}

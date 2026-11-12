@@ -1124,5 +1124,315 @@
   },
   "mailOnDevice": "Mail on this device",
   "syncWindow": "Messages to keep from each folder's first sync",
-  "syncWindowDetail": "A folder's first sync keeps this many of its newest messages on this device. Older mail stays on the server, and you can always fetch it from the end of the folder's list."
+  "syncWindowDetail": "A folder's first sync keeps this many of its newest messages on this device. Older mail stays on the server, and you can always fetch it from the end of the folder's list.",
+  "allInboxes": "All Inboxes",
+  "@allInboxes": {
+    "description": "The sidebar entry and list of every account's inbox together."
+  },
+  "accountUnread": "{account} {count}",
+  "@accountUnread": {
+    "description": "Under the unified inbox's title: an account's name and its inbox's unread count.",
+    "placeholders": {
+      "account": {
+        "type": "String",
+        "example": "Work"
+      },
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "inAccount": "Account: {account}",
+  "@inAccount": {
+    "description": "What assistive technology reads of the small account name on a row.",
+    "placeholders": {
+      "account": {
+        "type": "String",
+        "example": "Work"
+      }
+    }
+  },
+  "inFolder": "In {folder}",
+  "@inFolder": {
+    "description": "Under the subject in the reading pane: the folder of the open message.",
+    "placeholders": {
+      "folder": {
+        "type": "String",
+        "example": "Archive"
+      }
+    }
+  },
+  "inAccountFolder": "{account} · {folder}",
+  "@inAccountFolder": {
+    "description": "Under the subject in the reading pane: the account and folder of the open message.",
+    "placeholders": {
+      "account": {
+        "type": "String",
+        "example": "Work"
+      },
+      "folder": {
+        "type": "String",
+        "example": "Inbox"
+      }
+    }
+  },
+  "olderInFolderHint": "Older mail on the server is fetched from the end of a folder's own list.",
+  "fieldFrom": "from",
+  "@fieldFrom": {
+    "description": "A part of a message a search found its words in: the sender."
+  },
+  "fieldTo": "to",
+  "@fieldTo": {
+    "description": "A part of a message a search found its words in: the recipients."
+  },
+  "fieldSubject": "subject",
+  "@fieldSubject": {
+    "description": "A part of a message a search found its words in: the subject."
+  },
+  "fieldBody": "body",
+  "@fieldBody": {
+    "description": "A part of a message a search found its words in: the body."
+  },
+  "listSeparator": ", ",
+  "@listSeparator": {
+    "description": "Between the items of a short list in a sentence."
+  },
+  "matchedFields": "Matched: {fields}",
+  "@matchedFields": {
+    "description": "Under a search result: the parts of the message the words were found in.",
+    "placeholders": {
+      "fields": {
+        "type": "String",
+        "example": "from, body"
+      }
+    }
+  },
+  "matchedInMessages": "Matched in {count, plural, one {# message} other {# messages}}: {fields}",
+  "@matchedInMessages": {
+    "description": "Under a conversation found by a search: how many of its messages matched, and where.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      },
+      "fields": {
+        "type": "String",
+        "example": "body"
+      }
+    }
+  },
+  "searchAllAccounts": "Search all accounts",
+  "searchAllFolders": "Search all folders",
+  "searchFilters": "Search filters",
+  "@searchFilters": {
+    "description": "The button beside the search field that opens the filters."
+  },
+  "searchFiltersTitle": "Filters",
+  "filterFrom": "From",
+  "filterTo": "To",
+  "filterSubject": "Subject",
+  "filterAfter": "On or after",
+  "@filterAfter": {
+    "description": "A search filter: mail of that day or later."
+  },
+  "filterBefore": "Before",
+  "@filterBefore": {
+    "description": "A search filter: mail older than that day."
+  },
+  "filterAfterDate": "Date for On or after",
+  "filterBeforeDate": "Date for Before",
+  "filterUnread": "Unread only",
+  "filterStarred": "Starred only",
+  "filterAttachment": "Has attachments",
+  "filterFolder": "Folder",
+  "anyFolder": "Any folder",
+  "clearFilters": "Clear filters",
+  "filterSyntaxHint": "You can also type from:, to:, subject:, body:, after:, before:, is:unread, is:starred, has:attachment, in: and account:.",
+  "filterFromValue": "From: {value}",
+  "@filterFromValue": {
+    "placeholders": {
+      "value": {
+        "type": "String",
+        "example": "maya"
+      }
+    }
+  },
+  "filterToValue": "To: {value}",
+  "@filterToValue": {
+    "placeholders": {
+      "value": {
+        "type": "String",
+        "example": "maya"
+      }
+    }
+  },
+  "filterSubjectValue": "Subject: {value}",
+  "@filterSubjectValue": {
+    "placeholders": {
+      "value": {
+        "type": "String",
+        "example": "budget"
+      }
+    }
+  },
+  "filterBodyValue": "Body: {value}",
+  "@filterBodyValue": {
+    "placeholders": {
+      "value": {
+        "type": "String",
+        "example": "invoice"
+      }
+    }
+  },
+  "filterAfterDay": "On or after {day}",
+  "@filterAfterDay": {
+    "placeholders": {
+      "day": {
+        "type": "String",
+        "example": "Mar 1, 2026"
+      }
+    }
+  },
+  "filterBeforeDay": "Before {day}",
+  "@filterBeforeDay": {
+    "placeholders": {
+      "day": {
+        "type": "String",
+        "example": "Apr 1, 2026"
+      }
+    }
+  },
+  "filterInFolder": "In {folder}",
+  "@filterInFolder": {
+    "placeholders": {
+      "folder": {
+        "type": "String",
+        "example": "Sent"
+      }
+    }
+  },
+  "allFolders": "All folders",
+  "@allFolders": {
+    "description": "The search scope of every folder of the account on screen."
+  },
+  "allAccounts": "All accounts",
+  "@allAccounts": {
+    "description": "The search scope of every folder of every account."
+  },
+  "whereAllAccounts": "all folders of all accounts",
+  "@whereAllAccounts": {
+    "description": "What a search covered, after a count or Searched."
+  },
+  "whereAccount": "all folders of {account}",
+  "@whereAccount": {
+    "placeholders": {
+      "account": {
+        "type": "String",
+        "example": "Work"
+      }
+    }
+  },
+  "whereAllFolders": "all folders",
+  "whereFolderOf": "{folder} of {account}",
+  "@whereFolderOf": {
+    "placeholders": {
+      "folder": {
+        "type": "String",
+        "example": "Inbox"
+      },
+      "account": {
+        "type": "String",
+        "example": "Work"
+      }
+    }
+  },
+  "searchScope": "Search in",
+  "@searchScope": {
+    "description": "The name of the control choosing what a search covers."
+  },
+  "activeFilters": "Filters on",
+  "removeFilter": "Remove filter {filter}",
+  "@removeFilter": {
+    "placeholders": {
+      "filter": {
+        "type": "String",
+        "example": "From: maya"
+      }
+    }
+  },
+  "searchedWhere": "Searched {where}.",
+  "@searchedWhere": {
+    "placeholders": {
+      "where": {
+        "type": "String",
+        "example": "all folders of Work"
+      }
+    }
+  },
+  "withFilters": "Filters: {filters}",
+  "@withFilters": {
+    "placeholders": {
+      "filters": {
+        "type": "String",
+        "example": "From: maya, Unread only"
+      }
+    }
+  },
+  "noFilterResults": "No messages match these filters.",
+  "thisFolder": "This folder",
+  "@thisFolder": {
+    "description": "The search scope of the list on screen: its folder, Starred or Drafts."
+  },
+  "scopeInboxes": "Inboxes",
+  "@scopeInboxes": {
+    "description": "The search scope of the unified inbox: every account's inbox, and no other folder."
+  },
+  "filterAccount": "Account",
+  "@filterAccount": {
+    "description": "The name of the filter control choosing an account."
+  },
+  "anyAccount": "Any account",
+  "filterAccountValue": "Account: {value}",
+  "@filterAccountValue": {
+    "placeholders": {
+      "value": {
+        "type": "String",
+        "example": "Home"
+      }
+    }
+  },
+  "filterNoAccount": "Account: {value} (no such account)",
+  "@filterNoAccount": {
+    "description": "A filter of an account whose value is in no account's name or address.",
+    "placeholders": {
+      "value": {
+        "type": "String",
+        "example": "school"
+      }
+    }
+  },
+  "noAccountNamed": "No account’s name or address contains “{value}”.",
+  "@noAccountNamed": {
+    "placeholders": {
+      "value": {
+        "type": "String",
+        "example": "school"
+      }
+    }
+  },
+  "noAccountMatchesAll": "No account matches every account filter.",
+  "whereNoAccount": "no account",
+  "@whereNoAccount": {
+    "description": "What a search covered when its account filters leave no account, after a count."
+  },
+  "whereInboxesOf": "the inboxes of {accounts}",
+  "@whereInboxesOf": {
+    "placeholders": {
+      "accounts": {
+        "type": "String",
+        "example": "Home"
+      }
+    }
+  }
 }

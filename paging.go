@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -27,29 +28,77 @@ const (
 )
 
 // listQuery is what the rows of the list are a read of: an account's
-// folder, or its starred mail, searched or not, by conversation or by
-// message.
+// folder, its starred mail or the unified inbox, searched or not, in a
+// scope, by conversation or by message.
 type listQuery struct {
 	account, folder, search string
-	threaded                bool
+	// scope is the search's, scopeHere when there is none.
+	scope searchScope
+	// narrowed is set when the search's account: parts keep only some
+	// accounts: accounts, by ID and one per line, which may be none.
+	narrowed bool
+	accounts string
+	threaded bool
 }
 
 func (a *app) listQuery() listQuery {
-	return listQuery{account: a.active, folder: a.folder, search: strings.TrimSpace(a.query), threaded: a.threaded()}
+	q := listQuery{account: a.active, folder: a.folder, search: strings.TrimSpace(a.query), threaded: a.threaded()}
+	if q.search != "" {
+		q.scope = a.searchScope()
+		ids, narrowed := a.queryAccounts(a.parsedQuery())
+		q.narrowed, q.accounts = narrowed, strings.Join(ids, "\n")
+	}
+	return q
 }
 
 // isFolder reports whether the list is one folder of the server, whose
 // older mail can be fetched.
 func (q listQuery) isFolder() bool {
-	return q.folder != "" && q.folder != "starred" && q.folder != draftsFolder
+	return q.folder != "" && q.folder != "starred" && q.folder != draftsFolder && q.folder != allInboxes &&
+		q.scope == scopeHere
 }
 
-// read is the engine's query of a page of the list. The typed text is one
-// term, as it always was.
+// drafts reports whether the list is of the drafts, which their own read
+// lists rather than a page of the cache.
+func (q listQuery) drafts() bool { return q.folder == draftsFolder && q.scope == scopeHere }
+
+// mailScope is the part of the cache the list reads: that of its scope,
+// in the accounts the search's account: parts keep.
+func (q listQuery) mailScope() mail.Scope {
+	var sc mail.Scope
+	switch {
+	case q.scope == scopeAll:
+	case q.scope == scopeAccount:
+		sc = mail.AccountScope(q.account, "")
+	case q.folder == allInboxes:
+		sc = mail.AllInboxes()
+	default:
+		sc = mail.AccountScope(q.account, q.folder)
+	}
+	if q.narrowed {
+		var keep []string
+		for _, id := range strings.Split(q.accounts, "\n") {
+			if id != "" && (len(sc.Accounts) == 0 || slices.Contains(sc.Accounts, id)) {
+				keep = append(keep, id)
+			}
+		}
+		sc.Accounts = keep
+	}
+	return sc
+}
+
+// none reports whether the search's account: parts keep none of the
+// scope's accounts: a scope of no account, which the engine would read
+// as every account's.
+func (q listQuery) none() bool { return q.narrowed && len(q.mailScope().Accounts) == 0 }
+
+// read is the engine's query of a page of the list. The typed text is
+// read as the engine reads a search, operators and all, but for the
+// account: parts the scope applies.
 func (q listQuery) read(after mail.Cursor, limit int) mail.ListQuery {
-	lq := mail.ListQuery{Scope: mail.AccountScope(q.account, q.folder), After: after, Limit: limit}
+	lq := mail.ListQuery{Scope: q.mailScope(), After: after, Limit: limit}
 	if q.search != "" {
-		lq.Search.Text = []string{q.search}
+		lq.Search = parseQuery(q.search).Search
 	}
 	return lq
 }
@@ -184,6 +233,12 @@ func (a *app) mark(i int) rowMark {
 
 // readRows reads a page of the list. It runs in a job.
 func (a *app) readRows(ctx context.Context, q listQuery, after mail.Cursor, limit int) (listRows, error) {
+	if q.none() {
+		if q.threaded {
+			return listRows{convs: []mail.Conversation{}}, nil
+		}
+		return listRows{}, nil
+	}
 	if q.threaded {
 		page, err := a.svc.ConversationPage(ctx, q.read(after, limit))
 		if page.Conversations == nil {
@@ -381,7 +436,7 @@ func (a *app) endState() listEnd {
 	p := &a.pager
 	q := a.listQuery()
 	switch {
-	case q.folder == draftsFolder || len(a.all) == 0:
+	case q.drafts() || len(a.all) == 0:
 		return endNone
 	case p.failed != "":
 		return endLoadFailed
@@ -468,10 +523,25 @@ func (a *app) endText(state listEnd) string {
 		}
 		return locales.NoMoreHere()
 	case endNoMore:
-		if q.search != "" {
-			return locales.NoMoreResults()
+		switch {
+		case q.search != "":
+			// A search reads the cache alone, whatever its scope.
+			return locales.NoMoreResultsHere()
+		case q.folder == allInboxes:
+			return locales.NoMoreHere()
 		}
 		return locales.NoMoreMail()
+	}
+	return ""
+}
+
+// endHint is the line under the end of a list that reads several folders
+// from the cache: older mail comes from the server in a folder's own
+// list, one folder at a time.
+func (a *app) endHint(state listEnd) string {
+	q := a.listQuery()
+	if state == endNoMore && (q.folder == allInboxes || q.search != "" && q.scope != scopeHere) {
+		return locales.OlderInFolderHint()
 	}
 	return ""
 }
@@ -499,6 +569,9 @@ func (a *app) endRow(c *ui.Context, t *ui.Theme, state listEnd) {
 				line.TextAlign(ui.Center)
 			}
 		})
+		if hint := a.endHint(state); hint != "" {
+			ui.Text(c, hint).FontSize(11).TextColor(t.TextMuted).TextAlign(ui.Center).MaxWidth(320).MaxLines(3)
+		}
 		switch state {
 		case endLoadFailed:
 			ui.Button(c, locales.Retry()).Label(locales.RetryLoadMore()).OnClick(a.retryMore)

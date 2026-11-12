@@ -14,7 +14,7 @@ import (
 // conversation and a row for each message. The Drafts entry lists drafts
 // one by one either way, so it has none.
 func (a *app) viewToggle(c *ui.Context) {
-	if a.folder == draftsFolder {
+	if a.draftsList() {
 		return
 	}
 	label := locales.GroupByConversation()
@@ -47,22 +47,24 @@ func (a *app) threadToolbar(c *ui.Context, t *ui.Theme) {
 	n := len(targets)
 	has := n > 0
 	allFlagged, allSeen := has, has
+	places := make([]mailPlace, 0, 1)
 	for _, conv := range targets {
 		allFlagged = allFlagged && conv.Flagged
 		allSeen = allSeen && !conv.Unread
+		places = append(places, a.threadPlace(conv.Account))
 	}
-	archive := a.folderBySpecial(mail.SpecialArchive)
-	trash := a.folderBySpecial(mail.SpecialTrash)
-	junk := a.folderBySpecial(mail.SpecialJunk)
+	archive := a.canMove(places, mail.SpecialArchive)
+	trash := a.canMove(places, mail.SpecialTrash)
+	junk := a.canMove(places, mail.SpecialJunk)
 	newest, _ := a.newestShown()
 	ui.Toolbar(c, func() {
-		a.toolButton(c, archiveIcon, locales.ArchiveConversations(n), has && archive != "", func() {
+		a.toolButton(c, archiveIcon, locales.ArchiveConversations(n), has && archive, func() {
 			a.moveThreads(mail.SpecialArchive)
 		})
-		a.toolButton(c, trashIcon, locales.DeleteConversations(n), has && trash != "", func() {
+		a.toolButton(c, trashIcon, locales.DeleteConversations(n), has && trash, func() {
 			a.moveThreads(mail.SpecialTrash)
 		})
-		a.toolButton(c, spamIcon, locales.JunkConversations(n), has && junk != "", func() {
+		a.toolButton(c, spamIcon, locales.JunkConversations(n), has && junk, func() {
 			a.moveThreads(mail.SpecialJunk)
 		})
 		starLabel, star, starColor := locales.StarConversations(n), starIcon, t.Text
@@ -149,9 +151,14 @@ func (a *app) conversationPane(c *ui.Context, t *ui.Theme) {
 }
 
 // scopeLine says what the toolbar acts on: the messages the row stands
-// for, in the list's folder, and where the others shown are.
+// for, in the list's folder, and where the others shown are. A list of
+// several accounts names the conversation's, and one of several folders
+// says where each of its messages is.
 func (a *app) scopeLine(cv *convView) string {
-	parts := []string{locales.ConversationScope(len(cv.members), a.folderLabel(cv.scope))}
+	var parts []string
+	if a.spansAccounts() {
+		parts = append(parts, a.accountLabel(cv.account))
+	}
 	member := map[string]bool{}
 	for _, m := range cv.members {
 		member[summaryKey(m)] = true
@@ -159,7 +166,7 @@ func (a *app) scopeLine(cv *convView) string {
 	var order []string
 	count := map[string]int{}
 	for _, m := range cv.msgs {
-		if member[summaryKey(m)] {
+		if member[summaryKey(m)] != a.spansFolders() {
 			continue
 		}
 		if count[m.Folder] == 0 {
@@ -167,10 +174,28 @@ func (a *app) scopeLine(cv *convView) string {
 		}
 		count[m.Folder]++
 	}
+	if a.spansFolders() {
+		parts = append(parts, locales.MessageCount(len(cv.members)))
+	} else {
+		scope := cv.scope
+		if scope == allInboxes {
+			scope = a.specialFolder(cv.account, mail.SpecialInbox)
+		}
+		parts = append(parts, locales.ConversationScope(len(cv.members), a.folderLabelOf(cv.account, scope)))
+	}
 	for _, folder := range order {
-		parts = append(parts, locales.ConversationElsewhere(count[folder], a.folderLabel(folder)))
+		parts = append(parts, locales.ConversationElsewhere(count[folder], a.folderLabelOf(cv.account, folder)))
 	}
 	return strings.Join(parts, " · ")
+}
+
+// outsideList reports whether a message of the conversation on show is
+// in another folder than the list's, which its header then names.
+func (a *app) outsideList(cv *convView, m mail.Summary) bool {
+	if cv.scope == allInboxes {
+		return !a.isInboxOf(m.Account, m.Folder)
+	}
+	return m.Folder != cv.scope
 }
 
 // threadMessage draws one message of the conversation on show: a line
@@ -217,8 +242,8 @@ func (a *app) threadHeader(c *ui.Context, t *ui.Theme, cv *convView, n, total in
 					if open || !m.Seen {
 						who.Bold()
 					}
-					if m.Folder != cv.scope {
-						ui.Text(c, a.folderLabel(m.Folder)).FontSize(10).TextColor(t.TextMuted).Shrink(0).
+					if a.outsideList(cv, m) {
+						ui.Text(c, a.folderLabelOf(m.Account, m.Folder)).FontSize(10).TextColor(t.TextMuted).Shrink(0).
 							Padding(0, 5).Radius(6).Background(t.Surface).Border(1, t.Border)
 					}
 				})
@@ -229,6 +254,12 @@ func (a *app) threadHeader(c *ui.Context, t *ui.Theme, cv *convView, n, total in
 					}
 				}
 				ui.Text(c, detail).FontSize(12).TextColor(t.TextMuted).SingleLine()
+				if line := matchedLine(cv.found[key]); line != "" {
+					ui.Row(c).Gap(4).AlignItems(ui.Center).MinWidth(0).Children(func() {
+						ui.Icon(c, searchIcon).FontSize(10).TextColor(t.TextMuted)
+						ui.Text(c, line).FontSize(11).TextColor(t.TextMuted).SingleLine().Shrink(1)
+					})
+				}
 			})
 			ui.Column(c).Shrink(0).AlignItems(ui.End).Gap(3).Children(func() {
 				when := a.messageTime(c, m.Date)
@@ -312,11 +343,11 @@ func (a *app) messageMenu(menu *ui.Menu, key string) {
 		a.flagMessage(m, mail.FlagSeen, !m.Seen)
 	}
 	menu.Separator()
-	archive := a.folderBySpecial(mail.SpecialArchive)
+	archive := a.specialFolder(m.Account, mail.SpecialArchive)
 	if menu.Item(locales.ArchiveThisMessage()).Disabled(archive == "" || m.Folder == archive).Chosen() {
 		a.moveMessage(m, mail.SpecialArchive)
 	}
-	trash := a.folderBySpecial(mail.SpecialTrash)
+	trash := a.specialFolder(m.Account, mail.SpecialTrash)
 	if menu.Item(locales.DeleteThisMessage()).Disabled(trash == "" || m.Folder == trash).Chosen() {
 		a.moveMessage(m, mail.SpecialTrash)
 	}

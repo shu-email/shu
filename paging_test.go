@@ -125,7 +125,7 @@ func TestAccountsNeverShareAKey(t *testing.T) {
 	fs.addAccount(testAccount("a1", "Work", "work@example.com"), "secret", testFolders(), []mail.Summary{{
 		UID: 1, Folder: "INBOX", Subject: "Alpha", From: mail.Address{Name: "Ann", Email: "ann@example.com"}, Date: at,
 	}})
-	fs.addAccount(testAccount("a2", "Home", "home@example.com"), "secret", testFolders(), []mail.Summary{{
+	fs.addAccount(testAccount("a2", "Home", "home@example.com"), "secret", homeFolders(), []mail.Summary{{
 		UID: 1, Folder: "INBOX", Subject: "Beta", From: mail.Address{Name: "Bo", Email: "bo@example.com"},
 		To: []mail.Address{{Email: "home@example.com"}}, Date: at.Add(time.Minute),
 	}})
@@ -172,23 +172,6 @@ func TestAccountsNeverShareAKey(t *testing.T) {
 	if cs := a.composes[len(a.composes)-1]; cs.accountID != "a2" || cs.source == nil || cs.source.Scope != "a2" {
 		t.Errorf("the reply to a2's message is from %q, read as %+v", cs.accountID, cs.source)
 	}
-	// Archiving both moves a1's to a1's Archive, and leaves a2's, whose
-	// folders the window does not hold, where it is.
-	a.sel.Clear()
-	a.sel.Add(summaryKey(one))
-	a.sel.Add(summaryKey(two))
-	tt.Frame()
-	click(t, tt, locales.ArchiveMessage())
-	if !reflect.DeepEqual(fs.moved, []string{"INBOX->Archive"}) {
-		t.Errorf("moved = %v", fs.moved)
-	}
-	if _, ok := fs.find("a1", "Archive", 1001); !ok {
-		t.Error("a1's message is not in a1's Archive")
-	}
-	if _, ok := fs.find("a2", "INBOX", 1); !ok || len(fs.messages[listKey("a2", "Archive")]) != 0 {
-		t.Error("a2's message moved")
-	}
-
 	// A notification of a2's message 1 aims at it, not at a1's.
 	q := queueJobs(a)
 	a.showTarget(noteTarget{account: "a2", folder: "INBOX", validity: 7, uid: 1, message: true})
@@ -199,6 +182,30 @@ func TestAccountsNeverShareAKey(t *testing.T) {
 	tt.Frame()
 	if a.active != "a2" || a.selectedKey() != summaryKey(two) || !tt.HasText("Body of Beta") {
 		t.Errorf("the notification opened %q of %q", a.selectedKey(), a.active)
+	}
+
+	// Archiving both moves each to its own account's Archive: the window
+	// knows the folders of the account not on screen too.
+	both, err = fs.MessagePage(context.Background(), mail.ListQuery{Scope: mail.Scope{Folder: "INBOX"}})
+	if err != nil || len(both.Messages) != 2 {
+		t.Fatalf("both inboxes = %+v, %v", both, err)
+	}
+	a.setRows(a.listQuery(), listRows{msgs: both.Messages})
+	a.sel.Clear()
+	a.sel.Add(summaryKey(one))
+	a.sel.Add(summaryKey(two))
+	tt.Frame()
+	click(t, tt, locales.ArchiveMessage())
+	if got := slices.Sorted(slices.Values(fs.moved)); !reflect.DeepEqual(got, []string{"INBOX->All Mail", "INBOX->Archive"}) {
+		t.Errorf("moved = %v", fs.moved)
+	}
+	for id, archive := range map[string]string{"a1": "Archive", "a2": "All Mail"} {
+		if _, ok := fs.find(id, archive, 1001); !ok {
+			t.Errorf("%s's message is not in %s's %s", id, id, archive)
+		}
+		if got := slices.DeleteFunc(fs.actsOf(id), func(s string) bool { return !strings.HasPrefix(s, "Move ") }); !reflect.DeepEqual(got, []string{"Move INBOX/1->" + archive}) {
+			t.Errorf("moves of %s = %v", id, got)
+		}
 	}
 }
 
@@ -342,6 +349,8 @@ func TestPagingStarredAndSearch(t *testing.T) {
 		t.Errorf("the end of starred mail: %q", tt.Texts())
 	}
 
+	// A search from the inbox covers every folder of the account; the
+	// cache is all it reads, which its end says.
 	click(t, tt, locales.Inbox())
 	click(t, tt, "Search mail")
 	tt.Type("invoice")
@@ -358,11 +367,21 @@ func TestPagingStarredAndSearch(t *testing.T) {
 	chosen := a.selectedKey()
 	scrollList(tt, toEnd)
 	scrollList(tt, toEnd)
-	if len(a.all) != inbox || a.pager.more || a.selectedKey() != chosen || a.query != "invoice" {
-		t.Fatalf("search after paging: %d rows of %d, chosen %q, query %q", len(a.all), inbox, a.selectedKey(), a.query)
+	if len(a.all) != 160 || a.pager.more || a.selectedKey() != chosen || a.query != "invoice" {
+		t.Fatalf("search after paging: %d rows of 160, chosen %q, query %q", len(a.all), a.selectedKey(), a.query)
+	}
+	if !tt.HasText(locales.NoMoreResultsHere()) || !tt.HasText(locales.OlderInFolderHint()) || !tt.HasText("160") {
+		t.Errorf("the end of the search: %q", tt.Texts())
+	}
+	// The inbox alone pages to its end, which says that the folder is all
+	// on this device.
+	click(t, tt, locales.ThisFolder())
+	scrollToLast(t, a, tt)
+	if len(a.all) != inbox || a.query != "invoice" {
+		t.Fatalf("the inbox's search: %d rows of %d, query %q", len(a.all), inbox, a.query)
 	}
 	if !tt.HasText(locales.NoMoreResults()) || !tt.HasText(fmt.Sprint(inbox)) {
-		t.Errorf("the end of the search: %q", tt.Texts())
+		t.Errorf("the end of the inbox's search: %q", tt.Texts())
 	}
 }
 
@@ -495,7 +514,7 @@ func TestStalePagesAreDropped(t *testing.T) {
 	q = queueJobs(a)
 	scrollList(tt, toEnd)
 	click(t, tt, "Search mail")
-	tt.Type("Message 1")
+	tt.Type(`"Message 1"`)
 	page := q.jobs[0]
 	q.jobs = q.jobs[1:]
 	q.drain(a)
@@ -703,6 +722,7 @@ func TestEmptyListStates(t *testing.T) {
 	}
 	click(t, tt, "Search mail")
 	tt.Type("lunch")
+	click(t, tt, locales.ThisFolder())
 	if !tt.HasText(locales.SearchedHere()) || !tt.HasText(locales.LoadOlder()) {
 		t.Fatalf("no results here: %q", tt.Texts())
 	}

@@ -611,8 +611,8 @@ func TestMultiSelectArchive(t *testing.T) {
 	if len(a.all) != 1 {
 		t.Errorf("rows left = %d, want 1", len(a.all))
 	}
-	if a.sel.Len() != 0 {
-		t.Error("selection survives the move")
+	if a.sel.Len() != 1 {
+		t.Errorf("selection = %d after the move, want the remaining row chosen", a.sel.Len())
 	}
 }
 
@@ -709,5 +709,30 @@ func TestUndoExpires(t *testing.T) {
 	}
 	if a.undo != nil {
 		t.Error("the undo offer outlived its timer")
+	}
+}
+
+// The first message is chosen as one selection, so the row is
+// highlighted, and clearing the selection empties the reading pane.
+func TestAutoSelectionAndClear(t *testing.T) {
+	a, _ := sampleApp(t)
+	if a.selected != 0 || a.sel.Len() != 1 || !a.sel.Has(summaryKey(a.all[0])) {
+		t.Fatalf("selected=%d sel=%d", a.selected, a.sel.Len())
+	}
+	tt := ui.NewTester(a.view, 1220, 800)
+	if err := tt.Click("Design review — Thursday at 10"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ClickWith(ui.Cmd, "[shu-email/shu] Pull request #128"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.Click("Clear selection"); err != nil {
+		t.Fatal(err)
+	}
+	if a.selected != -1 || a.sel.Len() != 0 {
+		t.Errorf("selected=%d sel=%d after clearing", a.selected, a.sel.Len())
+	}
+	if !tt.HasText(locales.NoMessageSelected()) {
+		t.Errorf("reading pane is not empty: %q", tt.Texts())
 	}
 }

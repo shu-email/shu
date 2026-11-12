@@ -307,8 +307,11 @@ func (a *app) loadMessages(g uint64) {
 			a.all = msgs
 			a.pruneSelection()
 			a.restoreSelection(key)
-			if a.selected < 0 && len(a.all) > 0 && query == "" && a.sel.Len() == 0 {
-				a.selected = 0
+			switch {
+			case a.selected < 0 && len(a.all) > 0 && query == "" && a.sel.Len() == 0:
+				a.chooseRow(0)
+			case a.selected >= 0 && a.sel.Len() == 0:
+				a.sel.Add(summaryKey(a.all[a.selected]))
 			}
 			a.reloadBody()
 		})
@@ -338,6 +341,24 @@ func (a *app) selectedKey() string {
 		return ""
 	}
 	return summaryKey(a.all[a.selected])
+}
+
+// chooseRow makes row i the one chosen, and the only one, so the list
+// shows it highlighted.
+func (a *app) chooseRow(i int) {
+	if i < 0 || i >= len(a.all) {
+		return
+	}
+	a.selected = i
+	a.sel.Clear()
+	a.sel.Add(summaryKey(a.all[i]))
+}
+
+// clearSelection drops the choice and the reading pane with it.
+func (a *app) clearSelection() {
+	a.sel.Clear()
+	a.selected = -1
+	a.reloadBody()
 }
 
 // restoreSelection finds the chosen message again by its key.

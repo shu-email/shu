@@ -54,6 +54,9 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 		a.list.Selection = &a.sel
 		ui.List(c, &a.list, len(a.all)).Grow(1).
 			OnChange(func() {
+				if a.sel.Len() == 0 {
+					a.selected = -1
+				}
 				a.bodyErr = ""
 				a.reloadBody()
 			}).
@@ -84,7 +87,7 @@ func (a *app) listHeader(c *ui.Context, t *ui.Theme) {
 	switch {
 	case chosen > 1:
 		ui.Spacer(c)
-		ui.Button(c, locales.ClearSelection()).OnClick(func() { a.sel.Clear() })
+		ui.Button(c, locales.ClearSelection()).OnClick(func() { a.clearSelection() })
 	case query != "":
 		ui.Badge(c, fmt.Sprint(len(a.all))).Background(t.Surface).TextColor(t.TextMuted)
 	default:

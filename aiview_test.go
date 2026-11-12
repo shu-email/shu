@@ -73,8 +73,9 @@ type aiProvider struct {
 }
 
 const (
-	testSummary = "- The review moved to Thursday at 10."
-	testDraft   = "Thursday at 10 works for me."
+	testSummary       = "- The review moved to Thursday at 10."
+	testThreadSummary = "- The lakeside venue is booked for Thursday."
+	testDraft         = "Thursday at 10 works for me."
 )
 
 func (p *aiProvider) RoundTrip(r *http.Request) (*http.Response, error) {
@@ -124,6 +125,8 @@ func (p *aiProvider) RoundTrip(r *http.Request) (*http.Response, error) {
 		answer = testDraft
 	case strings.Contains(system, "summarize one email"):
 		answer = testSummary
+	case strings.Contains(system, "summarize an email conversation"):
+		answer = testThreadSummary
 	}
 	b, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": answer}}}})
 	return aiReply(http.StatusOK, string(b)), nil
@@ -139,7 +142,19 @@ const testAIKey = "sk-ui-test-KEY"
 // With on, AI is enabled and a key is stored.
 func aiApp(t *testing.T, on bool) (*app, *fakeService, *aiProvider, aiSecrets) {
 	t.Helper()
-	a, fs := sampleApp(t)
+	return aiAppOf(t, on, sampleApp)
+}
+
+// aiMessageApp is aiApp with a row for each message, the view the tests
+// written before conversations are about.
+func aiMessageApp(t *testing.T, on bool) (*app, *fakeService, *aiProvider, aiSecrets) {
+	t.Helper()
+	return aiAppOf(t, on, sampleMessageApp)
+}
+
+func aiAppOf(t *testing.T, on bool, sample func(*testing.T) (*app, *fakeService)) (*app, *fakeService, *aiProvider, aiSecrets) {
+	t.Helper()
+	a, fs := sample(t)
 	provider, secrets := &aiProvider{}, aiSecrets{}
 	svc := ai.NewService(&aiStore{settings: map[string]string{}, cache: map[string]ai.CacheEntry{}}, secrets)
 	svc.SetHTTPClient(&http.Client{Transport: provider})
@@ -166,7 +181,7 @@ func click(t *testing.T, tt *ui.Tester, target string) {
 
 // With AI off, the button explains how to turn it on and nothing is sent.
 func TestAIOffExplainsAndSendsNothing(t *testing.T) {
-	a, _, provider, _ := aiApp(t, false)
+	a, _, provider, _ := aiMessageApp(t, false)
 	tt := ui.NewTester(a.view, 1220, 800)
 	click(t, tt, "Design review — Thursday at 10")
 	click(t, tt, locales.Summarize())
@@ -208,7 +223,7 @@ func TestAIOffExplainsAndSendsNothing(t *testing.T) {
 // The first summary shows exactly what will be sent and waits; later ones
 // run at once, come from the cache, and name the model.
 func TestSummaryReviewThenCache(t *testing.T) {
-	a, fs, provider, _ := aiApp(t, true)
+	a, fs, provider, _ := aiMessageApp(t, true)
 	tt := ui.NewTester(a.view, 1220, 800)
 	click(t, tt, "Design review — Thursday at 10")
 	click(t, tt, locales.Summarize())
@@ -272,7 +287,7 @@ func TestSummaryReviewThenCache(t *testing.T) {
 // A provider failure is explained in the user's words, without the mail,
 // and can be retried.
 func TestSummaryFailureAndRetry(t *testing.T) {
-	a, _, provider, _ := aiApp(t, true)
+	a, _, provider, _ := aiMessageApp(t, true)
 	if err := a.ai.MarkReviewed(context.Background(), ai.FeatureSummary); err != nil {
 		t.Fatal(err)
 	}
@@ -297,7 +312,7 @@ func TestSummaryFailureAndRetry(t *testing.T) {
 
 // Cancelling a summary in flight stops it and shows nothing.
 func TestSummaryCancel(t *testing.T) {
-	a, _, provider, _ := aiApp(t, true)
+	a, _, provider, _ := aiMessageApp(t, true)
 	if err := a.ai.MarkReviewed(context.Background(), ai.FeatureSummary); err != nil {
 		t.Fatal(err)
 	}
@@ -326,7 +341,7 @@ func TestSummaryCancel(t *testing.T) {
 
 // Triage suggests groups with reasons, and moves nothing: the user acts.
 func TestTriageSuggestsOnly(t *testing.T) {
-	a, fs, provider, _ := aiApp(t, true)
+	a, fs, provider, _ := aiMessageApp(t, true)
 	tt := ui.NewTester(a.view, 1220, 800)
 	click(t, tt, locales.TriageInbox())
 	if !tt.HasText(locales.AiReviewTitle()) || len(provider.texts) != 0 {
@@ -514,7 +529,7 @@ func TestAISettings(t *testing.T) {
 // on screen rather than in the toolbar's overflow menu.
 func TestAIControlsAtMinimumSize(t *testing.T) {
 	for _, dark := range []bool{false, true} {
-		a, _, provider, _ := aiApp(t, true)
+		a, _, provider, _ := aiMessageApp(t, true)
 		tt := ui.NewTesterWith(a.view, 1000, 640, ui.TesterOptions{Dark: dark})
 		click(t, tt, locales.Summarize())
 		click(t, tt, locales.AiReviewSend("gpt-4o-mini"))

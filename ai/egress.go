@@ -80,8 +80,11 @@ type Payload struct {
 	Signature bool
 	Links     int
 	Truncated bool
-	// Messages is how many messages the payload describes.
+	// Messages is how many messages the payload describes, and Omitted
+	// how many earlier ones of a conversation were left out to keep it
+	// within its limit.
 	Messages int
+	Omitted  int
 }
 
 // ready checks, without any network call, that a capability may be used:

@@ -134,6 +134,12 @@ func (s *Service) Summarize(ctx context.Context, m Message) (Result, error) {
 	if req.user == "" {
 		return Result{}, &Error{Kind: KindEmpty}
 	}
+	return s.summarize(ctx, cfg, req, m.Scope)
+}
+
+// summarize sends a summary request, or answers it from the cache when the
+// same request was answered before.
+func (s *Service) summarize(ctx context.Context, cfg Config, req request, scope string) (Result, error) {
 	key := cacheKey(cfg, req)
 	if entry, ok, err := s.store.AICached(ctx, key); err == nil && ok {
 		return Result{Text: entry.Text, Provider: entry.Provider, Model: entry.Model, Cached: true}, nil
@@ -145,10 +151,131 @@ func (s *Service) Summarize(ctx context.Context, m Message) (Result, error) {
 	result := Result{Text: text, Provider: cfg.Provider, Model: cfg.ModelFor(FeatureSummary)}
 	// A failed cache write costs a repeated request later, nothing more.
 	_ = s.store.SaveAICache(ctx, CacheEntry{
-		Key: key, Scope: m.Scope, Feature: FeatureSummary,
+		Key: key, Scope: scope, Feature: FeatureSummary,
 		Provider: result.Provider, Model: result.Model, Text: text, CreatedAt: s.now().UTC(),
 	})
 	return result, nil
+}
+
+// Conversation is a conversation as the person reading it sees it, its
+// messages oldest first. Of each message the sender, the date and the
+// body are read; the subject is the conversation's, sent once. Like a
+// Message, it has no recipients, raw headers, HTML or attachments.
+type Conversation struct {
+	// Scope ties a cached answer to the mail account. It is never sent.
+	Scope    string
+	Subject  string
+	Messages []Message
+	Language string
+}
+
+// conversationSeparator goes between the messages of a conversation.
+const conversationSeparator = "\n\n---\n"
+
+// conversationRequest writes the excerpt of each message under its sender
+// and date, after the subject. The excerpt leaves out what a reply quotes,
+// so the messages do not repeat each other. When they do not all fit in
+// ConversationLimit, the oldest are left out, and the text says how many.
+// It returns what was left out of the messages sent, and how many were
+// sent and left out.
+func conversationRequest(c Conversation) (req request, total Excerpt, sent, omitted int) {
+	type block struct {
+		text string
+		e    Excerpt
+	}
+	var blocks []block
+	for _, m := range c.Messages {
+		e := MakeExcerpt(m.Body, BodyLimit)
+		if e.Text == "" {
+			// A reply that only quotes, or a message without text, says
+			// nothing to summarize.
+			continue
+		}
+		var b strings.Builder
+		fmt.Fprintf(&b, "From: %s\n", sender(m.FromName, m.FromEmail))
+		if !m.Date.IsZero() {
+			fmt.Fprintf(&b, "Date: %s\n", m.Date.Format("2006-01-02"))
+		}
+		b.WriteString("\n" + e.Text)
+		blocks = append(blocks, block{b.String(), e})
+	}
+	req.feature = FeatureSummary
+	if len(blocks) == 0 {
+		return req, total, 0, 0
+	}
+	head := fmt.Sprintf("Subject: %s\n", clip(c.Subject, 200))
+	// The room the line saying what was left out takes.
+	const noteRoom = 80
+	budget := ConversationLimit - len([]rune(head)) - noteRoom
+	first := len(blocks)
+	for first > 0 {
+		n := len([]rune(conversationSeparator)) + len([]rune(blocks[first-1].text))
+		// The newest message always goes: its excerpt is far within the
+		// limit on its own.
+		if first < len(blocks) && n > budget {
+			break
+		}
+		budget -= n
+		first--
+	}
+	var b strings.Builder
+	b.WriteString(head)
+	switch {
+	case first == 1:
+		b.WriteString("(The first message of the conversation is left out.)\n")
+	case first > 1:
+		fmt.Fprintf(&b, "(The first %d messages of the conversation are left out.)\n", first)
+	}
+	for i, bl := range blocks[first:] {
+		if i == 0 {
+			b.WriteString("\n---\n")
+		} else {
+			b.WriteString(conversationSeparator)
+		}
+		b.WriteString(bl.text)
+		total.Quoted += bl.e.Quoted
+		total.Links += bl.e.Links
+		total.Signature = total.Signature || bl.e.Signature
+		total.Truncated = total.Truncated || bl.e.Truncated
+	}
+	req.system = "You summarize an email conversation for one of the people in it, who is reading it. Say what it is about, what was decided, what is still open or asked of the reader, and any dates or deadlines, in at most five short bullet points starting with \"- \"." +
+		languageLine(c.Language) + untrusted
+	req.user = b.String()
+	return req, total, len(blocks) - first, first
+}
+
+// ConversationPayload shows what SummarizeConversation would send,
+// without sending it.
+func (s *Service) ConversationPayload(ctx context.Context, c Conversation) (Payload, error) {
+	cfg, err := s.Config(ctx)
+	if err != nil {
+		return Payload{}, err
+	}
+	req, e, sent, omitted := conversationRequest(c)
+	if req.user == "" {
+		return Payload{}, &Error{Kind: KindEmpty}
+	}
+	p := payload(cfg, req, ConversationLimit, sent, e)
+	p.Omitted = omitted
+	return p, nil
+}
+
+// SummarizeConversation summarizes a conversation as one summary: what it
+// is about, what was decided and what is still open. It is the summary
+// capability, with its switch, its model and its cache.
+func (s *Service) SummarizeConversation(ctx context.Context, c Conversation) (Result, error) {
+	cfg, err := s.Config(ctx)
+	if err != nil {
+		return Result{}, err
+	}
+	if _, err := s.ready(cfg, FeatureSummary); err != nil {
+		return Result{}, err
+	}
+	req, _, _, _ := conversationRequest(c)
+	if req.user == "" {
+		return Result{}, &Error{Kind: KindEmpty}
+	}
+	return s.summarize(ctx, cfg, req, c.Scope)
 }
 
 // DraftPayload shows what Draft would send, without sending it.

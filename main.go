@@ -31,6 +31,10 @@ type undoMove struct {
 	dest      string
 	destUID   mail.UID
 	label     string
+	// moved is a move of several messages, as a conversation's, which
+	// MoveBackMessages takes back; source, dest and destUID are then not
+	// used.
+	moved []mail.MoveResult
 }
 
 type app struct {
@@ -53,8 +57,16 @@ type app struct {
 	folder   string
 	query    string
 
-	all         []mail.Summary
-	selected    int
+	all      []mail.Summary
+	selected int
+	// In conversation view the rows are convs, and all holds the newest
+	// message of each, row for row. conv is the conversation open in the
+	// reading pane, convExpand a message the next one shown expands, and
+	// convToggle the list header's switch between the views.
+	convs       []mail.Conversation
+	conv        *convView
+	convExpand  string
+	convToggle  bool
 	list        ui.ListState
 	sel         ui.Selection[string]
 	searchField ui.Handle
@@ -177,6 +189,7 @@ func newApp(svc mailService) *app {
 		inboxes:       map[string]int{},
 		announced:     map[string]noteMark{},
 		mailSet:       mail.DefaultSettings(),
+		convToggle:    mail.DefaultSettings().Conversations,
 		checkChoice:   1,
 		notifyOn:      map[string]*bool{},
 	}
@@ -338,7 +351,7 @@ func (a *app) beginAccount() {
 	a.sel.Clear()
 	a.bodies = map[string]mail.FetchResult{}
 	a.clearAI()
-	a.all = nil
+	a.all, a.convs, a.conv = nil, nil, nil
 	a.loadCache(a.gen)
 }
 
@@ -401,6 +414,7 @@ func (a *app) syncAccount(g uint64) {
 			}
 			a.loadMessages(g)
 			a.syncFolder(g)
+			a.syncSent(g)
 			a.loadPending(g)
 			// The drafts sync with the account, whatever folder shows:
 			// what was written offline goes up, and what other mail
@@ -454,6 +468,27 @@ func (a *app) syncFolder(g uint64) {
 	})
 }
 
+// syncSent caches the Sent folder with the account in conversation view,
+// so that the replies the user sent, from here or elsewhere, join their
+// conversations. The folder on show is synced by syncFolder.
+func (a *app) syncSent(g uint64) {
+	sent := a.folderBySpecial(mail.SpecialSent)
+	if !a.mailSet.Conversations || sent == "" || sent == a.folder {
+		return
+	}
+	accountID := a.active
+	a.run(func() {
+		ctx, cancel := a.ctx()
+		defer cancel()
+		err := a.svc.SyncFolder(ctx, accountID, sent, 50)
+		a.post(func() {
+			if err == nil && !a.stale(g) && a.threaded() {
+				a.readList(g, false, false)
+			}
+		})
+	})
+}
+
 // loadMessages reads the current folder and query from the cache.
 func (a *app) loadMessages(g uint64) { a.readMessages(g, true) }
 
@@ -466,9 +501,14 @@ func (a *app) readMessages(g uint64, progress bool) { a.readList(g, progress, tr
 // open, and so mark read, the message beside it.
 func (a *app) readList(g uint64, progress, neighbour bool) {
 	accountID, folder, query := a.active, a.folder, strings.TrimSpace(a.query)
-	key := a.selectedKey()
+	threaded := a.threaded()
+	key, prev := a.selectedKey(), a.chosenMessage()
+	var aimAt mail.Summary
+	if aim := a.aim; threaded && aim != nil && aim.account == accountID && aim.folder == folder {
+		aimAt = mail.Summary{Folder: aim.folder, UID: aim.uid}
+	}
 	if folder == "" {
-		a.all = nil
+		a.all, a.convs = nil, nil
 		a.loading = false
 		return
 	}
@@ -479,34 +519,53 @@ func (a *app) readList(g uint64, progress, neighbour bool) {
 		ctx, cancel := a.ctx()
 		defer cancel()
 		var (
-			msgs []mail.Summary
-			err  error
+			msgs  []mail.Summary
+			convs []mail.Conversation
+			err   error
+			// In conversation view, found is the conversation the chosen
+			// message is in now when its own left the list, as one that
+			// merged into another does, and aimed the conversation of the
+			// message a notification asked to see.
+			found, aimed mail.ThreadID
 		)
-		if folder == draftsFolder {
+		switch {
+		case folder == draftsFolder:
 			msgs, err = a.svc.DraftList(ctx, accountID, query, 50)
-		} else {
+		case threaded:
+			convs, err = a.svc.CachedConversations(ctx, accountID, folder, query, 50)
+			msgs = latestOf(convs)
+			if err == nil && prev.UID != 0 && !hasThread(convs, prev.Thread) {
+				found = a.threadOf(ctx, accountID, prev)
+			}
+			if err == nil && aimAt.UID != 0 {
+				aimed = a.threadOf(ctx, accountID, aimAt)
+			}
+		default:
 			msgs, err = a.svc.CachedMessages(ctx, accountID, folder, query, 50)
 		}
 		a.post(func() {
-			if a.stale(g) || a.folder != folder || strings.TrimSpace(a.query) != query {
+			if a.stale(g) || a.folder != folder || strings.TrimSpace(a.query) != query || a.threaded() != threaded {
 				return
 			}
 			if progress {
 				a.loading = false
-			} else {
+			} else if chosen := a.selectedKey(); chosen != key {
 				// Nobody waited for this read, so the row chosen since
 				// it began is the one to keep.
-				key = a.selectedKey()
+				key, prev, found = chosen, a.chosenMessage(), 0
 			}
 			if err != nil {
 				a.err = err.Error()
 				return
 			}
 			was := a.selected
-			a.all = msgs
+			a.all, a.convs = msgs, convs
 			a.pruneSelection()
 			a.restoreSelection(key)
-			if i := a.aimRow(); i >= 0 {
+			if a.selected < 0 {
+				a.findChosen(prev, found)
+			}
+			if i := a.aimRow(aimed); i >= 0 {
 				a.chooseRow(i)
 			}
 			switch {
@@ -523,7 +582,7 @@ func (a *app) readList(g uint64, progress, neighbour bool) {
 				// took its place is chosen, as after archiving.
 				a.chooseRow(min(was, len(a.all)-1))
 			case a.selected >= 0 && a.sel.Len() == 0:
-				a.sel.Add(summaryKey(a.all[a.selected]))
+				a.sel.Add(a.rowKey(a.selected))
 			}
 			a.reloadBody()
 		})
@@ -537,8 +596,8 @@ func (a *app) pruneSelection() {
 		return
 	}
 	present := make(map[string]bool, len(a.all))
-	for _, m := range a.all {
-		present[summaryKey(m)] = true
+	for i := range a.all {
+		present[a.rowKey(i)] = true
 	}
 	for k := range a.sel.All() {
 		if !present[k] {
@@ -547,12 +606,21 @@ func (a *app) pruneSelection() {
 	}
 }
 
-// selectedKey is the identity of the chosen message, or "".
+// selectedKey is the identity of the chosen row, or "".
 func (a *app) selectedKey() string {
 	if a.selected < 0 || a.selected >= len(a.all) {
 		return ""
 	}
-	return summaryKey(a.all[a.selected])
+	return a.rowKey(a.selected)
+}
+
+// chosenMessage is the message the chosen row shows, in conversation view
+// its conversation's newest, or none.
+func (a *app) chosenMessage() mail.Summary {
+	if a.selected < 0 || a.selected >= len(a.all) {
+		return mail.Summary{}
+	}
+	return a.all[a.selected]
 }
 
 // chooseRow makes row i the one chosen, and the only one, so the list
@@ -564,7 +632,7 @@ func (a *app) chooseRow(i int) {
 	a.selected = i
 	a.details = false
 	a.sel.Clear()
-	a.sel.Add(summaryKey(a.all[i]))
+	a.sel.Add(a.rowKey(i))
 }
 
 // clearSelection drops the choice and the reading pane with it.
@@ -575,14 +643,14 @@ func (a *app) clearSelection() {
 	a.reloadBody()
 }
 
-// restoreSelection finds the chosen message again by its key.
+// restoreSelection finds the chosen row again by its key.
 func (a *app) restoreSelection(key string) {
 	a.selected = -1
 	if key == "" {
 		return
 	}
-	for i, m := range a.all {
-		if summaryKey(m) == key {
+	for i := range a.all {
+		if a.rowKey(i) == key {
 			a.selected = i
 			return
 		}
@@ -597,8 +665,13 @@ func summaryKey(m mail.Summary) string {
 	return fmt.Sprintf("%s/%d", m.Folder, m.UID)
 }
 
-// reloadBody shows the body of the chosen row, if any.
+// reloadBody shows the body of the chosen row, if any, or in conversation
+// view its conversation.
 func (a *app) reloadBody() {
+	if a.threaded() {
+		a.loadConversation(a.gen)
+		return
+	}
 	if a.selected < 0 || a.selected >= len(a.all) {
 		a.bodyLocked = false
 		a.bodyErr = ""
@@ -757,7 +830,7 @@ func (a *app) selectFolder() {
 	a.list = ui.ListState{}
 	a.sel.Clear()
 	a.clearTriage()
-	a.all = nil
+	a.all, a.convs, a.conv = nil, nil, nil
 	a.query = ""
 	a.loadMessages(a.gen)
 	a.syncFolder(a.gen)

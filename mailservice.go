@@ -19,14 +19,23 @@ type mailService interface {
 	CachedFolders(ctx context.Context, accountID string) ([]mail.Folder, error)
 	CachedMessages(ctx context.Context, accountID, folder, query string, limit int) ([]mail.Summary, error)
 	CachedMessage(ctx context.Context, accountID, folder string, uid mail.UID) (mail.FetchResult, bool, error)
+	// Conversations, from the cache alone. A conversation-wide action acts
+	// on exactly what CachedConversation returns for the list's scope; a
+	// read that returns nothing is of a conversation that merged into
+	// another, or left, since the list was read.
+	CachedConversations(ctx context.Context, accountID, folder, query string, limit int) ([]mail.Conversation, error)
+	CachedConversation(ctx context.Context, accountID, folder string, thread mail.ThreadID) ([]mail.Summary, error)
 
 	SyncAccount(ctx context.Context, accountID string) ([]mail.Folder, error)
 	SyncFolder(ctx context.Context, accountID, folder string, limit int) error
 	FetchMessage(ctx context.Context, accountID, folder string, uid mail.UID, markSeen bool) (mail.FetchResult, error)
 
 	SetFlag(ctx context.Context, accountID, folder string, uid mail.UID, flag mail.Flag, on bool) error
+	SetFlags(ctx context.Context, accountID string, msgs []mail.MessageRef, flag mail.Flag, on bool) error
 	Move(ctx context.Context, accountID, folder string, uid mail.UID, dest string) (mail.MoveResult, error)
 	MoveBack(ctx context.Context, accountID, from, to string, uid mail.UID) error
+	MoveMessages(ctx context.Context, accountID string, msgs []mail.MessageRef, dest string) ([]mail.MoveResult, error)
+	MoveBackMessages(ctx context.Context, accountID string, moved []mail.MoveResult) error
 	Send(ctx context.Context, accountID string, out mail.Outgoing) (mail.SendResult, error)
 	RetryPending(ctx context.Context, id string) (mail.SendResult, error)
 	PendingSends(ctx context.Context, accountID string) ([]mail.PendingSend, error)

@@ -55,7 +55,24 @@ func testMessages(accountID string) []mail.Summary {
 
 func sampleApp(t *testing.T) (*app, *fakeService) {
 	t.Helper()
-	fs := newFakeService()
+	return startSample(t, newFakeService())
+}
+
+// sampleMessageApp is sampleApp with a row for each message, the view the
+// tests written before conversations are about.
+func sampleMessageApp(t *testing.T) (*app, *fakeService) {
+	t.Helper()
+	return startSample(t, inMessageView(newFakeService()))
+}
+
+// inMessageView has the window list a row for each message.
+func inMessageView(fs *fakeService) *fakeService {
+	fs.settings.Conversations = false
+	return fs
+}
+
+func startSample(t *testing.T, fs *fakeService) (*app, *fakeService) {
+	t.Helper()
 	fs.addAccount(testAccount("a1", "Shu Mail", "me@example.com"), "secret", testFolders(), testMessages("a1"))
 	a := newTestApp(fs)
 	a.setLocale = func(string) {}
@@ -223,7 +240,7 @@ func TestAccountSwitching(t *testing.T) {
 
 // Starring is optimistic and rolls back when the server refuses.
 func TestStarRollsBackOnError(t *testing.T) {
-	a, fs := sampleApp(t)
+	a, fs := sampleMessageApp(t)
 	tt := ui.NewTester(a.view, 1220, 800)
 	if err := tt.Click("Design review — Thursday at 10"); err != nil {
 		t.Fatal(err)
@@ -249,7 +266,7 @@ func TestStarRollsBackOnError(t *testing.T) {
 
 // Moving removes the row, and a failed move brings it back.
 func TestMoveAndRollback(t *testing.T) {
-	a, fs := sampleApp(t)
+	a, fs := sampleMessageApp(t)
 	tt := ui.NewTester(a.view, 1220, 800)
 	if err := tt.Click("Design review — Thursday at 10"); err != nil {
 		t.Fatal(err)
@@ -346,7 +363,7 @@ func TestComposeSend(t *testing.T) {
 
 // The HTML toggle switches modes and shows the body either way.
 func TestHTMLToggle(t *testing.T) {
-	a, _ := sampleApp(t)
+	a, _ := sampleMessageApp(t)
 	tt := ui.NewTester(a.view, 1220, 800)
 	if err := tt.Click("Design review — Thursday at 10"); err != nil {
 		t.Fatal(err)
@@ -542,7 +559,7 @@ func TestCmdKFocusesSearch(t *testing.T) {
 // Archiving offers an undo that moves the message back and restores its
 // row.
 func TestUndoMove(t *testing.T) {
-	a, fs := sampleApp(t)
+	a, fs := sampleMessageApp(t)
 	tt := ui.NewTester(a.view, 1220, 800)
 	if err := tt.Click("Archive message"); err != nil {
 		t.Fatal(err)
@@ -588,7 +605,7 @@ func TestUnreadDockBadge(t *testing.T) {
 // Cmd-click chooses several messages, and a toolbar action applies to all
 // of them.
 func TestMultiSelectArchive(t *testing.T) {
-	a, fs := sampleApp(t)
+	a, fs := sampleMessageApp(t)
 	tt := ui.NewTester(a.view, 1220, 800)
 	if err := tt.Click("Design review — Thursday at 10"); err != nil {
 		t.Fatal(err)
@@ -668,7 +685,7 @@ func TestEditAccountOverlayCancel(t *testing.T) {
 // Starring several messages flags them all, and the toolbar offers the
 // opposite action afterwards.
 func TestMultiSelectStar(t *testing.T) {
-	a, fs := sampleApp(t)
+	a, fs := sampleMessageApp(t)
 	tt := ui.NewTester(a.view, 1220, 800)
 	if err := tt.Click("Design review — Thursday at 10"); err != nil {
 		t.Fatal(err)
@@ -715,7 +732,7 @@ func TestUndoExpires(t *testing.T) {
 // The first message is chosen as one selection, so the row is
 // highlighted, and clearing the selection empties the reading pane.
 func TestAutoSelectionAndClear(t *testing.T) {
-	a, _ := sampleApp(t)
+	a, _ := sampleMessageApp(t)
 	if a.selected != 0 || a.sel.Len() != 1 || !a.sel.Has(summaryKey(a.all[0])) {
 		t.Fatalf("selected=%d sel=%d", a.selected, a.sel.Len())
 	}
@@ -763,7 +780,7 @@ func TestSidebarToggle(t *testing.T) {
 
 // The reading header discloses the raw sender and recipient fields.
 func TestMessageDetails(t *testing.T) {
-	a, _ := sampleApp(t)
+	a, _ := sampleMessageApp(t)
 	tt := ui.NewTester(a.view, 1220, 800)
 	if err := tt.Click(locales.Details()); err != nil {
 		t.Fatal(err)

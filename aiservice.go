@@ -26,6 +26,8 @@ type aiService interface {
 
 	SummaryPayload(ctx context.Context, m ai.Message) (ai.Payload, error)
 	Summarize(ctx context.Context, m ai.Message) (ai.Result, error)
+	ConversationPayload(ctx context.Context, c ai.Conversation) (ai.Payload, error)
+	SummarizeConversation(ctx context.Context, c ai.Conversation) (ai.Result, error)
 	TriagePayload(ctx context.Context, items []ai.TriageItem, language string) (ai.Payload, error)
 	Triage(ctx context.Context, items []ai.TriageItem, language string) (ai.TriageResult, error)
 	DraftPayload(ctx context.Context, m ai.Message, guidance string) (ai.Payload, error)

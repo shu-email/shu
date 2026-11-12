@@ -37,14 +37,15 @@ type fakeIMAP struct {
 	caps imap.CapSet
 	cert tls.Certificate
 
-	// open counts the connections being served, and ended is signalled
-	// as one ends. selects records each SELECT and EXAMINE, with whether
-	// it opened the mailbox read-only.
-	open    atomic.Int32
-	ended   chan struct{}
-	mu      sync.Mutex
-	selects []fakeSelect
-	log     *testLogger
+	// open counts the connections being served, sessions all those ever
+	// served, and ended is signalled as one ends. selects records each
+	// SELECT and EXAMINE, with whether it opened the mailbox read-only.
+	open     atomic.Int32
+	sessions atomic.Int32
+	ended    chan struct{}
+	mu       sync.Mutex
+	selects  []fakeSelect
+	log      *testLogger
 	// holdsBack has an idling session behave as the in-memory server
 	// does by itself: see fakeSession.Idle.
 	holdsBack atomic.Bool
@@ -138,6 +139,7 @@ func (f *fakeIMAP) serve(ln net.Listener) {
 	server := imapserver.New(&imapserver.Options{
 		NewSession: func(*imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
 			f.open.Add(1)
+			f.sessions.Add(1)
 			session := f.mem.NewSession().(imapserver.SessionIMAP4rev2)
 			return &fakeSession{SessionIMAP4rev2: session, f: f}, &imapserver.GreetingData{}, nil
 		},

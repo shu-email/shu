@@ -1104,7 +1104,7 @@ func TestSettingsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.CheckMinutes != 5 || !got.Notify || got.NotifyDetails || len(got.Muted) != 0 {
+	if got.CheckMinutes != 5 || !got.Notify || got.NotifyDetails || len(got.Muted) != 0 || !got.Conversations {
 		t.Fatalf("default settings = %+v", got)
 	}
 
@@ -1117,8 +1117,15 @@ func TestSettingsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.CheckMinutes != 30 || got.Notify || !got.NotifyDetails || !got.Muted[a.ID] {
+	if got.CheckMinutes != 30 || got.Notify || !got.NotifyDetails || !got.Muted[a.ID] || got.Conversations {
 		t.Errorf("settings read back = %+v", got)
+	}
+	want.Conversations = true
+	if err := svc.SaveSettings(ctx, want); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ = svc.Settings(ctx); !got.Conversations {
+		t.Error("the conversation view did not come back on")
 	}
 	if got.Muted["gone"] {
 		t.Error("an account that does not exist has a setting")

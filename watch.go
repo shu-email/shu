@@ -105,8 +105,10 @@ type noteMark struct {
 type noteAim struct {
 	account string
 	folder  string
-	// key is the message's key in the list, or "" for the folder alone.
+	// key is the message's key in the list, or "" for the folder alone,
+	// and uid its UID. In conversation view the row is its conversation's.
 	key string
+	uid mail.UID
 	// last is set once the folder has synced: a list that still lacks
 	// the message will not get it.
 	last bool
@@ -435,6 +437,7 @@ func (a *app) showTarget(target noteTarget) {
 	a.aim = &noteAim{account: target.account, folder: target.folder}
 	if target.message {
 		a.aim.key = summaryKey(mail.Summary{Folder: target.folder, UID: target.uid})
+		a.aim.uid = target.uid
 	}
 	switch {
 	case target.account != a.active:
@@ -459,17 +462,23 @@ func (a *app) aimFolder() {
 	}
 }
 
-// aimRow is the row of the message a notification asked for, or -1. The
-// wish ends when it is met, and when the synced folder cannot meet it.
-func (a *app) aimRow() int {
+// aimRow is the row of the message a notification asked for, or -1: in
+// conversation view the row of its conversation, aimed, which then opens
+// with the message expanded. The wish ends when it is met, and when the
+// synced folder cannot meet it.
+func (a *app) aimRow(aimed mail.ThreadID) int {
 	aim := a.aim
 	if aim == nil || aim.account != a.active || aim.folder != a.folder {
 		return -1
 	}
 	if aim.key != "" {
 		for i, m := range a.all {
-			if summaryKey(m) == aim.key {
+			c := a.convAt(i)
+			if summaryKey(m) == aim.key || (c != nil && aimed != 0 && c.Thread == aimed) {
 				a.aim = nil
+				if c != nil {
+					a.convExpand = aim.key
+				}
 				return i
 			}
 		}
@@ -531,6 +540,7 @@ func (a *app) setMailSettings(set mail.Settings) {
 		set.Muted = map[string]bool{}
 	}
 	a.mailSet = set
+	a.convToggle = set.Conversations
 	a.checkChoice = 0
 	for i, minutes := range mail.CheckIntervals {
 		if minutes == set.CheckMinutes {

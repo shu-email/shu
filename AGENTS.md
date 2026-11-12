@@ -63,8 +63,8 @@ Windows and Linux. It is written in Go with
   the window decides what to notify, draws the state and sets the badge.
   A message is handed out for announcing at most once: `Store.TakeNew`
   moves the folder's watermark (`watermarks` table) in the same step
-  that returns it. The settings of checking and notifying are
-  `mail.Settings`, kept in the store. Notifications, focus, wake and
+  that returns it. The settings of checking, notifying and listing mail
+  are `mail.Settings`, kept in the store. Notifications, focus, wake and
   network reach the window through hook fields on `app` that `attach`
   sets. The target of a notification travels in its ID, which is parsed
   as untrusted input.
@@ -83,11 +83,20 @@ Windows and Linux. It is written in Go with
   `Service.CachedConversations` and read one with
   `Service.CachedConversation`, from the cache alone; a conversation-wide
   action acts on exactly what `CachedConversation` returns for the list's
-  scope, and `MoveMessages` / `MoveBackMessages` move such a set and undo
-  it.
+  scope, `MoveMessages` / `MoveBackMessages` move such a set and undo it,
+  and `SetFlags` stars it or marks it read with one connection and one
+  STORE per folder, changing only `\Seen` and `\Flagged` and never moving
+  or expunging. The window lists conversations unless the user switched
+  to single messages (`mail.Settings.Conversations`); the Drafts entry
+  always lists drafts one by one. A row is a conversation's messages in
+  the list's scope, and the toolbar acts on those. The reading pane shows
+  the conversation across folders, each message once and without the
+  copies in Drafts, Junk and Trash the list does not show, and each
+  expanded message has actions of its own.
 - `ai/` is the AI layer: provider settings, the excerpt that decides what
-  part of a message may leave the device, the features (summary, triage,
-  draft reply) and `Service.send`, the single egress point every model
+  part of a message may leave the device, the features (summary of a
+  message or a conversation, triage, draft reply) and `Service.send`, the
+  single egress point every model
   request passes through. It imports neither the UI nor `mail/`; views
   reach it through the `aiService` value. Its settings and the summary
   cache live in `store/`; its keys live only in `mygo.Secrets`. It

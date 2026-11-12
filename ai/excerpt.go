@@ -12,6 +12,9 @@ const (
 	// BodyLimit is the most body text one summary or draft request sends,
 	// in characters.
 	BodyLimit = 4000
+	// ConversationLimit is the most text one summary of a conversation
+	// sends, in characters, all its messages together.
+	ConversationLimit = 8000
 	// PreviewLimit is the most preview text sent per triaged message.
 	PreviewLimit = 160
 	// TriageLimit is the most messages one triage request lists.

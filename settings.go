@@ -373,7 +373,7 @@ func (a *app) aiSettingsView(c *ui.Context, t *ui.Theme) {
 
 	a.section(c, locales.AiCapabilities(), func() {
 		details := [3][2]string{
-			{locales.AiSummaries(), locales.AiSummariesDetail(ai.BodyLimit)},
+			{locales.AiSummaries(), locales.AiSummariesDetail(ai.BodyLimit, ai.ConversationLimit)},
 			{locales.AiTriage(), locales.AiTriageDetail(ai.TriageLimit)},
 			{locales.AiDrafts(), locales.AiDraftsDetail()},
 		}

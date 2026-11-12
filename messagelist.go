@@ -49,7 +49,7 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 			})
 			return
 		}
-		a.list.Key = func(i int) any { return summaryKey(a.all[i]) }
+		a.list.Key = func(i int) any { return a.rowKey(i) }
 		a.list.Label = func(i int) string {
 			m := a.all[i]
 			if a.folder == draftsFolder {
@@ -88,6 +88,8 @@ func (a *app) listHeader(c *ui.Context, t *ui.Theme) {
 	title := a.folderLabel(a.folder)
 	chosen := a.sel.Len()
 	switch {
+	case chosen > 1 && a.threaded():
+		title = locales.ConversationsSelected(chosen)
 	case chosen > 1:
 		title = locales.SelectedCount(chosen)
 	case query != "":
@@ -108,6 +110,7 @@ func (a *app) listHeader(c *ui.Context, t *ui.Theme) {
 		if a.loading {
 			ui.Spinner(c).Size(14, 14)
 		}
+		a.viewToggle(c)
 		if chosen > 1 {
 			ui.Button(c, locales.ClearSelection()).OnClick(func() { a.clearSelection() })
 		} else if a.ai != nil {
@@ -121,29 +124,37 @@ func (a *app) listHeader(c *ui.Context, t *ui.Theme) {
 	ui.Text(c, a.listSummary()).FontSize(11).TextColor(t.TextMuted).SingleLine()
 }
 
-// listSummary is the line under the folder title.
+// listSummary is the line under the folder title. A folder's counts are
+// of its messages, as the server keeps them, in either view.
 func (a *app) listSummary() string {
 	query := strings.TrimSpace(a.query)
-	if query != "" || a.folder == "starred" || a.folder == draftsFolder {
-		return locales.MessageCount(len(a.all))
-	}
-	for _, f := range a.folders {
-		if f.Name == a.folder {
-			total := f.Total
-			if total == 0 {
-				total = len(a.all)
+	if query == "" && a.folder != "starred" && a.folder != draftsFolder {
+		for _, f := range a.folders {
+			if f.Name == a.folder {
+				total := f.Total
+				if total == 0 {
+					total = len(a.all)
+				}
+				return locales.MailboxSummary(total, f.Unread)
 			}
-			return locales.MailboxSummary(total, f.Unread)
 		}
+	}
+	if a.threaded() {
+		return locales.ConversationCount(len(a.all))
 	}
 	return locales.MessageCount(len(a.all))
 }
 
-// unread counts the unseen messages of the list.
+// unread counts the unread rows of the list: messages, or conversations
+// with an unread message.
 func (a *app) unread() int {
 	n := 0
-	for _, m := range a.all {
-		if !m.Seen {
+	for i, m := range a.all {
+		if c := a.convAt(i); c != nil {
+			if c.Unread {
+				n++
+			}
+		} else if !m.Seen {
 			n++
 		}
 	}
@@ -258,6 +269,12 @@ func (a *app) messageRow(row ui.ListRow) {
 	}
 	m := a.all[row.Index]
 	chosen := row.Selected()
+	// A conversation's row shows its newest message, and what all its
+	// messages in the list add up to.
+	unread, flagged, attached, count := !m.Seen, m.Flagged, m.HasAttachments, 0
+	if conv := a.convAt(row.Index); conv != nil {
+		unread, flagged, attached, count = conv.Unread, conv.Flagged, conv.HasAttachments, conv.Count
+	}
 
 	muted := t.TextMuted
 	nameColor := t.Text
@@ -277,32 +294,35 @@ func (a *app) messageRow(row ui.ListRow) {
 	ui.Box(c).Padding(9, 14).BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Start).Children(func() {
 			dot := ui.Box(c).Size(7, 7).Radius(3.5).Shrink(0).Margin(6, 0, 0, 0)
-			if !m.Seen {
+			if unread {
 				dot.Background(dotColor)
 			}
 			ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
 				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 					name := ui.Text(c, who).FontSize(13).SingleLine().Grow(1)
-					if !m.Seen {
+					if unread {
 						name.Bold()
 					}
 					name.TextColor(nameColor)
+					if count > 1 {
+						countBadge(c, count, muted)
+					}
 					if meta != "" {
 						ui.Text(c, meta).FontSize(11).TextColor(muted).Shrink(0).SingleLine()
 					}
-					if m.HasAttachments {
+					if attached {
 						ui.Icon(c, paperclipIcon).FontSize(11).TextColor(muted).Label(locales.HasAttachments())
 					}
-					if m.Flagged {
+					if flagged {
 						ui.Icon(c, starFilledIcon).FontSize(11).TextColor(starColor)
 					}
 					ui.Text(c, a.messageTime(c, m.Date)).FontSize(11).TextColor(muted).Shrink(0)
 				})
 				subject := ui.Text(c, title).FontSize(13).SingleLine()
-				if !m.Seen {
+				if unread {
 					subject.Bold()
 				}
-				if s, ok := a.suggestion(m); ok {
+				if s, ok := a.suggestion(a.rowKey(row.Index)); ok {
 					a.suggestionLine(c, t, s, chosen)
 				} else {
 					ui.Text(c, m.Preview).FontSize(12).SingleLine().TextColor(muted)

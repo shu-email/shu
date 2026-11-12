@@ -72,6 +72,13 @@ type app struct {
 	sel         ui.Selection[string]
 	searchField ui.Handle
 	focusList   bool
+	// scope is the scope chosen for the list's searches, when scopeSet;
+	// scopeSeg is the scope control's choice as it draws it. filters is
+	// the filter control beside the search field.
+	scope    searchScope
+	scopeSet bool
+	scopeSeg int
+	filters  filterForm
 	// pager is how far the list has read the cache, and older, by account
 	// and folder, how much of a folder the cache holds and the fetch of
 	// the rest from the server.
@@ -127,9 +134,12 @@ type app struct {
 	watchTurn sync.Mutex
 	// inboxes is the inbox's unread count of each account, by its ID, and
 	// foldersOf the account whose folders a.folders are: after a switch
-	// they are the last account's until the cache is read.
-	inboxes   map[string]int
-	foldersOf string
+	// they are the last account's until the cache is read. otherFolders
+	// are the other accounts' folders, by ID: where an action on a row of
+	// theirs moves it, and what their counts are.
+	inboxes      map[string]int
+	foldersOf    string
+	otherFolders map[string][]mail.Folder
 	// announced is, by account and folder, the newest message already
 	// dealt with as new mail. aim is what a clicked notification asked
 	// to see; clicked is the ID of one clicked before the accounts were
@@ -195,6 +205,7 @@ func newApp(svc mailService) *app {
 		watched:       map[string]mail.Account{},
 		watch:         map[string]mail.WatchStatus{},
 		inboxes:       map[string]int{},
+		otherFolders:  map[string][]mail.Folder{},
 		announced:     map[string]noteMark{},
 		mailSet:       mail.DefaultSettings(),
 		convToggle:    mail.DefaultSettings().Conversations,
@@ -354,6 +365,7 @@ func (a *app) beginAccount() {
 	a.gen++
 	a.folder = ""
 	a.query = ""
+	a.scopeSet = false
 	a.selected = -1
 	a.setUndo(nil)
 	a.list = ui.ListState{}
@@ -444,6 +456,10 @@ func (a *app) syncFolder(g uint64) {
 	if folder == "" || folder == "starred" {
 		return
 	}
+	if folder == allInboxes {
+		a.syncInboxes(g)
+		return
+	}
 	if folder == draftsFolder {
 		a.syncDrafts(accountID)
 		return
@@ -517,7 +533,7 @@ func (a *app) readList(g uint64, progress, neighbour bool) {
 	accountID, folder, query, threaded := q.account, q.folder, q.search, q.threaded
 	key, prev := a.selectedKey(), a.chosenMessage()
 	var aimAt mail.Summary
-	if aim := a.aim; threaded && aim != nil && aim.account == accountID && aim.folder == folder {
+	if aim := a.aim; threaded && aim != nil && a.aimShown(aim) {
 		aimAt = mail.Summary{Account: aim.account, Folder: aim.folder, UID: aim.uid}
 	}
 	if folder == "" {
@@ -554,7 +570,7 @@ func (a *app) readList(g uint64, progress, neighbour bool) {
 			cacheErr     error
 		)
 		switch {
-		case folder == draftsFolder:
+		case q.drafts():
 			got.msgs, err = a.svc.DraftList(ctx, accountID, query, 50)
 		default:
 			got, err = a.readTop(ctx, q, want, first, last)
@@ -806,11 +822,13 @@ func (a *app) applySeen(key string) {
 }
 
 // updateBadge puts the unread count of every account's inbox on the
-// Dock. The active account's is the one its folders show, which follows
-// what the user reads before the server does.
+// Dock. Each is the one the account's folders show, which follows what
+// the user reads before the server does.
 func (a *app) updateBadge() {
-	if a.active != "" && a.foldersOf == a.active {
-		a.inboxes[a.active] = inboxUnread(a.folders)
+	for _, acc := range a.accounts {
+		if folders := a.foldersFor(acc.ID); folders != nil {
+			a.inboxes[acc.ID] = inboxUnread(folders)
+		}
 	}
 	if a.setBadge == nil {
 		return
@@ -878,6 +896,7 @@ func (a *app) selectFolder() {
 	a.clearTriage()
 	a.clearRows()
 	a.query = ""
+	a.scopeSet = false
 	a.loadMessages(a.gen)
 	a.syncFolder(a.gen)
 }
@@ -964,7 +983,7 @@ func (a *app) ensureFolder() {
 }
 
 func (a *app) folderExists(id string) bool {
-	if id == "starred" || id == draftsFolder {
+	if id == "starred" || id == draftsFolder || id == allInboxes && len(a.accounts) > 1 {
 		return true
 	}
 	for _, f := range a.folders {
@@ -985,26 +1004,41 @@ func (a *app) folderBySpecial(special string) string {
 }
 
 // specialFolder is an account's folder of a special use, where an action
-// on its mail moves it, or "": the window holds the folders of the
-// account on show.
+// on its mail moves it, or "" while the account's folders are not known.
 func (a *app) specialFolder(account, special string) string {
-	if account != a.foldersOf {
-		return ""
+	for _, f := range a.foldersFor(account) {
+		if f.SpecialUse == special {
+			return f.Name
+		}
 	}
-	return a.folderBySpecial(special)
+	return ""
+}
+
+// foldersFor is the folders of an account as the window has them.
+func (a *app) foldersFor(account string) []mail.Folder {
+	if account != "" && account == a.foldersOf {
+		return a.folders
+	}
+	return a.otherFolders[account]
 }
 
 // listScope is the part of the cache the list shows.
-func (a *app) listScope() mail.Scope { return mail.AccountScope(a.active, a.folder) }
+func (a *app) listScope() mail.Scope { return a.listQuery().mailScope() }
 
-func (a *app) folderLabel(id string) string {
-	if id == "starred" {
+func (a *app) folderLabel(id string) string { return a.folderLabelOf(a.foldersOf, id) }
+
+// folderLabelOf is the name the window gives an account's folder: its
+// special use in the user's language, else the server's name.
+func (a *app) folderLabelOf(account, id string) string {
+	switch id {
+	case "starred":
 		return locales.Starred()
-	}
-	if id == draftsFolder {
+	case draftsFolder:
 		return locales.Drafts()
+	case allInboxes:
+		return locales.AllInboxes()
 	}
-	for _, f := range a.folders {
+	for _, f := range a.foldersFor(account) {
 		if f.Name != id {
 			continue
 		}
@@ -1130,10 +1164,11 @@ func (a *app) titleBar(c *ui.Context, t *ui.Theme, bar ui.TitleBar, height float
 			OnClick(func() { a.sidebarOpen = !a.sidebarOpen })
 		ui.Spacer(c)
 		ui.SearchField(c, &a.query).Width(300).
-			Placeholder(locales.SearchFolder(a.folderLabel(a.folder))).
+			Placeholder(a.searchPlaceholder()).
 			Label(locales.SearchMailLabel()).Bind(&a.searchField).
 			OnClick(func() { a.focusList = false }).
 			OnChange(func() { a.search() })
+		a.filterButton(c, t)
 		if a.loading {
 			ui.Spinner(c).Size(14, 14)
 		}
@@ -1199,6 +1234,14 @@ func (a *app) sidebar(c *ui.Context, t *ui.Theme) {
 
 		entries := a.folderEntries()
 		changed := ui.Sidebar(c, &a.folder, func() {
+			if len(a.accounts) > 1 {
+				item := ui.SidebarItem(c, allInboxes, mailsIcon, locales.AllInboxes())
+				if n := a.unifiedUnread(); n > 0 {
+					item.Children(func() {
+						ui.Badge(c, fmt.Sprint(n)).Background(t.Accent).TextColor(t.AccentText)
+					})
+				}
+			}
 			ui.SidebarSection(c, locales.Mailboxes(), &a.mailboxesOpen, func() {
 				for _, e := range entries {
 					item := ui.SidebarItem(c, e.ID, e.Icon, e.Label)

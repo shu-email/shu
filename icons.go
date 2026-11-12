@@ -23,6 +23,7 @@ func mustIcon(name string) *ui.SVG {
 
 var (
 	inboxIcon         = mustIcon("inbox")
+	mailsIcon         = mustIcon("mails")
 	starIcon          = mustIcon("star")
 	starFilledIcon    = mustIcon("star-filled")
 	sentIcon          = mustIcon("send")
@@ -33,6 +34,7 @@ var (
 	tagIcon           = mustIcon("tag")
 	composeIcon       = mustIcon("square-pen")
 	filterIcon        = mustIcon("filter")
+	searchIcon        = mustIcon("search")
 	replyIcon         = mustIcon("reply")
 	replyAllIcon      = mustIcon("reply-all")
 	forwardIcon       = mustIcon("forward")

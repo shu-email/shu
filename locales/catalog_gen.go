@@ -3741,3 +3741,717 @@ func SyncWindowDetail() string { return In(i18n.Locale()).SyncWindowDetail() }
 func (msgs Messages) SyncWindowDetail() string {
 	return Catalog.Format(msgs.locale, "syncWindowDetail", nil)
 }
+
+// AllInboxes says "All Inboxes"
+// in the language the app shows.
+//
+// The sidebar entry and list of every account's inbox together.
+func AllInboxes() string { return In(i18n.Locale()).AllInboxes() }
+
+// AllInboxes says "All Inboxes"
+// in the language of msgs.
+//
+// The sidebar entry and list of every account's inbox together.
+func (msgs Messages) AllInboxes() string {
+	return Catalog.Format(msgs.locale, "allInboxes", nil)
+}
+
+// AccountUnread says "{account} {count}"
+// in the language the app shows.
+//
+// Under the unified inbox's title: an account's name and its inbox's unread
+// count.
+func AccountUnread(account string, count int) string {
+	return In(i18n.Locale()).AccountUnread(account, count)
+}
+
+// AccountUnread says "{account} {count}"
+// in the language of msgs.
+//
+// Under the unified inbox's title: an account's name and its inbox's unread
+// count.
+func (msgs Messages) AccountUnread(account string, count int) string {
+	return Catalog.Format(msgs.locale, "accountUnread", map[string]any{"account": account, "count": count})
+}
+
+// InAccount says "Account: {account}"
+// in the language the app shows.
+//
+// What assistive technology reads of the small account name on a row.
+func InAccount(account string) string { return In(i18n.Locale()).InAccount(account) }
+
+// InAccount says "Account: {account}"
+// in the language of msgs.
+//
+// What assistive technology reads of the small account name on a row.
+func (msgs Messages) InAccount(account string) string {
+	return Catalog.Format(msgs.locale, "inAccount", map[string]any{"account": account})
+}
+
+// InFolder says "In {folder}"
+// in the language the app shows.
+//
+// Under the subject in the reading pane: the folder of the open message.
+func InFolder(folder string) string { return In(i18n.Locale()).InFolder(folder) }
+
+// InFolder says "In {folder}"
+// in the language of msgs.
+//
+// Under the subject in the reading pane: the folder of the open message.
+func (msgs Messages) InFolder(folder string) string {
+	return Catalog.Format(msgs.locale, "inFolder", map[string]any{"folder": folder})
+}
+
+// InAccountFolder says "{account} · {folder}"
+// in the language the app shows.
+//
+// Under the subject in the reading pane: the account and folder of the open
+// message.
+func InAccountFolder(account string, folder string) string {
+	return In(i18n.Locale()).InAccountFolder(account, folder)
+}
+
+// InAccountFolder says "{account} · {folder}"
+// in the language of msgs.
+//
+// Under the subject in the reading pane: the account and folder of the open
+// message.
+func (msgs Messages) InAccountFolder(account string, folder string) string {
+	return Catalog.Format(msgs.locale, "inAccountFolder", map[string]any{"account": account, "folder": folder})
+}
+
+// OlderInFolderHint says "Older mail on the server is fetched from the end of a folder's own list."
+// in the language the app shows.
+func OlderInFolderHint() string { return In(i18n.Locale()).OlderInFolderHint() }
+
+// OlderInFolderHint says "Older mail on the server is fetched from the end of a folder's own list."
+// in the language of msgs.
+func (msgs Messages) OlderInFolderHint() string {
+	return Catalog.Format(msgs.locale, "olderInFolderHint", nil)
+}
+
+// FieldFrom says "from"
+// in the language the app shows.
+//
+// A part of a message a search found its words in: the sender.
+func FieldFrom() string { return In(i18n.Locale()).FieldFrom() }
+
+// FieldFrom says "from"
+// in the language of msgs.
+//
+// A part of a message a search found its words in: the sender.
+func (msgs Messages) FieldFrom() string {
+	return Catalog.Format(msgs.locale, "fieldFrom", nil)
+}
+
+// FieldTo says "to"
+// in the language the app shows.
+//
+// A part of a message a search found its words in: the recipients.
+func FieldTo() string { return In(i18n.Locale()).FieldTo() }
+
+// FieldTo says "to"
+// in the language of msgs.
+//
+// A part of a message a search found its words in: the recipients.
+func (msgs Messages) FieldTo() string {
+	return Catalog.Format(msgs.locale, "fieldTo", nil)
+}
+
+// FieldSubject says "subject"
+// in the language the app shows.
+//
+// A part of a message a search found its words in: the subject.
+func FieldSubject() string { return In(i18n.Locale()).FieldSubject() }
+
+// FieldSubject says "subject"
+// in the language of msgs.
+//
+// A part of a message a search found its words in: the subject.
+func (msgs Messages) FieldSubject() string {
+	return Catalog.Format(msgs.locale, "fieldSubject", nil)
+}
+
+// FieldBody says "body"
+// in the language the app shows.
+//
+// A part of a message a search found its words in: the body.
+func FieldBody() string { return In(i18n.Locale()).FieldBody() }
+
+// FieldBody says "body"
+// in the language of msgs.
+//
+// A part of a message a search found its words in: the body.
+func (msgs Messages) FieldBody() string {
+	return Catalog.Format(msgs.locale, "fieldBody", nil)
+}
+
+// ListSeparator says ", "
+// in the language the app shows.
+//
+// Between the items of a short list in a sentence.
+func ListSeparator() string { return In(i18n.Locale()).ListSeparator() }
+
+// ListSeparator says ", "
+// in the language of msgs.
+//
+// Between the items of a short list in a sentence.
+func (msgs Messages) ListSeparator() string {
+	return Catalog.Format(msgs.locale, "listSeparator", nil)
+}
+
+// MatchedFields says "Matched: {fields}"
+// in the language the app shows.
+//
+// Under a search result: the parts of the message the words were found in.
+func MatchedFields(fields string) string { return In(i18n.Locale()).MatchedFields(fields) }
+
+// MatchedFields says "Matched: {fields}"
+// in the language of msgs.
+//
+// Under a search result: the parts of the message the words were found in.
+func (msgs Messages) MatchedFields(fields string) string {
+	return Catalog.Format(msgs.locale, "matchedFields", map[string]any{"fields": fields})
+}
+
+// MatchedInMessages says "Matched in {count, plural, one {# message} other {# messages}}: {fields}"
+// in the language the app shows.
+//
+// Under a conversation found by a search: how many of its messages matched,
+// and where.
+func MatchedInMessages(count int, fields string) string {
+	return In(i18n.Locale()).MatchedInMessages(count, fields)
+}
+
+// MatchedInMessages says "Matched in {count, plural, one {# message} other {# messages}}: {fields}"
+// in the language of msgs.
+//
+// Under a conversation found by a search: how many of its messages matched,
+// and where.
+func (msgs Messages) MatchedInMessages(count int, fields string) string {
+	return Catalog.Format(msgs.locale, "matchedInMessages", map[string]any{"count": count, "fields": fields})
+}
+
+// SearchAllAccounts says "Search all accounts"
+// in the language the app shows.
+func SearchAllAccounts() string { return In(i18n.Locale()).SearchAllAccounts() }
+
+// SearchAllAccounts says "Search all accounts"
+// in the language of msgs.
+func (msgs Messages) SearchAllAccounts() string {
+	return Catalog.Format(msgs.locale, "searchAllAccounts", nil)
+}
+
+// SearchAllFolders says "Search all folders"
+// in the language the app shows.
+func SearchAllFolders() string { return In(i18n.Locale()).SearchAllFolders() }
+
+// SearchAllFolders says "Search all folders"
+// in the language of msgs.
+func (msgs Messages) SearchAllFolders() string {
+	return Catalog.Format(msgs.locale, "searchAllFolders", nil)
+}
+
+// SearchFilters says "Search filters"
+// in the language the app shows.
+//
+// The button beside the search field that opens the filters.
+func SearchFilters() string { return In(i18n.Locale()).SearchFilters() }
+
+// SearchFilters says "Search filters"
+// in the language of msgs.
+//
+// The button beside the search field that opens the filters.
+func (msgs Messages) SearchFilters() string {
+	return Catalog.Format(msgs.locale, "searchFilters", nil)
+}
+
+// SearchFiltersTitle says "Filters"
+// in the language the app shows.
+func SearchFiltersTitle() string { return In(i18n.Locale()).SearchFiltersTitle() }
+
+// SearchFiltersTitle says "Filters"
+// in the language of msgs.
+func (msgs Messages) SearchFiltersTitle() string {
+	return Catalog.Format(msgs.locale, "searchFiltersTitle", nil)
+}
+
+// FilterFrom says "From"
+// in the language the app shows.
+func FilterFrom() string { return In(i18n.Locale()).FilterFrom() }
+
+// FilterFrom says "From"
+// in the language of msgs.
+func (msgs Messages) FilterFrom() string {
+	return Catalog.Format(msgs.locale, "filterFrom", nil)
+}
+
+// FilterTo says "To"
+// in the language the app shows.
+func FilterTo() string { return In(i18n.Locale()).FilterTo() }
+
+// FilterTo says "To"
+// in the language of msgs.
+func (msgs Messages) FilterTo() string {
+	return Catalog.Format(msgs.locale, "filterTo", nil)
+}
+
+// FilterSubject says "Subject"
+// in the language the app shows.
+func FilterSubject() string { return In(i18n.Locale()).FilterSubject() }
+
+// FilterSubject says "Subject"
+// in the language of msgs.
+func (msgs Messages) FilterSubject() string {
+	return Catalog.Format(msgs.locale, "filterSubject", nil)
+}
+
+// FilterAfter says "On or after"
+// in the language the app shows.
+//
+// A search filter: mail of that day or later.
+func FilterAfter() string { return In(i18n.Locale()).FilterAfter() }
+
+// FilterAfter says "On or after"
+// in the language of msgs.
+//
+// A search filter: mail of that day or later.
+func (msgs Messages) FilterAfter() string {
+	return Catalog.Format(msgs.locale, "filterAfter", nil)
+}
+
+// FilterBefore says "Before"
+// in the language the app shows.
+//
+// A search filter: mail older than that day.
+func FilterBefore() string { return In(i18n.Locale()).FilterBefore() }
+
+// FilterBefore says "Before"
+// in the language of msgs.
+//
+// A search filter: mail older than that day.
+func (msgs Messages) FilterBefore() string {
+	return Catalog.Format(msgs.locale, "filterBefore", nil)
+}
+
+// FilterAfterDate says "Date for On or after"
+// in the language the app shows.
+func FilterAfterDate() string { return In(i18n.Locale()).FilterAfterDate() }
+
+// FilterAfterDate says "Date for On or after"
+// in the language of msgs.
+func (msgs Messages) FilterAfterDate() string {
+	return Catalog.Format(msgs.locale, "filterAfterDate", nil)
+}
+
+// FilterBeforeDate says "Date for Before"
+// in the language the app shows.
+func FilterBeforeDate() string { return In(i18n.Locale()).FilterBeforeDate() }
+
+// FilterBeforeDate says "Date for Before"
+// in the language of msgs.
+func (msgs Messages) FilterBeforeDate() string {
+	return Catalog.Format(msgs.locale, "filterBeforeDate", nil)
+}
+
+// FilterUnread says "Unread only"
+// in the language the app shows.
+func FilterUnread() string { return In(i18n.Locale()).FilterUnread() }
+
+// FilterUnread says "Unread only"
+// in the language of msgs.
+func (msgs Messages) FilterUnread() string {
+	return Catalog.Format(msgs.locale, "filterUnread", nil)
+}
+
+// FilterStarred says "Starred only"
+// in the language the app shows.
+func FilterStarred() string { return In(i18n.Locale()).FilterStarred() }
+
+// FilterStarred says "Starred only"
+// in the language of msgs.
+func (msgs Messages) FilterStarred() string {
+	return Catalog.Format(msgs.locale, "filterStarred", nil)
+}
+
+// FilterAttachment says "Has attachments"
+// in the language the app shows.
+func FilterAttachment() string { return In(i18n.Locale()).FilterAttachment() }
+
+// FilterAttachment says "Has attachments"
+// in the language of msgs.
+func (msgs Messages) FilterAttachment() string {
+	return Catalog.Format(msgs.locale, "filterAttachment", nil)
+}
+
+// FilterFolder says "Folder"
+// in the language the app shows.
+func FilterFolder() string { return In(i18n.Locale()).FilterFolder() }
+
+// FilterFolder says "Folder"
+// in the language of msgs.
+func (msgs Messages) FilterFolder() string {
+	return Catalog.Format(msgs.locale, "filterFolder", nil)
+}
+
+// AnyFolder says "Any folder"
+// in the language the app shows.
+func AnyFolder() string { return In(i18n.Locale()).AnyFolder() }
+
+// AnyFolder says "Any folder"
+// in the language of msgs.
+func (msgs Messages) AnyFolder() string {
+	return Catalog.Format(msgs.locale, "anyFolder", nil)
+}
+
+// ClearFilters says "Clear filters"
+// in the language the app shows.
+func ClearFilters() string { return In(i18n.Locale()).ClearFilters() }
+
+// ClearFilters says "Clear filters"
+// in the language of msgs.
+func (msgs Messages) ClearFilters() string {
+	return Catalog.Format(msgs.locale, "clearFilters", nil)
+}
+
+// FilterSyntaxHint says "You can also type from:, to:, subject:, body:, after:, before:, is:unread, is:starred, has:attachment, in: and account:."
+// in the language the app shows.
+func FilterSyntaxHint() string { return In(i18n.Locale()).FilterSyntaxHint() }
+
+// FilterSyntaxHint says "You can also type from:, to:, subject:, body:, after:, before:, is:unread, is:starred, has:attachment, in: and account:."
+// in the language of msgs.
+func (msgs Messages) FilterSyntaxHint() string {
+	return Catalog.Format(msgs.locale, "filterSyntaxHint", nil)
+}
+
+// FilterFromValue says "From: {value}"
+// in the language the app shows.
+func FilterFromValue(value string) string { return In(i18n.Locale()).FilterFromValue(value) }
+
+// FilterFromValue says "From: {value}"
+// in the language of msgs.
+func (msgs Messages) FilterFromValue(value string) string {
+	return Catalog.Format(msgs.locale, "filterFromValue", map[string]any{"value": value})
+}
+
+// FilterToValue says "To: {value}"
+// in the language the app shows.
+func FilterToValue(value string) string { return In(i18n.Locale()).FilterToValue(value) }
+
+// FilterToValue says "To: {value}"
+// in the language of msgs.
+func (msgs Messages) FilterToValue(value string) string {
+	return Catalog.Format(msgs.locale, "filterToValue", map[string]any{"value": value})
+}
+
+// FilterSubjectValue says "Subject: {value}"
+// in the language the app shows.
+func FilterSubjectValue(value string) string { return In(i18n.Locale()).FilterSubjectValue(value) }
+
+// FilterSubjectValue says "Subject: {value}"
+// in the language of msgs.
+func (msgs Messages) FilterSubjectValue(value string) string {
+	return Catalog.Format(msgs.locale, "filterSubjectValue", map[string]any{"value": value})
+}
+
+// FilterBodyValue says "Body: {value}"
+// in the language the app shows.
+func FilterBodyValue(value string) string { return In(i18n.Locale()).FilterBodyValue(value) }
+
+// FilterBodyValue says "Body: {value}"
+// in the language of msgs.
+func (msgs Messages) FilterBodyValue(value string) string {
+	return Catalog.Format(msgs.locale, "filterBodyValue", map[string]any{"value": value})
+}
+
+// FilterAfterDay says "On or after {day}"
+// in the language the app shows.
+func FilterAfterDay(day string) string { return In(i18n.Locale()).FilterAfterDay(day) }
+
+// FilterAfterDay says "On or after {day}"
+// in the language of msgs.
+func (msgs Messages) FilterAfterDay(day string) string {
+	return Catalog.Format(msgs.locale, "filterAfterDay", map[string]any{"day": day})
+}
+
+// FilterBeforeDay says "Before {day}"
+// in the language the app shows.
+func FilterBeforeDay(day string) string { return In(i18n.Locale()).FilterBeforeDay(day) }
+
+// FilterBeforeDay says "Before {day}"
+// in the language of msgs.
+func (msgs Messages) FilterBeforeDay(day string) string {
+	return Catalog.Format(msgs.locale, "filterBeforeDay", map[string]any{"day": day})
+}
+
+// FilterInFolder says "In {folder}"
+// in the language the app shows.
+func FilterInFolder(folder string) string { return In(i18n.Locale()).FilterInFolder(folder) }
+
+// FilterInFolder says "In {folder}"
+// in the language of msgs.
+func (msgs Messages) FilterInFolder(folder string) string {
+	return Catalog.Format(msgs.locale, "filterInFolder", map[string]any{"folder": folder})
+}
+
+// AllFolders says "All folders"
+// in the language the app shows.
+//
+// The search scope of every folder of the account on screen.
+func AllFolders() string { return In(i18n.Locale()).AllFolders() }
+
+// AllFolders says "All folders"
+// in the language of msgs.
+//
+// The search scope of every folder of the account on screen.
+func (msgs Messages) AllFolders() string {
+	return Catalog.Format(msgs.locale, "allFolders", nil)
+}
+
+// AllAccounts says "All accounts"
+// in the language the app shows.
+//
+// The search scope of every folder of every account.
+func AllAccounts() string { return In(i18n.Locale()).AllAccounts() }
+
+// AllAccounts says "All accounts"
+// in the language of msgs.
+//
+// The search scope of every folder of every account.
+func (msgs Messages) AllAccounts() string {
+	return Catalog.Format(msgs.locale, "allAccounts", nil)
+}
+
+// WhereAllAccounts says "all folders of all accounts"
+// in the language the app shows.
+//
+// What a search covered, after a count or Searched.
+func WhereAllAccounts() string { return In(i18n.Locale()).WhereAllAccounts() }
+
+// WhereAllAccounts says "all folders of all accounts"
+// in the language of msgs.
+//
+// What a search covered, after a count or Searched.
+func (msgs Messages) WhereAllAccounts() string {
+	return Catalog.Format(msgs.locale, "whereAllAccounts", nil)
+}
+
+// WhereAccount says "all folders of {account}"
+// in the language the app shows.
+func WhereAccount(account string) string { return In(i18n.Locale()).WhereAccount(account) }
+
+// WhereAccount says "all folders of {account}"
+// in the language of msgs.
+func (msgs Messages) WhereAccount(account string) string {
+	return Catalog.Format(msgs.locale, "whereAccount", map[string]any{"account": account})
+}
+
+// WhereAllFolders says "all folders"
+// in the language the app shows.
+func WhereAllFolders() string { return In(i18n.Locale()).WhereAllFolders() }
+
+// WhereAllFolders says "all folders"
+// in the language of msgs.
+func (msgs Messages) WhereAllFolders() string {
+	return Catalog.Format(msgs.locale, "whereAllFolders", nil)
+}
+
+// WhereFolderOf says "{folder} of {account}"
+// in the language the app shows.
+func WhereFolderOf(folder string, account string) string {
+	return In(i18n.Locale()).WhereFolderOf(folder, account)
+}
+
+// WhereFolderOf says "{folder} of {account}"
+// in the language of msgs.
+func (msgs Messages) WhereFolderOf(folder string, account string) string {
+	return Catalog.Format(msgs.locale, "whereFolderOf", map[string]any{"folder": folder, "account": account})
+}
+
+// SearchScope says "Search in"
+// in the language the app shows.
+//
+// The name of the control choosing what a search covers.
+func SearchScope() string { return In(i18n.Locale()).SearchScope() }
+
+// SearchScope says "Search in"
+// in the language of msgs.
+//
+// The name of the control choosing what a search covers.
+func (msgs Messages) SearchScope() string {
+	return Catalog.Format(msgs.locale, "searchScope", nil)
+}
+
+// ActiveFilters says "Filters on"
+// in the language the app shows.
+func ActiveFilters() string { return In(i18n.Locale()).ActiveFilters() }
+
+// ActiveFilters says "Filters on"
+// in the language of msgs.
+func (msgs Messages) ActiveFilters() string {
+	return Catalog.Format(msgs.locale, "activeFilters", nil)
+}
+
+// RemoveFilter says "Remove filter {filter}"
+// in the language the app shows.
+func RemoveFilter(filter string) string { return In(i18n.Locale()).RemoveFilter(filter) }
+
+// RemoveFilter says "Remove filter {filter}"
+// in the language of msgs.
+func (msgs Messages) RemoveFilter(filter string) string {
+	return Catalog.Format(msgs.locale, "removeFilter", map[string]any{"filter": filter})
+}
+
+// SearchedWhere says "Searched {where}."
+// in the language the app shows.
+func SearchedWhere(where string) string { return In(i18n.Locale()).SearchedWhere(where) }
+
+// SearchedWhere says "Searched {where}."
+// in the language of msgs.
+func (msgs Messages) SearchedWhere(where string) string {
+	return Catalog.Format(msgs.locale, "searchedWhere", map[string]any{"where": where})
+}
+
+// WithFilters says "Filters: {filters}"
+// in the language the app shows.
+func WithFilters(filters string) string { return In(i18n.Locale()).WithFilters(filters) }
+
+// WithFilters says "Filters: {filters}"
+// in the language of msgs.
+func (msgs Messages) WithFilters(filters string) string {
+	return Catalog.Format(msgs.locale, "withFilters", map[string]any{"filters": filters})
+}
+
+// NoFilterResults says "No messages match these filters."
+// in the language the app shows.
+func NoFilterResults() string { return In(i18n.Locale()).NoFilterResults() }
+
+// NoFilterResults says "No messages match these filters."
+// in the language of msgs.
+func (msgs Messages) NoFilterResults() string {
+	return Catalog.Format(msgs.locale, "noFilterResults", nil)
+}
+
+// ThisFolder says "This folder"
+// in the language the app shows.
+//
+// The search scope of the list on screen: its folder, Starred or Drafts.
+func ThisFolder() string { return In(i18n.Locale()).ThisFolder() }
+
+// ThisFolder says "This folder"
+// in the language of msgs.
+//
+// The search scope of the list on screen: its folder, Starred or Drafts.
+func (msgs Messages) ThisFolder() string {
+	return Catalog.Format(msgs.locale, "thisFolder", nil)
+}
+
+// ScopeInboxes says "Inboxes"
+// in the language the app shows.
+//
+// The search scope of the unified inbox: every account's inbox, and no
+// other folder.
+func ScopeInboxes() string { return In(i18n.Locale()).ScopeInboxes() }
+
+// ScopeInboxes says "Inboxes"
+// in the language of msgs.
+//
+// The search scope of the unified inbox: every account's inbox, and no
+// other folder.
+func (msgs Messages) ScopeInboxes() string {
+	return Catalog.Format(msgs.locale, "scopeInboxes", nil)
+}
+
+// FilterAccount says "Account"
+// in the language the app shows.
+//
+// The name of the filter control choosing an account.
+func FilterAccount() string { return In(i18n.Locale()).FilterAccount() }
+
+// FilterAccount says "Account"
+// in the language of msgs.
+//
+// The name of the filter control choosing an account.
+func (msgs Messages) FilterAccount() string {
+	return Catalog.Format(msgs.locale, "filterAccount", nil)
+}
+
+// AnyAccount says "Any account"
+// in the language the app shows.
+func AnyAccount() string { return In(i18n.Locale()).AnyAccount() }
+
+// AnyAccount says "Any account"
+// in the language of msgs.
+func (msgs Messages) AnyAccount() string {
+	return Catalog.Format(msgs.locale, "anyAccount", nil)
+}
+
+// FilterAccountValue says "Account: {value}"
+// in the language the app shows.
+func FilterAccountValue(value string) string { return In(i18n.Locale()).FilterAccountValue(value) }
+
+// FilterAccountValue says "Account: {value}"
+// in the language of msgs.
+func (msgs Messages) FilterAccountValue(value string) string {
+	return Catalog.Format(msgs.locale, "filterAccountValue", map[string]any{"value": value})
+}
+
+// FilterNoAccount says "Account: {value} (no such account)"
+// in the language the app shows.
+//
+// A filter of an account whose value is in no account's name or address.
+func FilterNoAccount(value string) string { return In(i18n.Locale()).FilterNoAccount(value) }
+
+// FilterNoAccount says "Account: {value} (no such account)"
+// in the language of msgs.
+//
+// A filter of an account whose value is in no account's name or address.
+func (msgs Messages) FilterNoAccount(value string) string {
+	return Catalog.Format(msgs.locale, "filterNoAccount", map[string]any{"value": value})
+}
+
+// NoAccountNamed says "No account’s name or address contains “{value}”."
+// in the language the app shows.
+func NoAccountNamed(value string) string { return In(i18n.Locale()).NoAccountNamed(value) }
+
+// NoAccountNamed says "No account’s name or address contains “{value}”."
+// in the language of msgs.
+func (msgs Messages) NoAccountNamed(value string) string {
+	return Catalog.Format(msgs.locale, "noAccountNamed", map[string]any{"value": value})
+}
+
+// NoAccountMatchesAll says "No account matches every account filter."
+// in the language the app shows.
+func NoAccountMatchesAll() string { return In(i18n.Locale()).NoAccountMatchesAll() }
+
+// NoAccountMatchesAll says "No account matches every account filter."
+// in the language of msgs.
+func (msgs Messages) NoAccountMatchesAll() string {
+	return Catalog.Format(msgs.locale, "noAccountMatchesAll", nil)
+}
+
+// WhereNoAccount says "no account"
+// in the language the app shows.
+//
+// What a search covered when its account filters leave no account, after a
+// count.
+func WhereNoAccount() string { return In(i18n.Locale()).WhereNoAccount() }
+
+// WhereNoAccount says "no account"
+// in the language of msgs.
+//
+// What a search covered when its account filters leave no account, after a
+// count.
+func (msgs Messages) WhereNoAccount() string {
+	return Catalog.Format(msgs.locale, "whereNoAccount", nil)
+}
+
+// WhereInboxesOf says "the inboxes of {accounts}"
+// in the language the app shows.
+func WhereInboxesOf(accounts string) string { return In(i18n.Locale()).WhereInboxesOf(accounts) }
+
+// WhereInboxesOf says "the inboxes of {accounts}"
+// in the language of msgs.
+func (msgs Messages) WhereInboxesOf(accounts string) string {
+	return Catalog.Format(msgs.locale, "whereInboxesOf", map[string]any{"accounts": accounts})
+}

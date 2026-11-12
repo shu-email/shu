@@ -164,7 +164,7 @@ func (a *app) loadDraftBody(g uint64, m mail.Summary) {
 // message rather than adding one.
 func (a *app) editDraft() {
 	m, _ := a.current()
-	if m == nil || a.folder != draftsFolder {
+	if m == nil || !a.draftsList() {
 		return
 	}
 	summary := *m
@@ -218,7 +218,7 @@ func (a *app) editDraft() {
 // was adopted as, so that it stays the one chosen when the list is read
 // again under its new identity.
 func (a *app) adoptRow(server mail.Summary, d mail.Draft) {
-	if a.active != d.AccountID || a.folder != draftsFolder {
+	if a.active != d.AccountID || !a.draftsList() {
 		return
 	}
 	old := summaryKey(server)
@@ -238,7 +238,7 @@ func (a *app) adoptRow(server mail.Summary, d mail.Draft) {
 // openSelected is a double click or Enter on a row. Only a draft has
 // something to open: other mail is read in the pane beside the list.
 func (a *app) openSelected() {
-	if a.folder == draftsFolder {
+	if a.draftsList() {
 		a.editDraft()
 	}
 }

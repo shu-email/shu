@@ -536,7 +536,7 @@ func aiReviewModal(c *ui.Context, slot **aiReview) {
 // triageList asks for suggestions on the messages the list shows. It is
 // the Triage button.
 func (a *app) triageList() {
-	if a.ai == nil || len(a.all) == 0 || a.folder == draftsFolder || (a.triage != nil && a.triage.busy) {
+	if a.ai == nil || len(a.all) == 0 || a.draftsList() || (a.triage != nil && a.triage.busy) {
 		return
 	}
 	items := a.triageItems()

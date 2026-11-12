@@ -32,7 +32,7 @@ func (a *app) readingPane(c *ui.Context, t *ui.Theme) {
 			return
 		}
 		subject := m.Subject
-		if a.folder == draftsFolder {
+		if a.draftsList() {
 			a.draftBanner(c, t, *m)
 			if strings.TrimSpace(subject) == "" {
 				subject = locales.NoSubject()
@@ -40,7 +40,12 @@ func (a *app) readingPane(c *ui.Context, t *ui.Theme) {
 		}
 		ui.Scroll(c.Key(summaryKey(*m))).Grow(1).Children(func() {
 			ui.Column(c).Padding(24, 30, 24, 30).Gap(16).MinWidth(0).Children(func() {
-				ui.Text(c, subject).FontSize(21).Bold().Balance()
+				ui.Column(c).Gap(4).MinWidth(0).Children(func() {
+					ui.Text(c, subject).FontSize(21).Bold().Balance()
+					if place := a.placeLine(*m); place != "" {
+						ui.Text(c, place).FontSize(12).TextColor(t.TextMuted).SingleLine()
+					}
+				})
 				a.senderHeader(c, t, *m)
 				if msg != nil && len(msg.Attachments) > 0 {
 					a.attachments(c, t, *m, msg.Attachments)
@@ -85,9 +90,13 @@ func (a *app) readingToolbar(c *ui.Context, t *ui.Theme) {
 			allSeen = false
 		}
 	}
-	archive := a.folderBySpecial(mail.SpecialArchive)
-	trash := a.folderBySpecial(mail.SpecialTrash)
-	junk := a.folderBySpecial(mail.SpecialJunk)
+	places := make([]mailPlace, 0, 1)
+	for _, m := range targets {
+		places = append(places, mailPlace{m.Account, m.Folder})
+	}
+	archive := a.canMove(places, mail.SpecialArchive)
+	trash := a.canMove(places, mail.SpecialTrash)
+	junk := a.canMove(places, mail.SpecialJunk)
 	// A draft of this device is no message of the server: it cannot be
 	// moved, flagged or answered, only edited or discarded. The actions
 	// for mail are off while one is among the chosen rows.
@@ -95,18 +104,18 @@ func (a *app) readingToolbar(c *ui.Context, t *ui.Theme) {
 	onlyDrafts := has && drafts == len(targets)
 	has = has && drafts == 0
 	ui.Toolbar(c, func() {
-		a.toolButton(c, archiveIcon, locales.ArchiveMessage(), has && archive != "", func() {
+		a.toolButton(c, archiveIcon, locales.ArchiveMessage(), has && archive, func() {
 			a.moveSelected(mail.SpecialArchive)
 		})
 		if onlyDrafts {
 			// Deleting a draft is discarding it, which asks first.
 			a.toolButton(c, trashIcon, locales.DiscardDraft(), true, a.discardSelected)
 		} else {
-			a.toolButton(c, trashIcon, locales.DeleteMessage(), has && trash != "", func() {
+			a.toolButton(c, trashIcon, locales.DeleteMessage(), has && trash, func() {
 				a.moveSelected(mail.SpecialTrash)
 			})
 		}
-		a.toolButton(c, spamIcon, locales.JunkMessage(), has && junk != "", func() {
+		a.toolButton(c, spamIcon, locales.JunkMessage(), has && junk, func() {
 			a.moveSelected(mail.SpecialJunk)
 		})
 		starLabel, star := locales.StarMessage(), starIcon
@@ -478,12 +487,12 @@ func (a *app) moveSelected(special string) {
 		return
 	}
 	// Each message goes to the folder of its own account, and stays where
-	// that account has none.
+	// that account has none or where it is in that folder already.
 	var targets []mail.Summary
 	dests := map[string]string{}
 	for _, m := range all {
-		if dest := a.specialFolder(m.Account, special); dest != "" {
-			dests[m.Account] = dest
+		if a.moves(mailPlace{m.Account, m.Folder}, special) {
+			dests[m.Account] = a.specialFolder(m.Account, special)
 			targets = append(targets, m)
 		}
 	}
@@ -575,7 +584,7 @@ func (a *app) undoLastMove() {
 				a.err = err.Error()
 				return
 			}
-			a.syncFolder(g)
+			a.syncMovedBack(g, u.accountID, u.source)
 		})
 	})
 }

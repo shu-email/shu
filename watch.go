@@ -121,13 +121,18 @@ type noteAim struct {
 func (a *app) accountsChanged() {
 	a.bindMailSettings()
 	for _, acc := range a.accounts {
-		if _, known := a.inboxes[acc.ID]; !known && acc.ID != a.active {
-			a.loadUnread(acc.ID)
+		if _, known := a.otherFolders[acc.ID]; !known && acc.ID != a.active {
+			a.loadOtherFolders(acc.ID)
 		}
 	}
 	for id := range a.inboxes {
 		if a.account(id) == nil {
 			delete(a.inboxes, id)
+		}
+	}
+	for id := range a.otherFolders {
+		if a.account(id) == nil {
+			delete(a.otherFolders, id)
 		}
 	}
 	a.watchAccounts()
@@ -196,10 +201,11 @@ func (a *app) rewatch(id string) {
 	delete(a.watched, id)
 }
 
-// loadUnread reads the cached inbox count of an account that is not on
-// screen, for the Dock badge and the account menu. The account's watcher
-// brings the server's count soon after.
-func (a *app) loadUnread(id string) {
+// loadOtherFolders reads the cached folders of an account that is not on
+// screen: its inbox's count, for the Dock badge, the account menu and the
+// unified inbox, and where an action on a row of its own moves it. The
+// account's watcher brings the server's soon after.
+func (a *app) loadOtherFolders(id string) {
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
@@ -208,10 +214,10 @@ func (a *app) loadUnread(id string) {
 			if err != nil || a.account(id) == nil || id == a.active {
 				return
 			}
-			if _, known := a.inboxes[id]; known {
+			if _, known := a.otherFolders[id]; known {
 				return
 			}
-			a.inboxes[id] = inboxUnread(folders)
+			a.otherFolders[id] = folders
 			a.updateBadge()
 		})
 	})
@@ -227,8 +233,13 @@ func inboxUnread(folders []mail.Folder) int {
 	return 0
 }
 
-// setFolders shows the active account's folders.
+// setFolders shows the active account's folders. Those of the account on
+// screen before stay known, as any other account's.
 func (a *app) setFolders(folders []mail.Folder) {
+	if a.foldersOf != "" && a.foldersOf != a.active && a.account(a.foldersOf) != nil {
+		a.otherFolders[a.foldersOf] = a.folders
+	}
+	delete(a.otherFolders, a.active)
 	a.folders = folders
 	a.foldersOf = a.active
 }
@@ -261,15 +272,18 @@ func (a *app) watchEvent(ev mail.WatchEvent) {
 		return
 	}
 	if ev.AccountID != a.active {
-		a.inboxes[ev.AccountID] = inboxUnread(ev.Folders)
+		a.otherFolders[ev.AccountID] = ev.Folders
 		a.updateBadge()
 		a.announce(ev)
+		if a.isUnified() && a.isInboxOf(ev.AccountID, ev.Folder) {
+			a.readList(a.gen, false, false)
+		}
 		return
 	}
 	if a.foldersOf != a.active {
 		// The account was just switched to and its cache is still being
 		// read: that read shows the folders, and the list after it.
-		a.inboxes[ev.AccountID] = inboxUnread(ev.Folders)
+		a.otherFolders[ev.AccountID] = ev.Folders
 		a.updateBadge()
 		a.announce(ev)
 		return
@@ -285,7 +299,7 @@ func (a *app) watchEvent(ev mail.WatchEvent) {
 	case a.folder != shown:
 		// The folder on show is gone from the server.
 		a.selectFolder()
-	case a.folder == ev.Folder:
+	case a.folder == ev.Folder, a.isUnified() && a.isInboxOf(ev.AccountID, ev.Folder):
 		a.readList(a.gen, false, false)
 	}
 }
@@ -330,8 +344,8 @@ func (a *app) looksAt(accountID, folder string) bool {
 	if a.focused == nil || !a.focused() {
 		return false
 	}
-	return !a.showSettings && !a.showAccounts && a.active == accountID &&
-		a.folder == folder && strings.TrimSpace(a.query) == ""
+	shown := a.active == accountID && a.folder == folder || a.isUnified() && a.isInboxOf(accountID, folder)
+	return !a.showSettings && !a.showAccounts && shown && strings.TrimSpace(a.query) == ""
 }
 
 // notesFor writes the notifications of an account's new messages, newest
@@ -442,6 +456,13 @@ func (a *app) showTarget(target noteTarget) {
 		a.aim.uid = target.uid
 	}
 	switch {
+	case a.isUnified() && a.isInboxOf(target.account, target.folder):
+		// The unified inbox shows every account's inbox: the message
+		// opens where the user is. It is read again without a search,
+		// and the inboxes synced.
+		a.query = ""
+		a.loadMessages(a.gen)
+		a.syncFolder(a.gen)
 	case target.account != a.active:
 		a.switchAccount(target.account)
 	case a.folder != target.folder:
@@ -470,13 +491,13 @@ func (a *app) aimFolder() {
 // synced folder cannot meet it.
 func (a *app) aimRow(aimed mail.ThreadID) int {
 	aim := a.aim
-	if aim == nil || aim.account != a.active || aim.folder != a.folder {
+	if aim == nil || !a.aimShown(aim) {
 		return -1
 	}
 	if aim.key != "" {
 		for i, m := range a.all {
 			c := a.convAt(i)
-			if summaryKey(m) == aim.key || (c != nil && aimed != 0 && c.Thread == aimed) {
+			if summaryKey(m) == aim.key || (c != nil && aimed != 0 && c.Account == aim.account && c.Thread == aimed) {
 				a.aim = nil
 				if c != nil {
 					a.convExpand = aim.key

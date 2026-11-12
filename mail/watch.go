@@ -62,6 +62,9 @@ const (
 	// WatchOffline is the server out of reach while the computer has no
 	// network: the watcher waits for the network instead of trying.
 	WatchOffline
+	// WatchSignIn is an account that has to sign in again
+	// (ErrSignInRequired): the watcher does not check until it has.
+	WatchSignIn
 )
 
 // WatchFailure is why a check failed, for the window to say in its own
@@ -77,6 +80,8 @@ const (
 	WatchFailAuth
 	// WatchFailOther is anything else: the server or the cache refusing.
 	WatchFailOther
+	// WatchFailSignIn is an account that has to sign in again.
+	WatchFailSignIn
 )
 
 // WatchStatus is a watcher's state.
@@ -119,8 +124,11 @@ type watcher struct {
 	done   chan struct{}
 	// nudge asks for a check now; reconsider has a watcher that waits
 	// after a failure look again at whether the computer is online.
+	// redial has the next check hang up first: the connection signed in
+	// with a sign-in that is gone.
 	nudge      chan struct{}
 	reconsider chan struct{}
+	redial     atomic.Bool
 
 	conn     *watchConn
 	status   WatchStatus
@@ -358,6 +366,9 @@ func (w *watcher) check(full bool) error {
 	defer cancel()
 	if w.status.State != WatchUpToDate {
 		w.say(WatchConnecting, WatchFailNone)
+	}
+	if w.redial.Swap(false) {
+		w.hangUp()
 	}
 	if w.conn != nil {
 		err := w.checkOn(ctx, w.conn, full)
@@ -693,6 +704,9 @@ func (w *watcher) idle(c *watchConn, d time.Duration) (changed, woken bool, err 
 // starts the count again. It reports false when the watcher was stopped.
 func (w *watcher) waitToRetry(err error) bool {
 	failure := failureOf(err)
+	if failure == WatchFailSignIn {
+		return w.waitForSignIn()
+	}
 	w.failures++
 	wait := watchBackoffMax
 	if shift := w.failures - 1; shift < 16 {
@@ -730,6 +744,47 @@ func (w *watcher) waitToRetry(err error) bool {
 	}
 }
 
+// waitForSignIn waits while the account has to sign in again, as a check
+// could only fail the same way, with no timer to try again. Signing in
+// again nudges the watcher; a nudge that finds the account still signed
+// out changes nothing. It reports false when the watcher was stopped.
+func (w *watcher) waitForSignIn() bool {
+	w.failures = 0
+	w.say(WatchSignIn, WatchFailSignIn)
+	for {
+		select {
+		case <-w.nudge:
+			if !errors.Is(w.svc.signInState(w.accountID), ErrSignInRequired) {
+				return true
+			}
+		case <-w.reconsider:
+		case <-w.ctx.Done():
+			return false
+		}
+	}
+}
+
+// signedOut has an account's watcher hang up, as its connection signed
+// in with tokens that are gone, and check again: it then waits for the
+// account to sign in again.
+func (s *Service) signedOut(accountID string) {
+	s.watchMu.Lock()
+	defer s.watchMu.Unlock()
+	if w := s.watchers[accountID]; w != nil {
+		w.redial.Store(true)
+		signal(w.nudge)
+	}
+}
+
+// signedIn has the watcher of an account that signed in again check now.
+func (s *Service) signedIn(accountID string) {
+	s.watchMu.Lock()
+	defer s.watchMu.Unlock()
+	if w := s.watchers[accountID]; w != nil {
+		signal(w.nudge)
+	}
+}
+
 // failureOf sorts an error into what the window can say about it.
 func failureOf(err error) WatchFailure {
 	var login *loginError
@@ -738,6 +793,8 @@ func failureOf(err error) WatchFailure {
 	switch {
 	case err == nil:
 		return WatchFailNone
+	case errors.Is(err, ErrSignInRequired):
+		return WatchFailSignIn
 	case errors.As(err, &login):
 		return WatchFailAuth
 	case errors.As(err, &lost), errors.As(err, &netErr), errors.Is(err, net.ErrClosed),

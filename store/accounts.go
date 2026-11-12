@@ -9,7 +9,7 @@ import (
 // Accounts returns the configured accounts in the order they were added.
 func (s *Store) Accounts(ctx context.Context) ([]mail.Account, error) {
 	rows, err := s.query(ctx, `SELECT id, name, email, username,
-		imap_host, imap_port, imap_tls, smtp_host, smtp_port, smtp_tls
+		imap_host, imap_port, imap_tls, smtp_host, smtp_port, smtp_tls, oauth
 		FROM accounts ORDER BY rowid`)
 	if err != nil {
 		return nil, err
@@ -24,7 +24,7 @@ func (s *Store) Accounts(ctx context.Context) ([]mail.Account, error) {
 // Account returns one account.
 func (s *Store) Account(ctx context.Context, id string) (mail.Account, bool, error) {
 	rows, err := s.query(ctx, `SELECT id, name, email, username,
-		imap_host, imap_port, imap_tls, smtp_host, smtp_port, smtp_tls
+		imap_host, imap_port, imap_tls, smtp_host, smtp_port, smtp_tls, oauth
 		FROM accounts WHERE id = ?`, id)
 	if err != nil {
 		return mail.Account{}, false, err
@@ -43,21 +43,23 @@ func accountRow(r []any) mail.Account {
 		Username: text(r[3]),
 		IMAP:     mail.Server{Host: text(r[4]), Port: int(number(r[5])), TLS: mail.TLSMode(text(r[6]))},
 		SMTP:     mail.Server{Host: text(r[7]), Port: int(number(r[8])), TLS: mail.TLSMode(text(r[9]))},
+		OAuth:    text(r[10]),
 	}
 }
 
 // SaveAccount inserts or updates an account.
 func (s *Store) SaveAccount(ctx context.Context, a mail.Account) error {
 	_, err := s.exec(ctx, `INSERT INTO accounts
-		(id, name, email, username, imap_host, imap_port, imap_tls, smtp_host, smtp_port, smtp_tls)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		(id, name, email, username, imap_host, imap_port, imap_tls, smtp_host, smtp_port, smtp_tls, oauth)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (id) DO UPDATE SET
 			name=excluded.name, email=excluded.email, username=excluded.username,
 			imap_host=excluded.imap_host, imap_port=excluded.imap_port, imap_tls=excluded.imap_tls,
-			smtp_host=excluded.smtp_host, smtp_port=excluded.smtp_port, smtp_tls=excluded.smtp_tls`,
+			smtp_host=excluded.smtp_host, smtp_port=excluded.smtp_port, smtp_tls=excluded.smtp_tls,
+			oauth=excluded.oauth`,
 		a.ID, a.Name, a.Email, a.Username,
 		a.IMAP.Host, a.IMAP.Port, string(a.IMAP.TLS),
-		a.SMTP.Host, a.SMTP.Port, string(a.SMTP.TLS))
+		a.SMTP.Host, a.SMTP.Port, string(a.SMTP.TLS), a.OAuth)
 	return err
 }
 

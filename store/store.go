@@ -263,6 +263,13 @@ var migrations = [][]string{
 		END`,
 		`INSERT INTO messages_fts(messages_fts) VALUES ('rebuild')`,
 	},
+	// v9: how an account signs in: '' with a password, or through OAuth
+	// with the provider named. Either way the secret is in the keychain:
+	// the password, or the refresh token. The accounts there before sign
+	// in with their passwords, as they did.
+	{
+		`ALTER TABLE accounts ADD COLUMN oauth TEXT NOT NULL DEFAULT ''`,
+	},
 }
 
 // backfills compute, from the rows of the version before, statements a

@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -60,6 +61,15 @@ type Service struct {
 	// watchNoIdle has the watchers treat every server as one that cannot
 	// push. It is for tests: the fake server always offers IDLE.
 	watchNoIdle bool
+
+	// Signing in with OAuth (oauth.go, signin.go): the providers, which
+	// tests point at a fake one, the HTTP client of their token
+	// endpoints, and the access token of each OAuth account, which lives
+	// in memory only, with the lock of its renewals.
+	oauthProviders map[string]oauthProvider
+	httpClient     *http.Client
+	tokenMu        sync.Mutex
+	tokens         map[string]*oauthToken
 }
 
 // NewService wires the cache, the keychain and the attachment cache
@@ -73,6 +83,9 @@ func NewService(store Store, secrets SecretStore, cacheDir string) *Service {
 		incoming:       map[string]bool{},
 		watchers:       map[string]*watcher{},
 		newTimer:       realTimer,
+		oauthProviders: defaultOAuthProviders(),
+		httpClient:     newOAuthClient(),
+		tokens:         map[string]*oauthToken{},
 	}
 }
 
@@ -106,13 +119,17 @@ func (s *Service) Accounts(ctx context.Context) ([]Account, string, error) {
 }
 
 // AddAccount validates an account, stores it and puts its password in the
-// keychain.
+// keychain. An account that signs in with OAuth is added by signing in
+// (AddOAuthAccount).
 func (s *Service) AddAccount(ctx context.Context, a Account, password string) error {
 	if a.ID == "" {
 		a.ID = NewAccountID()
 	}
 	if err := a.Validate(); err != nil {
 		return err
+	}
+	if a.OAuth != "" {
+		return errors.New("mail: an account that signs in with OAuth is added by signing in")
 	}
 	if password == "" {
 		return errors.New("mail: the password is empty")
@@ -132,14 +149,27 @@ func (s *Service) AddAccount(ctx context.Context, a Account, password string) er
 }
 
 // UpdateAccount saves changes. An empty password keeps the stored one.
+// How an account signs in does not change here. Of an account that signs
+// in with OAuth only the name does: its address, servers and sign-in are
+// the provider's, and it has no password.
 func (s *Service) UpdateAccount(ctx context.Context, a Account, password string) error {
 	if err := a.Validate(); err != nil {
 		return err
 	}
-	if _, ok, err := s.store.Account(ctx, a.ID); err != nil {
+	stored, ok, err := s.store.Account(ctx, a.ID)
+	if err != nil {
 		return err
 	} else if !ok {
 		return ErrNotFound
+	}
+	switch {
+	case stored.OAuth != "" && password != "":
+		return errors.New("mail: an account that signs in with OAuth has no password")
+	case stored.OAuth != "":
+		stored.Name = a.Name
+		a = stored
+	case a.OAuth != "":
+		return errors.New("mail: an account that signs in with a password cannot change to OAuth")
 	}
 	if err := s.store.SaveAccount(ctx, a); err != nil {
 		return err
@@ -152,14 +182,36 @@ func (s *Service) UpdateAccount(ctx context.Context, a Account, password string)
 	return nil
 }
 
-// RemoveAccount deletes an account's rows and its keychain entry.
+// RemoveAccount deletes an account's rows and its keychain entries: its
+// password, or its OAuth tokens.
 func (s *Service) RemoveAccount(ctx context.Context, id string) error {
 	// Its watcher ends first: a check that ran on would write the mail
 	// of an account that is no longer there.
 	s.Unwatch(id)
+	a, ok, err := s.store.Account(ctx, id)
+	if err != nil {
+		return err
+	}
+	if ok && a.OAuth != "" {
+		// The tokens go before the rows, and once a renewal under way
+		// has stored the refresh token it got: none may stay in the
+		// keychain for an account that is gone.
+		t := s.tokenOf(id)
+		if err := t.acquire(ctx); err != nil {
+			return err
+		}
+		defer t.release()
+		if err := s.secrets.Delete(tokensKey(id)); err != nil {
+			return fmt.Errorf("mail: remove the sign-in from the keychain: %w", err)
+		}
+		t.access, t.renewAt = "", time.Time{}
+	}
 	if err := s.store.DeleteAccount(ctx, id); err != nil {
 		return err
 	}
+	s.tokenMu.Lock()
+	delete(s.tokens, id)
+	s.tokenMu.Unlock()
 	// A missing keychain entry is not an error; the account is gone
 	// either way.
 	_ = s.secrets.Delete(PasswordKey(id))
@@ -171,7 +223,11 @@ func (s *Service) SetActive(ctx context.Context, id string) error {
 	return s.store.SetActiveAccount(ctx, id)
 }
 
-// account loads an account and its password.
+// account loads an account and its password. An account that signs in
+// with OAuth has none: each connection signs in with its access token,
+// renewed as needed (accessToken). Its keychain entry is read here all
+// the same, as a password is, so that an operation of an account that
+// has to sign in again fails before it begins (ErrSignInRequired).
 func (s *Service) account(ctx context.Context, id string) (Account, string, error) {
 	a, ok, err := s.store.Account(ctx, id)
 	if err != nil {
@@ -179,6 +235,12 @@ func (s *Service) account(ctx context.Context, id string) (Account, string, erro
 	}
 	if !ok {
 		return Account{}, "", ErrNotFound
+	}
+	if a.OAuth != "" {
+		if err := s.signInState(a.ID); err != nil {
+			return Account{}, "", err
+		}
+		return a, "", nil
 	}
 	password, err := s.password(a.ID)
 	if err != nil {
@@ -196,12 +258,13 @@ func (s *Service) password(id string) (string, error) {
 }
 
 // TestConnection logs in to IMAP and dials and authenticates SMTP, without
-// sending anything.
+// sending anything. An account that signs in with OAuth does so with its
+// tokens, and takes no password.
 func (s *Service) TestConnection(ctx context.Context, a Account, password string) error {
 	if err := a.Validate(); err != nil {
 		return err
 	}
-	if password == "" {
+	if password == "" && a.OAuth == "" {
 		var err error
 		if password, err = s.password(a.ID); err != nil {
 			return err
@@ -215,14 +278,11 @@ func (s *Service) TestConnection(ctx context.Context, a Account, password string
 	if _, err := s.listFolders(c); err != nil {
 		return err
 	}
-	client, err := s.smtpClient(a, password)
+	conn, err := s.dialSMTP(ctx, a, password)
 	if err != nil {
-		return err
-	}
-	if err := client.DialWithContext(ctx); err != nil {
 		return fmt.Errorf("smtp: %w", err)
 	}
-	return client.Close()
+	return conn.Quit()
 }
 
 // CachedFolders reads the folder list, without network.

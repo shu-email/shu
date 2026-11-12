@@ -79,6 +79,9 @@ func TestMigrationsFromEmpty(t *testing.T) {
 			t.Errorf("missing schema object %q", name)
 		}
 	}
+	if !hasColumn(t, s, "accounts", "oauth") {
+		t.Error("accounts has no oauth column")
+	}
 	// Reopening runs no migration and keeps the data.
 	addAccount(t, s, "a1")
 	path := t.TempDir() + "/shu.db"

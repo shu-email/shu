@@ -112,7 +112,7 @@ func (s *Store) GetMessage(ctx context.Context, accountID, folder string, uid ma
 		BodyTruncated: truth(r[19]),
 		RawHeaders:    text(r[20]),
 		CachedAt:      unix(r[21]),
-		BodyCached:    r[22] != nil,
+		BodyCached:    r[21] != nil,
 	}
 	messageID := number(r[22])
 	attachments, err := s.attachments(ctx, messageID)

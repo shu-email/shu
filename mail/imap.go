@@ -236,15 +236,74 @@ func summaryFromFetch(buf *imapclient.FetchMessageBuffer, withPreview bool) Mess
 			Peek:      true,
 		}
 		if body := buf.FindBodySection(section); len(body) > 0 {
-			text := normalizeText(string(body))
-			if strings.HasPrefix(strings.TrimSpace(text), "<") {
-				text = HTMLToText(text)
-			}
-			m.Preview = preview(text)
+			m.Preview = preview(previewText(body))
 		}
 	}
 	m.HasAttachments = attachmentsInStructure(buf.BodyStructure)
 	return m
+}
+
+// previewText turns a partial BODY[TEXT] into readable text. A multipart
+// body starts at its first boundary, so the first text part is read
+// directly instead of handing a truncated message to the MIME parser.
+func previewText(raw []byte) string {
+	s := string(raw)
+	trimmed := strings.TrimLeft(s, "\r\n \t")
+	if strings.HasPrefix(trimmed, "--") {
+		type part struct {
+			ctype string
+			body  string
+		}
+		var (
+			parts     []part
+			cur       *part
+			inHeaders bool
+		)
+		for _, line := range strings.Split(s, "\n") {
+			line = strings.TrimRight(line, "\r")
+			if strings.HasPrefix(line, "--") {
+				if cur != nil {
+					parts = append(parts, *cur)
+					cur = nil
+				}
+				inHeaders = true
+				continue
+			}
+			if cur == nil {
+				cur = &part{}
+				inHeaders = true
+			}
+			if inHeaders {
+				if strings.TrimSpace(line) == "" {
+					inHeaders = false
+					continue
+				}
+				if strings.HasPrefix(strings.ToLower(line), "content-type:") {
+					cur.ctype = strings.ToLower(strings.TrimSpace(line[len("content-type:"):]))
+				}
+				continue
+			}
+			cur.body += line + "\n"
+		}
+		if cur != nil {
+			parts = append(parts, *cur)
+		}
+		for _, p := range parts {
+			if strings.HasPrefix(p.ctype, "text/plain") {
+				return normalizeText(p.body)
+			}
+		}
+		for _, p := range parts {
+			if strings.HasPrefix(p.ctype, "text/html") {
+				return HTMLToText(p.body)
+			}
+		}
+		return ""
+	}
+	if strings.HasPrefix(trimmed, "<") {
+		return HTMLToText(s)
+	}
+	return normalizeText(s)
 }
 
 func envelopeAddress(list []imap.Address) Address {

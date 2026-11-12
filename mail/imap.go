@@ -752,6 +752,34 @@ func setFlags(c *imapSession, folder string, uid UID, flag Flag, on bool) error 
 	return cmd.Close()
 }
 
+// errValidityChanged is a folder whose UIDs no longer mean what the cache
+// says they do: the server gave it a new UIDVALIDITY.
+var errValidityChanged = errors.New("imap: the folder changed on the server; sync it first")
+
+// storeFlagsIn changes a flag on messages of one folder, in one STORE,
+// after checking that the folder's UIDVALIDITY is still validity.
+func storeFlagsIn(c *imapSession, folder string, validity uint32, uids []UID, flag Flag, on bool) error {
+	selected, err := c.client.Select(folder, &imap.SelectOptions{ReadOnly: false}).Wait()
+	if err != nil {
+		return fmt.Errorf("imap: select %s: %w", folder, err)
+	}
+	if validity != 0 && selected.UIDValidity != validity {
+		return fmt.Errorf("%w (%s)", errValidityChanged, folder)
+	}
+	var set imap.UIDSet
+	for _, uid := range uids {
+		set.AddNum(imap.UID(uid))
+	}
+	op := imap.StoreFlagsAdd
+	if !on {
+		op = imap.StoreFlagsDel
+	}
+	if err := c.client.Store(set, &imap.StoreFlags{Op: op, Silent: true, Flags: []imap.Flag{imap.Flag(flag)}}, nil).Close(); err != nil {
+		return fmt.Errorf("imap: store %s: %w", folder, err)
+	}
+	return nil
+}
+
 // moveOnServer moves messages of one folder in one command, preferring
 // MOVE and falling back to COPY plus delete and expunge. The client's own
 // Move would fall back with a bare EXPUNGE, so it is only called on a

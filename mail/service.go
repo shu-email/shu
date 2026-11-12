@@ -342,6 +342,50 @@ func (s *Service) SetFlag(ctx context.Context, accountID, folder string, uid UID
 	return s.store.SetFlag(ctx, accountID, folder, uid, flag, on)
 }
 
+// SetFlags changes a flag on several messages, as starring a conversation
+// or marking it read does: one connection, and for each folder one SELECT
+// and one STORE, then the cache. Only \Seen and \Flagged change this way,
+// and nothing is moved, deleted or expunged. A folder whose UIDVALIDITY is
+// no longer the cache's is not touched: its UIDs would name other
+// messages. When a folder fails, those before it keep their change.
+func (s *Service) SetFlags(ctx context.Context, accountID string, msgs []MessageRef, flag Flag, on bool) error {
+	if flag != FlagSeen && flag != FlagFlagged {
+		return fmt.Errorf("mail: flag %q is not set on several messages", flag)
+	}
+	groups := byFolder(msgs, "")
+	if len(groups) == 0 {
+		return nil
+	}
+	a, password, err := s.account(ctx, accountID)
+	if err != nil {
+		return err
+	}
+	c, err := s.dialIMAP(ctx, a, password)
+	if err != nil {
+		return err
+	}
+	defer c.close()
+	for _, g := range groups {
+		cached, ok, err := s.store.Folder(ctx, accountID, g.folder)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("mail: folder %s is not cached: %w", g.folder, ErrNotFound)
+		}
+		if err := storeFlagsIn(c, g.folder, cached.UIDValidity, g.uids, flag, on); err != nil {
+			return err
+		}
+		for _, uid := range g.uids {
+			// A row a sync removed meanwhile has nothing to change.
+			if err := s.store.SetFlag(ctx, accountID, g.folder, uid, flag, on); err != nil && !errors.Is(err, ErrNotFound) {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // Move archives, junks or deletes a message: the cache row is a tombstone
 // until the server confirms the move.
 func (s *Service) Move(ctx context.Context, accountID, folder string, uid UID, dest string) (MoveResult, error) {

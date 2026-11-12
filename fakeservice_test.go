@@ -84,6 +84,23 @@ type fakeService struct {
 	settings    mail.Settings
 	settingsErr error
 	saved       []mail.Settings
+
+	// Conversations. A message without a Thread is a conversation of its
+	// own, under an ID given on first sight, as the engine puts every
+	// message in one. bulkFlags records each SetFlags, movedRefs each
+	// message MoveMessages moved, and convErr fails CachedConversation.
+	ownThreads map[string]mail.ThreadID
+	nextThread mail.ThreadID
+	bulkFlags  []bulkFlag
+	movedRefs  []string
+	convErr    error
+}
+
+// bulkFlag is one SetFlags call.
+type bulkFlag struct {
+	flag mail.Flag
+	on   bool
+	refs []string
 }
 
 func newFakeService() *fakeService {
@@ -98,6 +115,8 @@ func newFakeService() *fakeService {
 		draftUID:  500,
 		watching:  map[string]func(mail.WatchEvent){},
 		settings:  mail.DefaultSettings(),
+
+		ownThreads: map[string]mail.ThreadID{},
 	}
 }
 
@@ -231,10 +250,15 @@ func (f *fakeService) matches(accountID string, m mail.Summary, q string) bool {
 }
 
 func (f *fakeService) CachedMessage(ctx context.Context, accountID, folder string, uid mail.UID) (mail.FetchResult, bool, error) {
+	s, found := f.find(accountID, folder, uid)
+	if found {
+		s.Thread = f.threadOf(accountID, s)
+	}
 	if b, ok := f.bodies[bodyKey(accountID, folder, uid)]; ok {
+		b.Thread = s.Thread
 		return mail.FetchResult{Message: b}, true, nil
 	}
-	if s, ok := f.find(accountID, folder, uid); ok {
+	if found {
 		return mail.FetchResult{Message: mail.Message{Summary: s}}, false, nil
 	}
 	return mail.FetchResult{}, false, nil
@@ -262,7 +286,9 @@ func (f *fakeService) FetchMessage(ctx context.Context, accountID, folder string
 	if !ok {
 		return mail.FetchResult{}, mail.ErrNotFound
 	}
+	s.Thread = f.threadOf(accountID, s)
 	if b, ok := f.bodies[bodyKey(accountID, folder, uid)]; ok {
+		b.Thread = s.Thread
 		return mail.FetchResult{Message: b}, nil
 	}
 	msg := mail.Message{Summary: s, BodyText: "Body of " + s.Subject, BodyCached: true}
@@ -778,5 +804,194 @@ func (f *fakeService) SaveSettings(ctx context.Context, s mail.Settings) error {
 	}
 	f.settings = s
 	f.saved = append(f.saved, s)
+	return nil
+}
+
+// threadOf is a message's conversation.
+func (f *fakeService) threadOf(accountID string, m mail.Summary) mail.ThreadID {
+	if m.Thread != 0 {
+		return m.Thread
+	}
+	key := bodyKey(accountID, m.Folder, m.UID)
+	if id, ok := f.ownThreads[key]; ok {
+		return id
+	}
+	f.nextThread++
+	f.ownThreads[key] = 100000 + f.nextThread
+	return f.ownThreads[key]
+}
+
+// everyMessage is the account's mail in every folder, each message with
+// its conversation.
+func (f *fakeService) everyMessage(accountID string) []mail.Summary {
+	var out []mail.Summary
+	for _, folder := range f.folders[accountID] {
+		for _, m := range f.messages[listKey(accountID, folder.Name)] {
+			m.Thread = f.threadOf(accountID, m)
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// inFakeScope reports whether a message is in a list's scope: a folder,
+// the starred messages, or "" for all.
+func inFakeScope(scope string, m mail.Summary) bool {
+	switch scope {
+	case "":
+		return true
+	case "starred":
+		return m.Flagged
+	}
+	return m.Folder == scope
+}
+
+// newer orders messages as the cache does: by date, then by UID.
+func newer(a, b mail.Summary) bool {
+	if !a.Date.Equal(b.Date) {
+		return a.Date.After(b.Date)
+	}
+	return a.UID > b.UID
+}
+
+func (f *fakeService) CachedConversations(ctx context.Context, accountID, folder, query string, limit int) ([]mail.Conversation, error) {
+	q := strings.ToLower(strings.TrimSpace(query))
+	every := f.everyMessage(accountID)
+	byThread := map[mail.ThreadID]*mail.Conversation{}
+	var order []mail.ThreadID
+	for _, m := range every {
+		if !inFakeScope(folder, m) {
+			continue
+		}
+		c := byThread[m.Thread]
+		if c == nil {
+			c = &mail.Conversation{Thread: m.Thread, Latest: m}
+			byThread[m.Thread] = c
+			order = append(order, m.Thread)
+		}
+		c.Count++
+		c.Unread = c.Unread || !m.Seen
+		c.Flagged = c.Flagged || m.Flagged
+		c.HasAttachments = c.HasAttachments || m.HasAttachments
+		if newer(m, c.Latest) {
+			c.Latest = m
+		}
+	}
+	if q != "" {
+		// A conversation is found by any of its messages, in any folder.
+		sort.SliceStable(every, func(i, j int) bool { return newer(every[i], every[j]) })
+		for _, m := range every {
+			if c := byThread[m.Thread]; c != nil && f.matches(accountID, m, q) {
+				c.Matches = append(c.Matches, mail.MessageRef{Folder: m.Folder, UID: m.UID})
+			}
+		}
+	}
+	var out []mail.Conversation
+	for _, id := range order {
+		if c := byThread[id]; q == "" || len(c.Matches) > 0 {
+			out = append(out, *c)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return newer(out[i].Latest, out[j].Latest) })
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+func (f *fakeService) CachedConversation(ctx context.Context, accountID, folder string, thread mail.ThreadID) ([]mail.Summary, error) {
+	if f.convErr != nil {
+		return nil, f.convErr
+	}
+	var out []mail.Summary
+	for _, m := range f.everyMessage(accountID) {
+		if m.Thread == thread && inFakeScope(folder, m) {
+			out = append(out, m)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return newer(out[j], out[i]) })
+	return out, nil
+}
+
+func (f *fakeService) SetFlags(ctx context.Context, accountID string, msgs []mail.MessageRef, flag mail.Flag, on bool) error {
+	call := bulkFlag{flag: flag, on: on}
+	for _, r := range msgs {
+		call.refs = append(call.refs, r.Folder+"/"+itoa(r.UID))
+	}
+	f.bulkFlags = append(f.bulkFlags, call)
+	if f.flagErr != nil {
+		return f.flagErr
+	}
+	for _, r := range msgs {
+		key := listKey(accountID, r.Folder)
+		for i := range f.messages[key] {
+			m := &f.messages[key][i]
+			if m.UID != r.UID {
+				continue
+			}
+			switch flag {
+			case mail.FlagFlagged:
+				m.Flagged = on
+			case mail.FlagSeen:
+				m.Seen = on
+			}
+		}
+		f.recount(accountID, r.Folder)
+	}
+	return nil
+}
+
+// moveOne moves a message to another folder under another UID, in its
+// conversation still, and returns that UID.
+func (f *fakeService) moveOne(accountID, from string, uid mail.UID, to string, newUID mail.UID) bool {
+	key := listKey(accountID, from)
+	list := f.messages[key]
+	for i := range list {
+		if list[i].UID != uid {
+			continue
+		}
+		m := list[i]
+		m.Thread = f.threadOf(accountID, m)
+		f.messages[key] = append(list[:i:i], list[i+1:]...)
+		m.Folder, m.UID = to, newUID
+		destKey := listKey(accountID, to)
+		f.messages[destKey] = append(f.messages[destKey], m)
+		f.recount(accountID, from)
+		f.recount(accountID, to)
+		return true
+	}
+	return false
+}
+
+func (f *fakeService) MoveMessages(ctx context.Context, accountID string, msgs []mail.MessageRef, dest string) ([]mail.MoveResult, error) {
+	for _, r := range msgs {
+		f.movedRefs = append(f.movedRefs, r.Folder+"/"+itoa(r.UID)+"->"+dest)
+	}
+	if f.moveErr != nil {
+		return nil, f.moveErr
+	}
+	var out []mail.MoveResult
+	for _, r := range msgs {
+		if r.Folder == dest {
+			continue
+		}
+		if f.moveOne(accountID, r.Folder, r.UID, dest, 1000+r.UID) {
+			out = append(out, mail.MoveResult{Folder: dest, DestUID: 1000 + r.UID, From: r.Folder, UID: r.UID})
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeService) MoveBackMessages(ctx context.Context, accountID string, moved []mail.MoveResult) error {
+	lost := 0
+	for _, r := range moved {
+		f.moveBacks = append(f.moveBacks, r.Folder+"->"+r.From)
+		if r.DestUID == 0 || !f.moveOne(accountID, r.Folder, r.DestUID, r.From, r.UID) {
+			lost++
+		}
+	}
+	if lost > 0 {
+		return errFake
+	}
 	return nil
 }

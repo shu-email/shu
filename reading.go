@@ -18,6 +18,10 @@ func (a *app) readingPane(c *ui.Context, t *ui.Theme) {
 	a.services = c.Services()
 	ui.Column(c).Grow(1).MinWidth(0).Background(t.Background).Children(func() {
 		a.readingToolbar(c, t)
+		if a.threaded() {
+			a.conversationPane(c, t)
+			return
+		}
 		m, msg := a.current()
 		if m == nil {
 			ui.Column(c).Fill().Center().Gap(8).Children(func() {
@@ -66,6 +70,10 @@ func (a *app) current() (*mail.Summary, *mail.Message) {
 // readingToolbar draws the message actions. Actions act on the whole
 // selection, and their icons show that selection's state.
 func (a *app) readingToolbar(c *ui.Context, t *ui.Theme) {
+	if a.threaded() {
+		a.threadToolbar(c, t)
+		return
+	}
 	targets := a.targets()
 	has := len(targets) > 0
 	allFlagged, allSeen := has, has
@@ -376,7 +384,8 @@ func safeFileName(name string) string {
 }
 
 // targets is the chosen messages: those selected with Cmd or Shift, or
-// the one row chosen.
+// the one row chosen. In conversation view they are the rows' newest
+// messages, and the actions act on threadTargets.
 func (a *app) targets() []mail.Summary {
 	if a.sel.Len() > 0 {
 		chosen := map[string]bool{}
@@ -384,8 +393,8 @@ func (a *app) targets() []mail.Summary {
 			chosen[k] = true
 		}
 		var out []mail.Summary
-		for _, m := range a.all {
-			if chosen[summaryKey(m)] {
+		for i, m := range a.all {
+			if chosen[a.rowKey(i)] {
 				out = append(out, m)
 			}
 		}
@@ -401,6 +410,10 @@ func (a *app) targets() []mail.Summary {
 
 // toggleStar stars or unstars the chosen messages, optimistically.
 func (a *app) toggleStar() {
+	if a.threaded() {
+		a.toggleThreadStar()
+		return
+	}
 	targets := a.targets()
 	if len(targets) == 0 || localDrafts(targets) > 0 {
 		return
@@ -452,6 +465,10 @@ func (a *app) toggleStar() {
 
 // moveSelected archives, junks or deletes the chosen messages.
 func (a *app) moveSelected(special string) {
+	if a.threaded() {
+		a.moveThreads(special)
+		return
+	}
 	targets := a.targets()
 	// The keys reach here whatever the toolbar offers: a draft of this
 	// device is in no folder of the server to be moved from.
@@ -538,6 +555,10 @@ func (a *app) undoLastMove() {
 		return
 	}
 	a.setUndo(nil)
+	if len(u.moved) > 0 {
+		a.undoThreadMove(u)
+		return
+	}
 	g := a.gen
 	a.run(func() {
 		ctx, cancel := a.ctx()
@@ -556,9 +577,19 @@ func (a *app) undoLastMove() {
 	})
 }
 
-// reply opens a reply or reply-all, quoting the body.
+// reply opens a reply or reply-all, quoting the body. In conversation
+// view it answers the conversation's newest message.
 func (a *app) reply(all bool) {
 	m, msg := a.current()
+	if a.threaded() {
+		m, msg = a.newestShown()
+	}
+	a.replyTo(m, msg, all)
+}
+
+// replyTo opens a reply or reply-all to a message, fetching its body
+// first when it is not loaded.
+func (a *app) replyTo(m *mail.Summary, msg *mail.Message, all bool) {
 	if m == nil || m.DraftID != "" {
 		return
 	}
@@ -592,9 +623,19 @@ func (a *app) reply(all bool) {
 	a.openReply(summary, body, all)
 }
 
-// forward opens a forwarded message with the original quoted.
+// forward opens a forwarded message with the original quoted. In
+// conversation view it forwards the conversation's newest message.
 func (a *app) forward() {
 	m, msg := a.current()
+	if a.threaded() {
+		m, msg = a.newestShown()
+	}
+	a.forwardMessage(m, msg)
+}
+
+// forwardMessage opens a forward of a message, fetching its body first
+// when it is not loaded.
+func (a *app) forwardMessage(m *mail.Summary, msg *mail.Message) {
 	if m == nil || m.DraftID != "" {
 		return
 	}
@@ -663,8 +704,19 @@ func replyDraft(a *app, m mail.Summary, body string, all, forward bool) *mail.Ou
 		out.Subject = withPrefix(m.Subject, "Fwd: ")
 	default:
 		out.Subject = withPrefix(m.Subject, "Re: ")
-		if strings.ToLower(m.From.Email) != own {
+		mine := strings.ToLower(m.From.Email) == own
+		if !mine {
 			out.To = append(out.To, m.From)
+		}
+		if mine && !all {
+			// Answering one's own message follows it up: it goes to the
+			// people the message went to, as a conversation's newest
+			// message so often is the user's.
+			for _, addr := range m.To {
+				if strings.ToLower(addr.Email) != own {
+					out.To = append(out.To, addr)
+				}
+			}
 		}
 		if all {
 			seen := map[string]bool{strings.ToLower(own): true}
@@ -726,6 +778,10 @@ func (a *app) stepMessage(delta int) {
 
 // toggleRead marks the chosen messages read or unread, optimistically.
 func (a *app) toggleRead() {
+	if a.threaded() {
+		a.toggleThreadRead()
+		return
+	}
 	targets := a.targets()
 	if len(targets) == 0 || localDrafts(targets) > 0 {
 		return

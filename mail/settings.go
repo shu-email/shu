@@ -14,9 +14,10 @@ var CheckIntervals = []int{1, 5, 15, 30}
 // DefaultCheckMinutes is how often mail is checked by default.
 const DefaultCheckMinutes = 5
 
-// Settings are how mail is received in the background and how new mail
-// is announced. The engine uses the interval; the rest it only keeps for
-// the window, which is what shows notifications.
+// Settings are how mail is received in the background, how new mail is
+// announced and how it is listed. The engine uses the interval; the rest
+// it only keeps for the window, which is what shows notifications and
+// lists.
 type Settings struct {
 	// CheckMinutes is one of CheckIntervals: how often the folders and
 	// their counts are refreshed, and how often new mail is looked for on
@@ -29,12 +30,16 @@ type Settings struct {
 	NotifyDetails bool
 	// Muted holds the accounts whose notifications are off, by ID.
 	Muted map[string]bool
+	// Conversations lists the mail of a folder one conversation to a row;
+	// off, every message is a row of its own.
+	Conversations bool
 }
 
 // DefaultSettings are the settings of a new install: mail is checked
-// every few minutes, and announced without saying what it holds.
+// every few minutes, announced without saying what it holds, and listed
+// by conversation.
 func DefaultSettings() Settings {
-	return Settings{CheckMinutes: DefaultCheckMinutes, Notify: true, Muted: map[string]bool{}}
+	return Settings{CheckMinutes: DefaultCheckMinutes, Notify: true, Muted: map[string]bool{}, Conversations: true}
 }
 
 // The keys of the settings in the store.
@@ -42,6 +47,7 @@ const (
 	settingCheckMinutes  = "mail.check_minutes"
 	settingNotify        = "notify.enabled"
 	settingNotifyDetails = "notify.details"
+	settingConversations = "view.conversations"
 )
 
 // MutedKey is the key of the setting that turns one account's
@@ -81,6 +87,9 @@ func (s *Service) Settings(ctx context.Context) (Settings, error) {
 	if err := flag(settingNotifyDetails, &out.NotifyDetails); err != nil {
 		return out, err
 	}
+	if err := flag(settingConversations, &out.Conversations); err != nil {
+		return out, err
+	}
 	accounts, err := s.store.Accounts(ctx)
 	if err != nil {
 		return out, err
@@ -114,6 +123,9 @@ func (s *Service) SaveSettings(ctx context.Context, set Settings) error {
 		return err
 	}
 	if err := s.store.SetSetting(ctx, settingNotifyDetails, bit(set.NotifyDetails)); err != nil {
+		return err
+	}
+	if err := s.store.SetSetting(ctx, settingConversations, bit(set.Conversations)); err != nil {
 		return err
 	}
 	// Only the accounts there are get a row: one for an account that was

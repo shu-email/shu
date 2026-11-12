@@ -39,6 +39,10 @@ func (a *app) ensureWebView() {
 // syncHTMLView loads the chosen message's HTML once, and only when it
 // changes.
 func (a *app) syncHTMLView() {
+	if a.threaded() {
+		a.syncThreadHTML()
+		return
+	}
 	if !a.htmlOn || a.webview == nil {
 		return
 	}
@@ -52,6 +56,25 @@ func (a *app) syncHTMLView() {
 	}
 	a.htmlKey = key
 	a.webview.Page().LoadHTML(renderHTML(msg.BodyHTML), "about:blank")
+}
+
+// syncThreadHTML loads the HTML of the message of the conversation on
+// show that is to show as HTML, once.
+func (a *app) syncThreadHTML() {
+	cv := a.conv
+	if cv == nil || cv.html == "" || a.webview == nil {
+		return
+	}
+	b, ok := a.bodies[cv.html]
+	if !ok || b.Message.BodyHTML == "" {
+		return
+	}
+	key := cv.html + "/html"
+	if a.htmlKey == key {
+		return
+	}
+	a.htmlKey = key
+	a.webview.Page().LoadHTML(renderHTML(b.Message.BodyHTML), "about:blank")
 }
 
 // isWebURL reports whether a link may leave the reading pane.

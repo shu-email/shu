@@ -26,6 +26,9 @@ type aiJob struct {
 	err    string
 	setup  bool
 	copied bool
+	// sent rebuilds the payload of a request whose input the window does
+	// not keep, as a conversation's, for "What was sent".
+	sent func(context.Context) (ai.Payload, error)
 }
 
 // aiReview is the payload of a request shown for inspection. With send
@@ -185,8 +188,13 @@ func (a *app) openAISettings() {
 	}
 }
 
-// summarize summarizes the open message. It is the Summarize button.
+// summarize summarizes the open message, or in conversation view the open
+// conversation. It is the Summarize button.
 func (a *app) summarize() {
+	if a.threaded() {
+		a.summarizeThread()
+		return
+	}
 	m, msg := a.current()
 	// A draft is the user's own unsent text, not mail to summarize.
 	if m == nil || msg == nil || a.ai == nil || m.DraftID != "" {
@@ -233,6 +241,131 @@ func (a *app) summarize() {
 				})
 			})
 		})
+}
+
+// summarizeThread summarizes the conversation on show as it shows: each
+// message once, oldest first. The bodies of the collapsed messages are
+// read first, from the cache or else the server, and nothing is marked
+// read.
+func (a *app) summarizeThread() {
+	cv := a.conv
+	if a.ai == nil || cv == nil || a.openRow() != a.selected || len(cv.msgs) == 0 {
+		return
+	}
+	key := threadKey(cv.thread)
+	if job := a.summaries[key]; job != nil && job.busy {
+		return
+	}
+	msgs := append([]mail.Summary(nil), cv.msgs...)
+	have := map[string]bool{}
+	for _, m := range msgs {
+		if _, ok := a.bodies[summaryKey(m)]; ok {
+			have[summaryKey(m)] = true
+		}
+	}
+	g, accountID := a.gen, a.active
+	a.run(func() {
+		ctx, cancel := a.ctx()
+		defer cancel()
+		fetched := map[string]mail.FetchResult{}
+		var err error
+		for _, m := range msgs {
+			k := summaryKey(m)
+			if have[k] {
+				continue
+			}
+			result, cached, e := a.svc.CachedMessage(ctx, accountID, m.Folder, m.UID)
+			if e == nil && !cached {
+				result, e = a.svc.FetchMessage(ctx, accountID, m.Folder, m.UID, false)
+			}
+			if e != nil {
+				err = e
+				break
+			}
+			fetched[k] = result
+		}
+		a.post(func() {
+			if a.stale(g) {
+				return
+			}
+			for k, r := range fetched {
+				if _, ok := a.bodies[k]; !ok {
+					a.bodies[k] = r
+				}
+			}
+			if err != nil {
+				a.summaries[key] = &aiJob{err: locales.BodyFailed(err.Error())}
+				return
+			}
+			a.summarizeConversation(g, key, a.aiConversation(msgs))
+		})
+	})
+}
+
+// aiConversation is the part of a conversation the AI layer may read: of
+// each message the sender, the date and the plain text.
+func (a *app) aiConversation(msgs []mail.Summary) ai.Conversation {
+	c := ai.Conversation{Scope: a.active, Language: aiLanguage()}
+	if len(msgs) > 0 {
+		c.Subject = msgs[0].Subject
+	}
+	for _, m := range msgs {
+		body := ""
+		if b, ok := a.bodies[summaryKey(m)]; ok {
+			body = b.Message.BodyText
+		}
+		c.Messages = append(c.Messages, ai.Message{FromName: m.From.Name, FromEmail: m.From.Email, Date: m.Date, Body: body})
+	}
+	return c
+}
+
+// summarizeConversation asks for the summary of a conversation whose
+// text is loaded, after the review of its payload the first time.
+func (a *app) summarizeConversation(g uint64, key string, in ai.Conversation) {
+	payload := func(ctx context.Context) (ai.Payload, error) { return a.ai.ConversationPayload(ctx, in) }
+	a.aiBegin(ai.FeatureSummary,
+		func(r *aiReview) { a.review = r },
+		func(err error) {
+			if !a.stale(g) {
+				a.summaries[key] = aiFailed(err)
+			}
+		},
+		payload,
+		func(model string) {
+			if a.stale(g) {
+				return
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			job := &aiJob{busy: true, cancel: cancel, model: model, sent: payload}
+			a.summaries[key] = job
+			a.run(func() {
+				defer cancel()
+				result, err := a.ai.SummarizeConversation(ctx, in)
+				a.post(func() {
+					if a.summaries[key] != job {
+						return
+					}
+					switch {
+					case ai.KindOf(err) == ai.KindCancelled:
+						delete(a.summaries, key)
+					case err != nil:
+						a.summaries[key] = aiFailed(err)
+					default:
+						job.busy = false
+						job.text, job.model, job.cached = result.Text, result.Model, result.Cached
+					}
+				})
+			})
+		})
+}
+
+// inspectJob shows what a finished summary sent.
+func (a *app) inspectJob(job *aiJob) {
+	if job.sent != nil {
+		a.aiInspect(func(r *aiReview) { a.review = r }, job.sent)
+		return
+	}
+	a.inspectSummary()
 }
 
 // inspectSummary shows what the summary of the open message sent.
@@ -289,7 +422,7 @@ func (a *app) summaryCard(c *ui.Context, t *ui.Theme, key string, job *aiJob) {
 			ui.Text(c, job.text).FontSize(13).LineHeight(1.55).Selectable()
 			ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, locales.AiGenerated(job.model)).FontSize(11).TextColor(t.TextMuted).Grow(1)
-				ui.ButtonBase(c).Label(locales.AiWhatWasSent()).OnClick(a.inspectSummary).Children(func() {
+				ui.ButtonBase(c).Label(locales.AiWhatWasSent()).OnClick(func() { a.inspectJob(job) }).Children(func() {
 					ui.Text(c, locales.AiWhatWasSent()).FontSize(11).TextColor(t.Accent)
 				})
 			})
@@ -353,13 +486,19 @@ func aiReviewModal(c *ui.Context, slot **aiReview) {
 				ui.Text(c, p.Text).FontSize(12).LineHeight(1.5).Padding(10, 12).Selectable()
 			})
 			size := locales.AiReviewSize(p.Chars, p.Limit)
-			if p.Feature == ai.FeatureTriage {
+			switch {
+			case p.Feature == ai.FeatureTriage:
 				size = locales.AiReviewTriageSize(p.Messages, p.Chars)
+			case p.Limit == ai.ConversationLimit:
+				size = locales.AiReviewConversationSize(p.Messages, p.Chars, p.Limit)
 			}
 			ui.Text(c, size).FontSize(11).TextColor(t.TextMuted)
 			ui.Text(c, locales.AiReviewLeftOut()).FontSize(11).Bold().TextColor(t.TextMuted)
 			ui.Column(c).Gap(2).Children(func() {
 				left := func(s string) { ui.Text(c, "· "+s).FontSize(12) }
+				if p.Omitted > 0 {
+					left(locales.AiReviewEarlier(p.Omitted))
+				}
 				if p.Quoted > 0 {
 					left(locales.AiReviewQuoted(p.Quoted))
 				}
@@ -443,14 +582,19 @@ func (a *app) triageList() {
 		})
 }
 
-// triageItems lists the rows on screen for a triage, newest first.
+// triageItems lists the rows on screen for a triage, newest first: a
+// conversation is one item, told by its newest message.
 func (a *app) triageItems() []ai.TriageItem {
 	n := min(len(a.all), ai.TriageLimit)
 	items := make([]ai.TriageItem, 0, n)
-	for _, m := range a.all[:n] {
+	for i, m := range a.all[:n] {
+		unread := !m.Seen
+		if c := a.convAt(i); c != nil {
+			unread = c.Unread
+		}
 		items = append(items, ai.TriageItem{
-			ID: summaryKey(m), FromName: m.From.Name, FromEmail: m.From.Email,
-			Subject: m.Subject, Preview: m.Preview, Unread: !m.Seen,
+			ID: a.rowKey(i), FromName: m.From.Name, FromEmail: m.From.Email,
+			Subject: m.Subject, Preview: m.Preview, Unread: unread,
 		})
 	}
 	return items
@@ -464,12 +608,12 @@ func (a *app) clearTriage() {
 	a.triage = nil
 }
 
-// suggestion is the triage suggestion for a row, if any.
-func (a *app) suggestion(m mail.Summary) (ai.Suggestion, bool) {
+// suggestion is the triage suggestion for the row with a key, if any.
+func (a *app) suggestion(key string) (ai.Suggestion, bool) {
 	if a.triage == nil || a.triage.byKey == nil {
 		return ai.Suggestion{}, false
 	}
-	s, ok := a.triage.byKey[summaryKey(m)]
+	s, ok := a.triage.byKey[key]
 	return s, ok
 }
 
@@ -478,9 +622,9 @@ func (a *app) suggestion(m mail.Summary) (ai.Suggestion, bool) {
 func (a *app) selectSuggested(group ai.Group) {
 	a.sel.Clear()
 	first := -1
-	for i, m := range a.all {
-		if s, ok := a.suggestion(m); ok && s.Group == group {
-			a.sel.Add(summaryKey(m))
+	for i := range a.all {
+		if s, ok := a.suggestion(a.rowKey(i)); ok && s.Group == group {
+			a.sel.Add(a.rowKey(i))
 			if first < 0 {
 				first = i
 			}
@@ -519,8 +663,8 @@ func (a *app) triageBanner(c *ui.Context, t *ui.Theme) {
 			a.aiNotice(c, t, &s.aiJob, locales.AiDismissSuggestions(), a.triageList, a.clearTriage)
 		default:
 			var needs, wait, archive int
-			for _, m := range a.all {
-				if sug, ok := a.suggestion(m); ok {
+			for i := range a.all {
+				if sug, ok := a.suggestion(a.rowKey(i)); ok {
 					switch sug.Group {
 					case ai.GroupNeedsYou:
 						needs++

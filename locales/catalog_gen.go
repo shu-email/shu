@@ -1730,14 +1730,16 @@ func (msgs Messages) AiSummaries() string {
 	return Catalog.Format(msgs.locale, "aiSummaries", nil)
 }
 
-// AiSummariesDetail says "Summarize the open message. Sends the subject, sender name, date and up to {limit} characters of the body."
+// AiSummariesDetail says "Summarize the open message or conversation. Sends the subject, the senders' names and dates, and up to {limit} charac…"
 // in the language the app shows.
-func AiSummariesDetail(limit int) string { return In(i18n.Locale()).AiSummariesDetail(limit) }
+func AiSummariesDetail(limit int, conversationLimit int) string {
+	return In(i18n.Locale()).AiSummariesDetail(limit, conversationLimit)
+}
 
-// AiSummariesDetail says "Summarize the open message. Sends the subject, sender name, date and up to {limit} characters of the body."
+// AiSummariesDetail says "Summarize the open message or conversation. Sends the subject, the senders' names and dates, and up to {limit} charac…"
 // in the language of msgs.
-func (msgs Messages) AiSummariesDetail(limit int) string {
-	return Catalog.Format(msgs.locale, "aiSummariesDetail", map[string]any{"limit": limit})
+func (msgs Messages) AiSummariesDetail(limit int, conversationLimit int) string {
+	return Catalog.Format(msgs.locale, "aiSummariesDetail", map[string]any{"limit": limit, "conversationLimit": conversationLimit})
 }
 
 // AiTriage says "Inbox triage"
@@ -3106,4 +3108,410 @@ func SettingsSaveFailed() string { return In(i18n.Locale()).SettingsSaveFailed()
 // in the language of msgs.
 func (msgs Messages) SettingsSaveFailed() string {
 	return Catalog.Format(msgs.locale, "settingsSaveFailed", nil)
+}
+
+// GroupByConversation says "Group by conversation"
+// in the language the app shows.
+func GroupByConversation() string { return In(i18n.Locale()).GroupByConversation() }
+
+// GroupByConversation says "Group by conversation"
+// in the language of msgs.
+func (msgs Messages) GroupByConversation() string {
+	return Catalog.Format(msgs.locale, "groupByConversation", nil)
+}
+
+// ConversationActions says "Conversation actions"
+// in the language the app shows.
+func ConversationActions() string { return In(i18n.Locale()).ConversationActions() }
+
+// ConversationActions says "Conversation actions"
+// in the language of msgs.
+func (msgs Messages) ConversationActions() string {
+	return Catalog.Format(msgs.locale, "conversationActions", nil)
+}
+
+// NoConversationSelected says "No conversation selected"
+// in the language the app shows.
+func NoConversationSelected() string { return In(i18n.Locale()).NoConversationSelected() }
+
+// NoConversationSelected says "No conversation selected"
+// in the language of msgs.
+func (msgs Messages) NoConversationSelected() string {
+	return Catalog.Format(msgs.locale, "noConversationSelected", nil)
+}
+
+// ConversationFailed says "Could not open the conversation: {error}"
+// in the language the app shows.
+func ConversationFailed(error string) string { return In(i18n.Locale()).ConversationFailed(error) }
+
+// ConversationFailed says "Could not open the conversation: {error}"
+// in the language of msgs.
+func (msgs Messages) ConversationFailed(error string) string {
+	return Catalog.Format(msgs.locale, "conversationFailed", map[string]any{"error": error})
+}
+
+// ConversationCount says "{count, plural, =0 {No conversations} one {# conversation} other {# conversations}}"
+// in the language the app shows.
+//
+// The number of conversations a list shows.
+func ConversationCount(count int) string { return In(i18n.Locale()).ConversationCount(count) }
+
+// ConversationCount says "{count, plural, =0 {No conversations} one {# conversation} other {# conversations}}"
+// in the language of msgs.
+//
+// The number of conversations a list shows.
+func (msgs Messages) ConversationCount(count int) string {
+	return Catalog.Format(msgs.locale, "conversationCount", map[string]any{"count": count})
+}
+
+// ConversationsSelected says "{count, plural, one {# conversation selected} other {# conversations selected}}"
+// in the language the app shows.
+func ConversationsSelected(count int) string { return In(i18n.Locale()).ConversationsSelected(count) }
+
+// ConversationsSelected says "{count, plural, one {# conversation selected} other {# conversations selected}}"
+// in the language of msgs.
+func (msgs Messages) ConversationsSelected(count int) string {
+	return Catalog.Format(msgs.locale, "conversationsSelected", map[string]any{"count": count})
+}
+
+// ArchiveConversations says "{count, plural, =0 {Archive conversation} one {Archive conversation} other {Archive # conversations}}"
+// in the language the app shows.
+//
+// The toolbar button that archives the chosen conversations, every message
+// their rows stand for.
+func ArchiveConversations(count int) string { return In(i18n.Locale()).ArchiveConversations(count) }
+
+// ArchiveConversations says "{count, plural, =0 {Archive conversation} one {Archive conversation} other {Archive # conversations}}"
+// in the language of msgs.
+//
+// The toolbar button that archives the chosen conversations, every message
+// their rows stand for.
+func (msgs Messages) ArchiveConversations(count int) string {
+	return Catalog.Format(msgs.locale, "archiveConversations", map[string]any{"count": count})
+}
+
+// DeleteConversations says "{count, plural, =0 {Delete conversation} one {Delete conversation} other {Delete # conversations}}"
+// in the language the app shows.
+func DeleteConversations(count int) string { return In(i18n.Locale()).DeleteConversations(count) }
+
+// DeleteConversations says "{count, plural, =0 {Delete conversation} one {Delete conversation} other {Delete # conversations}}"
+// in the language of msgs.
+func (msgs Messages) DeleteConversations(count int) string {
+	return Catalog.Format(msgs.locale, "deleteConversations", map[string]any{"count": count})
+}
+
+// JunkConversations says "{count, plural, =0 {Move conversation to junk} one {Move conversation to junk} other {Move # conversations to junk}}"
+// in the language the app shows.
+func JunkConversations(count int) string { return In(i18n.Locale()).JunkConversations(count) }
+
+// JunkConversations says "{count, plural, =0 {Move conversation to junk} one {Move conversation to junk} other {Move # conversations to junk}}"
+// in the language of msgs.
+func (msgs Messages) JunkConversations(count int) string {
+	return Catalog.Format(msgs.locale, "junkConversations", map[string]any{"count": count})
+}
+
+// StarConversations says "{count, plural, =0 {Star conversation} one {Star conversation} other {Star # conversations}}"
+// in the language the app shows.
+func StarConversations(count int) string { return In(i18n.Locale()).StarConversations(count) }
+
+// StarConversations says "{count, plural, =0 {Star conversation} one {Star conversation} other {Star # conversations}}"
+// in the language of msgs.
+func (msgs Messages) StarConversations(count int) string {
+	return Catalog.Format(msgs.locale, "starConversations", map[string]any{"count": count})
+}
+
+// UnstarConversations says "{count, plural, =0 {Unstar conversation} one {Unstar conversation} other {Unstar # conversations}}"
+// in the language the app shows.
+func UnstarConversations(count int) string { return In(i18n.Locale()).UnstarConversations(count) }
+
+// UnstarConversations says "{count, plural, =0 {Unstar conversation} one {Unstar conversation} other {Unstar # conversations}}"
+// in the language of msgs.
+func (msgs Messages) UnstarConversations(count int) string {
+	return Catalog.Format(msgs.locale, "unstarConversations", map[string]any{"count": count})
+}
+
+// MarkConversationsRead says "{count, plural, =0 {Mark conversation read} one {Mark conversation read} other {Mark # conversations read}}"
+// in the language the app shows.
+func MarkConversationsRead(count int) string { return In(i18n.Locale()).MarkConversationsRead(count) }
+
+// MarkConversationsRead says "{count, plural, =0 {Mark conversation read} one {Mark conversation read} other {Mark # conversations read}}"
+// in the language of msgs.
+func (msgs Messages) MarkConversationsRead(count int) string {
+	return Catalog.Format(msgs.locale, "markConversationsRead", map[string]any{"count": count})
+}
+
+// MarkConversationsUnread says "{count, plural, =0 {Mark conversation unread} one {Mark conversation unread} other {Mark # conversations unread}}"
+// in the language the app shows.
+func MarkConversationsUnread(count int) string {
+	return In(i18n.Locale()).MarkConversationsUnread(count)
+}
+
+// MarkConversationsUnread says "{count, plural, =0 {Mark conversation unread} one {Mark conversation unread} other {Mark # conversations unread}}"
+// in the language of msgs.
+func (msgs Messages) MarkConversationsUnread(count int) string {
+	return Catalog.Format(msgs.locale, "markConversationsUnread", map[string]any{"count": count})
+}
+
+// ConversationsArchived says "{count, plural, one {Conversation archived} other {# conversations archived}}"
+// in the language the app shows.
+func ConversationsArchived(count int) string { return In(i18n.Locale()).ConversationsArchived(count) }
+
+// ConversationsArchived says "{count, plural, one {Conversation archived} other {# conversations archived}}"
+// in the language of msgs.
+func (msgs Messages) ConversationsArchived(count int) string {
+	return Catalog.Format(msgs.locale, "conversationsArchived", map[string]any{"count": count})
+}
+
+// ConversationsDeleted says "{count, plural, one {Conversation deleted} other {# conversations deleted}}"
+// in the language the app shows.
+func ConversationsDeleted(count int) string { return In(i18n.Locale()).ConversationsDeleted(count) }
+
+// ConversationsDeleted says "{count, plural, one {Conversation deleted} other {# conversations deleted}}"
+// in the language of msgs.
+func (msgs Messages) ConversationsDeleted(count int) string {
+	return Catalog.Format(msgs.locale, "conversationsDeleted", map[string]any{"count": count})
+}
+
+// ConversationsJunked says "{count, plural, one {Conversation moved to junk} other {# conversations moved to junk}}"
+// in the language the app shows.
+func ConversationsJunked(count int) string { return In(i18n.Locale()).ConversationsJunked(count) }
+
+// ConversationsJunked says "{count, plural, one {Conversation moved to junk} other {# conversations moved to junk}}"
+// in the language of msgs.
+func (msgs Messages) ConversationsJunked(count int) string {
+	return Catalog.Format(msgs.locale, "conversationsJunked", map[string]any{"count": count})
+}
+
+// ReplyNewest says "Reply to the newest message"
+// in the language the app shows.
+func ReplyNewest() string { return In(i18n.Locale()).ReplyNewest() }
+
+// ReplyNewest says "Reply to the newest message"
+// in the language of msgs.
+func (msgs Messages) ReplyNewest() string {
+	return Catalog.Format(msgs.locale, "replyNewest", nil)
+}
+
+// ReplyAllNewest says "Reply all to the newest message"
+// in the language the app shows.
+func ReplyAllNewest() string { return In(i18n.Locale()).ReplyAllNewest() }
+
+// ReplyAllNewest says "Reply all to the newest message"
+// in the language of msgs.
+func (msgs Messages) ReplyAllNewest() string {
+	return Catalog.Format(msgs.locale, "replyAllNewest", nil)
+}
+
+// ForwardNewest says "Forward the newest message"
+// in the language the app shows.
+func ForwardNewest() string { return In(i18n.Locale()).ForwardNewest() }
+
+// ForwardNewest says "Forward the newest message"
+// in the language of msgs.
+func (msgs Messages) ForwardNewest() string {
+	return Catalog.Format(msgs.locale, "forwardNewest", nil)
+}
+
+// SummarizeConversation says "Summarize conversation with AI"
+// in the language the app shows.
+func SummarizeConversation() string { return In(i18n.Locale()).SummarizeConversation() }
+
+// SummarizeConversation says "Summarize conversation with AI"
+// in the language of msgs.
+func (msgs Messages) SummarizeConversation() string {
+	return Catalog.Format(msgs.locale, "summarizeConversation", nil)
+}
+
+// ConversationScope says "{count, plural, one {# message} other {# messages}} in {folder}"
+// in the language the app shows.
+//
+// Under a conversation's subject: how many of its messages the list's row
+// stands for, which the toolbar acts on, and the list's folder.
+func ConversationScope(count int, folder string) string {
+	return In(i18n.Locale()).ConversationScope(count, folder)
+}
+
+// ConversationScope says "{count, plural, one {# message} other {# messages}} in {folder}"
+// in the language of msgs.
+//
+// Under a conversation's subject: how many of its messages the list's row
+// stands for, which the toolbar acts on, and the list's folder.
+func (msgs Messages) ConversationScope(count int, folder string) string {
+	return Catalog.Format(msgs.locale, "conversationScope", map[string]any{"count": count, "folder": folder})
+}
+
+// ConversationElsewhere says "{count} in {folder}"
+// in the language the app shows.
+//
+// After conversationScope: how many messages shown are in another folder,
+// which the toolbar leaves alone.
+func ConversationElsewhere(count int, folder string) string {
+	return In(i18n.Locale()).ConversationElsewhere(count, folder)
+}
+
+// ConversationElsewhere says "{count} in {folder}"
+// in the language of msgs.
+//
+// After conversationScope: how many messages shown are in another folder,
+// which the toolbar leaves alone.
+func (msgs Messages) ConversationElsewhere(count int, folder string) string {
+	return Catalog.Format(msgs.locale, "conversationElsewhere", map[string]any{"count": count, "folder": folder})
+}
+
+// MessageHeading says "Message {n} of {total}, from {sender}"
+// in the language the app shows.
+//
+// The name of the line of a conversation's message that expands and
+// collapses it.
+func MessageHeading(n int, total int, sender string) string {
+	return In(i18n.Locale()).MessageHeading(n, total, sender)
+}
+
+// MessageHeading says "Message {n} of {total}, from {sender}"
+// in the language of msgs.
+//
+// The name of the line of a conversation's message that expands and
+// collapses it.
+func (msgs Messages) MessageHeading(n int, total int, sender string) string {
+	return Catalog.Format(msgs.locale, "messageHeading", map[string]any{"n": n, "total": total, "sender": sender})
+}
+
+// ForMessage says "{action}, message {n} of {total}"
+// in the language the app shows.
+//
+// The name of a control of one message of a conversation, as each expanded
+// message has the same controls.
+func ForMessage(action string, n int, total int) string {
+	return In(i18n.Locale()).ForMessage(action, n, total)
+}
+
+// ForMessage says "{action}, message {n} of {total}"
+// in the language of msgs.
+//
+// The name of a control of one message of a conversation, as each expanded
+// message has the same controls.
+func (msgs Messages) ForMessage(action string, n int, total int) string {
+	return Catalog.Format(msgs.locale, "forMessage", map[string]any{"action": action, "n": n, "total": total})
+}
+
+// ReplyToThis says "Reply to this message"
+// in the language the app shows.
+func ReplyToThis() string { return In(i18n.Locale()).ReplyToThis() }
+
+// ReplyToThis says "Reply to this message"
+// in the language of msgs.
+func (msgs Messages) ReplyToThis() string {
+	return Catalog.Format(msgs.locale, "replyToThis", nil)
+}
+
+// ReplyAllToThis says "Reply all to this message"
+// in the language the app shows.
+func ReplyAllToThis() string { return In(i18n.Locale()).ReplyAllToThis() }
+
+// ReplyAllToThis says "Reply all to this message"
+// in the language of msgs.
+func (msgs Messages) ReplyAllToThis() string {
+	return Catalog.Format(msgs.locale, "replyAllToThis", nil)
+}
+
+// ForwardThis says "Forward this message"
+// in the language the app shows.
+func ForwardThis() string { return In(i18n.Locale()).ForwardThis() }
+
+// ForwardThis says "Forward this message"
+// in the language of msgs.
+func (msgs Messages) ForwardThis() string {
+	return Catalog.Format(msgs.locale, "forwardThis", nil)
+}
+
+// MoreActionsThis says "More actions for this message"
+// in the language the app shows.
+func MoreActionsThis() string { return In(i18n.Locale()).MoreActionsThis() }
+
+// MoreActionsThis says "More actions for this message"
+// in the language of msgs.
+func (msgs Messages) MoreActionsThis() string {
+	return Catalog.Format(msgs.locale, "moreActionsThis", nil)
+}
+
+// StarThisMessage says "Star this message"
+// in the language the app shows.
+func StarThisMessage() string { return In(i18n.Locale()).StarThisMessage() }
+
+// StarThisMessage says "Star this message"
+// in the language of msgs.
+func (msgs Messages) StarThisMessage() string {
+	return Catalog.Format(msgs.locale, "starThisMessage", nil)
+}
+
+// UnstarThisMessage says "Unstar this message"
+// in the language the app shows.
+func UnstarThisMessage() string { return In(i18n.Locale()).UnstarThisMessage() }
+
+// UnstarThisMessage says "Unstar this message"
+// in the language of msgs.
+func (msgs Messages) UnstarThisMessage() string {
+	return Catalog.Format(msgs.locale, "unstarThisMessage", nil)
+}
+
+// MarkThisRead says "Mark this message read"
+// in the language the app shows.
+func MarkThisRead() string { return In(i18n.Locale()).MarkThisRead() }
+
+// MarkThisRead says "Mark this message read"
+// in the language of msgs.
+func (msgs Messages) MarkThisRead() string {
+	return Catalog.Format(msgs.locale, "markThisRead", nil)
+}
+
+// MarkThisUnread says "Mark this message unread"
+// in the language the app shows.
+func MarkThisUnread() string { return In(i18n.Locale()).MarkThisUnread() }
+
+// MarkThisUnread says "Mark this message unread"
+// in the language of msgs.
+func (msgs Messages) MarkThisUnread() string {
+	return Catalog.Format(msgs.locale, "markThisUnread", nil)
+}
+
+// ArchiveThisMessage says "Archive this message"
+// in the language the app shows.
+func ArchiveThisMessage() string { return In(i18n.Locale()).ArchiveThisMessage() }
+
+// ArchiveThisMessage says "Archive this message"
+// in the language of msgs.
+func (msgs Messages) ArchiveThisMessage() string {
+	return Catalog.Format(msgs.locale, "archiveThisMessage", nil)
+}
+
+// DeleteThisMessage says "Delete this message"
+// in the language the app shows.
+func DeleteThisMessage() string { return In(i18n.Locale()).DeleteThisMessage() }
+
+// DeleteThisMessage says "Delete this message"
+// in the language of msgs.
+func (msgs Messages) DeleteThisMessage() string {
+	return Catalog.Format(msgs.locale, "deleteThisMessage", nil)
+}
+
+// AiReviewConversationSize says "{count, plural, one {# message} other {# messages}}, {chars} of at most {limit} characters"
+// in the language the app shows.
+func AiReviewConversationSize(count int, chars int, limit int) string {
+	return In(i18n.Locale()).AiReviewConversationSize(count, chars, limit)
+}
+
+// AiReviewConversationSize says "{count, plural, one {# message} other {# messages}}, {chars} of at most {limit} characters"
+// in the language of msgs.
+func (msgs Messages) AiReviewConversationSize(count int, chars int, limit int) string {
+	return Catalog.Format(msgs.locale, "aiReviewConversationSize", map[string]any{"count": count, "chars": chars, "limit": limit})
+}
+
+// AiReviewEarlier says "{count, plural, one {The first message of the conversation, to stay within the limit} other {The first # messages of …"
+// in the language the app shows.
+func AiReviewEarlier(count int) string { return In(i18n.Locale()).AiReviewEarlier(count) }
+
+// AiReviewEarlier says "{count, plural, one {The first message of the conversation, to stay within the limit} other {The first # messages of …"
+// in the language of msgs.
+func (msgs Messages) AiReviewEarlier(count int) string {
+	return Catalog.Format(msgs.locale, "aiReviewEarlier", map[string]any{"count": count})
 }

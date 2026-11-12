@@ -89,6 +89,15 @@ func startWatchApp(t *testing.T) *watchedApp {
 	return w
 }
 
+// startMessageWatchApp is startWatchApp with a row for each message, the
+// view the tests written before conversations are about.
+func startMessageWatchApp(t *testing.T) *watchedApp {
+	t.Helper()
+	w := watchApp(t, inMessageView(newWatchedService()))
+	w.a.start()
+	return w
+}
+
 // newMail is an unread message for an inbox.
 func newMail(uid mail.UID, sender, subject string) mail.Summary {
 	return mail.Summary{
@@ -210,7 +219,7 @@ func TestNewMailOpensNothing(t *testing.T) {
 		msgs = append(msgs, m)
 	}
 	fs.addAccount(testAccount("a1", "Work", "work@example.com"), "secret", watchFolders(50, 50), msgs)
-	w := watchApp(t, fs)
+	w := watchApp(t, inMessageView(fs))
 	a := w.a
 	a.start()
 	tt := ui.NewTester(a.view, 1220, 800)
@@ -543,7 +552,7 @@ func TestNoNotificationForTheListOnScreen(t *testing.T) {
 // Clicking a notification opens its account, folder and message, and
 // brings the window to the front.
 func TestNotificationClickOpensTheMessage(t *testing.T) {
-	w := startWatchApp(t)
+	w := startMessageWatchApp(t)
 	a := w.a
 	tt := ui.NewTester(a.view, 1220, 800)
 	w.arrive(t, "a2", newMail(20, "Sam", "Dinner on Friday"))
@@ -617,7 +626,7 @@ func TestNotificationClickAtLaunch(t *testing.T) {
 	fs.recount("a2", "INBOX")
 	id := noteTarget{account: "a2", folder: "INBOX", validity: 7, uid: 20, message: true}.id()
 
-	w := watchApp(t, fs)
+	w := watchApp(t, inMessageView(fs))
 	a := w.a
 	a.openNotification(id)
 	if a.active != "" || w.raised != 0 {
@@ -1247,6 +1256,13 @@ func TestBackgroundMailEndToEnd(t *testing.T) {
 	// The watchers end before the database closes.
 	defer svc.StopWatching()
 	if err := svc.AddAccount(ctx, account, "secret"); err != nil {
+		t.Fatal(err)
+	}
+	// The list of messages, as before conversations: those have their own
+	// test end to end.
+	listing := mail.DefaultSettings()
+	listing.Conversations = false
+	if err := svc.SaveSettings(ctx, listing); err != nil {
 		t.Fatal(err)
 	}
 

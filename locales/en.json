@@ -295,12 +295,16 @@
   "aiAllowHTTP": "Allow plain HTTP to this server",
   "aiCapabilities": "Capabilities",
   "aiSummaries": "Summaries",
-  "aiSummariesDetail": "Summarize the open message. Sends the subject, sender name, date and up to {limit} characters of the body.",
+  "aiSummariesDetail": "Summarize the open message or conversation. Sends the subject, the senders' names and dates, and up to {limit} characters of a message's text, {conversationLimit} for a whole conversation.",
   "@aiSummariesDetail": {
     "placeholders": {
       "limit": {
         "type": "int",
         "example": "4000"
+      },
+      "conversationLimit": {
+        "type": "int",
+        "example": "8000"
       }
     }
   },
@@ -822,5 +826,231 @@
   "notifyDetailsDetail": "When off, a notification only says which account got how many new messages.",
   "notifyAccounts": "Notify for these accounts",
   "notifyDenied": "Notifications are turned off for Shu in the system's settings.",
-  "settingsSaveFailed": "Couldn't save the settings."
+  "settingsSaveFailed": "Couldn't save the settings.",
+  "groupByConversation": "Group by conversation",
+  "conversationActions": "Conversation actions",
+  "noConversationSelected": "No conversation selected",
+  "conversationFailed": "Could not open the conversation: {error}",
+  "@conversationFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "database is locked"
+      }
+    }
+  },
+  "conversationCount": "{count, plural, =0 {No conversations} one {# conversation} other {# conversations}}",
+  "@conversationCount": {
+    "description": "The number of conversations a list shows.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "conversationsSelected": "{count, plural, one {# conversation selected} other {# conversations selected}}",
+  "@conversationsSelected": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "archiveConversations": "{count, plural, =0 {Archive conversation} one {Archive conversation} other {Archive # conversations}}",
+  "@archiveConversations": {
+    "description": "The toolbar button that archives the chosen conversations, every message their rows stand for.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "deleteConversations": "{count, plural, =0 {Delete conversation} one {Delete conversation} other {Delete # conversations}}",
+  "@deleteConversations": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "junkConversations": "{count, plural, =0 {Move conversation to junk} one {Move conversation to junk} other {Move # conversations to junk}}",
+  "@junkConversations": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "starConversations": "{count, plural, =0 {Star conversation} one {Star conversation} other {Star # conversations}}",
+  "@starConversations": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "unstarConversations": "{count, plural, =0 {Unstar conversation} one {Unstar conversation} other {Unstar # conversations}}",
+  "@unstarConversations": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "markConversationsRead": "{count, plural, =0 {Mark conversation read} one {Mark conversation read} other {Mark # conversations read}}",
+  "@markConversationsRead": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "markConversationsUnread": "{count, plural, =0 {Mark conversation unread} one {Mark conversation unread} other {Mark # conversations unread}}",
+  "@markConversationsUnread": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "conversationsArchived": "{count, plural, one {Conversation archived} other {# conversations archived}}",
+  "@conversationsArchived": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "conversationsDeleted": "{count, plural, one {Conversation deleted} other {# conversations deleted}}",
+  "@conversationsDeleted": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "conversationsJunked": "{count, plural, one {Conversation moved to junk} other {# conversations moved to junk}}",
+  "@conversationsJunked": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "replyNewest": "Reply to the newest message",
+  "replyAllNewest": "Reply all to the newest message",
+  "forwardNewest": "Forward the newest message",
+  "summarizeConversation": "Summarize conversation with AI",
+  "conversationScope": "{count, plural, one {# message} other {# messages}} in {folder}",
+  "@conversationScope": {
+    "description": "Under a conversation's subject: how many of its messages the list's row stands for, which the toolbar acts on, and the list's folder.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      },
+      "folder": {
+        "type": "String",
+        "example": "Inbox"
+      }
+    }
+  },
+  "conversationElsewhere": "{count} in {folder}",
+  "@conversationElsewhere": {
+    "description": "After conversationScope: how many messages shown are in another folder, which the toolbar leaves alone.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      },
+      "folder": {
+        "type": "String",
+        "example": "Sent"
+      }
+    }
+  },
+  "messageHeading": "Message {n} of {total}, from {sender}",
+  "@messageHeading": {
+    "description": "The name of the line of a conversation's message that expands and collapses it.",
+    "placeholders": {
+      "n": {
+        "type": "int",
+        "example": "2"
+      },
+      "total": {
+        "type": "int",
+        "example": "3"
+      },
+      "sender": {
+        "type": "String",
+        "example": "Lin Wei"
+      }
+    }
+  },
+  "forMessage": "{action}, message {n} of {total}",
+  "@forMessage": {
+    "description": "The name of a control of one message of a conversation, as each expanded message has the same controls.",
+    "placeholders": {
+      "action": {
+        "type": "String",
+        "example": "Reply"
+      },
+      "n": {
+        "type": "int",
+        "example": "2"
+      },
+      "total": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "replyToThis": "Reply to this message",
+  "replyAllToThis": "Reply all to this message",
+  "forwardThis": "Forward this message",
+  "moreActionsThis": "More actions for this message",
+  "starThisMessage": "Star this message",
+  "unstarThisMessage": "Unstar this message",
+  "markThisRead": "Mark this message read",
+  "markThisUnread": "Mark this message unread",
+  "archiveThisMessage": "Archive this message",
+  "deleteThisMessage": "Delete this message",
+  "aiReviewConversationSize": "{count, plural, one {# message} other {# messages}}, {chars} of at most {limit} characters",
+  "@aiReviewConversationSize": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      },
+      "chars": {
+        "type": "int",
+        "example": "1200"
+      },
+      "limit": {
+        "type": "int",
+        "example": "8000"
+      }
+    }
+  },
+  "aiReviewEarlier": "{count, plural, one {The first message of the conversation, to stay within the limit} other {The first # messages of the conversation, to stay within the limit}}",
+  "@aiReviewEarlier": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  }
 }

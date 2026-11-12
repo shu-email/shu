@@ -37,9 +37,10 @@ func scopeClause(folder string) (string, []any) {
 }
 
 // matchClause is the condition on a message m that it matches a search,
-// or "" for no search. Three or more characters use the trigram FTS
-// index; shorter queries, which a trigram cannot answer, fall back to
-// LIKE.
+// or "" for no search: in its subject, its sender, its body if it was
+// downloaded, and the preview a sync stores. Three or more characters use
+// the trigram FTS index; shorter queries, which a trigram cannot answer,
+// fall back to LIKE.
 func matchClause(query string) (string, []any) {
 	q := strings.TrimSpace(query)
 	switch {
@@ -50,7 +51,8 @@ func matchClause(query string) (string, []any) {
 	default:
 		like := "%" + likeEscape(q) + "%"
 		return `(m.subject LIKE ? ESCAPE '\' OR m.from_name LIKE ? ESCAPE '\'
-			OR m.from_email LIKE ? ESCAPE '\' OR m.body_text LIKE ? ESCAPE '\')`, []any{like, like, like, like}
+			OR m.from_email LIKE ? ESCAPE '\' OR m.body_text LIKE ? ESCAPE '\'
+			OR m.preview LIKE ? ESCAPE '\')`, []any{like, like, like, like, like}
 	}
 }
 

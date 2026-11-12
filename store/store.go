@@ -190,6 +190,34 @@ var migrations = [][]string{
 			SELECT RAISE(ABORT, 'store: a message without a conversation');
 		END`,
 	},
+	// v7: the full-text index also holds each message's preview, which a
+	// sync stores with the headers, so that search finds a message by the
+	// start of its body before the body was ever downloaded. The index is
+	// made anew with the column and rebuilt from the rows.
+	{
+		`DROP TRIGGER messages_ai`,
+		`DROP TRIGGER messages_ad`,
+		`DROP TRIGGER messages_au`,
+		`DROP TABLE messages_fts`,
+		`CREATE VIRTUAL TABLE messages_fts USING fts5(
+			subject, from_name, from_email, body_text, preview,
+			content='messages', content_rowid='id', tokenize='trigram')`,
+		`CREATE TRIGGER messages_ai AFTER INSERT ON messages BEGIN
+			INSERT INTO messages_fts(rowid, subject, from_name, from_email, body_text, preview)
+			VALUES (new.id, new.subject, new.from_name, new.from_email, new.body_text, new.preview);
+		END`,
+		`CREATE TRIGGER messages_ad AFTER DELETE ON messages BEGIN
+			INSERT INTO messages_fts(messages_fts, rowid, subject, from_name, from_email, body_text, preview)
+			VALUES ('delete', old.id, old.subject, old.from_name, old.from_email, old.body_text, old.preview);
+		END`,
+		`CREATE TRIGGER messages_au AFTER UPDATE OF subject, from_name, from_email, body_text, preview ON messages BEGIN
+			INSERT INTO messages_fts(messages_fts, rowid, subject, from_name, from_email, body_text, preview)
+			VALUES ('delete', old.id, old.subject, old.from_name, old.from_email, old.body_text, old.preview);
+			INSERT INTO messages_fts(rowid, subject, from_name, from_email, body_text, preview)
+			VALUES (new.id, new.subject, new.from_name, new.from_email, new.body_text, new.preview);
+		END`,
+		`INSERT INTO messages_fts(messages_fts) VALUES ('rebuild')`,
+	},
 }
 
 // backfills compute, from the rows of the version before, statements a

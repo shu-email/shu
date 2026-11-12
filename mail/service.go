@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 )
@@ -235,6 +236,27 @@ func (s *Service) CachedMessages(ctx context.Context, accountID, folder, query s
 	return s.store.ListMessages(ctx, accountID, folder, query, limit)
 }
 
+// CachedConversations reads a conversation list from the cache, without
+// network: one row for each conversation with a message in folder (a
+// folder's name, "starred" for the flagged messages, "" for the whole
+// account), newest first, at most limit. A query keeps the conversations
+// any message of which matches it in its subject, sender or body, in any
+// folder, and each row says which did. The message list of
+// CachedMessages stays for a view of single messages.
+func (s *Service) CachedConversations(ctx context.Context, accountID, folder, query string, limit int) ([]Conversation, error) {
+	return s.store.ListConversations(ctx, accountID, folder, query, limit)
+}
+
+// CachedConversation reads the messages of a conversation from the cache,
+// oldest first, each with its folder: those in folder, a scope as
+// CachedConversations takes, so that "" reads the conversation whole, in
+// every folder, to show it. With the scope of a list it returns exactly
+// the messages the list's row stands for, which a conversation-wide
+// action acts on. Tombstones are left out.
+func (s *Service) CachedConversation(ctx context.Context, accountID, folder string, thread ThreadID) ([]Summary, error) {
+	return s.store.ConversationMessages(ctx, accountID, folder, thread)
+}
+
 // CachedMessage reads one cached message. The bool is false when only the
 // header is cached and the body must be fetched.
 func (s *Service) CachedMessage(ctx context.Context, accountID, folder string, uid UID) (FetchResult, bool, error) {
@@ -333,12 +355,12 @@ func (s *Service) Move(ctx context.Context, accountID, folder string, uid UID, d
 	if err := s.store.MarkDeleted(ctx, accountID, folder, uid, true); err != nil {
 		return MoveResult{}, err
 	}
-	result, err := s.moveOnServer(ctx, a, password, folder, uid, dest)
+	moved, err := s.moveOnServer(ctx, a, password, folder, []UID{uid}, dest)
 	if err != nil {
 		_ = s.store.MarkDeleted(ctx, accountID, folder, uid, false)
 		return MoveResult{}, err
 	}
-	return result, s.store.DeleteMessage(ctx, accountID, folder, uid)
+	return moved[0], s.store.DeleteMessage(ctx, accountID, folder, uid)
 }
 
 // MoveBack undoes a move when the server reported the destination UID.
@@ -351,8 +373,125 @@ func (s *Service) MoveBack(ctx context.Context, accountID, from, to string, uid 
 	if err != nil {
 		return err
 	}
-	_, err = s.moveOnServer(ctx, a, password, from, uid, to)
+	_, err = s.moveOnServer(ctx, a, password, from, []UID{uid}, to)
 	return err
+}
+
+// MoveMessages moves several messages to dest: a conversation, or what of
+// it a list shows. The messages of each folder move in one command. Their
+// cache rows are tombstones until the server confirms, and come back if
+// it fails. It returns a result for each message that moved, with what
+// MoveBackMessages needs; when a folder fails, the error comes with the
+// results of the folders that moved before it. Messages already in dest
+// stay where they are.
+func (s *Service) MoveMessages(ctx context.Context, accountID string, msgs []MessageRef, dest string) ([]MoveResult, error) {
+	if dest == "" {
+		return nil, errors.New("mail: the destination folder is empty")
+	}
+	a, password, err := s.account(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	groups := byFolder(msgs, dest)
+	// The rows come back even when the move failed because ctx ended.
+	restore := func(groups []uidGroup) {
+		for _, g := range groups {
+			for _, uid := range g.uids {
+				_ = s.store.MarkDeleted(context.WithoutCancel(ctx), accountID, g.folder, uid, false)
+			}
+		}
+	}
+	for i, g := range groups {
+		for j, uid := range g.uids {
+			if err := s.store.MarkDeleted(ctx, accountID, g.folder, uid, true); err != nil {
+				restore(groups[:i])
+				restore([]uidGroup{{g.folder, g.uids[:j]}})
+				return nil, err
+			}
+		}
+	}
+	var results []MoveResult
+	var cacheErr error
+	for i, g := range groups {
+		moved, err := s.moveOnServer(ctx, a, password, g.folder, g.uids, dest)
+		if err != nil {
+			restore(groups[i:])
+			return results, err
+		}
+		results = append(results, moved...)
+		for _, uid := range g.uids {
+			if err := s.store.DeleteMessage(ctx, accountID, g.folder, uid); err != nil && cacheErr == nil {
+				cacheErr = err
+			}
+		}
+	}
+	return results, cacheErr
+}
+
+// MoveBackMessages undoes MoveMessages: each message goes back to the
+// folder it came from, found by the UID the server gave it where it went.
+// A message the server gave no UID for cannot be found, and stays; the
+// error says so once the others are back. The caller syncs the folders
+// the messages return to, to restore their cache rows.
+func (s *Service) MoveBackMessages(ctx context.Context, accountID string, moved []MoveResult) error {
+	a, password, err := s.account(ctx, accountID)
+	if err != nil {
+		return err
+	}
+	type route struct{ from, to string }
+	var order []route
+	byRoute := map[route][]UID{}
+	lost := 0
+	for _, m := range moved {
+		if m.DestUID == 0 {
+			lost++
+			continue
+		}
+		r := route{m.Folder, m.From}
+		if _, ok := byRoute[r]; !ok {
+			order = append(order, r)
+		}
+		if !slices.Contains(byRoute[r], m.DestUID) {
+			byRoute[r] = append(byRoute[r], m.DestUID)
+		}
+	}
+	for _, r := range order {
+		if _, err := s.moveOnServer(ctx, a, password, r.from, byRoute[r], r.to); err != nil {
+			return err
+		}
+	}
+	if lost > 0 {
+		return fmt.Errorf("mail: the server gave no UID for %d moved messages, which stay where they are", lost)
+	}
+	return nil
+}
+
+// uidGroup is the UIDs of one folder, in the order first asked for.
+type uidGroup struct {
+	folder string
+	uids   []UID
+}
+
+// byFolder groups messages by folder, once each and in their order,
+// leaving out those in skip.
+func byFolder(msgs []MessageRef, skip string) []uidGroup {
+	var out []uidGroup
+	index := map[string]int{}
+	for _, m := range msgs {
+		if m.Folder == skip {
+			continue
+		}
+		i, ok := index[m.Folder]
+		if !ok {
+			i = len(out)
+			index[m.Folder] = i
+			out = append(out, uidGroup{folder: m.Folder})
+		}
+		if !slices.Contains(out[i].uids, m.UID) {
+			out[i].uids = append(out[i].uids, m.UID)
+		}
+	}
+	return out
 }
 
 // Attachment returns an attachment's bytes, from the disk cache or by

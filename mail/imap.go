@@ -1,12 +1,14 @@
 package mail
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
 	"mime"
 	"net"
+	"net/mail"
 	"strings"
 	"time"
 
@@ -212,6 +214,17 @@ func attrsOf(d *imap.ListData) []string {
 	return out
 }
 
+// threadSection is the part of the header a sync reads besides the
+// envelope, which has no References or Thread-Index and parses
+// In-Reply-To strictly. PEEK, as reading must never mark mail read.
+func threadSection() *imap.FetchItemBodySection {
+	return &imap.FetchItemBodySection{
+		Specifier:    imap.PartSpecifierHeader,
+		HeaderFields: []string{"References", "In-Reply-To", "Thread-Index"},
+		Peek:         true,
+	}
+}
+
 // fetchOptions is the header fetch of the list phase.
 func fetchOptions(withPreview bool) *imap.FetchOptions {
 	opts := &imap.FetchOptions{
@@ -221,15 +234,34 @@ func fetchOptions(withPreview bool) *imap.FetchOptions {
 		RFC822Size:    true,
 		UID:           true,
 		BodyStructure: &imap.FetchItemBodyStructure{},
+		BodySection:   []*imap.FetchItemBodySection{threadSection()},
 	}
 	if withPreview {
-		opts.BodySection = []*imap.FetchItemBodySection{{
+		opts.BodySection = append(opts.BodySection, &imap.FetchItemBodySection{
 			Specifier: imap.PartSpecifierText,
 			Partial:   &imap.SectionPartial{Offset: 0, Size: 256},
 			Peek:      true,
-		}}
+		})
 	}
 	return opts
+}
+
+// threadHeaders reads the threading headers of a fetch into m.
+func threadHeaders(m *Message, raw []byte) {
+	if len(raw) == 0 {
+		return
+	}
+	// The blank line that ends a header block may be missing.
+	block := append(append([]byte(nil), raw...), "\r\n\r\n"...)
+	msg, err := mail.ReadMessage(bytes.NewReader(block))
+	if err != nil {
+		return
+	}
+	m.References = msgIDs(msg.Header.Get("References"))
+	if ids := msgIDs(msg.Header.Get("In-Reply-To")); m.InReplyTo == "" && len(ids) > 0 {
+		m.InReplyTo = ids[0]
+	}
+	m.ThreadIndex = cleanThreadIndex(msg.Header.Get("Thread-Index"))
 }
 
 // fetchSummaries reads headers (and a preview) for a number set.
@@ -302,6 +334,7 @@ func summaryFromFetch(buf *imapclient.FetchMessageBuffer, withPreview bool) Mess
 		m.ReplyTo = envelopeAddresses(buf.Envelope.ReplyTo)
 		m.Date = buf.Envelope.Date
 	}
+	threadHeaders(&m, buf.FindBodySection(threadSection()))
 	if m.Date.IsZero() {
 		m.Date = buf.InternalDate
 	}
@@ -535,11 +568,18 @@ func (s *Service) syncSelected(ctx context.Context, c *imapSession, accountID, f
 			batch.Folder.LastUID = cached.LastUID
 		}
 		// Refresh the flags of the cached window, which the server may
-		// have changed from another client.
+		// have changed from another client, and the headers that thread
+		// it, which a cache from before conversations lacks.
 		if batch.Folder.Total > 0 {
-			_, flags, err := fetchSummaries(c, recentSeqSet(total, limit), false)
+			refreshed, flags, err := fetchSummaries(c, recentSeqSet(total, limit), false)
 			if err == nil {
 				batch.Flags = flags
+				for _, m := range refreshed {
+					batch.Threading = append(batch.Threading, ThreadHeaders{
+						UID: m.UID, MessageID: m.MessageID, InReplyTo: m.InReplyTo,
+						References: m.References, ThreadIndex: m.ThreadIndex,
+					})
+				}
 			}
 		}
 	}
@@ -712,57 +752,124 @@ func setFlags(c *imapSession, folder string, uid UID, flag Flag, on bool) error 
 	return cmd.Close()
 }
 
-// moveOnServer moves one message, preferring MOVE and falling back to
-// COPY plus delete and expunge.
-func (s *Service) moveOnServer(ctx context.Context, a Account, password, folder string, uid UID, dest string) (MoveResult, error) {
-	result := MoveResult{Folder: dest}
+// moveOnServer moves messages of one folder in one command, preferring
+// MOVE and falling back to COPY plus delete and expunge. The client's own
+// Move would fall back with a bare EXPUNGE, so it is only called on a
+// server that has MOVE.
+func (s *Service) moveOnServer(ctx context.Context, a Account, password, folder string, uids []UID, dest string) ([]MoveResult, error) {
 	c, err := s.dialIMAP(ctx, a, password)
 	if err != nil {
-		return result, err
+		return nil, err
 	}
 	defer c.close()
 	if _, err := c.client.Select(folder, nil).Wait(); err != nil {
-		return result, fmt.Errorf("imap: select %s: %w", folder, err)
+		return nil, fmt.Errorf("imap: select %s: %w", folder, err)
 	}
 	var set imap.UIDSet
-	set.AddNum(imap.UID(uid))
+	for _, uid := range uids {
+		set.AddNum(imap.UID(uid))
+	}
 	if c.capHas(imap.CapMove) {
 		data, err := c.client.Move(set, dest).Wait()
 		if err != nil {
-			return result, fmt.Errorf("imap: move: %w", err)
+			return nil, fmt.Errorf("imap: move: %w", err)
 		}
-		result.DestUID = firstUID(data.DestUIDs)
-		return result, nil
+		return movedTo(folder, dest, uids, data.SourceUIDs, data.DestUIDs), nil
 	}
 	data, err := c.client.Copy(set, dest).Wait()
 	if err != nil {
-		return result, fmt.Errorf("imap: copy: %w", err)
+		return nil, fmt.Errorf("imap: copy: %w", err)
 	}
-	result.DestUID = firstUID(data.DestUIDs)
-	cmd := c.client.Store(set, &imap.StoreFlags{Op: imap.StoreFlagsAdd, Silent: true, Flags: []imap.Flag{imap.FlagDeleted}}, nil)
-	if err := cmd.Close(); err != nil {
-		return result, fmt.Errorf("imap: mark deleted: %w", err)
-	}
-	if c.capHas(imap.CapUIDPlus) {
-		if err := c.client.UIDExpunge(set).Close(); err != nil {
-			return result, fmt.Errorf("imap: expunge: %w", err)
-		}
-		return result, nil
-	}
-	return result, c.client.Expunge().Close()
+	results := movedTo(folder, dest, uids, data.SourceUIDs, data.DestUIDs)
+	return results, expunge(c, folder, set)
 }
 
-// firstUID reads the one UID a COPY or MOVE response reported.
-func firstUID(set imap.NumSet) UID {
+// movedTo pairs the messages moved with the UIDs the server gave them in
+// dest. Its COPYUID answer lists the source and destination UIDs in the
+// same order; a server without UIDPLUS gives none, and those moves cannot
+// be undone.
+func movedTo(from, dest string, uids []UID, source, dests imap.NumSet) []MoveResult {
+	src, dst := uidList(source), uidList(dests)
+	destOf := map[UID]UID{}
+	if len(src) == len(dst) {
+		for i := range src {
+			destOf[UID(src[i])] = UID(dst[i])
+		}
+	}
+	out := make([]MoveResult, 0, len(uids))
+	for _, uid := range uids {
+		out = append(out, MoveResult{Folder: dest, DestUID: destOf[uid], From: from, UID: uid})
+	}
+	return out
+}
+
+// uidList reads the UIDs of a COPYUID answer in their order.
+func uidList(set imap.NumSet) []imap.UID {
 	uids, ok := set.(imap.UIDSet)
 	if !ok {
-		return 0
+		return nil
 	}
 	nums, ok := uids.Nums()
-	if !ok || len(nums) == 0 {
-		return 0
+	if !ok {
+		return nil
 	}
-	return UID(nums[0])
+	return nums
+}
+
+// expunge removes messages of the selected folder for good. UID EXPUNGE
+// removes those and no others; a server without it gets expungeOnly.
+func expunge(c *imapSession, folder string, set imap.UIDSet) error {
+	deleted := &imap.StoreFlags{Op: imap.StoreFlagsAdd, Silent: true, Flags: []imap.Flag{imap.FlagDeleted}}
+	if !c.capHas(imap.CapUIDPlus) && !c.capHas(imap.CapIMAP4rev2) {
+		return expungeOnly(c, folder, set, deleted)
+	}
+	if err := c.client.Store(set, deleted, nil).Close(); err != nil {
+		return fmt.Errorf("imap: mark deleted: %w", err)
+	}
+	if err := c.client.UIDExpunge(set).Close(); err != nil {
+		return fmt.Errorf("imap: expunge: %w", err)
+	}
+	return nil
+}
+
+// expungeOnly removes the given messages on a server without UID EXPUNGE.
+// Its EXPUNGE removes every message flagged \Deleted, and another mail
+// client may have flagged some it has not removed yet, which the user can
+// still undelete there. Those are unflagged for the EXPUNGE and flagged
+// again after it. If the connection is lost in between they stay
+// unflagged, which keeps them: the safe way for this to fail.
+func expungeOnly(c *imapSession, folder string, set imap.UIDSet, deleted *imap.StoreFlags) error {
+	data, err := c.client.UIDSearch(&imap.SearchCriteria{Flag: []imap.Flag{imap.FlagDeleted}}, nil).Wait()
+	if err != nil {
+		return fmt.Errorf("imap: search %s: %w", folder, err)
+	}
+	var others imap.UIDSet
+	for _, uid := range data.AllUIDs() {
+		if !set.Contains(uid) {
+			others.AddNum(uid)
+		}
+	}
+	if len(others) > 0 {
+		undelete := &imap.StoreFlags{Op: imap.StoreFlagsDel, Silent: true, Flags: []imap.Flag{imap.FlagDeleted}}
+		if err := c.client.Store(others, undelete, nil).Close(); err != nil {
+			// Nothing was removed yet, and nothing will be this time.
+			return fmt.Errorf("imap: unmark deleted: %w", err)
+		}
+	}
+	err = c.client.Store(set, deleted, nil).Close()
+	if err == nil {
+		err = c.client.Expunge().Close()
+	}
+	if len(others) > 0 {
+		// Whatever happened above, the other client's marks go back.
+		if flagErr := c.client.Store(others, deleted, nil).Close(); flagErr != nil && err == nil {
+			err = fmt.Errorf("imap: mark deleted again: %w", flagErr)
+		}
+	}
+	if err != nil {
+		return fmt.Errorf("imap: expunge: %w", err)
+	}
+	return nil
 }
 
 // appendTo appends a raw message to a folder.

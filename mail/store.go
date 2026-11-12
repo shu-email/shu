@@ -49,6 +49,19 @@ type Store interface {
 	// folder is not known.
 	TakeNew(ctx context.Context, accountID, folder string) ([]Summary, error)
 
+	// Conversations. Every message written is put in one, with the
+	// messages of any folder of its account it shares a key with (see
+	// ThreadKeys); a message that links two conversations makes them
+	// one. A scope is a folder's name, "starred" for the flagged
+	// messages, or "" for the whole account, tombstones left out.
+	// ListConversations returns a row for each conversation with a
+	// message in the scope, newest first, from that scope's messages; a
+	// query keeps those any message of which matches, in any folder, and
+	// names them. ConversationMessages returns a conversation's messages
+	// in the scope, oldest first.
+	ListConversations(ctx context.Context, accountID, folder, query string, limit int) ([]Conversation, error)
+	ConversationMessages(ctx context.Context, accountID, folder string, thread ThreadID) ([]Summary, error)
+
 	// Outbox.
 	EnqueueOutbox(ctx context.Context, p PendingSend) error
 	Outbox(ctx context.Context, id string) (PendingSend, error)

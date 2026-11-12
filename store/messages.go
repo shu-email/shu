@@ -13,7 +13,10 @@ const summaryColumns = `m.server_uid, f.name, COALESCE(m.message_id, ''), COALES
 	COALESCE(m.references_json, ''), COALESCE(m.from_name, ''), COALESCE(m.from_email, ''),
 	COALESCE(m.to_json, ''), COALESCE(m.cc_json, ''), COALESCE(m.reply_to_json, ''),
 	COALESCE(m.subject, ''), COALESCE(m.preview, ''), m.date, m.size,
-	m.seen, m.flagged, m.has_attachments`
+	m.seen, m.flagged, m.has_attachments, COALESCE(m.thread_index, ''), m.thread_id`
+
+// summaryWidth is how many columns summaryColumns has.
+const summaryWidth = 19
 
 func summaryRow(r []any) mail.Summary {
 	return mail.Summary{
@@ -33,6 +36,8 @@ func summaryRow(r []any) mail.Summary {
 		Seen:           truth(r[14]),
 		Flagged:        truth(r[15]),
 		HasAttachments: truth(r[16]),
+		ThreadIndex:    text(r[17]),
+		Thread:         mail.ThreadID(number(r[18])),
 	}
 }
 
@@ -105,16 +110,17 @@ func (s *Store) GetMessage(ctx context.Context, accountID, folder string, uid ma
 		return mail.Message{}, false, nil
 	}
 	r := rows.Values[0]
+	body := r[summaryWidth:]
 	msg := mail.Message{
-		Summary:       summaryRow(r[:17]),
-		BodyText:      text(r[17]),
-		BodyHTML:      text(r[18]),
-		BodyTruncated: truth(r[19]),
-		RawHeaders:    text(r[20]),
-		CachedAt:      unix(r[21]),
-		BodyCached:    r[21] != nil,
+		Summary:       summaryRow(r[:summaryWidth]),
+		BodyText:      text(body[0]),
+		BodyHTML:      text(body[1]),
+		BodyTruncated: truth(body[2]),
+		RawHeaders:    text(body[3]),
+		CachedAt:      unix(body[4]),
+		BodyCached:    body[4] != nil,
 	}
-	messageID := number(r[22])
+	messageID := number(body[5])
 	attachments, err := s.attachments(ctx, messageID)
 	if err != nil {
 		return mail.Message{}, false, err
@@ -150,13 +156,33 @@ func (s *Store) SaveMessage(ctx context.Context, accountID, folder string, m mai
 	if err != nil {
 		return err
 	}
-	stmts := []stmtType{
+	s.threadMu.Lock()
+	defer s.threadMu.Unlock()
+	var id, thread int64
+	var wasSeen bool
+	rows, err := s.query(ctx, `SELECT id, seen, thread_id FROM messages WHERE folder_id = ? AND server_uid = ?`, folderID, int64(m.UID))
+	if err != nil {
+		return err
+	}
+	if len(rows.Values) == 1 {
+		id = number(rows.Values[0][0])
+		wasSeen = truth(rows.Values[0][1])
+		thread = number(rows.Values[0][2])
+	}
+	keys := mail.ThreadKeys(m.MessageID, m.InReplyTo, m.References, m.ThreadIndex)
+	plan, err := s.planThreads(ctx, accountID, [][]string{keys})
+	if err != nil {
+		return err
+	}
+	thread = plan.assign(keys, thread)
+	stmts := append(plan.before(),
 		stmt(`INSERT INTO messages (
 				folder_id, server_uid, message_id, in_reply_to, references_json,
 				from_name, from_email, to_json, cc_json, reply_to_json,
 				subject, preview, date, size, seen, flagged, has_attachments,
-				body_text, body_html, body_truncated, raw_headers, cached_at, deleted)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+				body_text, body_html, body_truncated, raw_headers, cached_at,
+				thread_index, thread_id, deleted)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
 			ON CONFLICT (folder_id, server_uid) DO UPDATE SET
 				message_id=excluded.message_id, in_reply_to=excluded.in_reply_to,
 				references_json=excluded.references_json,
@@ -168,23 +194,13 @@ func (s *Store) SaveMessage(ctx context.Context, accountID, folder string, m mai
 				has_attachments=excluded.has_attachments,
 				body_text=excluded.body_text, body_html=excluded.body_html,
 				body_truncated=excluded.body_truncated, raw_headers=excluded.raw_headers,
-				cached_at=excluded.cached_at, deleted=0`,
+				cached_at=excluded.cached_at, thread_index=excluded.thread_index,
+				thread_id=excluded.thread_id, deleted=0`,
 			folderID, int64(m.UID), m.MessageID, m.InReplyTo, encodeJSON(m.References),
 			m.From.Name, m.From.Email, encodeJSON(m.To), encodeJSON(m.Cc), encodeJSON(m.ReplyTo),
 			m.Subject, m.Preview, unixPtr(m.Date), m.Size, boolInt(m.Seen), boolInt(m.Flagged),
 			boolInt(m.HasAttachments), m.BodyText, m.BodyHTML, boolInt(m.BodyTruncated),
-			m.RawHeaders, unixPtr(m.CachedAt)),
-	}
-	var id int64
-	var wasSeen bool
-	rows, err := s.query(ctx, `SELECT id, seen FROM messages WHERE folder_id = ? AND server_uid = ?`, folderID, int64(m.UID))
-	if err != nil {
-		return err
-	}
-	if len(rows.Values) == 1 {
-		id = number(rows.Values[0][0])
-		wasSeen = truth(rows.Values[0][1])
-	}
+			m.RawHeaders, unixPtr(m.CachedAt), m.ThreadIndex, plan.find(thread)))
 	if m.Seen && !wasSeen {
 		stmts = append(stmts, stmt(`UPDATE folders SET unread = MAX(0, unread - 1) WHERE id = ?`, folderID))
 	}
@@ -206,7 +222,7 @@ func (s *Store) SaveMessage(ctx context.Context, accountID, folder string, m mai
 				a.Part, a.Filename, a.ContentType, a.Size, a.ContentHash, a.CachePath, folderID, int64(m.UID)))
 		}
 	}
-	return s.transaction(ctx, stmts)
+	return s.transaction(ctx, append(stmts, plan.after()...))
 }
 
 // ApplySync writes one folder sync batch and advances its cursor, all or
@@ -216,28 +232,91 @@ func (s *Store) ApplySync(ctx context.Context, accountID string, b mail.SyncBatc
 	if err != nil {
 		return err
 	}
-	stmts := make([]stmtType, 0, len(b.Messages)+len(b.Flags)+4)
+	s.threadMu.Lock()
+	defer s.threadMu.Unlock()
+	// A reset folder's rows go: the UIDs now name other messages.
+	var uids []mail.UID
+	if !b.Reset {
+		for _, m := range b.Messages {
+			uids = append(uids, m.UID)
+		}
+		for _, h := range b.Threading {
+			uids = append(uids, h.UID)
+		}
+	}
+	cached, err := s.cachedThreads(ctx, folderID, uids)
+	if err != nil {
+		return err
+	}
+	keys := make([][]string, 0, len(b.Messages))
+	written := map[mail.UID]bool{}
+	for _, m := range b.Messages {
+		keys = append(keys, mail.ThreadKeys(m.MessageID, m.InReplyTo, m.References, m.ThreadIndex))
+		written[m.UID] = true
+	}
+	// A row read again is threaded again only when the server gave more
+	// than the cache has, so that a sync that changed nothing writes
+	// nothing for it.
+	var again []mail.ThreadHeaders
+	for _, h := range b.Threading {
+		row, ok := cached[h.UID]
+		if !ok || written[h.UID] {
+			continue
+		}
+		refs := encodeJSON(h.References)
+		if (refs == "" || refs == row.refs) && (h.ThreadIndex == "" || h.ThreadIndex == row.threadIndex) {
+			continue
+		}
+		again = append(again, h)
+		keys = append(keys, mail.ThreadKeys(h.MessageID, h.InReplyTo, h.References, h.ThreadIndex))
+	}
+	plan, err := s.planThreads(ctx, accountID, keys)
+	if err != nil {
+		return err
+	}
+	threads := make([]int64, len(keys))
+	for i, m := range b.Messages {
+		threads[i] = plan.assign(keys[i], cached[m.UID].thread)
+	}
+	for i, h := range again {
+		j := len(b.Messages) + i
+		threads[j] = plan.assign(keys[j], cached[h.UID].thread)
+	}
+
+	stmts := make([]stmtType, 0, len(b.Messages)+len(again)+len(b.Flags)+8)
 	if b.Reset {
 		stmts = append(stmts, stmt(`DELETE FROM messages WHERE folder_id = ?`, folderID))
 	}
-	for _, m := range b.Messages {
+	stmts = append(stmts, plan.before()...)
+	// A header the sync did not get keeps what the cache had of it.
+	for i, m := range b.Messages {
 		stmts = append(stmts, stmt(`INSERT INTO messages (
 				folder_id, server_uid, message_id, in_reply_to, references_json,
 				from_name, from_email, to_json, cc_json, reply_to_json,
-				subject, preview, date, size, seen, flagged, has_attachments, deleted)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+				subject, preview, date, size, seen, flagged, has_attachments,
+				thread_index, thread_id, deleted)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
 			ON CONFLICT (folder_id, server_uid) DO UPDATE SET
 				message_id=excluded.message_id, in_reply_to=excluded.in_reply_to,
-				references_json=excluded.references_json,
+				references_json=COALESCE(NULLIF(excluded.references_json, ''), messages.references_json),
 				from_name=excluded.from_name, from_email=excluded.from_email,
 				to_json=excluded.to_json, cc_json=excluded.cc_json, reply_to_json=excluded.reply_to_json,
 				subject=excluded.subject, preview=excluded.preview, date=excluded.date,
 				size=excluded.size, seen=excluded.seen, flagged=excluded.flagged,
-				has_attachments=excluded.has_attachments, deleted=0`,
+				has_attachments=excluded.has_attachments,
+				thread_index=COALESCE(NULLIF(excluded.thread_index, ''), messages.thread_index),
+				thread_id=excluded.thread_id, deleted=0`,
 			folderID, int64(m.UID), m.MessageID, m.InReplyTo, encodeJSON(m.References),
 			m.From.Name, m.From.Email, encodeJSON(m.To), encodeJSON(m.Cc), encodeJSON(m.ReplyTo),
 			m.Subject, m.Preview, unixPtr(m.Date), m.Size, boolInt(m.Seen), boolInt(m.Flagged),
-			boolInt(m.HasAttachments)))
+			boolInt(m.HasAttachments), m.ThreadIndex, plan.find(threads[i])))
+	}
+	for i, h := range again {
+		stmts = append(stmts, stmt(`UPDATE messages SET
+				references_json = COALESCE(NULLIF(?, ''), references_json),
+				thread_index = COALESCE(NULLIF(?, ''), thread_index), thread_id = ?
+			WHERE folder_id = ? AND server_uid = ?`,
+			encodeJSON(h.References), h.ThreadIndex, plan.find(threads[len(b.Messages)+i]), folderID, int64(h.UID)))
 	}
 	for _, f := range b.Flags {
 		stmts = append(stmts, stmt(`UPDATE messages SET seen = ?, flagged = ?
@@ -249,7 +328,7 @@ func (s *Store) ApplySync(ctx context.Context, accountID string, b mail.SyncBatc
 			WHERE id = ?`,
 		int64(b.Folder.UIDValidity), int64(b.Folder.LastUID), b.Folder.Unread, b.Folder.Total,
 		unixPtr(b.Folder.SyncedAt), folderID))
-	return s.transaction(ctx, stmts)
+	return s.transaction(ctx, append(stmts, plan.after()...))
 }
 
 // SetFlag updates a flag and, for \Seen, adjusts the folder's unread

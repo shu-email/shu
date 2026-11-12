@@ -645,12 +645,12 @@ func (a *app) stepMessage(delta int) {
 	if len(a.all) == 0 {
 		return
 	}
-	a.sel.Clear()
 	next := a.selected + delta
 	if a.selected < 0 {
 		next = 0
 	}
 	next = max(0, min(next, len(a.all)-1))
+	a.chooseRow(next)
 	a.list.Choose(next)
 	a.list.ScrollTo(next, ui.Center)
 	a.bodyErr = ""

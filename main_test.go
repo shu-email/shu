@@ -664,3 +664,50 @@ func TestEditAccountOverlayCancel(t *testing.T) {
 		t.Error("Cancel did not close the overlay")
 	}
 }
+
+// Starring several messages flags them all, and the toolbar offers the
+// opposite action afterwards.
+func TestMultiSelectStar(t *testing.T) {
+	a, fs := sampleApp(t)
+	tt := ui.NewTester(a.view, 1220, 800)
+	if err := tt.Click("Design review — Thursday at 10"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ClickWith(ui.Cmd, "[shu-email/shu] Pull request #128"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.Click("Star message"); err != nil {
+		t.Fatal(err)
+	}
+	if len(fs.flagCalls) != 2 {
+		t.Fatalf("flag calls = %v", fs.flagCalls)
+	}
+	for _, m := range a.all {
+		if m.UID == 1 || m.UID == 2 {
+			if !m.Flagged {
+				t.Errorf("message %d is not flagged", m.UID)
+			}
+		}
+	}
+	if !tt.HasText("Unstar message") {
+		t.Errorf("toolbar does not offer Unstar: %q", tt.Texts())
+	}
+}
+
+// The undo offer retires after its delay.
+func TestUndoExpires(t *testing.T) {
+	a, _ := sampleApp(t)
+	fired := false
+	a.after = func(d time.Duration, fn func()) *time.Timer {
+		fired = true
+		fn()
+		return nil
+	}
+	a.setUndo(&undoMove{label: "Archived"})
+	if !fired {
+		t.Fatal("no timer was armed")
+	}
+	if a.undo != nil {
+		t.Error("the undo offer outlived its timer")
+	}
+}

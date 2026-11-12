@@ -53,32 +53,51 @@ func (a *app) current() (*mail.Summary, *mail.Message) {
 	return m, nil
 }
 
-// readingToolbar draws the message actions.
+// readingToolbar draws the message actions. Actions act on the whole
+// selection, and their icons show that selection's state.
 func (a *app) readingToolbar(c *ui.Context, t *ui.Theme) {
 	_, msg := a.current()
-	has := msg != nil
-	html := has && msg.BodyHTML != ""
+	targets := a.targets()
+	has := len(targets) > 0
+	html := msg != nil && msg.BodyHTML != ""
+	allFlagged, allSeen := has, has
+	for _, m := range targets {
+		if !m.Flagged {
+			allFlagged = false
+		}
+		if !m.Seen {
+			allSeen = false
+		}
+	}
+	archive := a.folderBySpecial(mail.SpecialArchive)
+	trash := a.folderBySpecial(mail.SpecialTrash)
+	junk := a.folderBySpecial(mail.SpecialJunk)
 	ui.Toolbar(c, func() {
-		a.toolButton(c, archiveIcon, locales.ArchiveMessage(), a.folderBySpecial(mail.SpecialArchive) != "", func() {
+		a.toolButton(c, archiveIcon, locales.ArchiveMessage(), has && archive != "", func() {
 			a.moveSelected(mail.SpecialArchive)
 		})
-		a.toolButton(c, trashIcon, locales.DeleteMessage(), a.folderBySpecial(mail.SpecialTrash) != "", func() {
+		a.toolButton(c, trashIcon, locales.DeleteMessage(), has && trash != "", func() {
 			a.moveSelected(mail.SpecialTrash)
 		})
-		a.toolButton(c, spamIcon, locales.JunkMessage(), a.folderBySpecial(mail.SpecialJunk) != "", func() {
+		a.toolButton(c, spamIcon, locales.JunkMessage(), has && junk != "", func() {
 			a.moveSelected(mail.SpecialJunk)
 		})
-		starLabel := locales.StarMessage()
-		starred := false
-		if a.selected >= 0 && a.selected < len(a.all) {
-			starred = a.all[a.selected].Flagged
+		starLabel, star := locales.StarMessage(), starIcon
+		starColor := t.Text
+		if allFlagged {
+			starLabel, star = locales.UnstarMessage(), starFilledIcon
+			starColor = t.Warning
 		}
-		if starred {
-			starLabel = locales.UnstarMessage()
+		starButton := ui.Button(c, "").Label(starLabel).Tooltip(starLabel).Disabled(!has).
+			Padding(6, 8)
+		if has {
+			starButton = starButton.OnClick(func() { a.toggleStar() })
 		}
-		a.toolButton(c, starIcon, starLabel, has, func() { a.toggleStar() })
+		starButton.Children(func() {
+			ui.Icon(c, star).FontSize(16).TextColor(starColor)
+		})
 		readLabel, readIcon := locales.MarkRead(), mailOpenIcon
-		if a.selected >= 0 && a.selected < len(a.all) && a.all[a.selected].Seen {
+		if allSeen {
 			readLabel, readIcon = locales.MarkUnread(), mailIcon
 		}
 		a.toolButton(c, readIcon, readLabel, has, func() { a.toggleRead() })
@@ -392,7 +411,7 @@ func (a *app) moveSelected(special string) {
 	}
 	a.all = kept
 	a.sel.Clear()
-	a.undo = nil
+	a.setUndo(nil)
 	if a.selected >= len(a.all) {
 		a.selected = len(a.all) - 1
 	}
@@ -437,7 +456,7 @@ func (a *app) moveSelected(special string) {
 				case mail.SpecialJunk:
 					label = locales.MovedToJunk()
 				}
-				a.undo = &undoMove{accountID: accountID, source: targets[0].Folder, dest: dest, destUID: first.DestUID, label: label}
+				a.setUndo(&undoMove{accountID: accountID, source: targets[0].Folder, dest: dest, destUID: first.DestUID, label: label})
 			}
 			a.loadMessages(g)
 		})
@@ -451,7 +470,7 @@ func (a *app) undoLastMove() {
 	if u == nil {
 		return
 	}
-	a.undo = nil
+	a.setUndo(nil)
 	g := a.gen
 	a.run(func() {
 		ctx, cancel := a.ctx()

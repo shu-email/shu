@@ -24,6 +24,7 @@ func mustIcon(name string) *ui.SVG {
 var (
 	inboxIcon       = mustIcon("inbox")
 	starIcon        = mustIcon("star")
+	starFilledIcon  = mustIcon("star-filled")
 	sentIcon        = mustIcon("send")
 	draftIcon       = mustIcon("file-pen")
 	archiveIcon     = mustIcon("archive")

@@ -52,6 +52,19 @@ type memStore struct {
 	// keeps them by.
 	contacts map[string]*ContactState
 	counted  map[string]bool
+	// labels are the labels by ID, the last given labelsNext. msgLabels
+	// is the labels each message has as the server keeps them, by
+	// tombKey; keptLabels those kept on this device, by labelKeyOf;
+	// labelsGone when each label deleted went, by its account and keyword
+	// in lower case (see fake_labels_test.go). beforeApply runs once, at
+	// the start of the next ApplySync: the moment a sync has read the
+	// server and not yet written what it read.
+	labels      map[LabelID]*memLabel
+	labelsNext  LabelID
+	msgLabels   map[string]map[LabelID]bool
+	keptLabels  map[string]map[LabelID]bool
+	labelsGone  map[string]time.Time
+	beforeApply func()
 }
 
 // memMark is a folder's watermark.
@@ -73,6 +86,10 @@ func newMemStore() *memStore {
 		tombs:      map[string]bool{},
 		contacts:   map[string]*ContactState{},
 		counted:    map[string]bool{},
+		labels:     map[LabelID]*memLabel{},
+		msgLabels:  map[string]map[LabelID]bool{},
+		keptLabels: map[string]map[LabelID]bool{},
+		labelsGone: map[string]time.Time{},
 	}
 }
 
@@ -106,10 +123,23 @@ func (s *memStore) DeleteAccount(ctx context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.accounts, id)
+	for _, f := range s.folders[id] {
+		s.dropLabelsLocked(id, f.Name)
+	}
 	delete(s.folders, id)
 	for k := range s.messages {
 		if len(k) > len(id) && k[:len(id)+1] == id+"/" {
 			delete(s.messages, k)
+		}
+	}
+	for lid, l := range s.labels {
+		if l.Account == id {
+			delete(s.labels, lid)
+		}
+	}
+	for k := range s.keptLabels {
+		if strings.HasPrefix(k, id+"\x00") {
+			delete(s.keptLabels, k)
 		}
 	}
 	for k := range s.marks {
@@ -264,8 +294,9 @@ func (s *memStore) Folder(ctx context.Context, accountID, name string) (Folder, 
 	return Folder{}, false, nil
 }
 
-// SaveFolders keeps the sync cursor of the folders it knows, as the
-// SQLite store does: a LIST says nothing of it.
+// SaveFolders keeps the sync cursor of the folders it knows, and what
+// their PERMANENTFLAGS said, as the SQLite store does: a LIST says
+// nothing of them.
 func (s *memStore) SaveFolders(ctx context.Context, accountID string, folders []Folder) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -275,6 +306,7 @@ func (s *memStore) SaveFolders(ctx context.Context, accountID string, folders []
 			if old.Name == saved[i].Name {
 				saved[i].UIDValidity, saved[i].LastUID = old.UIDValidity, old.LastUID
 				saved[i].SyncedAt, saved[i].Complete = old.SyncedAt, old.Complete
+				saved[i].PermanentFlags = old.PermanentFlags
 			}
 		}
 	}
@@ -292,7 +324,7 @@ func (s *memStore) ListMessages(ctx context.Context, accountID, folder, query st
 		}
 		// A row says which account and folder it is in, as the SQLite
 		// store's do.
-		summary := m.Summary
+		summary := s.labelledLocked(m.Summary, accountID, s.folderLocked(accountID, folder), m)
 		summary.Account, summary.Folder = accountID, folder
 		out = append(out, summary)
 	}
@@ -378,12 +410,13 @@ func (s *memStore) ListConversations(ctx context.Context, accountID, folder, que
 	q := strings.ToLower(strings.TrimSpace(query))
 	rows := map[ThreadID]*Conversation{}
 	hits := map[ThreadID][]Summary{}
+	labels := map[ThreadID]map[LabelID]bool{}
 	for ref, thread := range s.threadsLocked(accountID) {
 		if s.tombs[tombKey(accountID, ref.Folder, ref.UID)] {
 			continue
 		}
 		m := s.messages[msgKey(accountID, ref.Folder)][ref.UID]
-		summary := m.Summary
+		summary := s.labelledLocked(m.Summary, accountID, s.folderLocked(accountID, ref.Folder), m)
 		summary.Account, summary.Folder, summary.Thread = accountID, ref.Folder, thread
 		for _, field := range []string{m.Subject, m.From.Name, m.From.Email, m.BodyText} {
 			if q != "" && strings.Contains(strings.ToLower(field), q) {
@@ -398,17 +431,22 @@ func (s *memStore) ListConversations(ctx context.Context, accountID, folder, que
 		if c == nil {
 			c = &Conversation{Thread: thread, Account: accountID, Latest: summary}
 			rows[thread] = c
+			labels[thread] = map[LabelID]bool{}
 		}
 		c.Count++
 		c.Unread = c.Unread || !m.Seen
 		c.Flagged = c.Flagged || m.Flagged
 		c.HasAttachments = c.HasAttachments || m.HasAttachments
+		for _, l := range summary.Labels {
+			labels[thread][l.ID] = true
+		}
 		if newerSummary(summary, c.Latest) {
 			c.Latest = summary
 		}
 	}
 	var out []Conversation
 	for thread, c := range rows {
+		c.Labels = s.orderedLabelsLocked(accountID, labels[thread])
 		if q != "" {
 			if len(hits[thread]) == 0 {
 				continue
@@ -436,7 +474,7 @@ func (s *memStore) ConversationMessages(ctx context.Context, accountID, folder s
 		if t != thread || !inScope(folder, ref, m) || s.tombs[tombKey(accountID, ref.Folder, ref.UID)] {
 			continue
 		}
-		summary := m.Summary
+		summary := s.labelledLocked(m.Summary, accountID, s.folderLocked(accountID, ref.Folder), m)
 		summary.Account, summary.Folder, summary.Thread = accountID, ref.Folder, t
 		out = append(out, summary)
 	}
@@ -457,8 +495,9 @@ func memRowKey(m Summary) string {
 }
 
 // memFound reports whether a message matches a search whole, and the
-// parts its terms are in.
-func memFound(q Search, f Folder, m Message) (Field, bool) {
+// parts its terms are in. named reports whether it has its account's
+// label of a name.
+func memFound(q Search, f Folder, m Message, named func(string) bool) (Field, bool) {
 	parts := map[Field][]string{
 		FieldSubject: {m.Subject}, FieldFrom: {m.From.Name, m.From.Email},
 		FieldBody: {m.BodyText, m.Preview},
@@ -491,17 +530,30 @@ func memFound(q Search, f Folder, m Message) (Field, bool) {
 		(q.In != "" && !f.NamedBy(q.In)) {
 		return 0, false
 	}
+	for _, name := range q.Labels {
+		if !named(name) {
+			return 0, false
+		}
+		found |= FieldLabel
+	}
 	return found, true
 }
 
 // pageLocked lists every message of the accounts of a scope, those in it
-// and the others, as rows with their conversation.
+// and the others, as rows with their conversation and labels.
 func (s *memStore) pageLocked(sc Scope, each func(f Folder, m Message, row memRow, inScope bool)) {
 	accounts := sc.Accounts
 	if len(accounts) == 0 {
 		for id := range s.accounts {
 			accounts = append(accounts, id)
 		}
+	}
+	if sc.Label != 0 {
+		l := s.labels[sc.Label]
+		if l == nil || !slices.Contains(accounts, l.Account) {
+			return
+		}
+		accounts = []string{l.Account}
 	}
 	for _, accountID := range accounts {
 		threads := s.threadsLocked(accountID)
@@ -511,14 +563,20 @@ func (s *memStore) pageLocked(sc Scope, each func(f Folder, m Message, row memRo
 					continue
 				}
 				inScope := (sc.Folder == "" || f.Name == sc.Folder) &&
-					(sc.Special == "" || f.SpecialUse == sc.Special) && (!sc.Starred || m.Flagged)
-				summary := m.Summary
+					(sc.Special == "" || f.SpecialUse == sc.Special) && (!sc.Starred || m.Flagged) &&
+					(sc.Label == 0 || f.InLabelScope() && s.hasLabelLocked(accountID, f.Name, m, sc.Label))
+				summary := s.labelledLocked(m.Summary, accountID, f, m)
 				summary.Account, summary.Folder, summary.UID = accountID, f.Name, uid
 				summary.Thread = threads[MessageRef{f.Name, uid}]
 				each(f, m, memRow{summary, memRowKey(summary)}, inScope)
 			}
 		}
 	}
+}
+
+// namedLocked is memFound's named of a row.
+func (s *memStore) namedLocked(row memRow, m Message) func(string) bool {
+	return func(name string) bool { return s.namedLabelLocked(row.Account, row.Folder, m, name) }
 }
 
 // memPage cuts the rows after a cursor, newest first, to a page.
@@ -549,7 +607,7 @@ func (s *memStore) MessagePage(ctx context.Context, q ListQuery) (MessagePage, e
 	defer s.mu.Unlock()
 	var rows []memRow
 	s.pageLocked(q.Scope, func(f Folder, m Message, row memRow, inScope bool) {
-		if fields, ok := memFound(q.Search, f, m); ok && inScope {
+		if fields, ok := memFound(q.Search, f, m, s.namedLocked(row, m)); ok && inScope {
 			row.Matched = fields
 			rows = append(rows, row)
 		}
@@ -575,9 +633,10 @@ func (s *memStore) ConversationPage(ctx context.Context, q ListQuery) (Conversat
 	heads := map[thread]*memRow{}
 	rows := map[thread]*Conversation{}
 	found := map[thread][]memRow{}
+	labels := map[thread]map[LabelID]bool{}
 	s.pageLocked(q.Scope, func(f Folder, m Message, row memRow, inScope bool) {
 		t := thread{row.Account, row.Thread}
-		if fields, ok := memFound(q.Search, f, m); ok && !q.Search.IsZero() {
+		if fields, ok := memFound(q.Search, f, m, s.namedLocked(row, m)); ok && !q.Search.IsZero() {
 			row.Matched = fields
 			found[t] = append(found[t], row)
 		}
@@ -588,11 +647,15 @@ func (s *memStore) ConversationPage(ctx context.Context, q ListQuery) (Conversat
 		if c == nil {
 			c = &Conversation{Thread: row.Thread, Account: row.Account}
 			rows[t] = c
+			labels[t] = map[LabelID]bool{}
 		}
 		c.Count++
 		c.Unread = c.Unread || !m.Seen
 		c.Flagged = c.Flagged || m.Flagged
 		c.HasAttachments = c.HasAttachments || m.HasAttachments
+		for _, l := range row.Labels {
+			labels[t][l.ID] = true
+		}
 		if heads[t] == nil || row.key > heads[t].key {
 			heads[t] = &row
 		}
@@ -609,6 +672,7 @@ func (s *memStore) ConversationPage(ctx context.Context, q ListQuery) (Conversat
 		t := thread{head.Account, head.Thread}
 		c := *rows[t]
 		c.Latest = head.Summary
+		c.Labels = s.orderedLabelsLocked(head.Account, labels[t])
 		hits := found[t]
 		sort.Slice(hits, func(i, j int) bool { return hits[i].key > hits[j].key })
 		for _, h := range hits {
@@ -678,6 +742,7 @@ func (s *memStore) ApplyOlder(ctx context.Context, accountID string, b OlderBatc
 		for _, m := range b.Messages {
 			s.messages[key][m.UID] = m
 		}
+		s.keywordsLocked(accountID, b.Folder, b.Messages, nil, time.Time{})
 		f.Complete = b.Complete
 		s.olderWrites++
 		s.countFolderLocked(accountID, b.Folder, b.Messages)
@@ -693,6 +758,7 @@ func (s *memStore) GetMessage(ctx context.Context, accountID, folder string, uid
 	if !ok {
 		return Message{}, false, nil
 	}
+	m.Summary = s.labelledLocked(m.Summary, accountID, s.folderLocked(accountID, folder), m)
 	m.Account = accountID
 	return m, true, nil
 }
@@ -715,6 +781,7 @@ func (s *memStore) SaveMessage(ctx context.Context, accountID, folder string, m 
 	}
 	s.messages[key][m.UID] = m
 	if !ok {
+		s.keywordsLocked(accountID, folder, []Message{m}, nil, time.Time{})
 		s.countFolderLocked(accountID, folder, []Message{m})
 	}
 	return nil
@@ -722,9 +789,17 @@ func (s *memStore) SaveMessage(ctx context.Context, accountID, folder string, m 
 
 func (s *memStore) ApplySync(ctx context.Context, accountID string, b SyncBatch) error {
 	s.mu.Lock()
+	before := s.beforeApply
+	s.beforeApply = nil
+	s.mu.Unlock()
+	if before != nil {
+		before()
+	}
+	s.mu.Lock()
 	defer s.mu.Unlock()
 	key := msgKey(accountID, b.Folder.Name)
 	if b.Reset {
+		s.dropLabelsLocked(accountID, b.Folder.Name)
 		s.messages[key] = map[UID]Message{}
 	}
 	if s.messages[key] == nil {
@@ -768,6 +843,7 @@ func (s *memStore) ApplySync(ctx context.Context, accountID string, b SyncBatch)
 			s.messages[key][f.UID] = m
 		}
 	}
+	s.keywordsLocked(accountID, b.Folder.Name, b.Messages, b.Flags, b.Folder.SyncedAt)
 	found := false
 	for i := range s.folders[accountID] {
 		if s.folders[accountID][i].Name == b.Folder.Name {
@@ -777,6 +853,9 @@ func (s *memStore) ApplySync(ctx context.Context, accountID string, b SyncBatch)
 			f.UIDValidity, f.LastUID = b.Folder.UIDValidity, b.Folder.LastUID
 			f.Unread, f.Total, f.SyncedAt = b.Folder.Unread, b.Folder.Total, b.Folder.SyncedAt
 			f.Complete = b.Folder.Complete
+			if b.Folder.PermanentFlags != nil {
+				f.PermanentFlags = b.Folder.PermanentFlags
+			}
 			found = true
 		}
 	}
@@ -839,6 +918,7 @@ func (s *memStore) DeleteMessage(ctx context.Context, accountID, folder string, 
 	defer s.mu.Unlock()
 	delete(s.messages[msgKey(accountID, folder)], uid)
 	delete(s.tombs, tombKey(accountID, folder, uid))
+	delete(s.msgLabels, tombKey(accountID, folder, uid))
 	return nil
 }
 

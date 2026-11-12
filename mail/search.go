@@ -33,6 +33,9 @@ type Search struct {
 	// In keeps the messages of the folders a typed name means (see
 	// Folder.NamedBy), in each account of the scope.
 	In string `json:"in,omitempty"`
+	// Labels are names of labels, each kept by the messages that have
+	// the label of its account so named, in any case.
+	Labels []string `json:"labels,omitempty"`
 }
 
 // IsZero reports whether the search asks nothing, which every message
@@ -40,7 +43,7 @@ type Search struct {
 func (s Search) IsZero() bool {
 	return len(s.Text) == 0 && len(s.From) == 0 && len(s.To) == 0 && len(s.Subject) == 0 &&
 		len(s.Body) == 0 && s.Since.IsZero() && s.Before.IsZero() &&
-		!s.Unread && !s.Starred && !s.Attachment && strings.TrimSpace(s.In) == ""
+		!s.Unread && !s.Starred && !s.Attachment && strings.TrimSpace(s.In) == "" && len(s.Labels) == 0
 }
 
 // Field is a set of the parts of a message a search looks in.
@@ -53,6 +56,9 @@ const (
 	FieldTo
 	// FieldBody is the body, or the preview of a body not downloaded.
 	FieldBody
+	// FieldLabel is the labels: a message found by a label: part has
+	// it, which no free text is looked for in.
+	FieldLabel
 )
 
 // FieldAny is every part free text is looked for in.
@@ -62,8 +68,8 @@ const FieldAny = FieldSubject | FieldFrom | FieldTo | FieldBody
 func (f Field) Has(g Field) bool { return g != 0 && f&g == g }
 
 // Match is a message a search found, and the parts of it its terms were
-// found in. Fields is empty for a search of flags, dates or folders
-// alone.
+// found in, FieldLabel for the labels a search named. Fields is empty for
+// a search of flags, dates or folders alone.
 type Match struct {
 	MessageRef
 	Fields Field `json:"fields,omitempty"`
@@ -98,6 +104,7 @@ func (f Folder) NamedBy(name string) bool {
 //	after:2026-03-01   on that day or later
 //	before:2026-03-01  before that day
 //	in:sent            a folder, by its name or its special use
+//	label:work         messages with a label, by its name in any case
 //
 // A value may be quoted, as in from:"Maya Lin". Operators are read in any
 // case, and their colon may be the full-width one Chinese input types.
@@ -143,6 +150,8 @@ func (s *Search) apply(tok searchToken, loc *time.Location) bool {
 		s.Body = append(s.Body, value)
 	case "in":
 		s.In = value
+	case "label":
+		s.Labels = append(s.Labels, value)
 	case "has":
 		if !strings.EqualFold(value, "attachment") {
 			return false
@@ -188,7 +197,7 @@ func parseDay(value string, loc *time.Location) (time.Time, bool) {
 // searchOperators are the operators ParseSearch knows.
 var searchOperators = map[string]bool{
 	"from": true, "to": true, "subject": true, "body": true, "in": true,
-	"has": true, "is": true, "after": true, "before": true,
+	"has": true, "is": true, "after": true, "before": true, "label": true,
 }
 
 // isQuote reports whether r opens or closes a phrase: the ASCII quote

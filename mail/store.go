@@ -85,6 +85,42 @@ type Store interface {
 	MessagePage(ctx context.Context, q ListQuery) (MessagePage, error)
 	ConversationPage(ctx context.Context, q ListQuery) (ConversationPage, error)
 
+	// Labels (see Label), which go with their account. Every message a
+	// read returns has its labels: those its row has as the server keeps
+	// them, which ApplySync, ApplyOlder and SaveMessage write from the
+	// Keywords of the messages and flags they write (a new row only, for
+	// SaveMessage), a keyword no label has yet becoming one named
+	// LabelName; and those kept on this device by its LabelKey, wherever
+	// it is. ApplySync leaves out a keyword whose label DeleteLabel
+	// deleted at or after the batch's Folder.SyncedAt: the sync read it
+	// before the deletion took it off the server.
+	//
+	// Labels lists an account's labels in their order, each with the
+	// unread messages of LabelScope that have it and whether it is kept
+	// on this device only (KeptLocally). CreateLabel adds one after
+	// them, the palette's next color when it has none: ErrLabelExists
+	// when the account has one of the same name in any case
+	// (LabelNameKey), and a keyword another label has is made free
+	// (FreeKeyword). UpdateLabel changes the name and color ("" keeps
+	// it) of one and never its keyword. DeleteLabel removes one, from
+	// every message here too, at a time. SetLabel puts a label on cached
+	// messages of a folder or takes it off: as the server keeps it, on
+	// their rows, or with local set on this device, by their LabelKey; it
+	// returns the UIDs of the messages it changed, and skips those not
+	// cached. LabelRefs lists the cached messages that have a label as
+	// the server keeps it. Each returns ErrNotFound for a label or folder
+	// the account has not.
+	Labels(ctx context.Context, accountID string) ([]Label, error)
+	CreateLabel(ctx context.Context, l Label) (Label, error)
+	UpdateLabel(ctx context.Context, l Label) (Label, error)
+	DeleteLabel(ctx context.Context, accountID string, id LabelID, at time.Time) error
+	SetLabel(ctx context.Context, accountID string, id LabelID, folder string, uids []UID, on, local bool) ([]UID, error)
+	LabelRefs(ctx context.Context, accountID string, id LabelID) ([]MessageRef, error)
+	// SetPermanentFlags records what a folder's PERMANENTFLAGS said as it
+	// was opened to change (Folder.PermanentFlags). ApplySync records a
+	// batch's when its Folder has them, and SaveFolders keeps them.
+	SetPermanentFlags(ctx context.Context, accountID, folder string, flags []string) error
+
 	// Older mail. FolderCache counts what the cache holds of a folder.
 	// FolderUIDs lists the UIDs it holds there, those being moved away
 	// included. ApplyOlder writes messages a sync left out, threading

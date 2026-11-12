@@ -67,7 +67,7 @@ func (s *Service) FetchOlder(ctx context.Context, accountID, folder string, n in
 		return OlderResult{}, err
 	}
 	if !ok || cached.LastUID == 0 || cached.UIDValidity != selected.UIDValidity {
-		written, err := s.syncSelected(ctx, c, accountID, folder, selected.UIDValidity, windowSpan(window))
+		written, err := s.syncSelected(ctx, c, accountID, folder, selected.UIDValidity, nil, windowSpan(window))
 		if err != nil {
 			return OlderResult{}, err
 		}

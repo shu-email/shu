@@ -70,19 +70,23 @@ func columnsOf(fields mail.Field) []string {
 // listPlan is a list read put in the terms of the SQL that answers it.
 type listPlan struct {
 	// folders are the scope's, and starred narrows them to the flagged
-	// messages.
+	// messages, label to those with the label.
 	folders []int64
 	starred bool
+	label   int64
 	// in are the folders the search's In names, nil when it names none.
-	in       []int64
+	in []int64
+	// labels are, for each label the search names, the labels of that
+	// name in the scope's accounts.
+	labels   [][]int64
 	criteria []criterion
 	search   mail.Search
 	after    cursor
 	limit    int
 }
 
-// plan reads what a list read needs to know of the folders, with the
-// terms of its search.
+// plan reads what a list read needs to know of the folders and labels,
+// with the terms of its search.
 func (s *Store) plan(ctx context.Context, q mail.ListQuery, criteria []criterion) (*listPlan, error) {
 	if err := q.Scope.Check(); err != nil {
 		return nil, err
@@ -91,14 +95,26 @@ func (s *Store) plan(ctx context.Context, q mail.ListQuery, criteria []criterion
 	if err != nil {
 		return nil, err
 	}
-	p := &listPlan{starred: q.Scope.Starred, criteria: criteria, search: q.Search, after: after, limit: q.Limit}
+	p := &listPlan{starred: q.Scope.Starred, label: int64(q.Scope.Label), criteria: criteria, search: q.Search, after: after, limit: q.Limit}
 	if p.limit <= 0 {
 		p.limit = mail.DefaultPageSize
 	}
+	accounts := q.Scope.Accounts
+	if p.label != 0 {
+		// A label's scope is its account's, if the scope reads that one.
+		rows, err := s.query(ctx, `SELECT account_id FROM labels WHERE id = ?`, p.label)
+		if err != nil {
+			return nil, err
+		}
+		if len(rows.Values) == 0 || len(accounts) > 0 && !slices.Contains(accounts, text(rows.Values[0][0])) {
+			return p, nil
+		}
+		accounts = []string{text(rows.Values[0][0])}
+	}
 	query, args := `SELECT id, name, COALESCE(special_use, '') FROM folders`, []any(nil)
-	if len(q.Scope.Accounts) > 0 {
+	if len(accounts) > 0 {
 		query += ` WHERE account_id IN (SELECT value FROM json_each(?))`
-		args = append(args, jsonText(q.Scope.Accounts))
+		args = append(args, jsonText(accounts))
 	}
 	rows, err := s.query(ctx, query+` ORDER BY id`, args...)
 	if err != nil {
@@ -110,12 +126,29 @@ func (s *Store) plan(ctx context.Context, q mail.ListQuery, criteria []criterion
 	}
 	for _, r := range rows.Values {
 		id, f := number(r[0]), mail.Folder{Name: text(r[1]), SpecialUse: text(r[2])}
-		if (q.Scope.Folder == "" || f.Name == q.Scope.Folder) && (q.Scope.Special == "" || f.SpecialUse == q.Scope.Special) {
+		if (q.Scope.Folder == "" || f.Name == q.Scope.Folder) && (q.Scope.Special == "" || f.SpecialUse == q.Scope.Special) &&
+			(p.label == 0 || f.InLabelScope()) {
 			p.folders = append(p.folders, id)
 		}
 		if in != "" && f.NamedBy(in) {
 			p.in = append(p.in, id)
 		}
+	}
+	for _, name := range q.Search.Labels {
+		query, args := `SELECT id FROM labels WHERE name_key = ?`, []any{mail.LabelNameKey(strings.TrimSpace(name))}
+		if len(accounts) > 0 {
+			query += ` AND account_id IN (SELECT value FROM json_each(?))`
+			args = append(args, jsonText(accounts))
+		}
+		rows, err := s.query(ctx, query, args...)
+		if err != nil {
+			return nil, err
+		}
+		ids := []int64{}
+		for _, r := range rows.Values {
+			ids = append(ids, number(r[0]))
+		}
+		p.labels = append(p.labels, ids)
 	}
 	return p, nil
 }
@@ -123,7 +156,8 @@ func (s *Store) plan(ctx context.Context, q mail.ListQuery, criteria []criterion
 // inScope is the condition that a message m is in the scope. drive lets
 // the read of a single folder go through that folder's index; any other
 // read of several walks the index of all messages newest first, and
-// leaves those of other folders out as it goes.
+// leaves those of other folders out as it goes, but the read of a label,
+// which goes through the label's messages.
 func (p *listPlan) inScope(m string, folders []int64, drive bool) (string, []any) {
 	cond, args := `+`+m+`.folder_id IN (SELECT value FROM json_each(?))`, []any{jsonText(folders)}
 	if drive && len(folders) == 1 {
@@ -131,6 +165,10 @@ func (p *listPlan) inScope(m string, folders []int64, drive bool) (string, []any
 	}
 	if p.starred {
 		cond += ` AND ` + m + `.flagged = 1`
+	}
+	if p.label != 0 {
+		labelled, more := labelledSQL(m, []int64{p.label})
+		cond, args = cond+` AND `+labelled, append(args, more...)
 	}
 	return cond, args
 }
@@ -190,6 +228,11 @@ func (p *listPlan) matchSQL(m string, drive bool) (string, []any) {
 	if p.in != nil {
 		conds = append(conds, `+`+m+`.folder_id IN (SELECT value FROM json_each(?))`)
 		args = append(args, jsonText(p.in))
+	}
+	for _, labels := range p.labels {
+		labelled, more := labelledSQL(m, labels)
+		conds = append(conds, labelled)
+		args = append(args, more...)
 	}
 	return strings.Join(conds, " AND "), args
 }

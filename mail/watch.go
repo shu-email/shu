@@ -539,7 +539,7 @@ func (w *watcher) checkOn(ctx context.Context, c *watchConn, full bool) error {
 		// What the server signalled until now, this sync covers.
 		taken(c.changed)
 		span := syncSpan{first: w.svc.firstSyncWindow(ctx), refresh: watchWindow, keep: defaultSyncCap}
-		if _, err := w.svc.syncSelected(ctx, c.imapSession, w.accountID, c.folder, c.uidValidity, span); err != nil {
+		if _, err := w.svc.syncSelected(ctx, c.imapSession, w.accountID, c.folder, c.uidValidity, nil, span); err != nil {
 			return err
 		}
 		var err error

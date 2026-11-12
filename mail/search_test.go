@@ -45,7 +45,13 @@ func TestParseSearch(t *testing.T) {
 		{"发票", Search{Text: []string{"发票"}}},
 		// Colons inside words are text, and so is an operator nobody knows.
 		{"10:30 re:meeting http://example.com", Search{Text: []string{"10:30", "re:meeting", "http://example.com"}}},
-		{"cc:maya label:work", Search{Text: []string{"cc:maya", "label:work"}}},
+		{"cc:maya tag:work", Search{Text: []string{"cc:maya", "tag:work"}}},
+		// Labels, by name, in any case, quoted, with the full-width colon.
+		{"label:work", Search{Labels: []string{"work"}}},
+		{`LABEL:Work label:"To Do" budget`, Search{Labels: []string{"Work", "To Do"}, Text: []string{"budget"}}},
+		{"label：工作 from:张三 is:unread", Search{Labels: []string{"工作"}, From: []string{"张三"}, Unread: true}},
+		{`label: label:""`, Search{}},
+		{`"label:work"`, Search{Text: []string{"label:work"}}},
 		{"from:maya:x", Search{From: []string{"maya:x"}}},
 		{":leading", Search{Text: []string{":leading"}}},
 		// A value an operator does not take makes it text.
@@ -99,6 +105,7 @@ func TestSearchIsZero(t *testing.T) {
 	for _, s := range []Search{
 		{Text: []string{"x"}}, {From: []string{"x"}}, {To: []string{"x"}}, {Subject: []string{"x"}}, {Body: []string{"x"}},
 		{Since: time.Unix(1, 0)}, {Before: time.Unix(1, 0)}, {Unread: true}, {Starred: true}, {Attachment: true}, {In: "Sent"},
+		{Labels: []string{"Work"}},
 	} {
 		if s.IsZero() {
 			t.Errorf("%+v asks nothing", s)
@@ -135,7 +142,11 @@ func TestScopeCheck(t *testing.T) {
 			t.Errorf("%+v: %v", sc, err)
 		}
 	}
-	for _, sc := range []Scope{{Folder: "INBOX", Starred: true}, {Folder: "INBOX", Special: SpecialInbox}, {Special: SpecialSent, Starred: true}} {
+	if err := LabelScope("a1", 7).Check(); err != nil {
+		t.Errorf("a label's scope: %v", err)
+	}
+	for _, sc := range []Scope{{Folder: "INBOX", Starred: true}, {Folder: "INBOX", Special: SpecialInbox}, {Special: SpecialSent, Starred: true},
+		{Folder: "INBOX", Label: 7}, {Starred: true, Label: 7}, {Special: SpecialInbox, Label: 7}} {
 		if err := sc.Check(); err != ErrBadScope {
 			t.Errorf("%+v = %v", sc, err)
 		}

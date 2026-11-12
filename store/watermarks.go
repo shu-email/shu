@@ -46,11 +46,12 @@ func (s *Store) TakeNew(ctx context.Context, accountID, folder string) ([]mail.S
 	if err != nil {
 		return nil, err
 	}
-	out := make([]mail.Summary, 0, len(found.Values))
-	for _, row := range found.Values {
-		m := summaryRow(row)
+	out, err := s.summaries(ctx, found.Values)
+	if err != nil {
+		return nil, err
+	}
+	for _, m := range out {
 		highest = max(highest, int64(m.UID))
-		out = append(out, m)
 	}
 	if highest <= mark {
 		return nil, nil

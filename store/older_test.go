@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -53,7 +54,7 @@ func TestApplyOlderLeavesCursorAndWatermark(t *testing.T) {
 	}
 	after, _, _ := s.Folder(ctx, "a1", "INBOX")
 	before.Complete = after.Complete
-	if after != before {
+	if !reflect.DeepEqual(after, before) {
 		t.Errorf("the folder changed:\n was %+v\n now %+v", before, after)
 	}
 	if got := countRows(t, s, `SELECT uid FROM watermarks`); got != mark {

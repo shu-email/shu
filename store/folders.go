@@ -8,19 +8,20 @@ import (
 
 // folderColumns are the folder fields every query reads.
 const folderColumns = `name, COALESCE(delimiter, ''), COALESCE(special_use, ''),
-	unread, total, uidvalidity, last_uid, synced_at, complete`
+	unread, total, uidvalidity, last_uid, synced_at, complete, permanent_flags`
 
 func folderRow(r []any) mail.Folder {
 	return mail.Folder{
-		Name:        text(r[0]),
-		Delimiter:   text(r[1]),
-		SpecialUse:  text(r[2]),
-		Unread:      int(number(r[3])),
-		Total:       int(number(r[4])),
-		UIDValidity: uint32(number(r[5])),
-		LastUID:     mail.UID(number(r[6])),
-		SyncedAt:    unix(r[7]),
-		Complete:    truth(r[8]),
+		Name:           text(r[0]),
+		Delimiter:      text(r[1]),
+		SpecialUse:     text(r[2]),
+		Unread:         int(number(r[3])),
+		Total:          int(number(r[4])),
+		UIDValidity:    uint32(number(r[5])),
+		LastUID:        mail.UID(number(r[6])),
+		SyncedAt:       unix(r[7]),
+		Complete:       truth(r[8]),
+		PermanentFlags: decodeFlags(r[9]),
 	}
 }
 
@@ -54,7 +55,8 @@ func (s *Store) Folder(ctx context.Context, accountID, name string) (mail.Folder
 	return folderRow(rows.Values[0]), true, nil
 }
 
-// SaveFolders upserts a LIST result, keeping each folder's sync cursor.
+// SaveFolders upserts a LIST result, keeping each folder's sync cursor
+// and what its PERMANENTFLAGS said, of which a LIST says nothing.
 func (s *Store) SaveFolders(ctx context.Context, accountID string, folders []mail.Folder) error {
 	stmts := make([]stmtType, 0, len(folders)+1)
 	for _, f := range folders {

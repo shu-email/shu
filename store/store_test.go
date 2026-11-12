@@ -76,6 +76,8 @@ func TestMigrationsFromEmpty(t *testing.T) {
 		"messages_date", "messages_flagged",
 		"identities", "identities_email",
 		"contacts", "contacts_rank", "contact_terms", "contact_terms_key", "contact_messages",
+		"labels", "labels_name", "labels_keyword", "message_labels", "message_labels_label",
+		"local_labels", "local_labels_key", "messages_key",
 	} {
 		if !have[name] {
 			t.Errorf("missing schema object %q", name)
@@ -83,6 +85,7 @@ func TestMigrationsFromEmpty(t *testing.T) {
 	}
 	for _, column := range [][2]string{
 		{"accounts", "oauth"}, {"drafts", "identity"}, {"outbox", "due_at"}, {"outbox", "draft_id"},
+		{"messages", "msg_key"}, {"folders", "permanent_flags"},
 	} {
 		if !hasColumn(t, s, column[0], column[1]) {
 			t.Errorf("%s has no %s column", column[0], column[1])

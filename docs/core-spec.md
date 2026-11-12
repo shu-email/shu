@@ -385,6 +385,13 @@ RenameContact(ctx, email, name string) (Contact, error)     // "" hands the nami
 FavoriteContact(ctx, email string, on bool) (Contact, error)
 DeleteContact(ctx, email string) error                      // writing to it again brings it back
 CheckRecipients(ctx, field string) (RecipientCheck, error)  // what of a field is no address, and whom a name may mean
+
+// Labels, added since: IMAP keywords where a folder keeps them, else on this device (see AGENTS.md)
+Labels(ctx, accountID string) ([]Label, error)                            // in order, with Unread and Local
+CreateLabel(ctx, accountID, name string, color LabelColor) (Label, error) // ErrLabelName, ErrLabelColor, ErrLabelExists
+UpdateLabel(ctx, accountID string, id LabelID, name string, color LabelColor) (Label, error) // the keyword stays
+SetLabel(ctx, accountID string, msgs []MessageRef, id LabelID, on bool) error // cache first, one STORE per folder
+DeleteLabel(ctx, accountID string, id LabelID) error // off every message on the server, then gone; ErrLabelPartlyRemoved
 ```
 
 IMAP details:

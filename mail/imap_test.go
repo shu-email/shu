@@ -60,6 +60,11 @@ type fakeIMAP struct {
 	// the client hears the answer: the moment a sync has read a folder's
 	// counts and not yet fetched its new mail.
 	statusDone func()
+	// keywords says how a mailbox, by name, keeps keywords (see
+	// fakeKeywords); one not named keeps any, as the in-memory server
+	// does. stores records each STORE, in the mailbox it changed.
+	keywords map[string]fakeKeywords
+	stores   []fakeStore
 }
 
 // afterStatus has do run once the next STATUS is answered.
@@ -82,13 +87,28 @@ type fakeSession struct {
 	// implements beyond the plain interface.
 	imapserver.SessionIMAP4rev2
 	f *fakeIMAP
+	// selected is the mailbox selected last.
+	selected string
 }
 
 func (s *fakeSession) Select(mailbox string, options *imap.SelectOptions) (*imap.SelectData, error) {
 	s.f.mu.Lock()
 	s.f.selects = append(s.f.selects, fakeSelect{mailbox, options != nil && options.ReadOnly})
+	rule, ruled := s.f.keywords[mailbox]
 	s.f.mu.Unlock()
-	return s.SessionIMAP4rev2.Select(mailbox, options)
+	data, err := s.SessionIMAP4rev2.Select(mailbox, options)
+	if err == nil {
+		s.selected = mailbox
+		switch {
+		case options != nil && options.ReadOnly:
+			// Nothing can be changed in a mailbox examined, as servers
+			// in use say.
+			data.PermanentFlags = nil
+		case ruled:
+			data.PermanentFlags = rule.permanentFlags()
+		}
+	}
+	return data, err
 }
 
 func (s *fakeSession) Status(mailbox string, options *imap.StatusOptions) (*imap.StatusData, error) {

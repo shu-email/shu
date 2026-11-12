@@ -5,26 +5,42 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"shu/mail"
 )
 
-// summaryColumns are the message list fields, of messages m in folders f.
+// summaryColumns are the message list fields, of messages m in folders f,
+// and the message's row, which its labels are read by.
 const summaryColumns = `m.server_uid, f.name, COALESCE(m.message_id, ''), COALESCE(m.in_reply_to, ''),
 	COALESCE(m.references_json, ''), COALESCE(m.from_name, ''), COALESCE(m.from_email, ''),
 	COALESCE(m.to_json, ''), COALESCE(m.cc_json, ''), COALESCE(m.reply_to_json, ''),
 	COALESCE(m.subject, ''), COALESCE(m.preview, ''), m.date, m.size,
-	m.seen, m.flagged, m.has_attachments, COALESCE(m.thread_index, ''), m.thread_id, f.account_id`
+	m.seen, m.flagged, m.has_attachments, COALESCE(m.thread_index, ''), m.thread_id, f.account_id,
+	m.id, f.permanent_flags`
 
 // summaryWidth is how many columns summaryColumns has, and summaryDate
-// the place of the date among them.
+// and summaryID the places of the date and the row among them.
 const (
-	summaryWidth = 20
+	summaryWidth = 22
 	summaryDate  = 12
+	summaryID    = 20
 )
+
+// summaries reads rows of summaryColumns, with their labels.
+func (s *Store) summaries(ctx context.Context, rows [][]any) ([]mail.Summary, error) {
+	out := make([]mail.Summary, 0, len(rows))
+	ids := make([]int64, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, summaryRow(r))
+		ids = append(ids, number(r[summaryID]))
+	}
+	return out, s.withLabels(ctx, out, ids)
+}
 
 func summaryRow(r []any) mail.Summary {
 	return mail.Summary{
+		LabelsLocal:    labelsLocal(r[21]),
 		Account:        text(r[19]),
 		UID:            mail.UID(number(r[0])),
 		Folder:         text(r[1]),
@@ -45,6 +61,13 @@ func summaryRow(r []any) mail.Summary {
 		ThreadIndex:    text(r[17]),
 		Thread:         mail.ThreadID(number(r[18])),
 	}
+}
+
+// labelsLocal reports whether a folder's PERMANENTFLAGS column says it
+// keeps no new keyword.
+func labelsLocal(v any) bool {
+	f := mail.Folder{PermanentFlags: decodeFlags(v)}
+	return f.KeywordsKnown() && !f.KeepsNewKeywords()
 }
 
 func encodeJSON(v any) string {
@@ -119,8 +142,12 @@ func (s *Store) GetMessage(ctx context.Context, accountID, folder string, uid ma
 	}
 	r := rows.Values[0]
 	body := r[summaryWidth:]
+	summary, err := s.summaries(ctx, [][]any{r[:summaryWidth]})
+	if err != nil {
+		return mail.Message{}, false, err
+	}
 	msg := mail.Message{
-		Summary:       summaryRow(r[:summaryWidth]),
+		Summary:       summary[0],
 		BodyText:      text(body[0]),
 		BodyHTML:      text(body[1]),
 		BodyTruncated: truth(body[2]),
@@ -189,8 +216,8 @@ func (s *Store) SaveMessage(ctx context.Context, accountID, folder string, m mai
 				from_name, from_email, to_json, cc_json, reply_to_json, recipients,
 				subject, preview, date, size, seen, flagged, has_attachments,
 				body_text, body_html, body_truncated, raw_headers, cached_at,
-				thread_index, thread_id, deleted)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+				thread_index, thread_id, msg_key, deleted)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
 			ON CONFLICT (folder_id, server_uid) DO UPDATE SET
 				message_id=excluded.message_id, in_reply_to=excluded.in_reply_to,
 				references_json=excluded.references_json,
@@ -204,12 +231,12 @@ func (s *Store) SaveMessage(ctx context.Context, accountID, folder string, m mai
 				body_text=excluded.body_text, body_html=excluded.body_html,
 				body_truncated=excluded.body_truncated, raw_headers=excluded.raw_headers,
 				cached_at=excluded.cached_at, thread_index=excluded.thread_index,
-				thread_id=excluded.thread_id, deleted=0`,
+				thread_id=excluded.thread_id, msg_key=excluded.msg_key, deleted=0`,
 			folderID, int64(m.UID), m.MessageID, m.InReplyTo, encodeJSON(m.References),
 			m.From.Name, m.From.Email, encodeJSON(m.To), encodeJSON(m.Cc), encodeJSON(m.ReplyTo), recipientsText(m.To, m.Cc),
 			m.Subject, m.Preview, dateColumn(m.Date), m.Size, boolInt(m.Seen), boolInt(m.Flagged),
 			boolInt(m.HasAttachments), m.BodyText, m.BodyHTML, boolInt(m.BodyTruncated),
-			m.RawHeaders, unixPtr(m.CachedAt), m.ThreadIndex, plan.find(thread)))
+			m.RawHeaders, unixPtr(m.CachedAt), m.ThreadIndex, plan.find(thread), mail.LabelKey(m.Summary)))
 	if m.Seen && !wasSeen {
 		stmts = append(stmts, stmt(`UPDATE folders SET unread = MAX(0, unread - 1) WHERE id = ?`, folderID))
 	}
@@ -230,6 +257,14 @@ func (s *Store) SaveMessage(ctx context.Context, accountID, folder string, m mai
 				SELECT id, ?, ?, ?, ?, ?, ? FROM messages WHERE folder_id = ? AND server_uid = ?`,
 				a.Part, a.Filename, a.ContentType, a.Size, a.ContentHash, a.CachePath, folderID, int64(m.UID)))
 		}
+		// A row written before keeps its labels, as it keeps a flag set:
+		// a label just put on it may not have reached the server this
+		// fetch read.
+		labels, err := s.keywordLabels(ctx, accountID, folderID, keywordRows([]mail.Message{m}, nil), time.Time{})
+		if err != nil {
+			return err
+		}
+		stmts = append(stmts, labels...)
 	}
 	stmts = append(stmts, plan.after()...)
 	if id != 0 {
@@ -319,11 +354,17 @@ func (s *Store) ApplySync(ctx context.Context, accountID string, b mail.SyncBatc
 			WHERE folder_id = ? AND server_uid = ?`,
 			boolInt(f.Seen), boolInt(f.Flagged), folderID, int64(f.UID)))
 	}
+	labels, err := s.keywordLabels(ctx, accountID, folderID, keywordRows(b.Messages, b.Flags), b.Folder.SyncedAt)
+	if err != nil {
+		return err
+	}
+	stmts = append(stmts, labels...)
 	stmts = append(stmts, stmt(`UPDATE folders SET
-			uidvalidity = ?, last_uid = ?, unread = ?, total = ?, synced_at = ?, complete = ?
+			uidvalidity = ?, last_uid = ?, unread = ?, total = ?, synced_at = ?, complete = ?,
+			permanent_flags = COALESCE(?, permanent_flags)
 			WHERE id = ?`,
 		int64(b.Folder.UIDValidity), int64(b.Folder.LastUID), b.Folder.Unread, b.Folder.Total,
-		unixPtr(b.Folder.SyncedAt), boolInt(b.Folder.Complete), folderID))
+		unixPtr(b.Folder.SyncedAt), boolInt(b.Folder.Complete), encodeFlags(b.Folder.PermanentFlags), folderID))
 	return s.writeCounting(ctx, append(stmts, plan.after()...), func() ([]stmtType, error) {
 		return s.countFolder(ctx, folderID, b.Messages)
 	})
@@ -337,8 +378,8 @@ func upsertHeader(folderID int64, m mail.Message, thread int64) stmtType {
 			folder_id, server_uid, message_id, in_reply_to, references_json,
 			from_name, from_email, to_json, cc_json, reply_to_json, recipients,
 			subject, preview, date, size, seen, flagged, has_attachments,
-			thread_index, thread_id, deleted)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+			thread_index, thread_id, msg_key, deleted)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
 		ON CONFLICT (folder_id, server_uid) DO UPDATE SET
 			message_id=excluded.message_id, in_reply_to=excluded.in_reply_to,
 			references_json=COALESCE(NULLIF(excluded.references_json, ''), messages.references_json),
@@ -349,11 +390,11 @@ func upsertHeader(folderID int64, m mail.Message, thread int64) stmtType {
 			size=excluded.size, seen=excluded.seen, flagged=excluded.flagged,
 			has_attachments=excluded.has_attachments,
 			thread_index=COALESCE(NULLIF(excluded.thread_index, ''), messages.thread_index),
-			thread_id=excluded.thread_id, deleted=0`,
+			thread_id=excluded.thread_id, msg_key=excluded.msg_key, deleted=0`,
 		folderID, int64(m.UID), m.MessageID, m.InReplyTo, encodeJSON(m.References),
 		m.From.Name, m.From.Email, encodeJSON(m.To), encodeJSON(m.Cc), encodeJSON(m.ReplyTo), recipientsText(m.To, m.Cc),
 		m.Subject, m.Preview, dateColumn(m.Date), m.Size, boolInt(m.Seen), boolInt(m.Flagged),
-		boolInt(m.HasAttachments), m.ThreadIndex, thread)
+		boolInt(m.HasAttachments), m.ThreadIndex, thread, mail.LabelKey(m.Summary))
 }
 
 // ApplyOlder writes messages of a folder that a sync left out, older ones
@@ -400,6 +441,11 @@ func (s *Store) ApplyOlder(ctx context.Context, accountID string, b mail.OlderBa
 	for i, m := range b.Messages {
 		stmts = append(stmts, upsertHeader(folderID, m, plan.find(threads[i])))
 	}
+	labels, err := s.keywordLabels(ctx, accountID, folderID, keywordRows(b.Messages, nil), time.Time{})
+	if err != nil {
+		return err
+	}
+	stmts = append(stmts, labels...)
 	stmts = append(stmts, stmt(`UPDATE folders SET complete = ? WHERE id = ?`, boolInt(b.Complete), folderID))
 	return s.writeCounting(ctx, append(stmts, plan.after()...), func() ([]stmtType, error) {
 		return s.countFolder(ctx, folderID, b.Messages)

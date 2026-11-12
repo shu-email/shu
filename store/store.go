@@ -23,8 +23,14 @@ type Store struct {
 	// threadMu makes each write of messages one step with the reads
 	// that put them in conversations: the watcher of every account,
 	// window syncs and body fetches write at once, and two that read
-	// the same keys must not each make a conversation of them.
+	// the same keys must not each make a conversation of them. The
+	// writes of labels hold it too, as a sync makes labels of keywords.
 	threadMu sync.Mutex
+	// labelsGone is when each label DeleteLabel deleted went, by its
+	// account and its keyword in lower case, under threadMu: a sync that
+	// began before then read the keyword before the deletion took it off
+	// the server, and must not make the label again.
+	labelsGone map[string]time.Time
 	// contactMu makes each write of the address book one step with the
 	// reads it is worked out from (see contacts.go). Where both are held,
 	// threadMu is taken first.
@@ -336,6 +342,44 @@ var migrations = [][]string{
 		`CREATE INDEX contact_terms_key ON contact_terms (key, term)`,
 		`CREATE TABLE contact_messages (key TEXT PRIMARY KEY) WITHOUT ROWID`,
 	},
+	// v12: labels (see mail.Label). A label is an account's, with a name
+	// that is one whatever its case (name_key, mail.LabelNameKey), a
+	// color, and a keyword, its name on the server, also one whatever its
+	// case; position orders them, and their IDs are never given again.
+	// message_labels holds the labels each cached message has as the
+	// server keeps them, which a sync writes from its keywords;
+	// local_labels those kept on this device only, by the message's
+	// mail.LabelKey, which messages.msg_key holds, so that a label stays
+	// on a message wherever it goes. Both index their messages by label,
+	// which lists and counts a label's. folders.permanent_flags is what a
+	// folder's PERMANENTFLAGS said when it was last opened to change, as
+	// JSON, null until then. backfillLabelKeys writes the key of each
+	// message already there.
+	{
+		`ALTER TABLE messages ADD COLUMN msg_key TEXT`,
+		`CREATE INDEX messages_key ON messages (msg_key)`,
+		`ALTER TABLE folders ADD COLUMN permanent_flags TEXT`,
+		`CREATE TABLE labels (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+			name TEXT NOT NULL,
+			name_key TEXT NOT NULL,
+			color TEXT NOT NULL,
+			keyword TEXT NOT NULL,
+			position INTEGER NOT NULL)`,
+		`CREATE UNIQUE INDEX labels_name ON labels (account_id, name_key)`,
+		`CREATE UNIQUE INDEX labels_keyword ON labels (account_id, keyword COLLATE NOCASE)`,
+		`CREATE TABLE message_labels (
+			message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+			label_id INTEGER NOT NULL REFERENCES labels(id) ON DELETE CASCADE,
+			PRIMARY KEY (message_id, label_id)) WITHOUT ROWID`,
+		`CREATE INDEX message_labels_label ON message_labels (label_id, message_id)`,
+		`CREATE TABLE local_labels (
+			label_id INTEGER NOT NULL REFERENCES labels(id) ON DELETE CASCADE,
+			msg_key TEXT NOT NULL,
+			PRIMARY KEY (label_id, msg_key)) WITHOUT ROWID`,
+		`CREATE INDEX local_labels_key ON local_labels (msg_key, label_id)`,
+	},
 }
 
 // backfills compute, from the rows of the version before, statements a
@@ -344,6 +388,7 @@ var migrations = [][]string{
 var backfills = map[int]func(context.Context, *Store) ([]sqlite.Statement, error){
 	6:  backfillThreads,
 	11: backfillContacts,
+	12: backfillLabelKeys,
 }
 
 // SchemaVersion is the version Open migrates to.
@@ -363,7 +408,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Store{db: db, now: time.Now}
+	s := &Store{db: db, now: time.Now, labelsGone: map[string]time.Time{}}
 	if err := s.init(ctx); err != nil {
 		db.Close()
 		return nil, err

@@ -33,6 +33,9 @@ type Conversation struct {
 	Unread         bool `json:"unread"`
 	Flagged        bool `json:"flagged"`
 	HasAttachments bool `json:"hasAttachments"`
+	// Labels are the labels any of them has, in the order of the
+	// account's labels.
+	Labels []LabelID `json:"labels,omitempty"`
 	// Matches are the messages of the conversation a search found, in
 	// any folder, newest first. A list that is no search has none.
 	// Found is the same messages with the parts their terms were found

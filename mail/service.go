@@ -359,14 +359,20 @@ func (s *Service) ScopedConversation(ctx context.Context, accountID string, scop
 	if err != nil {
 		return nil, err
 	}
-	special := map[string]bool{}
-	if scope.Special != "" {
+	// in is whether a folder is one the scope reads, of those a special
+	// use or a label narrows it to.
+	in := map[string]bool{}
+	if scope.Special != "" || scope.Label != 0 {
 		folders, err := s.store.Folders(ctx, accountID)
 		if err != nil {
 			return nil, err
 		}
 		for _, f := range folders {
-			special[f.Name] = f.SpecialUse == scope.Special
+			if scope.Label != 0 {
+				in[f.Name] = f.InLabelScope()
+			} else {
+				in[f.Name] = f.SpecialUse == scope.Special
+			}
 		}
 	}
 	return slices.DeleteFunc(all, func(m Summary) bool {
@@ -376,7 +382,9 @@ func (s *Service) ScopedConversation(ctx context.Context, accountID string, scop
 		case scope.Folder != "":
 			return m.Folder != scope.Folder
 		case scope.Special != "":
-			return !special[m.Folder]
+			return !in[m.Folder]
+		case scope.Label != 0:
+			return !in[m.Folder] || !m.HasLabel(scope.Label)
 		}
 		return false
 	}), nil
@@ -484,6 +492,10 @@ func (s *Service) FetchMessage(ctx context.Context, accountID, folder string, ui
 	m.BodyCached = true
 	if err := s.store.SaveMessage(ctx, accountID, folder, m); err != nil {
 		return result, err
+	}
+	// Its labels are the cache's: those kept on this device too.
+	if cached, ok, err := s.store.GetMessage(ctx, accountID, folder, uid); err == nil && ok {
+		result.Message.Labels, result.Message.LabelsLocal = cached.Labels, cached.LabelsLocal
 	}
 	return result, nil
 }

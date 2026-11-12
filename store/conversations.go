@@ -29,9 +29,5 @@ func (s *Store) ConversationMessages(ctx context.Context, accountID, folder stri
 	if err != nil {
 		return nil, err
 	}
-	out := make([]mail.Summary, 0, len(rows.Values))
-	for _, r := range rows.Values {
-		out = append(out, summaryRow(r))
-	}
-	return out, nil
+	return s.summaries(ctx, rows.Values)
 }

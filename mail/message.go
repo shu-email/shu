@@ -67,6 +67,11 @@ type Folder struct {
 	// up to LastUID: a sync read the folder whole, or FetchOlder reached
 	// its oldest message. A sync keeps it; a LIST says nothing of it.
 	Complete bool `json:"complete,omitempty"`
+	// PermanentFlags is what the folder's PERMANENTFLAGS said the last
+	// time it was opened to change, which tells whether it keeps labels
+	// (KeepsKeyword): the flags it keeps, \* for any keyword. It is nil
+	// until then; a folder opened read-only says nothing of it.
+	PermanentFlags []string `json:"permanentFlags"`
 }
 
 // IsInbox reports whether the folder is the inbox.
@@ -104,6 +109,12 @@ type Summary struct {
 	// Matched is set on a message a search found: the parts of it its
 	// terms were found in.
 	Matched Field `json:"matched,omitempty"`
+	// Labels are the labels the message has, in the order of its
+	// account's. LabelsLocal reports that its folder keeps no new keyword
+	// on the server, so a label put on it is kept on this device only,
+	// unless the folder names that label's keyword among those it keeps.
+	Labels      []MessageLabel `json:"labels,omitempty"`
+	LabelsLocal bool           `json:"labelsLocal,omitempty"`
 }
 
 // Message is a summary with the parts the reading pane needs.
@@ -121,6 +132,10 @@ type Message struct {
 	// BodyCached reports whether the body is in the cache; a summary
 	// whose body was never fetched has none.
 	BodyCached bool `json:"bodyCached,omitempty"`
+	// Keywords are the flags of the user's that a fetch read of the
+	// message on the server, which the cache keeps as its labels; nil
+	// when it read none, as a message not fetched from a server.
+	Keywords []string `json:"-"`
 }
 
 // Attachment is one part of a message. Data is only in memory; the cache
@@ -258,11 +273,13 @@ type PendingSend struct {
 	DraftID string `json:"draftID,omitempty"`
 }
 
-// FlagUpdate refreshes the flags of a cached message during a sync.
+// FlagUpdate refreshes the flags of a cached message during a sync, and
+// its labels from its keywords, unless Keywords is nil.
 type FlagUpdate struct {
-	UID     UID
-	Seen    bool
-	Flagged bool
+	UID      UID
+	Seen     bool
+	Flagged  bool
+	Keywords []string
 }
 
 // SyncBatch is one folder sync's changes, written with the cursor in one

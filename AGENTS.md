@@ -159,11 +159,42 @@ Windows and Linux. It is written in Go with
   (`Service.AddContact`, `RenameContact`, `FavoriteContact`,
   `DeleteContact`) are rows as well: a name the user gave is never
   changed by mail, and a deleted contact keeps its address alone, so that
-  the mail it sends does not bring it back; a message the user writes to
+  the mail   it sends does not bring it back; a message the user writes to
   it does. `Service.Suggest` reads the book by the prefix of a word typed
   (`contact_terms`), and `Service.CheckRecipients` reads a recipient field
   as a send takes it and tells a broken address from a bare name, with
   the contacts that name may mean. `ai/` has no way to the book.
+- Labels are the user's categories of messages, an account's each
+  (`mail/labels.go`, `store/labels.go`). On the server a label is an IMAP
+  keyword: `mail.LabelKeyword` writes a name as one, as it is when it is
+  an atom and in MIME's Q encoding otherwise ("To Do" is `To_Do`), which
+  reads back whatever case a server keeps it in, and `mail.LabelName`
+  names the label a keyword found on the server becomes: Thunderbird's
+  `$label1`-`$label5` by its names, the keywords of the system, of junk
+  and of forwarding never. A folder keeps keywords when its PERMANENTFLAGS
+  have `\*` or name the keyword; `Folder.PermanentFlags` is what a
+  read-write SELECT said (a sync's, or a change of labels'), never a
+  read-only one's. A sync writes the labels of the keywords it fetches,
+  and its refresh of flags brings what other clients changed.
+  `Service.SetLabel` changes a label on messages as `SetFlags` changes a
+  flag, but the cache first: one connection, one silent UID STORE of the
+  keyword per folder, and the cache put back when the server refuses. In
+  a folder that keeps no such keyword the label stays on this device, by
+  `mail.LabelKey` (the Message-ID, or a digest of sender, date and subject
+  for a message without), so that it follows the message through moves,
+  resyncs and restarts, and no server hears of it. `Label.Local` says a
+  label is kept on this device only (no folder known keeps its keyword),
+  `MessageLabel.Local` that a message has one so, and `Summary.LabelsLocal`
+  that a message's folder keeps no new keyword. A label's name and color
+  are this device's: a rename keeps its keyword. `Service.DeleteLabel`,
+  which the window confirms first, searches every folder of the server for
+  the keyword and takes it off with STORE -FLAGS, then drops the label; it
+  never moves or deletes a message, a failure leaves the label
+  (`ErrLabelPartlyRemoved` once some messages lost it) and deleting it
+  again finishes. `mail.LabelScope` lists a label's messages in every
+  folder but Junk, Trash and Drafts, with its unread count in
+  `Label.Unread`; a conversation's row carries the labels of its messages
+  in the list's scope, and `label:` searches by name.
 - `ai/` is the AI layer: provider settings, the excerpt that decides what
   part of a message may leave the device, the features (summary of a
   message or a conversation, triage, draft reply) and `Service.send`, the

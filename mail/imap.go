@@ -344,7 +344,7 @@ func fetchSummariesOnce(c *imapSession, set imap.NumSet, withPreview, lenient bo
 			}
 		}
 		messages = append(messages, m)
-		flags = append(flags, FlagUpdate{UID: m.UID, Seen: m.Seen, Flagged: m.Flagged})
+		flags = append(flags, FlagUpdate{UID: m.UID, Seen: m.Seen, Flagged: m.Flagged, Keywords: m.Keywords})
 	}
 	if err := cmd.Close(); err != nil {
 		return nil, nil, false, fmt.Errorf("imap: fetch: %w", err)
@@ -375,14 +375,7 @@ func summaryFromFetch(buf *imapclient.FetchMessageBuffer, withPreview bool) Mess
 		m.Date = buf.InternalDate
 	}
 	m.Size = buf.RFC822Size
-	for _, f := range buf.Flags {
-		switch f {
-		case imap.FlagSeen:
-			m.Seen = true
-		case imap.FlagFlagged:
-			m.Flagged = true
-		}
-	}
+	m.Seen, m.Flagged, m.Keywords = readFlags(buf.Flags)
 	if withPreview {
 		section := &imap.FetchItemBodySection{
 			Specifier: imap.PartSpecifierText,
@@ -395,6 +388,23 @@ func summaryFromFetch(buf *imapclient.FetchMessageBuffer, withPreview bool) Mess
 	}
 	m.HasAttachments = attachmentsInStructure(buf.BodyStructure)
 	return m
+}
+
+// readFlags reads the flags a fetch gave a message: whether it is read
+// and flagged, and its keywords, which are never nil.
+func readFlags(flags []imap.Flag) (seen, flagged bool, keywords []string) {
+	keywords = []string{}
+	for _, f := range flags {
+		switch {
+		case f == imap.FlagSeen:
+			seen = true
+		case f == imap.FlagFlagged:
+			flagged = true
+		case !strings.HasPrefix(string(f), `\`):
+			keywords = append(keywords, string(f))
+		}
+	}
+	return seen, flagged, keywords
 }
 
 // previewText turns a partial BODY[TEXT] into readable text. A multipart
@@ -530,7 +540,7 @@ func (s *Service) syncFolder(ctx context.Context, a Account, password, folder st
 	if err != nil {
 		return fmt.Errorf("imap: select %s: %w", folder, err)
 	}
-	_, err = s.syncSelected(ctx, c, a.ID, folder, selected.UIDValidity, windowSpan(limit))
+	_, err = s.syncSelected(ctx, c, a.ID, folder, selected.UIDValidity, permanentFlags(selected), windowSpan(limit))
 	return err
 }
 
@@ -550,8 +560,10 @@ func windowSpan(window int) syncSpan {
 // syncSelected syncs the folder a connection has selected, under the
 // UIDVALIDITY the server gave when it was, and returns how many messages
 // it wrote. It only reads, so it works as well on a folder opened
-// read-only.
-func (s *Service) syncSelected(ctx context.Context, c *imapSession, accountID, folder string, uidValidity uint32, span syncSpan) (int, error) {
+// read-only. permanent is what a SELECT said of the flags the folder
+// keeps, which the batch records; it is nil for a folder opened
+// read-only, which says nothing of them.
+func (s *Service) syncSelected(ctx context.Context, c *imapSession, accountID, folder string, uidValidity uint32, permanent []string, span syncSpan) (int, error) {
 	status, err := c.client.Status(folder, &imap.StatusOptions{
 		NumMessages: true, NumUnseen: true, UIDValidity: true,
 	}).Wait()
@@ -566,9 +578,10 @@ func (s *Service) syncSelected(ctx context.Context, c *imapSession, accountID, f
 
 	batch := SyncBatch{
 		Folder: Folder{
-			Name:        folder,
-			UIDValidity: uidValidity,
-			SyncedAt:    s.now(),
+			Name:           folder,
+			UIDValidity:    uidValidity,
+			SyncedAt:       s.now(),
+			PermanentFlags: permanent,
 		},
 		Reset: reset,
 	}
@@ -705,8 +718,10 @@ func (s *Service) fetchMessage(ctx context.Context, a Account, password, folder 
 		return FetchResult{}, fmt.Errorf("mime: %w", err)
 	}
 	msg.UID = uid
-	msg.Seen = msg.Seen || bufFlag(buf, imap.FlagSeen)
-	msg.Flagged = msg.Flagged || bufFlag(buf, imap.FlagFlagged)
+	seen, flagged, keywords := readFlags(buf.Flags)
+	msg.Seen = msg.Seen || seen
+	msg.Flagged = msg.Flagged || flagged
+	msg.Keywords = keywords
 	if buf.Envelope != nil && msg.Subject == "" {
 		msg.Subject = buf.Envelope.Subject
 	}

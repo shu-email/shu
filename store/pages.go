@@ -30,16 +30,23 @@ func (s *Store) messagePage(ctx context.Context, q mail.ListQuery, criteria []cr
 	if err != nil {
 		return page, err
 	}
-	ids := make([]int64, 0, len(rows.Values))
-	for _, r := range rows.Values {
-		if len(page.Messages) == p.limit {
-			page.More = true
-			break
-		}
-		id := number(r[summaryWidth])
-		page.Messages = append(page.Messages, summaryRow(r))
+	found := rows.Values
+	if len(found) > p.limit {
+		found, page.More = found[:p.limit], true
+	}
+	if page.Messages, err = s.summaries(ctx, found); err != nil {
+		return page, err
+	}
+	ids := make([]int64, 0, len(found))
+	for _, r := range found {
+		id := number(r[summaryID])
 		ids = append(ids, id)
 		page.Next = cursor{date: number(r[summaryDate]), id: id, set: true}.value()
+	}
+	if len(p.labels) > 0 {
+		for i := range page.Messages {
+			page.Messages[i].Matched |= mail.FieldLabel
+		}
 	}
 	if len(criteria) == 0 || len(ids) == 0 {
 		return page, nil
@@ -56,7 +63,7 @@ func (s *Store) messagePage(ctx context.Context, q mail.ListQuery, criteria []cr
 	}
 	for i := range page.Messages {
 		m := &page.Messages[i]
-		m.Matched = foundIn(messageText{
+		m.Matched |= foundIn(messageText{
 			subject: m.Subject, fromName: m.From.Name, fromEmail: m.From.Email,
 			recipients: more[ids[i]][0], body: more[ids[i]][1], preview: m.Preview,
 		}, criteria)
@@ -84,7 +91,7 @@ func (p *listPlan) messageSQL() (query string, args []any, ok bool) {
 		where += ` AND (m.date, m.id) < (?, ?)`
 		args = append(args, p.after.date, p.after.id)
 	}
-	return `SELECT ` + summaryColumns + `, m.id
+	return `SELECT ` + summaryColumns + `
 		FROM messages m JOIN folders f ON f.id = m.folder_id
 		WHERE ` + where + ` AND m.deleted = 0
 		ORDER BY m.date DESC, m.id DESC LIMIT ?`, append(args, p.limit+1), true
@@ -115,18 +122,21 @@ func (s *Store) conversationPage(ctx context.Context, q mail.ListQuery, criteria
 	if err != nil {
 		return page, err
 	}
+	found := rows.Values
+	if len(found) > p.limit {
+		found, page.More = found[:p.limit], true
+	}
+	latest, err := s.summaries(ctx, found)
+	if err != nil {
+		return page, err
+	}
 	index := map[mail.ThreadID]int{}
-	threads := make([]int64, 0, len(rows.Values))
-	for _, r := range rows.Values {
-		if len(page.Conversations) == p.limit {
-			page.More = true
-			break
-		}
-		latest := summaryRow(r)
-		index[latest.Thread] = len(page.Conversations)
-		threads = append(threads, int64(latest.Thread))
-		page.Conversations = append(page.Conversations, mail.Conversation{Thread: latest.Thread, Account: latest.Account, Latest: latest})
-		page.Next = cursor{date: number(r[summaryDate]), id: number(r[summaryWidth]), set: true}.value()
+	threads := make([]int64, 0, len(found))
+	for i, r := range found {
+		index[latest[i].Thread] = len(page.Conversations)
+		threads = append(threads, int64(latest[i].Thread))
+		page.Conversations = append(page.Conversations, mail.Conversation{Thread: latest[i].Thread, Account: latest[i].Account, Latest: latest[i]})
+		page.Next = cursor{date: number(r[summaryDate]), id: number(r[summaryID]), set: true}.value()
 	}
 	if len(threads) == 0 {
 		return page, nil
@@ -142,6 +152,26 @@ func (s *Store) conversationPage(ctx context.Context, q mail.ListQuery, criteria
 	for _, r := range sums.Values {
 		c := &page.Conversations[index[mail.ThreadID(number(r[0]))]]
 		c.Count, c.Unread, c.Flagged, c.HasAttachments = int(number(r[1])), truth(r[2]), truth(r[3]), truth(r[4])
+	}
+	// The labels of the scope's messages, each once, in the account's
+	// order.
+	labels, err := s.query(ctx, `SELECT DISTINCT thread_id, label_id, position FROM (
+			SELECT m.thread_id, l.id AS label_id, l.position FROM messages m
+				JOIN message_labels ml ON ml.message_id = m.id JOIN labels l ON l.id = ml.label_id
+			WHERE m.thread_id IN (SELECT value FROM json_each(?)) AND `+scope+` AND m.deleted = 0
+			UNION ALL
+			SELECT m.thread_id, l.id, l.position FROM messages m JOIN folders f ON f.id = m.folder_id
+				JOIN local_labels ll ON ll.msg_key = m.msg_key
+				JOIN labels l ON l.id = ll.label_id AND l.account_id = f.account_id
+			WHERE m.thread_id IN (SELECT value FROM json_each(?)) AND `+scope+` AND m.deleted = 0)
+		ORDER BY thread_id, position, label_id`,
+		append(append(append([]any{jsonText(threads)}, scopeArgs...), jsonText(threads)), scopeArgs...)...)
+	if err != nil {
+		return page, err
+	}
+	for _, r := range labels.Values {
+		c := &page.Conversations[index[mail.ThreadID(number(r[0]))]]
+		c.Labels = append(c.Labels, mail.LabelID(number(r[1])))
 	}
 	match, matchArgs := p.matchSQL("m", false)
 	if match == "" {
@@ -168,6 +198,9 @@ func (s *Store) conversationPage(ctx context.Context, q mail.ListQuery, criteria
 			subject: text(r[3]), fromName: text(r[4]), fromEmail: text(r[5]),
 			recipients: text(r[6]), body: text(r[7]), preview: text(r[8]),
 		}, criteria)
+		if len(p.labels) > 0 {
+			fields |= mail.FieldLabel
+		}
 		c.Matches = append(c.Matches, ref)
 		c.Found = append(c.Found, mail.Match{MessageRef: ref, Fields: fields})
 		if ref.Folder == c.Latest.Folder && ref.UID == c.Latest.UID {
@@ -196,7 +229,7 @@ func (p *listPlan) conversationSQL() (string, []any) {
 	where += ` AND NOT EXISTS (SELECT 1 FROM messages n WHERE n.thread_id = m.thread_id AND ` + newer + `
 		AND n.deleted = 0 AND (n.date, n.id) > (m.date, m.id))`
 	args = append(args, newerArgs...)
-	return `SELECT ` + summaryColumns + `, m.id
+	return `SELECT ` + summaryColumns + `
 		FROM messages m JOIN folders f ON f.id = m.folder_id
 		WHERE ` + where + ` AND m.deleted = 0
 		ORDER BY m.date DESC, m.id DESC LIMIT ?`, append(args, p.limit+1)

@@ -134,7 +134,7 @@ func (a *app) undoBanner(c *ui.Context, t *ui.Theme) {
 		ui.Button(c, locales.Undo()).Label(locales.Undo()).
 			OnClick(func() { a.undoLastMove() })
 		a.iconButton(c, closeIcon, locales.Dismiss(), locales.Dismiss()).
-			OnClick(func() { a.undo = nil })
+			OnClick(func() { a.setUndo(nil) })
 	})
 }
 
@@ -245,7 +245,7 @@ func (a *app) messageRow(row ui.ListRow) {
 						ui.Icon(c, paperclipIcon).FontSize(11).TextColor(muted)
 					}
 					if m.Flagged {
-						ui.Icon(c, starIcon).FontSize(11).TextColor(starColor)
+						ui.Icon(c, starFilledIcon).FontSize(11).TextColor(starColor)
 					}
 					ui.Text(c, a.messageTime(c, m.Date)).FontSize(11).TextColor(muted).Shrink(0)
 				})

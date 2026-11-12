@@ -62,6 +62,7 @@ type app struct {
 	pending          []mail.PendingSend
 	pendingDismissed bool
 	undo             *undoMove
+	undoTimer        *time.Timer
 
 	showAccounts bool
 	showSettings bool
@@ -83,6 +84,7 @@ type app struct {
 	saveFile  func(parent *mygo.Window, name string) (string, error)
 	setLocale func(string)
 	setBadge  func(int)
+	after     func(time.Duration, func()) *time.Timer
 	lang      int
 }
 
@@ -134,6 +136,7 @@ func (a *app) attach(win *mygo.Window) {
 	}
 	a.setLocale = mygo.App.SetLocale
 	a.setBadge = mygo.App.SetBadgeCount
+	a.after = time.AfterFunc
 	win.OnClosed(func() { a.closed = true })
 	mygo.App.OnLocaleChanged(func(string) { win.SetTitle(locales.AppName()) })
 }
@@ -187,7 +190,7 @@ func (a *app) beginAccount() {
 	a.folder = ""
 	a.query = ""
 	a.selected = -1
-	a.undo = nil
+	a.setUndo(nil)
 	a.list = ui.ListState{}
 	a.sel.Clear()
 	a.bodies = map[string]mail.FetchResult{}
@@ -457,6 +460,26 @@ func (a *app) updateBadge() {
 	a.setBadge(n)
 }
 
+// setUndo offers an undo, or clears it, and retires the offer after a
+// while so a stale banner does not linger.
+func (a *app) setUndo(u *undoMove) {
+	if a.undoTimer != nil {
+		a.undoTimer.Stop()
+		a.undoTimer = nil
+	}
+	a.undo = u
+	if u == nil || a.after == nil {
+		return
+	}
+	a.undoTimer = a.after(10*time.Second, func() {
+		a.post(func() {
+			if a.undo == u {
+				a.undo = nil
+			}
+		})
+	})
+}
+
 // loadPending reads the outbox's leftovers for the delivery banner.
 func (a *app) loadPending(g uint64) {
 	accountID := a.active
@@ -485,7 +508,7 @@ func (a *app) search() {
 func (a *app) selectFolder() {
 	a.gen++
 	a.selected = -1
-	a.undo = nil
+	a.setUndo(nil)
 	a.list = ui.ListState{}
 	a.sel.Clear()
 	a.all = nil

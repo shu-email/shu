@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	netmail "net/mail"
 	"os"
 	"path/filepath"
 	"slices"
@@ -142,6 +143,60 @@ type fakeService struct {
 	signOuts     []string
 	signInChecks []string
 	prompts      []mail.OAuthPrompt
+
+	// How messages are written. compose is what ComposeSettings reads,
+	// composeSaved each save, and composeErr a store that refuses one.
+	// signatures are the accounts' saved signatures, and identities the
+	// addresses added to each account, its own being the account's;
+	// signatureErr and identityErr fail their saves as a store would.
+	compose      mail.ComposeSettings
+	composeSaved []mail.ComposeSettings
+	composeErr   error
+	signatures   map[string]mail.Signature
+	signatureErr error
+	identities   map[string][]mail.Identity
+	identityErr  error
+	nextIdentity int
+
+	// Sending with a delay. scheduled is every message Schedule wrote, in
+	// order, with what became of it. onScheduled runs while SendScheduled
+	// waits for one to be due, where a test looks at the window and takes
+	// the message back or not; clock is what DueAt counts from, the time
+	// of the window's tester. scheduleErr fails Schedule, unsendErr
+	// Unsend, and delivered and deliverErr are what DeliverScheduled
+	// returns, deliverCalls how often it was asked.
+	scheduled    []*fakeScheduled
+	onScheduled  func(ctx context.Context, id string)
+	clock        func() time.Time
+	scheduleErr  error
+	unsendErr    error
+	delivered    []mail.ScheduledResult
+	deliverErr   error
+	deliverCalls int
+
+	// Forwards. forwards records each AttachFromMessage; forwardFail
+	// fails the attachment of that name, and forwardErr all of them.
+	forwards    []string
+	forwardFail map[string]error
+	forwardErr  error
+}
+
+// fakeScheduled is a message Schedule wrote: its outbox entry, whose
+// State follows what became of it, the delay it was given, and the draft
+// it was written as, as the store held it when the message was
+// scheduled.
+type fakeScheduled struct {
+	mail.PendingSend
+	delay time.Duration
+	draft mail.Draft
+}
+
+// noDelay is the engine's compose settings with no send delay: the tests
+// written before the delay send at once, and those about it set one.
+func noDelay() mail.ComposeSettings {
+	set := mail.DefaultComposeSettings()
+	set.SendDelay = 0
+	return set
 }
 
 // act records a call with its account.
@@ -187,6 +242,11 @@ func newFakeService() *fakeService {
 		oauth:      map[string]bool{},
 		newAddress: "ann@gmail.com",
 		needSignIn: map[string]bool{},
+
+		compose:     noDelay(),
+		signatures:  map[string]mail.Signature{},
+		identities:  map[string][]mail.Identity{},
+		forwardFail: map[string]error{},
 	}
 }
 
@@ -828,13 +888,13 @@ func (f *fakeService) SaveDraft(ctx context.Context, d mail.Draft) (mail.Draft, 
 	}
 	if old, ok := f.drafts[d.ID]; ok {
 		if old.To == d.To && old.Cc == d.Cc && old.Bcc == d.Bcc && old.Subject == d.Subject &&
-			old.Body == d.Body && old.InReplyTo == d.InReplyTo {
+			old.Body == d.Body && old.InReplyTo == d.InReplyTo && old.Identity == d.Identity {
 			return old, nil
 		}
 		// The content changes; where the copy is, and its revision on
 		// the server, do not.
 		old.To, old.Cc, old.Bcc, old.Subject, old.Body = d.To, d.Cc, d.Bcc, d.Subject, d.Body
-		old.InReplyTo, old.References = d.InReplyTo, d.References
+		old.InReplyTo, old.References, old.Identity = d.InReplyTo, d.References, d.Identity
 		old.Revision++
 		d = old
 	} else {
@@ -1458,4 +1518,289 @@ func (f *fakeService) SignOut(ctx context.Context, accountID string) error {
 func (f *fakeService) NeedsSignIn(ctx context.Context, accountID string) (bool, error) {
 	f.signInChecks = append(f.signInChecks, accountID)
 	return f.needSignIn[accountID], nil
+}
+
+func (f *fakeService) ComposeSettings(ctx context.Context) (mail.ComposeSettings, error) {
+	return f.compose, nil
+}
+
+func (f *fakeService) SaveComposeSettings(ctx context.Context, set mail.ComposeSettings) error {
+	if f.composeErr != nil {
+		return f.composeErr
+	}
+	f.compose = set
+	f.composeSaved = append(f.composeSaved, set)
+	return nil
+}
+
+func (f *fakeService) Signature(ctx context.Context, accountID string) (mail.Signature, error) {
+	if sig, ok := f.signatures[accountID]; ok {
+		return sig, nil
+	}
+	return mail.DefaultSignature(), nil
+}
+
+func (f *fakeService) SaveSignature(ctx context.Context, accountID string, sig mail.Signature) error {
+	if f.signatureErr != nil {
+		return f.signatureErr
+	}
+	f.signatures[accountID] = sig
+	return nil
+}
+
+// fakeAccount is an account of the fake's, by its ID.
+func (f *fakeService) fakeAccount(id string) (mail.Account, bool) {
+	for _, a := range f.accounts {
+		if a.ID == id {
+			return a, true
+		}
+	}
+	return mail.Account{}, false
+}
+
+func (f *fakeService) Identities(ctx context.Context, accountID string) ([]mail.Identity, error) {
+	a, ok := f.fakeAccount(accountID)
+	if !ok {
+		return nil, mail.ErrNotFound
+	}
+	own := mail.Identity{AccountID: a.ID, Name: a.Name, Email: a.Email}
+	return append([]mail.Identity{own}, f.identities[accountID]...), nil
+}
+
+// checkIdentity cleans an identity and refuses it as the engine does: an
+// address that is not one alone, or one the account sends from already.
+func (f *fakeService) checkIdentity(id *mail.Identity) error {
+	a, ok := f.fakeAccount(id.AccountID)
+	if !ok {
+		return mail.ErrNotFound
+	}
+	id.Name, id.Email = strings.TrimSpace(id.Name), strings.TrimSpace(id.Email)
+	if parsed, err := netmail.ParseAddress(id.Email); err != nil || parsed.Address != id.Email {
+		return mail.ErrIdentityAddress
+	}
+	if strings.EqualFold(id.Email, a.Email) {
+		return mail.ErrIdentityExists
+	}
+	for _, have := range f.identities[a.ID] {
+		if have.ID != id.ID && strings.EqualFold(have.Email, id.Email) {
+			return mail.ErrIdentityExists
+		}
+	}
+	return f.identityErr
+}
+
+func (f *fakeService) AddIdentity(ctx context.Context, accountID, name, email string) (mail.Identity, error) {
+	f.nextIdentity++
+	id := mail.Identity{ID: fmt.Sprintf("identity-%d", f.nextIdentity), AccountID: accountID, Name: name, Email: email}
+	if err := f.checkIdentity(&id); err != nil {
+		return mail.Identity{}, err
+	}
+	f.identities[accountID] = append(f.identities[accountID], id)
+	return id, nil
+}
+
+func (f *fakeService) UpdateIdentity(ctx context.Context, id mail.Identity) (mail.Identity, error) {
+	list := f.identities[id.AccountID]
+	i := slices.IndexFunc(list, func(have mail.Identity) bool { return id.ID != "" && have.ID == id.ID })
+	if i < 0 {
+		return mail.Identity{}, mail.ErrNotFound
+	}
+	if err := f.checkIdentity(&id); err != nil {
+		return mail.Identity{}, err
+	}
+	list[i] = id
+	return id, nil
+}
+
+// DeleteIdentity removes an identity, and as the engine does has the
+// drafts written from it go from the account's own address.
+func (f *fakeService) DeleteIdentity(ctx context.Context, accountID, id string) error {
+	list := f.identities[accountID]
+	i := slices.IndexFunc(list, func(have mail.Identity) bool { return id != "" && have.ID == id })
+	if i < 0 {
+		return mail.ErrNotFound
+	}
+	if f.identityErr != nil {
+		return f.identityErr
+	}
+	f.identities[accountID] = slices.Delete(slices.Clone(list), i, i+1)
+	for key, d := range f.drafts {
+		if d.AccountID == accountID && d.Identity == id {
+			d.Identity = ""
+			f.drafts[key] = d
+		}
+	}
+	return nil
+}
+
+// now is the time a message is scheduled at.
+func (f *fakeService) now() time.Time {
+	if f.clock != nil {
+		return f.clock()
+	}
+	return time.Now()
+}
+
+// scheduledSend is a message Schedule wrote, by its outbox ID.
+func (f *fakeService) scheduledSend(id string) *fakeScheduled {
+	for _, s := range f.scheduled {
+		if s.ID == id {
+			return s
+		}
+	}
+	return nil
+}
+
+// Schedule writes a message to send once its delay is over, as the
+// engine does: from the identity chosen, and refused as Send refuses it.
+func (f *fakeService) Schedule(ctx context.Context, accountID string, out mail.Outgoing, delay time.Duration) (mail.PendingSend, error) {
+	f.act(accountID, "Schedule %s %v", out.Subject, delay)
+	if err := f.signedOut(accountID); err != nil {
+		return mail.PendingSend{}, err
+	}
+	if f.scheduleErr != nil {
+		return mail.PendingSend{}, f.scheduleErr
+	}
+	if len(out.To) == 0 {
+		return mail.PendingSend{}, errors.New("fake: the message has no recipients")
+	}
+	identities, err := f.Identities(ctx, accountID)
+	if err != nil {
+		return mail.PendingSend{}, err
+	}
+	out.From = identities[0].Address()
+	for _, id := range identities {
+		if id.ID == out.Identity {
+			out.From = id.Address()
+		}
+	}
+	now := f.now()
+	s := &fakeScheduled{PendingSend: mail.PendingSend{
+		ID: fmt.Sprintf("outbox-%d", len(f.scheduled)+1), AccountID: accountID, Envelope: out,
+		State: mail.StateScheduled, CreatedAt: now, DueAt: now.Add(delay),
+	}, delay: delay}
+	if d, ok := f.drafts[out.DraftID]; ok {
+		s.DraftID, s.draft = d.ID, d
+	}
+	f.scheduled = append(f.scheduled, s)
+	return s.PendingSend, nil
+}
+
+// SendScheduled waits for a scheduled message as the engine does: the
+// test's onScheduled is the wait. One taken back meanwhile is not sent,
+// nor one whose wait ended with ctx; the others leave, or fail and stay
+// among the pending sends, as Send's do.
+func (f *fakeService) SendScheduled(ctx context.Context, id string) (mail.SendResult, error) {
+	s := f.scheduledSend(id)
+	if s == nil {
+		return mail.SendResult{}, mail.ErrNotFound
+	}
+	f.act(s.AccountID, "SendScheduled %s", s.Envelope.Subject)
+	if s.State == mail.StateCancelled {
+		return mail.SendResult{}, mail.ErrUnsent
+	}
+	if s.State != mail.StateScheduled {
+		return mail.SendResult{}, mail.ErrAlreadyLeft
+	}
+	if f.onScheduled != nil {
+		f.onScheduled(ctx, id)
+	}
+	if s.State == mail.StateCancelled {
+		return mail.SendResult{}, mail.ErrUnsent
+	}
+	if err := ctx.Err(); err != nil {
+		return mail.SendResult{}, err
+	}
+	err := f.signedOut(s.AccountID)
+	if err == nil {
+		err = f.sendErr
+	}
+	if err != nil {
+		s.State, s.LastError = mail.StateFailed, err.Error()
+		f.pending = append(f.pending, s.PendingSend)
+		return mail.SendResult{}, err
+	}
+	s.State, s.SentAt = mail.StateSent, f.now()
+	f.sent = append(f.sent, s.Envelope)
+	f.removeDraft(s.DraftID)
+	return mail.SendResult{Copied: f.sendWarn == nil, Warning: f.sendWarn, Outbox: s.PendingSend}, nil
+}
+
+// Unsend takes a scheduled message back and returns its draft, or one
+// made from the message when it has none, as the engine does.
+func (f *fakeService) Unsend(ctx context.Context, id string) (mail.Draft, error) {
+	s := f.scheduledSend(id)
+	if s == nil {
+		return mail.Draft{}, mail.ErrNotFound
+	}
+	f.act(s.AccountID, "Unsend %s", s.Envelope.Subject)
+	if f.unsendErr != nil {
+		return mail.Draft{}, f.unsendErr
+	}
+	switch s.State {
+	case mail.StateScheduled:
+		s.State = mail.StateCancelled
+	case mail.StateCancelled:
+		return mail.Draft{}, mail.ErrUnsent
+	default:
+		return mail.Draft{}, mail.ErrAlreadyLeft
+	}
+	if d, ok := f.drafts[s.DraftID]; ok {
+		return d, nil
+	}
+	out := s.Envelope
+	d := mail.Draft{
+		ID: "unsent-" + s.ID, AccountID: s.AccountID,
+		To: joinAddresses(out.To), Cc: joinAddresses(out.Cc), Bcc: joinAddresses(out.Bcc),
+		Subject: out.Subject, Body: out.Text, InReplyTo: out.InReplyTo, References: out.References,
+		Identity: out.Identity, MessageID: out.MessageID, Attachments: out.Attachments, Revision: 1,
+	}
+	f.drafts[d.ID] = d
+	return d, nil
+}
+
+func (f *fakeService) DeliverScheduled(ctx context.Context) ([]mail.ScheduledResult, error) {
+	f.deliverCalls++
+	return f.delivered, f.deliverErr
+}
+
+// AttachFromMessage copies the attachments the fake's body of a message
+// lists into a draft, which it makes as d says if it is not stored, and
+// reports those forwardFail names as not copied, as the engine does.
+func (f *fakeService) AttachFromMessage(ctx context.Context, d mail.Draft, accountID, folder string, uid mail.UID) (mail.Draft, []mail.AttachFailure, error) {
+	f.forwards = append(f.forwards, fmt.Sprintf("%s/%s/%d", accountID, folder, uid))
+	if err := f.signedOut(accountID); err != nil {
+		return mail.Draft{}, nil, err
+	}
+	if f.forwardErr != nil {
+		return mail.Draft{}, nil, f.forwardErr
+	}
+	m, ok := f.bodies[bodyKey(accountID, folder, uid)]
+	if !ok || d.AccountID != accountID {
+		return mail.Draft{}, nil, mail.ErrNotFound
+	}
+	cur, ok := f.drafts[d.ID]
+	if !ok {
+		var err error
+		if cur, err = f.SaveDraft(ctx, d); err != nil {
+			return mail.Draft{}, nil, err
+		}
+	}
+	var failures []mail.AttachFailure
+	list := slices.Clone(cur.Attachments)
+	for _, att := range m.Attachments {
+		if err := f.forwardFail[att.Filename]; err != nil {
+			failures = append(failures, mail.AttachFailure{Attachment: att, Err: err})
+			continue
+		}
+		list = append(list, mail.Attachment{
+			Filename: att.Filename, ContentType: att.ContentType, Size: att.Size,
+			ContentHash: "copy-of-" + folder + "/" + itoa(uid) + "/" + att.Part,
+		})
+	}
+	if len(list) == len(cur.Attachments) {
+		return cur, failures, nil
+	}
+	cur.Attachments = list
+	return f.touchDraft(cur), failures, nil
 }

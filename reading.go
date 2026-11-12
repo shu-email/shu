@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 
 	"shu/locales"
@@ -138,8 +139,10 @@ func (a *app) readingToolbar(c *ui.Context, t *ui.Theme) {
 		}
 		a.toolButton(c, readIcon, readLabel, has, func() { a.toggleRead() })
 		a.toolDivider(c)
-		a.toolButton(c, replyIcon, locales.Reply(), has, func() { a.reply(false) })
-		a.toolButton(c, replyAllIcon, locales.ReplyAll(), has, func() { a.reply(true) })
+		for _, all := range a.replyOrder() {
+			icon, label := replyLook(all)
+			a.toolButton(c, icon, label, has, func() { a.reply(all) })
+		}
 		a.toolButton(c, forwardIcon, locales.Forward(), has, func() { a.forward() })
 		if a.ai != nil {
 			// A summary is of the one message open, once its body is here.
@@ -591,6 +594,22 @@ func (a *app) undoLastMove() {
 	})
 }
 
+// replyOrder is the order of the reply actions: the default reply's,
+// which R does, then the other kind's, which Shift+R does. Each says
+// whether it answers everyone.
+func (a *app) replyOrder() [2]bool {
+	all := a.composeSet.Reply == mail.ReplyAll
+	return [2]bool{all, !all}
+}
+
+// replyLook is the icon and the name of a reply action.
+func replyLook(all bool) (*ui.SVG, string) {
+	if all {
+		return replyAllIcon, locales.ReplyAll()
+	}
+	return replyIcon, locales.Reply()
+}
+
 // reply opens a reply or reply-all, quoting the body. In conversation
 // view it answers the conversation's newest message.
 func (a *app) reply(all bool) {
@@ -604,37 +623,46 @@ func (a *app) reply(all bool) {
 // replyTo opens a reply or reply-all to a message, fetching its body
 // first when it is not loaded.
 func (a *app) replyTo(m *mail.Summary, msg *mail.Message, all bool) {
+	a.withBody(m, msg, func(full mail.Message) { a.openReply(full, all) })
+}
+
+// withBody opens a window on a message with its body, fetching the body
+// first when it is not loaded. A draft of this device is not answered or
+// forwarded: it is edited.
+func (a *app) withBody(m *mail.Summary, msg *mail.Message, open func(mail.Message)) {
 	if m == nil || m.DraftID != "" {
 		return
 	}
 	summary := *m
-	var body string
-	if msg != nil {
-		body = msg.BodyText
-	}
-	if body == "" {
-		// Fetch the body first, then open the window.
-		accountID, folder, uid := summary.Account, summary.Folder, summary.UID
-		g := a.gen
-		a.run(func() {
-			ctx, cancel := a.ctx()
-			defer cancel()
-			result, err := a.svc.FetchMessage(ctx, accountID, folder, uid, false)
-			a.post(func() {
-				if a.stale(g) {
-					return
-				}
-				body := ""
-				if err == nil {
-					body = result.Message.BodyText
-					a.bodies[summaryKey(summary)] = result
-				}
-				a.openReply(summary, body, all)
-			})
-		})
+	if msg != nil && msg.BodyText != "" {
+		open(withSummary(summary, *msg))
 		return
 	}
-	a.openReply(summary, body, all)
+	accountID, folder, uid := summary.Account, summary.Folder, summary.UID
+	g := a.gen
+	a.run(func() {
+		ctx, cancel := a.ctx()
+		defer cancel()
+		result, err := a.svc.FetchMessage(ctx, accountID, folder, uid, false)
+		a.post(func() {
+			if a.stale(g) {
+				return
+			}
+			full := mail.Message{Summary: summary}
+			if err == nil {
+				full = withSummary(summary, result.Message)
+				a.bodies[summaryKey(summary)] = result
+			}
+			open(full)
+		})
+	})
+}
+
+// withSummary is a loaded message under the list's summary of it, which
+// says the account, folder and message it is.
+func withSummary(m mail.Summary, msg mail.Message) mail.Message {
+	msg.Summary = m
+	return msg
 }
 
 // forward opens a forwarded message with the original quoted. In
@@ -650,114 +678,94 @@ func (a *app) forward() {
 // forwardMessage opens a forward of a message, fetching its body first
 // when it is not loaded.
 func (a *app) forwardMessage(m *mail.Summary, msg *mail.Message) {
-	if m == nil || m.DraftID != "" {
-		return
-	}
-	summary := *m
-	var body string
-	if msg != nil {
-		body = msg.BodyText
-	}
-	if body == "" {
-		accountID, folder, uid := summary.Account, summary.Folder, summary.UID
-		g := a.gen
-		a.run(func() {
-			ctx, cancel := a.ctx()
-			defer cancel()
-			result, err := a.svc.FetchMessage(ctx, accountID, folder, uid, false)
-			a.post(func() {
-				if a.stale(g) {
-					return
-				}
-				body := ""
-				if err == nil {
-					body = result.Message.BodyText
-					a.bodies[summaryKey(summary)] = result
-				}
-				a.composeFrom(summary.Account, replyDraft(a, summary, body, false, true))
-			})
-		})
-		return
-	}
-	a.composeFrom(summary.Account, replyDraft(a, summary, body, false, true))
+	a.withBody(m, msg, a.openForward)
 }
 
-// replyDraft builds the recipient, subject and quoted body of a reply or
-// forward. The account the message is in is the one that answers it.
-func replyDraft(a *app, m mail.Summary, body string, all, forward bool) *mail.Outgoing {
-	out := &mail.Outgoing{}
-	own := ""
-	if acc := a.account(m.Account); acc != nil {
-		own = strings.ToLower(acc.Email)
+// replyDraft is a reply to m, or a forward of it, as its window opens:
+// the recipients, the subject, the identity it goes from, and the body,
+// with the quote and the account's signature as the settings put them,
+// and where in it the caret goes. The account the message is in answers
+// it, from the address it reached: the one it was addressed to, or for
+// the user's own message, the one it went from.
+func (a *app) replyDraft(m mail.Message, all, forward bool) (*mail.Outgoing, int) {
+	ids := a.identitiesOf(m.Account)
+	from := mail.ReplyIdentity(ids, m)
+	for _, id := range ids {
+		if email := strings.TrimSpace(m.From.Email); email != "" && strings.EqualFold(email, id.Email) {
+			from = id
+		}
 	}
-	quote := func() string {
-		if body == "" {
-			return ""
-		}
-		date := ""
-		if !m.Date.IsZero() {
-			date = m.Date.Format(time.RFC1123Z)
-		}
-		var b strings.Builder
-		if forward {
-			b.WriteString("\n\n" + locales.ForwardedHeader() + "\n")
-			b.WriteString(locales.From() + ": " + m.From.String() + "\n")
-			b.WriteString(locales.Subject() + ": " + m.Subject + "\n")
-			b.WriteString(date + "\n\n")
-			b.WriteString(body)
-			return b.String()
-		}
-		b.WriteString("\n\n" + locales.OnWrote(date, displayName(m.From)) + "\n")
-		for _, line := range strings.Split(body, "\n") {
-			b.WriteString("> " + line + "\n")
-		}
-		return b.String()
-	}
-	switch {
-	case forward:
+	out := &mail.Outgoing{Identity: from.ID}
+	sig := a.signatureOf(m.Account)
+	var body mail.Body
+	if forward {
 		out.Subject = withPrefix(m.Subject, "Fwd: ")
-	default:
+		body = mail.ForwardBody(sig, m.Summary, m.BodyText, quoteWords())
+	} else {
 		out.Subject = withPrefix(m.Subject, "Re: ")
-		mine := strings.ToLower(m.From.Email) == own
-		if !mine {
-			out.To = append(out.To, m.From)
-		}
-		if mine && !all {
-			// Answering one's own message follows it up: it goes to the
-			// people the message went to, as a conversation's newest
-			// message so often is the user's.
-			for _, addr := range m.To {
-				if strings.ToLower(addr.Email) != own {
-					out.To = append(out.To, addr)
-				}
-			}
-		}
-		if all {
-			seen := map[string]bool{strings.ToLower(own): true}
-			for _, addr := range out.To {
-				seen[strings.ToLower(addr.Email)] = true
-			}
-			for _, list := range [][]mail.Address{m.To, m.Cc} {
-				for _, addr := range list {
-					key := strings.ToLower(addr.Email)
-					if seen[key] {
-						continue
-					}
-					seen[key] = true
-					if key == strings.ToLower(m.From.Email) {
-						continue
-					}
-					out.To = append(out.To, addr)
-				}
-			}
-		}
+		out.To = replyRecipients(m.Summary, ids, all)
+		body = mail.ReplyBody(a.composeSet, sig, m.Summary, m.BodyText, quoteWords())
 	}
-	out.Text = quote()
+	out.Text = body.Text
 	if m.MessageID != "" {
 		out.InReplyTo = m.MessageID
 		out.References = append(append([]string(nil), m.References...), m.MessageID)
 	}
-	return out
+	return out, body.Caret
+}
+
+// replyRecipients are whom a reply to m goes to: its sender, and for all
+// everyone else it went to, each address once. The user's own addresses,
+// those of all the account's identities, are left out. Answering one's
+// own message follows it up: it goes to the people the message went to,
+// as a conversation's newest message so often is the user's.
+func replyRecipients(m mail.Summary, ids []mail.Identity, all bool) []mail.Address {
+	own := map[string]bool{}
+	for _, id := range ids {
+		own[strings.ToLower(strings.TrimSpace(id.Email))] = true
+	}
+	var to []mail.Address
+	seen := map[string]bool{}
+	add := func(list ...mail.Address) {
+		for _, addr := range list {
+			key := strings.ToLower(strings.TrimSpace(addr.Email))
+			if key == "" || own[key] || seen[key] {
+				continue
+			}
+			seen[key] = true
+			to = append(to, addr)
+		}
+	}
+	mine := own[strings.ToLower(strings.TrimSpace(m.From.Email))]
+	if !mine {
+		add(m.From)
+	}
+	if mine || all {
+		add(m.To...)
+	}
+	if all {
+		add(m.Cc...)
+	}
+	return to
+}
+
+// quoteWords are the words a reply quotes with, and a forward passes a
+// message on with, in the user's language: the headers' names, and the
+// message's date as the window writes dates, in this computer's time.
+func quoteWords() mail.QuoteWords {
+	return mail.QuoteWords{
+		Wrote:     locales.OnWrote,
+		Original:  locales.QuoteOriginal(),
+		Forwarded: locales.ForwardedHeader(),
+		From:      locales.From(),
+		To:        locales.To(),
+		Cc:        locales.Cc(),
+		Date:      locales.QuoteDate(),
+		Subject:   locales.Subject(),
+		FormatDate: func(t time.Time) string {
+			return i18n.FormatDate(i18n.Locale(), t.Local(), i18n.DateOptions{Date: i18n.MediumStyle, Time: i18n.ShortStyle})
+		},
+	}
 }
 
 // withPrefix adds a subject prefix once.

@@ -236,8 +236,9 @@ func (a *app) testAI() {
 	})
 }
 
-// settingsView is the settings window: the language, receiving mail and
-// accounts, and the AI settings on a tab of their own.
+// settingsView is the settings window: the language, receiving mail,
+// writing and sending, and accounts, and the AI settings on a tab of
+// their own.
 func (a *app) settingsView(c *ui.Context) {
 	t := c.Theme()
 	bar := c.TitleBar()
@@ -267,6 +268,7 @@ func (a *app) settingsView(c *ui.Context) {
 				ui.Text(c, locales.Language()).FontSize(12).Bold().TextColor(t.TextMuted)
 				a.languageChoice(c).Width(320)
 				a.mailSettingsView(c, t)
+				a.composeSettingsView(c, t)
 				ui.Divider(c)
 				ui.Row(c).Gap(10).Children(func() {
 					ui.Button(c, locales.ManageAccounts()).OnClick(func() {

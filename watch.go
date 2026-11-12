@@ -116,10 +116,11 @@ type noteAim struct {
 	last bool
 }
 
-// accountsChanged follows a.accounts: the notification switches and the
-// watchers match the accounts there are.
+// accountsChanged follows a.accounts: the notification switches, what
+// compose writes with and the watchers match the accounts there are.
 func (a *app) accountsChanged() {
 	a.bindMailSettings()
+	a.sendingChanged()
 	for _, acc := range a.accounts {
 		if _, known := a.otherFolders[acc.ID]; !known && acc.ID != a.active {
 			a.loadOtherFolders(acc.ID)
@@ -699,9 +700,15 @@ func windowIndex(n int) int {
 	return slices.Index(mail.SyncWindows, mail.DefaultSyncWindow)
 }
 
-// switchRow is a switch with its name and a line about it. The name
-// labels the switch and toggles it when clicked.
+// switchRow is a switch of the settings of receiving mail, with its name
+// and a line about it.
 func (a *app) switchRow(c *ui.Context, t *ui.Theme, title, detail string, on *bool, disabled bool) {
+	a.switchLine(c, t, title, detail, on, disabled, a.saveMailSettings)
+}
+
+// switchLine is a switch with its name and a line about it, which saves
+// with changed. The name labels the switch and toggles it when clicked.
+func (a *app) switchLine(c *ui.Context, t *ui.Theme, title, detail string, on *bool, disabled bool, changed func()) {
 	ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
 		var caption ui.Element
 		ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
@@ -710,7 +717,7 @@ func (a *app) switchRow(c *ui.Context, t *ui.Theme, title, detail string, on *bo
 				ui.Text(c, detail).FontSize(12).TextColor(t.TextMuted)
 			}
 		})
-		ui.Switch(c, on).LabelledBy(caption).Disabled(disabled).OnChange(a.saveMailSettings)
+		ui.Switch(c, on).LabelledBy(caption).Disabled(disabled).OnChange(changed)
 	})
 }
 

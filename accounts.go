@@ -120,9 +120,11 @@ func (a *app) openAccountForm(acc *mail.Account) {
 				a.applyProvider(p)
 			}
 		}
+		a.openSending("")
 		return
 	}
 	a.accountForm = formFromAccount(*acc)
+	a.openSending(acc.ID)
 }
 
 // closeAccountForm dismisses the floating form, and with it an account
@@ -166,9 +168,12 @@ func (a *app) accountModal(c *ui.Context) {
 				ui.Column(c).Padding(2, 2, 6, 2).Children(func() { a.providerSignIn(c, t) })
 				return
 			case a.oauthEditing():
-				ui.Column(c).Padding(2, 2).Gap(14).Children(func() {
-					a.oauthAccountFields(c, t)
-					a.accountStatus(c, t)
+				ui.Scroll(c).Height(430).KeepScrollbars(true).Children(func() {
+					ui.Column(c).Padding(2, 2).PaddingEnd(10).Gap(14).Children(func() {
+						a.oauthAccountFields(c, t)
+						a.accountStatus(c, t)
+						a.sendingSections(c, t)
+					})
 				})
 			default:
 				ui.Scroll(c).Height(430).KeepScrollbars(true).Children(func() {
@@ -178,6 +183,7 @@ func (a *app) accountModal(c *ui.Context) {
 						}
 						a.accountFields(c, t)
 						a.accountStatus(c, t)
+						a.sendingSections(c, t)
 					})
 				})
 			}
@@ -300,6 +306,7 @@ func (a *app) accountsView(c *ui.Context) {
 					a.accountFields(c, t)
 				}
 				a.accountStatus(c, t)
+				a.sendingSections(c, t)
 				a.accountActions(c, false)
 			})
 		})

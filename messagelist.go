@@ -23,6 +23,12 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 		if searching {
 			a.searchBar(c, t)
 		}
+		if len(a.waiting) > 0 {
+			a.waitingNotice(c, t)
+		}
+		if a.sendNote != "" {
+			a.sendNoteBanner(c, t)
+		}
 		if a.undo != nil {
 			a.undoBanner(c, t)
 		}

@@ -775,16 +775,19 @@ func (cs *composeState) redraw() {
 	}
 }
 
-// insertDraft puts the drafted text above whatever the body holds, which
-// for a reply is the quoted original.
+// insertDraft puts the drafted text where the reply is written: above
+// whatever the body holds, which for a reply is the quoted original, or
+// after the quote of a reply written below it, while the body still
+// starts with that quote.
 func (cs *composeState) insertDraft(text string) {
 	text = strings.TrimSpace(text)
-	rest := strings.TrimLeft(cs.body, "\n")
+	lead := string([]rune(cs.body)[:cs.writeAt()])
+	rest := strings.TrimLeft(strings.TrimPrefix(cs.body, lead), "\n")
 	if rest == "" {
-		cs.body = text + "\n"
+		cs.body = lead + text + "\n"
 		return
 	}
-	cs.body = text + "\n\n" + rest
+	cs.body = lead + text + "\n\n" + rest
 }
 
 // inspectDraft shows what drafting this reply sends.

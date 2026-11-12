@@ -230,13 +230,23 @@ type appendBody struct{ *bytes.Reader }
 
 func (b appendBody) Size() int64 { return int64(b.Len()) }
 
-// localSMTP is a server that records the messages it is given.
+// localSMTP is a server that records the messages it is given: their
+// data, and the envelope each came in, and how many connections it took.
 type localSMTP struct {
-	addr string
-	mu   sync.Mutex
-	got  []string
+	addr      string
+	mu        sync.Mutex
+	got       []string
+	envelopes []smtpEnvelope
+	sessions  int
 	// refuse is the server's answer to a message it does not take.
 	refuse error
+}
+
+// smtpEnvelope is the sender and the recipients of a message the server
+// was given, as its MAIL FROM and RCPT TO commands named them.
+type smtpEnvelope struct {
+	from string
+	to   []string
 }
 
 func (s *localSMTP) setRefuse(err error) {
@@ -245,7 +255,12 @@ func (s *localSMTP) setRefuse(err error) {
 	s.refuse = err
 }
 
-func (s *localSMTP) NewSession(*smtp.Conn) (smtp.Session, error) { return &smtpSession{server: s}, nil }
+func (s *localSMTP) NewSession(*smtp.Conn) (smtp.Session, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sessions++
+	return &smtpSession{server: s}, nil
+}
 
 func (s *localSMTP) received() []string {
 	s.mu.Lock()
@@ -253,9 +268,26 @@ func (s *localSMTP) received() []string {
 	return append([]string(nil), s.got...)
 }
 
+// envelopesGot is the envelope of each message received, in order.
+func (s *localSMTP) envelopesGot() []smtpEnvelope {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]smtpEnvelope(nil), s.envelopes...)
+}
+
+// connections counts the sessions the server opened.
+func (s *localSMTP) connections() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.sessions
+}
+
 type smtpSession struct {
 	server *localSMTP
 	authed bool
+	// from and to are the envelope of the message under way.
+	from string
+	to   []string
 }
 
 func (s *smtpSession) AuthMechanisms() []string { return []string{sasl.Plain} }
@@ -270,14 +302,18 @@ func (s *smtpSession) Auth(string) (sasl.Server, error) {
 	}), nil
 }
 
-func (s *smtpSession) Mail(string, *smtp.MailOptions) error {
+func (s *smtpSession) Mail(from string, _ *smtp.MailOptions) error {
 	if !s.authed {
 		return smtp.ErrAuthRequired
 	}
+	s.from, s.to = from, nil
 	return nil
 }
 
-func (s *smtpSession) Rcpt(string, *smtp.RcptOptions) error { return nil }
+func (s *smtpSession) Rcpt(to string, _ *smtp.RcptOptions) error {
+	s.to = append(s.to, to)
+	return nil
+}
 
 func (s *smtpSession) Data(r io.Reader) error {
 	b, err := io.ReadAll(r)
@@ -290,10 +326,11 @@ func (s *smtpSession) Data(r io.Reader) error {
 		return s.server.refuse
 	}
 	s.server.got = append(s.server.got, string(b))
+	s.server.envelopes = append(s.server.envelopes, smtpEnvelope{from: s.from, to: s.to})
 	return nil
 }
 
-func (s *smtpSession) Reset()        {}
+func (s *smtpSession) Reset()        { s.from, s.to = "", nil }
 func (s *smtpSession) Logout() error { return nil }
 
 func startLocalSMTP(t *testing.T) *localSMTP {
@@ -314,6 +351,18 @@ func startLocalSMTP(t *testing.T) *localSMTP {
 		ln.Close()
 	})
 	return s
+}
+
+// sendAtOnce has the engine send without a delay, as it did before there
+// was one: these tests are of what a send does once it begins, and the
+// delay has a test of its own end to end.
+func sendAtOnce(t *testing.T, svc *mail.Service) {
+	t.Helper()
+	set := mail.DefaultComposeSettings()
+	set.SendDelay = 0
+	if err := svc.SaveComposeSettings(context.Background(), set); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func hostPort(t *testing.T, addr string) (string, int) {
@@ -356,6 +405,7 @@ func TestDraftsEndToEnd(t *testing.T) {
 	if err := svc.AddAccount(ctx, account, "secret"); err != nil {
 		t.Fatal(err)
 	}
+	sendAtOnce(t, svc)
 	a := newTestApp(svc)
 	a.setLocale = func(string) {}
 	a.start()

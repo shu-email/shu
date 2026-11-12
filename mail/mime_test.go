@@ -222,3 +222,16 @@ func TestFolderSpecialUse(t *testing.T) {
 		t.Error("hasNoSelect is wrong")
 	}
 }
+
+func TestPreviewMultipartPartial(t *testing.T) {
+	partial := "--alt123\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nHello from the first part.\r\n--alt123\r\nContent-Type: text/html\r\n\r\n<p>html</p>"
+	if got := previewText([]byte(partial)); got != "Hello from the first part." {
+		t.Errorf("previewText(multipart) = %q", got)
+	}
+	if got := previewText([]byte("<p>Hello <b>HTML</b></p>")); got != "Hello HTML" {
+		t.Errorf("previewText(html) = %q", got)
+	}
+	if got := previewText([]byte("Plain preview")); got != "Plain preview" {
+		t.Errorf("previewText(plain) = %q", got)
+	}
+}

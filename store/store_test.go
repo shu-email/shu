@@ -252,6 +252,26 @@ func TestMessageBodyAndAttachments(t *testing.T) {
 	}
 }
 
+func TestHeaderOnlyMessageHasNoBody(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	addAccount(t, s, "a1")
+	addFolder(t, s, "a1", "INBOX")
+	if err := s.ApplySync(ctx, "a1", mail.SyncBatch{
+		Folder:   mail.Folder{Name: "INBOX", UIDValidity: 1, LastUID: 2},
+		Messages: []mail.Message{{Summary: mail.Summary{UID: 2, Subject: "header only"}}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m, ok, err := s.GetMessage(ctx, "a1", "INBOX", 2)
+	if err != nil || !ok {
+		t.Fatal(ok, err)
+	}
+	if m.BodyCached {
+		t.Error("a header-only message reports a cached body")
+	}
+}
+
 func TestSetFlagAdjustsUnread(t *testing.T) {
 	s := openTest(t)
 	ctx := context.Background()

@@ -86,6 +86,10 @@ type Summary struct {
 	Seen           bool      `json:"seen"`
 	Flagged        bool      `json:"flagged"`
 	HasAttachments bool      `json:"hasAttachments"`
+	// ThreadIndex is an Outlook Thread-Index header, which ThreadKeys
+	// reads. Thread is the conversation the cache put the message in.
+	ThreadIndex string   `json:"threadIndex,omitempty"`
+	Thread      ThreadID `json:"thread,omitempty"`
 	// DraftID is set on the row of a local draft, which has no folder or
 	// UID of its own: the draft is on this device, whatever the server
 	// holds of it.
@@ -171,10 +175,12 @@ type Outgoing struct {
 }
 
 // MoveResult is where a message went and its UID there, when the server
-// reports one. An undo needs that UID.
+// reports one, and where it was. An undo needs that UID.
 type MoveResult struct {
 	Folder  string
 	DestUID UID
+	From    string
+	UID     UID
 }
 
 // SendResult says whether the Sent copy was saved. Copied is false when
@@ -233,6 +239,10 @@ type SyncBatch struct {
 	Reset    bool
 	Messages []Message
 	Flags    []FlagUpdate
+	// Threading is what the sync read again of the threading headers of
+	// cached messages. Only what the server gave is written, and the
+	// messages are put in their conversations again.
+	Threading []ThreadHeaders
 }
 
 // nowUTC is the clock of the cache's timestamps.

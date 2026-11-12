@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/egoist/mygo/plugins/sqlite"
@@ -19,6 +20,11 @@ import (
 // Store is the SQLite connection and the mail cache on it.
 type Store struct {
 	db *sqlite.DB
+	// threadMu makes each write of messages one step with the reads
+	// that put them in conversations: the watcher of every account,
+	// window syncs and body fetches write at once, and two that read
+	// the same keys must not each make a conversation of them.
+	threadMu sync.Mutex
 }
 
 // stmtType is one statement of a transaction.
@@ -147,6 +153,50 @@ var migrations = [][]string{
 			folder_id INTEGER PRIMARY KEY REFERENCES folders(id) ON DELETE CASCADE,
 			uidvalidity INTEGER NOT NULL, uid INTEGER NOT NULL)`,
 	},
+	// v6: conversations. thread_id is a message's, never null once
+	// written. threads hands out their IDs, which only grow, so that an
+	// ID is never another conversation's. thread_refs maps each key an
+	// account's messages were threaded by (see mail.ThreadKeys) to its
+	// conversation, and stays when the messages go: mail that comes
+	// later still finds it. The update trigger of the full-text index
+	// now fires only for the columns it indexes, so that renumbering a
+	// merged conversation, like setting a flag, leaves the index alone.
+	// backfillThreads threads the rows already there.
+	{
+		`ALTER TABLE messages ADD COLUMN thread_id INTEGER`,
+		`ALTER TABLE messages ADD COLUMN thread_index TEXT`,
+		`CREATE INDEX messages_thread ON messages (thread_id, date)`,
+		`CREATE TABLE threads (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE)`,
+		`CREATE INDEX threads_account ON threads (account_id)`,
+		`CREATE TABLE thread_refs (
+			account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+			key TEXT NOT NULL,
+			thread_id INTEGER NOT NULL,
+			PRIMARY KEY (account_id, key)) WITHOUT ROWID`,
+		`CREATE INDEX thread_refs_thread ON thread_refs (thread_id)`,
+		`DROP TRIGGER messages_au`,
+		`CREATE TRIGGER messages_au AFTER UPDATE OF subject, from_name, from_email, body_text ON messages BEGIN
+			INSERT INTO messages_fts(messages_fts, rowid, subject, from_name, from_email, body_text)
+			VALUES ('delete', old.id, old.subject, old.from_name, old.from_email, old.body_text);
+			INSERT INTO messages_fts(rowid, subject, from_name, from_email, body_text)
+			VALUES (new.id, new.subject, new.from_name, new.from_email, new.body_text);
+		END`,
+		`CREATE TRIGGER messages_thread_insert BEFORE INSERT ON messages WHEN new.thread_id IS NULL BEGIN
+			SELECT RAISE(ABORT, 'store: a message without a conversation');
+		END`,
+		`CREATE TRIGGER messages_thread_update BEFORE UPDATE OF thread_id ON messages WHEN new.thread_id IS NULL BEGIN
+			SELECT RAISE(ABORT, 'store: a message without a conversation');
+		END`,
+	},
+}
+
+// backfills compute, from the rows of the version before, statements a
+// migration runs in its transaction after its own, keyed by the version
+// it migrates to.
+var backfills = map[int]func(context.Context, *Store) ([]sqlite.Statement, error){
+	6: backfillThreads,
 }
 
 // SchemaVersion is the version Open migrates to.
@@ -206,6 +256,13 @@ func (s *Store) init(ctx context.Context) error {
 		stmts := make([]sqlite.Statement, 0, len(migrations[v])+1)
 		for _, q := range migrations[v] {
 			stmts = append(stmts, sqlite.Statement{SQL: q})
+		}
+		if backfill := backfills[v+1]; backfill != nil {
+			more, err := backfill(ctx, s)
+			if err != nil {
+				return fmt.Errorf("store: migration to v%d: %w", v+1, err)
+			}
+			stmts = append(stmts, more...)
 		}
 		stmts = append(stmts, sqlite.Statement{SQL: fmt.Sprintf("PRAGMA user_version=%d", v+1)})
 		if _, err := s.db.Transaction(ctx, stmts); err != nil {

@@ -68,6 +68,23 @@ Windows and Linux. It is written in Go with
   network reach the window through hook fields on `app` that `attach`
   sets. The target of a notification travels in its ID, which is parsed
   as untrusted input.
+- Conversations are the cache's own. `store/` puts every message in one
+  (`thread_id`) as it writes it, by the keys of `mail.ThreadKeys`: its
+  Message-ID, In-Reply-To and References, and the conversation part of an
+  Outlook Thread-Index, never the subject. Messages of any folder of an
+  account that share a key are one conversation; a message that links two
+  merges them into the lower ID, and `threads` hands out IDs that are never
+  reused. `thread_refs` keeps every key an account has seen, so a reply
+  that arrives before its original is found by it. Assigning reads before
+  it writes, so `Store` holds a mutex over the reads and the transaction
+  that writes the rows with their conversations. A sync reads References,
+  In-Reply-To and Thread-Index with `BODY.PEEK[HEADER.FIELDS (...)]`, also
+  for the cached window it refreshes. Views list conversations with
+  `Service.CachedConversations` and read one with
+  `Service.CachedConversation`, from the cache alone; a conversation-wide
+  action acts on exactly what `CachedConversation` returns for the list's
+  scope, and `MoveMessages` / `MoveBackMessages` move such a set and undo
+  it.
 - `ai/` is the AI layer: provider settings, the excerpt that decides what
   part of a message may leave the device, the features (summary, triage,
   draft reply) and `Service.send`, the single egress point every model

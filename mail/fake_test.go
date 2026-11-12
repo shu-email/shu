@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -35,6 +36,9 @@ type memStore struct {
 	// which is an upload reading the text it is about to send.
 	afterDrafts func()
 	afterDraft  func()
+	// tombs is the messages a move hides until the server confirms it,
+	// which the reads leave out as the SQLite store's do.
+	tombs map[string]bool
 }
 
 // memMark is a folder's watermark.
@@ -53,6 +57,7 @@ func newMemStore() *memStore {
 		outbox:     map[string]PendingSend{},
 		drafts:     map[string]Draft{},
 		draftOrder: map[string]int{},
+		tombs:      map[string]bool{},
 	}
 }
 
@@ -210,12 +215,159 @@ func (s *memStore) ListMessages(ctx context.Context, accountID, folder, query st
 	defer s.mu.Unlock()
 	var out []Summary
 	for _, m := range s.messages[msgKey(accountID, folder)] {
+		if s.tombs[tombKey(accountID, folder, m.UID)] {
+			continue
+		}
 		// A row says which folder it is in, as the SQLite store's do.
 		summary := m.Summary
 		summary.Folder = folder
 		out = append(out, summary)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].UID > out[j].UID })
+	return out, nil
+}
+
+// threadsLocked puts an account's messages in conversations as the SQLite
+// store does: those that share a key are one. It works them out on every
+// read; a conversation's ID is the place of its first message by folder
+// and UID, which is stable enough for a test.
+func (s *memStore) threadsLocked(accountID string) map[MessageRef]ThreadID {
+	var refs []MessageRef
+	for key, folderMsgs := range s.messages {
+		folder, ok := strings.CutPrefix(key, accountID+"/")
+		if !ok {
+			continue
+		}
+		for uid := range folderMsgs {
+			refs = append(refs, MessageRef{folder, uid})
+		}
+	}
+	sort.Slice(refs, func(i, j int) bool {
+		if refs[i].Folder != refs[j].Folder {
+			return refs[i].Folder < refs[j].Folder
+		}
+		return refs[i].UID < refs[j].UID
+	})
+	parent := make([]int, len(refs))
+	find := func(i int) int {
+		for parent[i] != i {
+			i = parent[i]
+		}
+		return i
+	}
+	owner := map[string]int{}
+	for i, ref := range refs {
+		parent[i] = i
+		m := s.messages[msgKey(accountID, ref.Folder)][ref.UID]
+		for _, key := range ThreadKeys(m.MessageID, m.InReplyTo, m.References, m.ThreadIndex) {
+			j, ok := owner[key]
+			if !ok {
+				owner[key] = i
+				continue
+			}
+			a, b := find(i), find(j)
+			parent[max(a, b)] = min(a, b)
+		}
+	}
+	out := make(map[MessageRef]ThreadID, len(refs))
+	for i, ref := range refs {
+		out[ref] = ThreadID(find(i) + 1)
+	}
+	return out
+}
+
+// inScope reports whether a message is in a conversation list's scope.
+func inScope(folder string, ref MessageRef, m Message) bool {
+	switch folder {
+	case "":
+		return true
+	case "starred":
+		return m.Flagged
+	default:
+		return ref.Folder == folder
+	}
+}
+
+// newerSummary orders a conversation's messages, newest first.
+func newerSummary(a, b Summary) bool {
+	if !a.Date.Equal(b.Date) {
+		return a.Date.After(b.Date)
+	}
+	if a.Folder != b.Folder {
+		return a.Folder > b.Folder
+	}
+	return a.UID > b.UID
+}
+
+func (s *memStore) ListConversations(ctx context.Context, accountID, folder, query string, limit int) ([]Conversation, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	q := strings.ToLower(strings.TrimSpace(query))
+	rows := map[ThreadID]*Conversation{}
+	hits := map[ThreadID][]Summary{}
+	for ref, thread := range s.threadsLocked(accountID) {
+		if s.tombs[tombKey(accountID, ref.Folder, ref.UID)] {
+			continue
+		}
+		m := s.messages[msgKey(accountID, ref.Folder)][ref.UID]
+		summary := m.Summary
+		summary.Folder, summary.Thread = ref.Folder, thread
+		for _, field := range []string{m.Subject, m.From.Name, m.From.Email, m.BodyText} {
+			if q != "" && strings.Contains(strings.ToLower(field), q) {
+				hits[thread] = append(hits[thread], summary)
+				break
+			}
+		}
+		if !inScope(folder, ref, m) {
+			continue
+		}
+		c := rows[thread]
+		if c == nil {
+			c = &Conversation{Thread: thread, Latest: summary}
+			rows[thread] = c
+		}
+		c.Count++
+		c.Unread = c.Unread || !m.Seen
+		c.Flagged = c.Flagged || m.Flagged
+		c.HasAttachments = c.HasAttachments || m.HasAttachments
+		if newerSummary(summary, c.Latest) {
+			c.Latest = summary
+		}
+	}
+	var out []Conversation
+	for thread, c := range rows {
+		if q != "" {
+			if len(hits[thread]) == 0 {
+				continue
+			}
+			sort.Slice(hits[thread], func(i, j int) bool { return newerSummary(hits[thread][i], hits[thread][j]) })
+			for _, h := range hits[thread] {
+				c.Matches = append(c.Matches, MessageRef{h.Folder, h.UID})
+			}
+		}
+		out = append(out, *c)
+	}
+	sort.Slice(out, func(i, j int) bool { return newerSummary(out[i].Latest, out[j].Latest) })
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+func (s *memStore) ConversationMessages(ctx context.Context, accountID, folder string, thread ThreadID) ([]Summary, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []Summary
+	for ref, t := range s.threadsLocked(accountID) {
+		m := s.messages[msgKey(accountID, ref.Folder)][ref.UID]
+		if t != thread || !inScope(folder, ref, m) || s.tombs[tombKey(accountID, ref.Folder, ref.UID)] {
+			continue
+		}
+		summary := m.Summary
+		summary.Folder, summary.Thread = ref.Folder, t
+		out = append(out, summary)
+	}
+	sort.Slice(out, func(i, j int) bool { return newerSummary(out[j], out[i]) })
 	return out, nil
 }
 
@@ -259,13 +411,36 @@ func (s *memStore) ApplySync(ctx context.Context, accountID string, b SyncBatch)
 	if s.messages[key] == nil {
 		s.messages[key] = map[UID]Message{}
 	}
+	written := map[UID]bool{}
 	for _, m := range b.Messages {
+		written[m.UID] = true
 		if old, ok := s.messages[key][m.UID]; ok {
+			refs, index := old.References, old.ThreadIndex
 			old.Summary = m.Summary
+			// A header the sync did not get keeps what the cache had.
+			if len(old.References) == 0 {
+				old.References = refs
+			}
+			if old.ThreadIndex == "" {
+				old.ThreadIndex = index
+			}
 			s.messages[key][m.UID] = old
 		} else {
 			s.messages[key][m.UID] = m
 		}
+	}
+	for _, h := range b.Threading {
+		m, ok := s.messages[key][h.UID]
+		if !ok || written[h.UID] {
+			continue
+		}
+		if len(h.References) > 0 {
+			m.References = h.References
+		}
+		if h.ThreadIndex != "" {
+			m.ThreadIndex = h.ThreadIndex
+		}
+		s.messages[key][h.UID] = m
 	}
 	for _, f := range b.Flags {
 		if m, ok := s.messages[key][f.UID]; ok {
@@ -323,13 +498,26 @@ func (s *memStore) SetFlag(ctx context.Context, accountID, folder string, uid UI
 }
 
 func (s *memStore) MarkDeleted(ctx context.Context, accountID, folder string, uid UID, deleted bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := tombKey(accountID, folder, uid)
+	if deleted {
+		s.tombs[key] = true
+	} else {
+		delete(s.tombs, key)
+	}
 	return nil
+}
+
+func tombKey(accountID, folder string, uid UID) string {
+	return fmt.Sprintf("%s/%d", msgKey(accountID, folder), uid)
 }
 
 func (s *memStore) DeleteMessage(ctx context.Context, accountID, folder string, uid UID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.messages[msgKey(accountID, folder)], uid)
+	delete(s.tombs, tombKey(accountID, folder, uid))
 	return nil
 }
 

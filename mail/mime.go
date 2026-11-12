@@ -49,10 +49,14 @@ func parseMessage(raw []byte, attachmentCap int64) (Message, int, error) {
 	h := r.Header
 	m.Subject, _ = h.Subject()
 	m.MessageID, _ = h.MessageID()
-	if ids, _ := h.MsgIDList("In-Reply-To"); len(ids) > 0 {
+	if ids := msgIDs(h.Get("Message-Id")); m.MessageID == "" && len(ids) > 0 {
+		m.MessageID = ids[0]
+	}
+	if ids := msgIDs(h.Get("In-Reply-To")); len(ids) > 0 {
 		m.InReplyTo = ids[0]
 	}
-	m.References, _ = h.MsgIDList("References")
+	m.References = msgIDs(h.Get("References"))
+	m.ThreadIndex = cleanThreadIndex(h.Get("Thread-Index"))
 	if d, err := h.Date(); err == nil {
 		m.Date = d
 	}

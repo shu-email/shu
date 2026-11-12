@@ -1,0 +1,24 @@
+MIME-Version: 1.0
+References: <CAH2xQ8F4kR7mN1pZ3vY6wB9tJ5sL0dE8cU2aXq7oKf3nVb1mWg@mail.gmail.com>
+ <CAKp9vT2wQ5mZ8rX1nB4yH7cF3jL6dS0gA9eU5oW2iM8tPq4zRk@mail.gmail.com>
+In-Reply-To: <CAKp9vT2wQ5mZ8rX1nB4yH7cF3jL6dS0gA9eU5oW2iM8tPq4zRk@mail.gmail.com>
+From: Lin Wei <lin.wei@example.com>
+Date: Mon, 2 Nov 2026 11:30:17 +0800
+Message-ID: <CAH2xQ8GmT6pW3zK9rB1vN5yQ8cX2sF7jL4dA0eU6oH9iM3tRq5w@mail.gmail.com>
+Subject: Re: Venue for the offsite
+To: Ann Example <ann@example.com>
+Content-Type: multipart/mixed; boundary="000000000000f2a7c805f3a81b55"
+
+--000000000000f2a7c805f3a81b55
+Content-Type: text/plain; charset="UTF-8"
+
+Booked the lakeside room for Thursday. The quote is attached.
+
+--000000000000f2a7c805f3a81b55
+Content-Type: application/pdf; name="quote.pdf"
+Content-Disposition: attachment; filename="quote.pdf"
+Content-Transfer-Encoding: base64
+X-Attachment-Id: f_lx2k9q1a0
+
+JVBERi0xLjQKJSBhIHN0YW5kLWluIGZvciBhIHF1b3RlCg==
+--000000000000f2a7c805f3a81b55--

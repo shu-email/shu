@@ -547,60 +547,11 @@ func (b *draftBox) remove(uids []UID) error {
 	if len(set) == 0 {
 		return nil
 	}
-	deleted := &imap.StoreFlags{Op: imap.StoreFlagsAdd, Silent: true, Flags: []imap.Flag{imap.FlagDeleted}}
-	if b.c.capHas(imap.CapUIDPlus) || b.c.capHas(imap.CapIMAP4rev2) {
-		if err := b.c.client.Store(set, deleted, nil).Close(); err != nil {
-			return fmt.Errorf("imap: mark deleted: %w", err)
-		}
-		// UID EXPUNGE removes these messages and no others.
-		if err := b.c.client.UIDExpunge(set).Close(); err != nil {
-			return fmt.Errorf("imap: expunge: %w", err)
-		}
-	} else if err := b.expungeOnly(set, deleted); err != nil {
+	if err := expunge(b.c, b.folder, set); err != nil {
 		return err
 	}
 	for _, uid := range uids {
 		delete(b.present, uid)
-	}
-	return nil
-}
-
-// expungeOnly removes the given messages on a server without UID EXPUNGE.
-// Its EXPUNGE removes every message flagged \Deleted, and another mail
-// client may have flagged some it has not removed yet, which the user can
-// still undelete there. Those are unflagged for the EXPUNGE and flagged
-// again after it. If the connection is lost in between they stay
-// unflagged, which keeps them: the safe way for this to fail.
-func (b *draftBox) expungeOnly(set imap.UIDSet, deleted *imap.StoreFlags) error {
-	data, err := b.c.client.UIDSearch(&imap.SearchCriteria{Flag: []imap.Flag{imap.FlagDeleted}}, nil).Wait()
-	if err != nil {
-		return fmt.Errorf("imap: search %s: %w", b.folder, err)
-	}
-	var others imap.UIDSet
-	for _, uid := range data.AllUIDs() {
-		if !set.Contains(uid) {
-			others.AddNum(uid)
-		}
-	}
-	if len(others) > 0 {
-		undelete := &imap.StoreFlags{Op: imap.StoreFlagsDel, Silent: true, Flags: []imap.Flag{imap.FlagDeleted}}
-		if err := b.c.client.Store(others, undelete, nil).Close(); err != nil {
-			// Nothing was removed yet, and nothing will be this time.
-			return fmt.Errorf("imap: unmark deleted: %w", err)
-		}
-	}
-	err = b.c.client.Store(set, deleted, nil).Close()
-	if err == nil {
-		err = b.c.client.Expunge().Close()
-	}
-	if len(others) > 0 {
-		// Whatever happened above, the other client's marks go back.
-		if flagErr := b.c.client.Store(others, deleted, nil).Close(); flagErr != nil && err == nil {
-			err = fmt.Errorf("imap: mark deleted again: %w", flagErr)
-		}
-	}
-	if err != nil {
-		return fmt.Errorf("imap: expunge: %w", err)
 	}
 	return nil
 }

@@ -1,0 +1,203 @@
+package store
+
+import (
+	"context"
+	"slices"
+
+	"shu/mail"
+)
+
+// MessagePage reads a page of the messages of a scope a search finds,
+// newest first, after a cursor. A message of a search says where its
+// terms were found.
+func (s *Store) MessagePage(ctx context.Context, q mail.ListQuery) (mail.MessagePage, error) {
+	return s.messagePage(ctx, q, searchCriteria(q.Search))
+}
+
+func (s *Store) messagePage(ctx context.Context, q mail.ListQuery, criteria []criterion) (mail.MessagePage, error) {
+	// A page with nothing after it hands its cursor on, so that asking
+	// again does not start over.
+	page := mail.MessagePage{Messages: []mail.Summary{}, Next: q.After}
+	p, err := s.plan(ctx, q, criteria)
+	if err != nil {
+		return page, err
+	}
+	query, args, ok := p.messageSQL()
+	if !ok {
+		return page, nil
+	}
+	rows, err := s.query(ctx, query, args...)
+	if err != nil {
+		return page, err
+	}
+	ids := make([]int64, 0, len(rows.Values))
+	for _, r := range rows.Values {
+		if len(page.Messages) == p.limit {
+			page.More = true
+			break
+		}
+		id := number(r[summaryWidth])
+		page.Messages = append(page.Messages, summaryRow(r))
+		ids = append(ids, id)
+		page.Next = cursor{date: number(r[summaryDate]), id: id, set: true}.value()
+	}
+	if len(criteria) == 0 || len(ids) == 0 {
+		return page, nil
+	}
+	// The row lacks the body and the recipients as the index has them.
+	rows, err = s.query(ctx, `SELECT id, COALESCE(recipients, ''), COALESCE(body_text, '')
+		FROM messages WHERE id IN (SELECT value FROM json_each(?))`, jsonText(ids))
+	if err != nil {
+		return page, err
+	}
+	more := make(map[int64][2]string, len(rows.Values))
+	for _, r := range rows.Values {
+		more[number(r[0])] = [2]string{text(r[1]), text(r[2])}
+	}
+	for i := range page.Messages {
+		m := &page.Messages[i]
+		m.Matched = foundIn(messageText{
+			subject: m.Subject, fromName: m.From.Name, fromEmail: m.From.Email,
+			recipients: more[ids[i]][0], body: more[ids[i]][1], preview: m.Preview,
+		}, criteria)
+	}
+	return page, nil
+}
+
+// messageSQL is the query of a page of messages, one row more than the
+// page to tell whether there are more; ok is false when the scope has no
+// folder the search can find a message in.
+func (p *listPlan) messageSQL() (query string, args []any, ok bool) {
+	folders := p.folders
+	if p.in != nil {
+		folders = slices.DeleteFunc(slices.Clone(folders), func(id int64) bool { return !slices.Contains(p.in, id) })
+	}
+	if len(folders) == 0 {
+		return "", nil, false
+	}
+	where, args := p.inScope("m", folders, true)
+	if match, more := p.matchSQL("m", false); match != "" {
+		where += ` AND ` + match
+		args = append(args, more...)
+	}
+	if p.after.set {
+		where += ` AND (m.date, m.id) < (?, ?)`
+		args = append(args, p.after.date, p.after.id)
+	}
+	return `SELECT ` + summaryColumns + `, m.id
+		FROM messages m JOIN folders f ON f.id = m.folder_id
+		WHERE ` + where + ` AND m.deleted = 0
+		ORDER BY m.date DESC, m.id DESC LIMIT ?`, append(args, p.limit+1), true
+}
+
+// ConversationPage reads a page of the conversations with a message in a
+// scope, the one whose newest such message is newest first, after a
+// cursor. A row is made of the conversation's messages in the scope: the
+// newest, how many there are, and whether any is unread, flagged or has
+// attachments. A search keeps the conversations any message of which, in
+// any folder, matches it whole, and names those messages with where its
+// terms were found.
+func (s *Store) ConversationPage(ctx context.Context, q mail.ListQuery) (mail.ConversationPage, error) {
+	return s.conversationPage(ctx, q, searchCriteria(q.Search))
+}
+
+func (s *Store) conversationPage(ctx context.Context, q mail.ListQuery, criteria []criterion) (mail.ConversationPage, error) {
+	page := mail.ConversationPage{Conversations: []mail.Conversation{}, Next: q.After}
+	p, err := s.plan(ctx, q, criteria)
+	if err != nil {
+		return page, err
+	}
+	if len(p.folders) == 0 {
+		return page, nil
+	}
+	query, args := p.conversationSQL()
+	rows, err := s.query(ctx, query, args...)
+	if err != nil {
+		return page, err
+	}
+	index := map[mail.ThreadID]int{}
+	threads := make([]int64, 0, len(rows.Values))
+	for _, r := range rows.Values {
+		if len(page.Conversations) == p.limit {
+			page.More = true
+			break
+		}
+		latest := summaryRow(r)
+		index[latest.Thread] = len(page.Conversations)
+		threads = append(threads, int64(latest.Thread))
+		page.Conversations = append(page.Conversations, mail.Conversation{Thread: latest.Thread, Account: latest.Account, Latest: latest})
+		page.Next = cursor{date: number(r[summaryDate]), id: number(r[summaryWidth]), set: true}.value()
+	}
+	if len(threads) == 0 {
+		return page, nil
+	}
+	scope, scopeArgs := p.inScope("m", p.folders, false)
+	sums, err := s.query(ctx, `SELECT m.thread_id, COUNT(*), MAX(m.seen = 0), MAX(m.flagged), MAX(m.has_attachments)
+		FROM messages m
+		WHERE m.thread_id IN (SELECT value FROM json_each(?)) AND `+scope+` AND m.deleted = 0
+		GROUP BY m.thread_id`, append([]any{jsonText(threads)}, scopeArgs...)...)
+	if err != nil {
+		return page, err
+	}
+	for _, r := range sums.Values {
+		c := &page.Conversations[index[mail.ThreadID(number(r[0]))]]
+		c.Count, c.Unread, c.Flagged, c.HasAttachments = int(number(r[1])), truth(r[2]), truth(r[3]), truth(r[4])
+	}
+	match, matchArgs := p.matchSQL("m", false)
+	if match == "" {
+		return page, nil
+	}
+	// The messages the search found, in any folder, newest first. Their
+	// text is read only when the search has terms to find in it.
+	texts := `'', '', '', '', '', ''`
+	if len(criteria) > 0 {
+		texts = `COALESCE(m.subject, ''), COALESCE(m.from_name, ''), COALESCE(m.from_email, ''),
+			COALESCE(m.recipients, ''), COALESCE(m.body_text, ''), COALESCE(m.preview, '')`
+	}
+	hits, err := s.query(ctx, `SELECT m.thread_id, f.name, m.server_uid, `+texts+`
+		FROM messages m JOIN folders f ON f.id = m.folder_id
+		WHERE m.thread_id IN (SELECT value FROM json_each(?)) AND m.deleted = 0 AND `+match+`
+		ORDER BY m.date DESC, m.id DESC`, append([]any{jsonText(threads)}, matchArgs...)...)
+	if err != nil {
+		return page, err
+	}
+	for _, r := range hits.Values {
+		c := &page.Conversations[index[mail.ThreadID(number(r[0]))]]
+		ref := mail.MessageRef{Folder: text(r[1]), UID: mail.UID(number(r[2]))}
+		fields := foundIn(messageText{
+			subject: text(r[3]), fromName: text(r[4]), fromEmail: text(r[5]),
+			recipients: text(r[6]), body: text(r[7]), preview: text(r[8]),
+		}, criteria)
+		c.Matches = append(c.Matches, ref)
+		c.Found = append(c.Found, mail.Match{MessageRef: ref, Fields: fields})
+		if ref.Folder == c.Latest.Folder && ref.UID == c.Latest.UID {
+			c.Latest.Matched = fields
+		}
+	}
+	return page, nil
+}
+
+// conversationSQL is the query of the rows of a page of conversations,
+// one more than the page. A conversation's row is its newest message in
+// the scope: one that no message of the conversation in the scope comes
+// after. With a search, its conversation must have a message, in any
+// folder, the search finds.
+func (p *listPlan) conversationSQL() (string, []any) {
+	where, args := p.inScope("m", p.folders, true)
+	if p.after.set {
+		where += ` AND (m.date, m.id) < (?, ?)`
+		args = append(args, p.after.date, p.after.id)
+	}
+	if match, matchArgs := p.matchSQL("h", true); match != "" {
+		where += ` AND +m.thread_id IN (SELECT h.thread_id FROM messages h WHERE h.deleted = 0 AND ` + match + `)`
+		args = append(args, matchArgs...)
+	}
+	newer, newerArgs := p.inScope("n", p.folders, false)
+	where += ` AND NOT EXISTS (SELECT 1 FROM messages n WHERE n.thread_id = m.thread_id AND ` + newer + `
+		AND n.deleted = 0 AND (n.date, n.id) > (m.date, m.id))`
+	args = append(args, newerArgs...)
+	return `SELECT ` + summaryColumns + `, m.id
+		FROM messages m JOIN folders f ON f.id = m.folder_id
+		WHERE ` + where + ` AND m.deleted = 0
+		ORDER BY m.date DESC, m.id DESC LIMIT ?`, append(args, p.limit+1)
+}

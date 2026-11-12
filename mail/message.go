@@ -63,6 +63,10 @@ type Folder struct {
 	UIDValidity uint32    `json:"uidValidity"`
 	LastUID     UID       `json:"lastUID"`
 	SyncedAt    time.Time `json:"syncedAt,omitempty"`
+	// Complete reports that the cache lacks none of the folder's messages
+	// up to LastUID: a sync read the folder whole, or FetchOlder reached
+	// its oldest message. A sync keeps it; a LIST says nothing of it.
+	Complete bool `json:"complete,omitempty"`
 }
 
 // IsInbox reports whether the folder is the inbox.
@@ -70,6 +74,9 @@ func (f Folder) IsInbox() bool { return f.SpecialUse == SpecialInbox }
 
 // Summary is the header of a message, what the list shows.
 type Summary struct {
+	// Account is the account the message is in. Every list read sets it,
+	// so a row of a list across accounts is acted on in its own.
+	Account        string    `json:"account,omitempty"`
 	UID            UID       `json:"uid"`
 	Folder         string    `json:"folder,omitempty"`
 	MessageID      string    `json:"messageID,omitempty"`
@@ -94,6 +101,9 @@ type Summary struct {
 	// UID of its own: the draft is on this device, whatever the server
 	// holds of it.
 	DraftID string `json:"draftID,omitempty"`
+	// Matched is set on a message a search found: the parts of it its
+	// terms were found in.
+	Matched Field `json:"matched,omitempty"`
 }
 
 // Message is a summary with the parts the reading pane needs.
@@ -243,6 +253,17 @@ type SyncBatch struct {
 	// cached messages. Only what the server gave is written, and the
 	// messages are put in their conversations again.
 	Threading []ThreadHeaders
+}
+
+// OlderBatch is what one fetch of older mail writes: messages of a folder
+// the cache lacked below its sync cursor, fetched under UIDValidity, and
+// whether the cache then lacks none of them. The cursor, the counts and
+// the watermark of announced mail are no part of it.
+type OlderBatch struct {
+	Folder      string
+	UIDValidity uint32
+	Messages    []Message
+	Complete    bool
 }
 
 // nowUTC is the clock of the cache's timestamps.

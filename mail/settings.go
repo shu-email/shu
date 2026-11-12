@@ -14,6 +14,14 @@ var CheckIntervals = []int{1, 5, 15, 30}
 // DefaultCheckMinutes is how often mail is checked by default.
 const DefaultCheckMinutes = 5
 
+// SyncWindows are the choices of how many of a folder's newest messages
+// its first sync puts in the cache, and DefaultSyncWindow the one in use
+// until the user picks. Older mail comes on demand (FetchOlder).
+var SyncWindows = []int{50, 200, 1000}
+
+// DefaultSyncWindow is the first-sync window of a new install.
+const DefaultSyncWindow = 200
+
 // Settings are how mail is received in the background, how new mail is
 // announced and how it is listed. The engine uses the interval; the rest
 // it only keeps for the window, which is what shows notifications and
@@ -33,18 +41,25 @@ type Settings struct {
 	// Conversations lists the mail of a folder one conversation to a row;
 	// off, every message is a row of its own.
 	Conversations bool
+	// SyncWindow is one of SyncWindows: how many of a folder's newest
+	// messages its first sync caches, the window's and the watcher's.
+	SyncWindow int
 }
 
 // DefaultSettings are the settings of a new install: mail is checked
 // every few minutes, announced without saying what it holds, and listed
 // by conversation.
 func DefaultSettings() Settings {
-	return Settings{CheckMinutes: DefaultCheckMinutes, Notify: true, Muted: map[string]bool{}, Conversations: true}
+	return Settings{
+		CheckMinutes: DefaultCheckMinutes, Notify: true, Muted: map[string]bool{}, Conversations: true,
+		SyncWindow: DefaultSyncWindow,
+	}
 }
 
 // The keys of the settings in the store.
 const (
 	settingCheckMinutes  = "mail.check_minutes"
+	settingSyncWindow    = "mail.sync_window"
 	settingNotify        = "notify.enabled"
 	settingNotifyDetails = "notify.details"
 	settingConversations = "view.conversations"
@@ -61,6 +76,25 @@ func checkMinutes(minutes int) int {
 		return minutes
 	}
 	return DefaultCheckMinutes
+}
+
+// syncWindow returns n if it is one of the choices, else the default.
+func syncWindow(n int) int {
+	if slices.Contains(SyncWindows, n) {
+		return n
+	}
+	return DefaultSyncWindow
+}
+
+// firstSyncWindow reads the first-sync window from the settings, the
+// default when it cannot.
+func (s *Service) firstSyncWindow(ctx context.Context) int {
+	raw, ok, err := s.store.Setting(ctx, settingSyncWindow)
+	if err != nil || !ok {
+		return DefaultSyncWindow
+	}
+	n, _ := strconv.Atoi(raw)
+	return syncWindow(n)
 }
 
 // Settings reads the settings, with the defaults for what was never set.
@@ -80,6 +114,14 @@ func (s *Service) Settings(ctx context.Context) (Settings, error) {
 	if ok {
 		minutes, _ := strconv.Atoi(raw)
 		out.CheckMinutes = checkMinutes(minutes)
+	}
+	raw, ok, err = s.store.Setting(ctx, settingSyncWindow)
+	if err != nil {
+		return out, err
+	}
+	if ok {
+		n, _ := strconv.Atoi(raw)
+		out.SyncWindow = syncWindow(n)
 	}
 	if err := flag(settingNotify, &out.Notify); err != nil {
 		return out, err
@@ -110,6 +152,7 @@ func (s *Service) Settings(ctx context.Context) (Settings, error) {
 // interval.
 func (s *Service) SaveSettings(ctx context.Context, set Settings) error {
 	set.CheckMinutes = checkMinutes(set.CheckMinutes)
+	set.SyncWindow = syncWindow(set.SyncWindow)
 	bit := func(on bool) string {
 		if on {
 			return "1"
@@ -117,6 +160,9 @@ func (s *Service) SaveSettings(ctx context.Context, set Settings) error {
 		return "0"
 	}
 	if err := s.store.SetSetting(ctx, settingCheckMinutes, strconv.Itoa(set.CheckMinutes)); err != nil {
+		return err
+	}
+	if err := s.store.SetSetting(ctx, settingSyncWindow, strconv.Itoa(set.SyncWindow)); err != nil {
 		return err
 	}
 	if err := s.store.SetSetting(ctx, settingNotify, bit(set.Notify)); err != nil {

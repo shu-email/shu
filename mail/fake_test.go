@@ -39,6 +39,11 @@ type memStore struct {
 	// tombs is the messages a move hides until the server confirms it,
 	// which the reads leave out as the SQLite store's do.
 	tombs map[string]bool
+	// olderWrites counts the batches of older mail written. afterUIDs
+	// runs once, right after the next FolderUIDs call: the moment a fetch
+	// of older mail has read what the cache holds, before it writes.
+	olderWrites int
+	afterUIDs   func()
 }
 
 // memMark is a folder's watermark.
@@ -177,7 +182,7 @@ func (s *memStore) TakeNew(ctx context.Context, accountID, folder string) ([]Sum
 	for uid, m := range s.messages[key] {
 		if uid > mark.uid && !m.Seen {
 			summary := m.Summary
-			summary.Folder = folder
+			summary.Account, summary.Folder = accountID, folder
 			out = append(out, summary)
 		}
 	}
@@ -203,10 +208,21 @@ func (s *memStore) Folder(ctx context.Context, accountID, name string) (Folder, 
 	return Folder{}, false, nil
 }
 
+// SaveFolders keeps the sync cursor of the folders it knows, as the
+// SQLite store does: a LIST says nothing of it.
 func (s *memStore) SaveFolders(ctx context.Context, accountID string, folders []Folder) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.folders[accountID] = append([]Folder(nil), folders...)
+	saved := append([]Folder(nil), folders...)
+	for i := range saved {
+		for _, old := range s.folders[accountID] {
+			if old.Name == saved[i].Name {
+				saved[i].UIDValidity, saved[i].LastUID = old.UIDValidity, old.LastUID
+				saved[i].SyncedAt, saved[i].Complete = old.SyncedAt, old.Complete
+			}
+		}
+	}
+	s.folders[accountID] = saved
 	return nil
 }
 
@@ -218,9 +234,10 @@ func (s *memStore) ListMessages(ctx context.Context, accountID, folder, query st
 		if s.tombs[tombKey(accountID, folder, m.UID)] {
 			continue
 		}
-		// A row says which folder it is in, as the SQLite store's do.
+		// A row says which account and folder it is in, as the SQLite
+		// store's do.
 		summary := m.Summary
-		summary.Folder = folder
+		summary.Account, summary.Folder = accountID, folder
 		out = append(out, summary)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].UID > out[j].UID })
@@ -311,7 +328,7 @@ func (s *memStore) ListConversations(ctx context.Context, accountID, folder, que
 		}
 		m := s.messages[msgKey(accountID, ref.Folder)][ref.UID]
 		summary := m.Summary
-		summary.Folder, summary.Thread = ref.Folder, thread
+		summary.Account, summary.Folder, summary.Thread = accountID, ref.Folder, thread
 		for _, field := range []string{m.Subject, m.From.Name, m.From.Email, m.BodyText} {
 			if q != "" && strings.Contains(strings.ToLower(field), q) {
 				hits[thread] = append(hits[thread], summary)
@@ -323,7 +340,7 @@ func (s *memStore) ListConversations(ctx context.Context, accountID, folder, que
 		}
 		c := rows[thread]
 		if c == nil {
-			c = &Conversation{Thread: thread, Latest: summary}
+			c = &Conversation{Thread: thread, Account: accountID, Latest: summary}
 			rows[thread] = c
 		}
 		c.Count++
@@ -364,11 +381,252 @@ func (s *memStore) ConversationMessages(ctx context.Context, accountID, folder s
 			continue
 		}
 		summary := m.Summary
-		summary.Folder, summary.Thread = ref.Folder, t
+		summary.Account, summary.Folder, summary.Thread = accountID, ref.Folder, t
 		out = append(out, summary)
 	}
 	sort.Slice(out, func(i, j int) bool { return newerSummary(out[j], out[i]) })
 	return out, nil
+}
+
+// memRow is a message a page read found, with what orders it.
+type memRow struct {
+	Summary
+	key string
+}
+
+// memRowKey orders rows as the SQLite store does, newest first, with the
+// account, folder and UID in place of the row number.
+func memRowKey(m Summary) string {
+	return fmt.Sprintf("%020d/%s/%s/%010d", m.Date.Unix()+1<<40, m.Account, m.Folder, m.UID)
+}
+
+// memFound reports whether a message matches a search whole, and the
+// parts its terms are in.
+func memFound(q Search, f Folder, m Message) (Field, bool) {
+	parts := map[Field][]string{
+		FieldSubject: {m.Subject}, FieldFrom: {m.From.Name, m.From.Email},
+		FieldBody: {m.BodyText, m.Preview},
+	}
+	for _, a := range append(append([]Address(nil), m.To...), m.Cc...) {
+		parts[FieldTo] = append(parts[FieldTo], a.Name, a.Email)
+	}
+	var found Field
+	for _, c := range []struct {
+		terms  []string
+		fields Field
+	}{{q.Text, FieldAny}, {q.From, FieldFrom}, {q.To, FieldTo}, {q.Subject, FieldSubject}, {q.Body, FieldBody}} {
+		for _, term := range c.terms {
+			var in Field
+			for _, field := range []Field{FieldSubject, FieldFrom, FieldTo, FieldBody} {
+				for _, text := range parts[field] {
+					if c.fields.Has(field) && strings.Contains(strings.ToLower(text), strings.ToLower(term)) {
+						in |= field
+					}
+				}
+			}
+			if in == 0 {
+				return 0, false
+			}
+			found |= in
+		}
+	}
+	if (!q.Since.IsZero() && m.Date.Before(q.Since)) || (!q.Before.IsZero() && !m.Date.Before(q.Before)) ||
+		(q.Unread && m.Seen) || (q.Starred && !m.Flagged) || (q.Attachment && !m.HasAttachments) ||
+		(q.In != "" && !f.NamedBy(q.In)) {
+		return 0, false
+	}
+	return found, true
+}
+
+// pageLocked lists every message of the accounts of a scope, those in it
+// and the others, as rows with their conversation.
+func (s *memStore) pageLocked(sc Scope, each func(f Folder, m Message, row memRow, inScope bool)) {
+	accounts := sc.Accounts
+	if len(accounts) == 0 {
+		for id := range s.accounts {
+			accounts = append(accounts, id)
+		}
+	}
+	for _, accountID := range accounts {
+		threads := s.threadsLocked(accountID)
+		for _, f := range s.folders[accountID] {
+			for uid, m := range s.messages[msgKey(accountID, f.Name)] {
+				if s.tombs[tombKey(accountID, f.Name, uid)] {
+					continue
+				}
+				inScope := (sc.Folder == "" || f.Name == sc.Folder) &&
+					(sc.Special == "" || f.SpecialUse == sc.Special) && (!sc.Starred || m.Flagged)
+				summary := m.Summary
+				summary.Account, summary.Folder, summary.UID = accountID, f.Name, uid
+				summary.Thread = threads[MessageRef{f.Name, uid}]
+				each(f, m, memRow{summary, memRowKey(summary)}, inScope)
+			}
+		}
+	}
+}
+
+// memPage cuts the rows after a cursor, newest first, to a page.
+func memPage(rows []memRow, after Cursor, limit int) (page []memRow, next Cursor, more bool) {
+	sort.Slice(rows, func(i, j int) bool { return rows[i].key > rows[j].key })
+	if limit <= 0 {
+		limit = DefaultPageSize
+	}
+	next = after
+	for _, r := range rows {
+		if after != "" && r.key >= string(after) {
+			continue
+		}
+		if len(page) == limit {
+			return page, next, true
+		}
+		page = append(page, r)
+		next = Cursor(r.key)
+	}
+	return page, next, false
+}
+
+func (s *memStore) MessagePage(ctx context.Context, q ListQuery) (MessagePage, error) {
+	if err := q.Scope.Check(); err != nil {
+		return MessagePage{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var rows []memRow
+	s.pageLocked(q.Scope, func(f Folder, m Message, row memRow, inScope bool) {
+		if fields, ok := memFound(q.Search, f, m); ok && inScope {
+			row.Matched = fields
+			rows = append(rows, row)
+		}
+	})
+	page, next, more := memPage(rows, q.After, q.Limit)
+	out := MessagePage{Messages: []Summary{}, Next: next, More: more}
+	for _, r := range page {
+		out.Messages = append(out.Messages, r.Summary)
+	}
+	return out, nil
+}
+
+func (s *memStore) ConversationPage(ctx context.Context, q ListQuery) (ConversationPage, error) {
+	if err := q.Scope.Check(); err != nil {
+		return ConversationPage{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	type thread struct {
+		account string
+		id      ThreadID
+	}
+	heads := map[thread]*memRow{}
+	rows := map[thread]*Conversation{}
+	found := map[thread][]memRow{}
+	s.pageLocked(q.Scope, func(f Folder, m Message, row memRow, inScope bool) {
+		t := thread{row.Account, row.Thread}
+		if fields, ok := memFound(q.Search, f, m); ok && !q.Search.IsZero() {
+			row.Matched = fields
+			found[t] = append(found[t], row)
+		}
+		if !inScope {
+			return
+		}
+		c := rows[t]
+		if c == nil {
+			c = &Conversation{Thread: row.Thread, Account: row.Account}
+			rows[t] = c
+		}
+		c.Count++
+		c.Unread = c.Unread || !m.Seen
+		c.Flagged = c.Flagged || m.Flagged
+		c.HasAttachments = c.HasAttachments || m.HasAttachments
+		if heads[t] == nil || row.key > heads[t].key {
+			heads[t] = &row
+		}
+	})
+	var list []memRow
+	for t, head := range heads {
+		if q.Search.IsZero() || len(found[t]) > 0 {
+			list = append(list, *head)
+		}
+	}
+	page, next, more := memPage(list, q.After, q.Limit)
+	out := ConversationPage{Conversations: []Conversation{}, Next: next, More: more}
+	for _, head := range page {
+		t := thread{head.Account, head.Thread}
+		c := *rows[t]
+		c.Latest = head.Summary
+		hits := found[t]
+		sort.Slice(hits, func(i, j int) bool { return hits[i].key > hits[j].key })
+		for _, h := range hits {
+			ref := MessageRef{h.Folder, h.UID}
+			c.Matches = append(c.Matches, ref)
+			c.Found = append(c.Found, Match{ref, h.Matched})
+			if ref == (MessageRef{c.Latest.Folder, c.Latest.UID}) {
+				c.Latest.Matched = h.Matched
+			}
+		}
+		out.Conversations = append(out.Conversations, c)
+	}
+	return out, nil
+}
+
+func (s *memStore) FolderCache(ctx context.Context, accountID, folder string) (FolderCache, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, f := range s.folders[accountID] {
+		if f.Name != folder {
+			continue
+		}
+		out := FolderCache{Total: f.Total, Complete: f.Complete}
+		for uid := range s.messages[msgKey(accountID, folder)] {
+			if !s.tombs[tombKey(accountID, folder, uid)] {
+				out.Cached++
+			}
+		}
+		return out, nil
+	}
+	return FolderCache{}, ErrNotFound
+}
+
+func (s *memStore) FolderUIDs(ctx context.Context, accountID, folder string) ([]UID, error) {
+	s.mu.Lock()
+	var out []UID
+	for uid := range s.messages[msgKey(accountID, folder)] {
+		out = append(out, uid)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	after := s.afterUIDs
+	s.afterUIDs = nil
+	s.mu.Unlock()
+	if after != nil {
+		after()
+	}
+	return out, nil
+}
+
+// ApplyOlder writes the messages and the folder's Complete, and nothing
+// else of the folder, as the SQLite store does.
+func (s *memStore) ApplyOlder(ctx context.Context, accountID string, b OlderBatch) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.folders[accountID] {
+		f := &s.folders[accountID][i]
+		if f.Name != b.Folder {
+			continue
+		}
+		if f.UIDValidity != b.UIDValidity {
+			return ErrFolderReset
+		}
+		key := msgKey(accountID, b.Folder)
+		if s.messages[key] == nil {
+			s.messages[key] = map[UID]Message{}
+		}
+		for _, m := range b.Messages {
+			s.messages[key][m.UID] = m
+		}
+		f.Complete = b.Complete
+		s.olderWrites++
+		return nil
+	}
+	return ErrNotFound
 }
 
 func (s *memStore) GetMessage(ctx context.Context, accountID, folder string, uid UID) (Message, bool, error) {
@@ -379,6 +637,7 @@ func (s *memStore) GetMessage(ctx context.Context, accountID, folder string, uid
 		return Message{}, false, nil
 	}
 	m.BodyCached = true
+	m.Account = accountID
 	return m, true, nil
 }
 
@@ -457,6 +716,7 @@ func (s *memStore) ApplySync(ctx context.Context, accountID string, b SyncBatch)
 			f := &s.folders[accountID][i]
 			f.UIDValidity, f.LastUID = b.Folder.UIDValidity, b.Folder.LastUID
 			f.Unread, f.Total, f.SyncedAt = b.Folder.Unread, b.Folder.Total, b.Folder.SyncedAt
+			f.Complete = b.Folder.Complete
 			found = true
 		}
 	}

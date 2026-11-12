@@ -9,6 +9,10 @@ import (
 // ErrNotFound is returned when a cached row does not exist.
 var ErrNotFound = errors.New("mail: not found")
 
+// ErrFolderReset is a write of older mail into a folder whose UIDVALIDITY
+// changed since the mail was fetched: its UIDs name other messages now.
+var ErrFolderReset = errors.New("mail: the folder was reset meanwhile")
+
 // Store is the engine's cache: accounts and their settings, folders and
 // their sync cursors, message headers and bodies, attachments, the outbox
 // and the drafts. The engine is the only writer; the UI reads through
@@ -61,6 +65,25 @@ type Store interface {
 	// in the scope, oldest first.
 	ListConversations(ctx context.Context, accountID, folder, query string, limit int) ([]Conversation, error)
 	ConversationMessages(ctx context.Context, accountID, folder string, thread ThreadID) ([]Summary, error)
+
+	// Pages of a Scope, across accounts as well: the rows newest first,
+	// after a cursor, each with its account and with where a Search
+	// found its terms. ConversationPage lists a conversation when it has
+	// a message in the scope and any of its messages, in any folder,
+	// matches the whole search; its row adds up the scope's messages.
+	MessagePage(ctx context.Context, q ListQuery) (MessagePage, error)
+	ConversationPage(ctx context.Context, q ListQuery) (ConversationPage, error)
+
+	// Older mail. FolderCache counts what the cache holds of a folder.
+	// FolderUIDs lists the UIDs it holds there, those being moved away
+	// included. ApplyOlder writes messages a sync left out, threading
+	// them as any, and the folder's Complete, and nothing else of the
+	// folder: not its cursor, counts or watermark. It returns
+	// ErrFolderReset, writing nothing, when the folder's UIDVALIDITY is
+	// no longer the batch's.
+	FolderCache(ctx context.Context, accountID, folder string) (FolderCache, error)
+	FolderUIDs(ctx context.Context, accountID, folder string) ([]UID, error)
+	ApplyOlder(ctx context.Context, accountID string, b OlderBatch) error
 
 	// Outbox.
 	EnqueueOutbox(ctx context.Context, p PendingSend) error

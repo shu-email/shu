@@ -4,22 +4,28 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"shu/mail"
 )
 
-// summaryColumns are the message list fields.
+// summaryColumns are the message list fields, of messages m in folders f.
 const summaryColumns = `m.server_uid, f.name, COALESCE(m.message_id, ''), COALESCE(m.in_reply_to, ''),
 	COALESCE(m.references_json, ''), COALESCE(m.from_name, ''), COALESCE(m.from_email, ''),
 	COALESCE(m.to_json, ''), COALESCE(m.cc_json, ''), COALESCE(m.reply_to_json, ''),
 	COALESCE(m.subject, ''), COALESCE(m.preview, ''), m.date, m.size,
-	m.seen, m.flagged, m.has_attachments, COALESCE(m.thread_index, ''), m.thread_id`
+	m.seen, m.flagged, m.has_attachments, COALESCE(m.thread_index, ''), m.thread_id, f.account_id`
 
-// summaryWidth is how many columns summaryColumns has.
-const summaryWidth = 19
+// summaryWidth is how many columns summaryColumns has, and summaryDate
+// the place of the date among them.
+const (
+	summaryWidth = 20
+	summaryDate  = 12
+)
 
 func summaryRow(r []any) mail.Summary {
 	return mail.Summary{
+		Account:        text(r[19]),
 		UID:            mail.UID(number(r[0])),
 		Folder:         text(r[1]),
 		MessageID:      text(r[2]),
@@ -77,22 +83,24 @@ func decodeAddresses(s string) []mail.Address {
 	return out
 }
 
+// recipientsText is what the full-text index holds of the To and Cc of a
+// message: each name with its address. Migration v8 writes the same of
+// the rows it found.
+func recipientsText(to, cc []mail.Address) string {
+	var parts []string
+	for _, list := range [][]mail.Address{to, cc} {
+		for _, a := range list {
+			parts = append(parts, strings.TrimSpace(a.Name+" "+a.Email))
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
 // ListMessages reads the cache: the newest headers of a folder, all
 // starred messages across folders ("starred"), or search results.
 func (s *Store) ListMessages(ctx context.Context, accountID, folder, query string, limit int) ([]mail.Summary, error) {
-	if limit <= 0 {
-		limit = 50
-	}
-	q, args := listQuery(accountID, folder, query, limit)
-	rows, err := s.query(ctx, q, args...)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]mail.Summary, 0, len(rows.Values))
-	for _, r := range rows.Values {
-		out = append(out, summaryRow(r))
-	}
-	return out, nil
+	page, err := s.messagePage(ctx, mail.ListQuery{Scope: mail.AccountScope(accountID, folder), Limit: limit}, queryCriteria(query))
+	return page.Messages, err
 }
 
 // GetMessage reads a cached message and its attachments.
@@ -178,16 +186,17 @@ func (s *Store) SaveMessage(ctx context.Context, accountID, folder string, m mai
 	stmts := append(plan.before(),
 		stmt(`INSERT INTO messages (
 				folder_id, server_uid, message_id, in_reply_to, references_json,
-				from_name, from_email, to_json, cc_json, reply_to_json,
+				from_name, from_email, to_json, cc_json, reply_to_json, recipients,
 				subject, preview, date, size, seen, flagged, has_attachments,
 				body_text, body_html, body_truncated, raw_headers, cached_at,
 				thread_index, thread_id, deleted)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
 			ON CONFLICT (folder_id, server_uid) DO UPDATE SET
 				message_id=excluded.message_id, in_reply_to=excluded.in_reply_to,
 				references_json=excluded.references_json,
 				from_name=excluded.from_name, from_email=excluded.from_email,
 				to_json=excluded.to_json, cc_json=excluded.cc_json, reply_to_json=excluded.reply_to_json,
+				recipients=excluded.recipients,
 				subject=excluded.subject, preview=excluded.preview, date=excluded.date, size=excluded.size,
 				seen=excluded.seen OR messages.seen,
 				flagged=excluded.flagged OR messages.flagged,
@@ -197,8 +206,8 @@ func (s *Store) SaveMessage(ctx context.Context, accountID, folder string, m mai
 				cached_at=excluded.cached_at, thread_index=excluded.thread_index,
 				thread_id=excluded.thread_id, deleted=0`,
 			folderID, int64(m.UID), m.MessageID, m.InReplyTo, encodeJSON(m.References),
-			m.From.Name, m.From.Email, encodeJSON(m.To), encodeJSON(m.Cc), encodeJSON(m.ReplyTo),
-			m.Subject, m.Preview, unixPtr(m.Date), m.Size, boolInt(m.Seen), boolInt(m.Flagged),
+			m.From.Name, m.From.Email, encodeJSON(m.To), encodeJSON(m.Cc), encodeJSON(m.ReplyTo), recipientsText(m.To, m.Cc),
+			m.Subject, m.Preview, dateColumn(m.Date), m.Size, boolInt(m.Seen), boolInt(m.Flagged),
 			boolInt(m.HasAttachments), m.BodyText, m.BodyHTML, boolInt(m.BodyTruncated),
 			m.RawHeaders, unixPtr(m.CachedAt), m.ThreadIndex, plan.find(thread)))
 	if m.Seen && !wasSeen {
@@ -288,28 +297,8 @@ func (s *Store) ApplySync(ctx context.Context, accountID string, b mail.SyncBatc
 		stmts = append(stmts, stmt(`DELETE FROM messages WHERE folder_id = ?`, folderID))
 	}
 	stmts = append(stmts, plan.before()...)
-	// A header the sync did not get keeps what the cache had of it.
 	for i, m := range b.Messages {
-		stmts = append(stmts, stmt(`INSERT INTO messages (
-				folder_id, server_uid, message_id, in_reply_to, references_json,
-				from_name, from_email, to_json, cc_json, reply_to_json,
-				subject, preview, date, size, seen, flagged, has_attachments,
-				thread_index, thread_id, deleted)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-			ON CONFLICT (folder_id, server_uid) DO UPDATE SET
-				message_id=excluded.message_id, in_reply_to=excluded.in_reply_to,
-				references_json=COALESCE(NULLIF(excluded.references_json, ''), messages.references_json),
-				from_name=excluded.from_name, from_email=excluded.from_email,
-				to_json=excluded.to_json, cc_json=excluded.cc_json, reply_to_json=excluded.reply_to_json,
-				subject=excluded.subject, preview=excluded.preview, date=excluded.date,
-				size=excluded.size, seen=excluded.seen, flagged=excluded.flagged,
-				has_attachments=excluded.has_attachments,
-				thread_index=COALESCE(NULLIF(excluded.thread_index, ''), messages.thread_index),
-				thread_id=excluded.thread_id, deleted=0`,
-			folderID, int64(m.UID), m.MessageID, m.InReplyTo, encodeJSON(m.References),
-			m.From.Name, m.From.Email, encodeJSON(m.To), encodeJSON(m.Cc), encodeJSON(m.ReplyTo),
-			m.Subject, m.Preview, unixPtr(m.Date), m.Size, boolInt(m.Seen), boolInt(m.Flagged),
-			boolInt(m.HasAttachments), m.ThreadIndex, plan.find(threads[i])))
+		stmts = append(stmts, upsertHeader(folderID, m, plan.find(threads[i])))
 	}
 	for i, h := range again {
 		stmts = append(stmts, stmt(`UPDATE messages SET
@@ -324,10 +313,85 @@ func (s *Store) ApplySync(ctx context.Context, accountID string, b mail.SyncBatc
 			boolInt(f.Seen), boolInt(f.Flagged), folderID, int64(f.UID)))
 	}
 	stmts = append(stmts, stmt(`UPDATE folders SET
-			uidvalidity = ?, last_uid = ?, unread = ?, total = ?, synced_at = ?
+			uidvalidity = ?, last_uid = ?, unread = ?, total = ?, synced_at = ?, complete = ?
 			WHERE id = ?`,
 		int64(b.Folder.UIDValidity), int64(b.Folder.LastUID), b.Folder.Unread, b.Folder.Total,
-		unixPtr(b.Folder.SyncedAt), folderID))
+		unixPtr(b.Folder.SyncedAt), boolInt(b.Folder.Complete), folderID))
+	return s.transaction(ctx, append(stmts, plan.after()...))
+}
+
+// upsertHeader writes the header a fetch read of a message, in its
+// conversation. A header the fetch did not get keeps what the cache had
+// of it.
+func upsertHeader(folderID int64, m mail.Message, thread int64) stmtType {
+	return stmt(`INSERT INTO messages (
+			folder_id, server_uid, message_id, in_reply_to, references_json,
+			from_name, from_email, to_json, cc_json, reply_to_json, recipients,
+			subject, preview, date, size, seen, flagged, has_attachments,
+			thread_index, thread_id, deleted)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+		ON CONFLICT (folder_id, server_uid) DO UPDATE SET
+			message_id=excluded.message_id, in_reply_to=excluded.in_reply_to,
+			references_json=COALESCE(NULLIF(excluded.references_json, ''), messages.references_json),
+			from_name=excluded.from_name, from_email=excluded.from_email,
+			to_json=excluded.to_json, cc_json=excluded.cc_json, reply_to_json=excluded.reply_to_json,
+			recipients=excluded.recipients,
+			subject=excluded.subject, preview=excluded.preview, date=excluded.date,
+			size=excluded.size, seen=excluded.seen, flagged=excluded.flagged,
+			has_attachments=excluded.has_attachments,
+			thread_index=COALESCE(NULLIF(excluded.thread_index, ''), messages.thread_index),
+			thread_id=excluded.thread_id, deleted=0`,
+		folderID, int64(m.UID), m.MessageID, m.InReplyTo, encodeJSON(m.References),
+		m.From.Name, m.From.Email, encodeJSON(m.To), encodeJSON(m.Cc), encodeJSON(m.ReplyTo), recipientsText(m.To, m.Cc),
+		m.Subject, m.Preview, dateColumn(m.Date), m.Size, boolInt(m.Seen), boolInt(m.Flagged),
+		boolInt(m.HasAttachments), m.ThreadIndex, thread)
+}
+
+// ApplyOlder writes messages of a folder that a sync left out, older ones
+// fetched on demand, in their conversations, and whether the cache now
+// lacks none. The cursor, the counts and the watermark stay as they are:
+// this is no new mail. A batch fetched under a UIDVALIDITY the folder no
+// longer has names other messages, and is refused whole.
+func (s *Store) ApplyOlder(ctx context.Context, accountID string, b mail.OlderBatch) error {
+	s.threadMu.Lock()
+	defer s.threadMu.Unlock()
+	// Only ApplySync changes a folder's UIDVALIDITY, under threadMu, so
+	// what is read here still holds when the batch is written.
+	rows, err := s.query(ctx, `SELECT id, uidvalidity FROM folders WHERE account_id = ? AND name = ?`, accountID, b.Folder)
+	if err != nil {
+		return err
+	}
+	if len(rows.Values) == 0 {
+		return mail.ErrNotFound
+	}
+	folderID := number(rows.Values[0][0])
+	if uint32(number(rows.Values[0][1])) != b.UIDValidity {
+		return mail.ErrFolderReset
+	}
+	uids := make([]mail.UID, 0, len(b.Messages))
+	keys := make([][]string, 0, len(b.Messages))
+	for _, m := range b.Messages {
+		uids = append(uids, m.UID)
+		keys = append(keys, mail.ThreadKeys(m.MessageID, m.InReplyTo, m.References, m.ThreadIndex))
+	}
+	// A sync may have written some of them meanwhile.
+	cached, err := s.cachedThreads(ctx, folderID, uids)
+	if err != nil {
+		return err
+	}
+	plan, err := s.planThreads(ctx, accountID, keys)
+	if err != nil {
+		return err
+	}
+	threads := make([]int64, len(b.Messages))
+	for i, m := range b.Messages {
+		threads[i] = plan.assign(keys[i], cached[m.UID].thread)
+	}
+	stmts := plan.before()
+	for i, m := range b.Messages {
+		stmts = append(stmts, upsertHeader(folderID, m, plan.find(threads[i])))
+	}
+	stmts = append(stmts, stmt(`UPDATE folders SET complete = ? WHERE id = ?`, boolInt(b.Complete), folderID))
 	return s.transaction(ctx, append(stmts, plan.after()...))
 }
 

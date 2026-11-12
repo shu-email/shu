@@ -16,10 +16,13 @@ import (
 type ThreadID int64
 
 // Conversation is a row of a conversation list: what the messages of one
-// conversation in the list's scope (a folder, the starred messages, or the
-// whole account) add up to.
+// conversation in the list's scope (a folder, the starred messages, every
+// folder, or the inbox of every account; see Scope) add up to.
 type Conversation struct {
 	Thread ThreadID `json:"thread"`
+	// Account is the account the conversation is in: all its messages
+	// are, and an action on it is the account's.
+	Account string `json:"account,omitempty"`
 	// Latest is the newest of those messages; the row shows its sender,
 	// subject, date and preview.
 	Latest Summary `json:"latest"`
@@ -32,7 +35,10 @@ type Conversation struct {
 	HasAttachments bool `json:"hasAttachments"`
 	// Matches are the messages of the conversation a search found, in
 	// any folder, newest first. A list that is no search has none.
+	// Found is the same messages with the parts their terms were found
+	// in.
 	Matches []MessageRef `json:"matches,omitempty"`
+	Found   []Match      `json:"found,omitempty"`
 }
 
 // MessageRef names a cached message: its folder and its UID there.

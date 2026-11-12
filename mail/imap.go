@@ -477,10 +477,12 @@ func recentSeqSet(total uint32, limit int) imap.NumSet {
 	return set
 }
 
-// syncFolder implements the changeset sync described in the docs.
+// syncFolder implements the changeset sync described in the docs. A
+// limit above zero is how many of the newest messages a first sync
+// fetches and the sync refreshes; else the settings' window is.
 func (s *Service) syncFolder(ctx context.Context, a Account, password, folder string, limit int) error {
 	if limit <= 0 {
-		limit = defaultSyncCap
+		limit = s.firstSyncWindow(ctx)
 	}
 	c, err := s.dialIMAP(ctx, a, password)
 	if err != nil {
@@ -492,25 +494,37 @@ func (s *Service) syncFolder(ctx context.Context, a Account, password, folder st
 	if err != nil {
 		return fmt.Errorf("imap: select %s: %w", folder, err)
 	}
-	return s.syncSelected(ctx, c, a.ID, folder, selected.UIDValidity, limit, limit)
+	_, err = s.syncSelected(ctx, c, a.ID, folder, selected.UIDValidity, windowSpan(limit))
+	return err
+}
+
+// syncSpan is how much of a folder a sync reads: the newest first
+// messages when it has none cached or they were reset, the flags and
+// threading headers of the newest refresh, and of the messages that
+// arrived since the last sync the newest keep. What keep leaves out is a
+// gap FetchOlder fills.
+type syncSpan struct{ first, refresh, keep int }
+
+// windowSpan is the span of a sync that caches and refreshes the newest
+// window messages and keeps up to defaultSyncCap that arrived.
+func windowSpan(window int) syncSpan {
+	return syncSpan{first: window, refresh: window, keep: max(window, defaultSyncCap)}
 }
 
 // syncSelected syncs the folder a connection has selected, under the
-// UIDVALIDITY the server gave when it was. It only reads, so it works as
-// well on a folder opened read-only. limit is how many of the newest
-// messages a first sync fetches and how many have their flags refreshed;
-// keep is how many of the messages that arrived since the last sync are
-// kept, the newest ones.
-func (s *Service) syncSelected(ctx context.Context, c *imapSession, accountID, folder string, uidValidity uint32, limit, keep int) error {
+// UIDVALIDITY the server gave when it was, and returns how many messages
+// it wrote. It only reads, so it works as well on a folder opened
+// read-only.
+func (s *Service) syncSelected(ctx context.Context, c *imapSession, accountID, folder string, uidValidity uint32, span syncSpan) (int, error) {
 	status, err := c.client.Status(folder, &imap.StatusOptions{
 		NumMessages: true, NumUnseen: true, UIDValidity: true,
 	}).Wait()
 	if err != nil {
-		return fmt.Errorf("imap: status %s: %w", folder, err)
+		return 0, fmt.Errorf("imap: status %s: %w", folder, err)
 	}
 	cached, hasCached, err := s.store.Folder(ctx, accountID, folder)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	reset := hasCached && cached.UIDValidity != 0 && uidValidity != 0 && cached.UIDValidity != uidValidity
 
@@ -531,13 +545,17 @@ func (s *Service) syncSelected(ctx context.Context, c *imapSession, accountID, f
 	total := uint32(batch.Folder.Total)
 
 	var set imap.NumSet
+	keep := span.keep
 	if reset || !hasCached || cached.LastUID == 0 {
-		set = recentSeqSet(total, limit)
-		keep = limit
+		set = recentSeqSet(total, span.first)
+		keep = span.first
+		// The cache is complete when this reads the folder whole.
+		batch.Folder.Complete = int(total) <= span.first
 	} else {
 		var uids imap.UIDSet
 		uids.AddRange(imap.UID(cached.LastUID+1), 0)
 		set = uids
+		batch.Folder.Complete = cached.Complete
 	}
 	// A newer UIDVALIDITY with an old cursor is a reset even if the
 	// cached row did not have the cursor yet.
@@ -547,11 +565,13 @@ func (s *Service) syncSelected(ctx context.Context, c *imapSession, accountID, f
 	if total > 0 {
 		messages, flags, err := fetchSummaries(c, set, false)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		// Trim to the newest ones even when the server ignored the limit.
+		// What goes is mail the cache lacks.
 		if len(messages) > keep {
 			messages = messages[len(messages)-keep:]
+			batch.Folder.Complete = false
 		}
 		batch.Messages = messages
 		if reset {
@@ -571,7 +591,7 @@ func (s *Service) syncSelected(ctx context.Context, c *imapSession, accountID, f
 		// have changed from another client, and the headers that thread
 		// it, which a cache from before conversations lacks.
 		if batch.Folder.Total > 0 {
-			refreshed, flags, err := fetchSummaries(c, recentSeqSet(total, limit), false)
+			refreshed, flags, err := fetchSummaries(c, recentSeqSet(total, span.refresh), false)
 			if err == nil {
 				batch.Flags = flags
 				for _, m := range refreshed {
@@ -583,22 +603,33 @@ func (s *Service) syncSelected(ctx context.Context, c *imapSession, accountID, f
 			}
 		}
 	}
-	// Previews are a nicety: a server that cannot do a partial body
-	// fetch should not fail the sync.
-	if total > 0 && len(batch.Messages) > 0 {
-		if previews, _, err := fetchSummaries(c, set, true); err == nil {
-			byUID := make(map[UID]string, len(previews))
-			for _, p := range previews {
-				byUID[p.UID] = p.Preview
-			}
-			for i := range batch.Messages {
-				if p := byUID[batch.Messages[i].UID]; p != "" {
-					batch.Messages[i].Preview = p
-				}
-			}
+	if total > 0 {
+		addPreviews(c, set, batch.Messages)
+	}
+	return len(batch.Messages), s.store.ApplySync(ctx, accountID, batch)
+}
+
+// addPreviews fetches the start of the body of each message of set and
+// puts it in that message's preview, among messages. Previews are a
+// nicety: a server that cannot do a partial body fetch does not fail the
+// fetch they are part of.
+func addPreviews(c *imapSession, set imap.NumSet, messages []Message) {
+	if len(messages) == 0 {
+		return
+	}
+	previews, _, err := fetchSummaries(c, set, true)
+	if err != nil {
+		return
+	}
+	byUID := make(map[UID]string, len(previews))
+	for _, p := range previews {
+		byUID[p.UID] = p.Preview
+	}
+	for i := range messages {
+		if p := byUID[messages[i].UID]; p != "" {
+			messages[i].Preview = p
 		}
 	}
-	return s.store.ApplySync(ctx, accountID, batch)
 }
 
 // fetchMessage reads and parses one message's body.

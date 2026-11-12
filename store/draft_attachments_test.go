@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"shu/internal/sqlitetest"
 	"shu/mail"
 
 	"github.com/egoist/mygo/plugins/sqlite"
@@ -304,9 +305,7 @@ func TestCancelledSendIsNotPending(t *testing.T) {
 // A database from before attachments gains the table and keeps its
 // drafts, which have none.
 func TestMigrationAddsDraftAttachmentsToAnOlderDatabase(t *testing.T) {
-	if err := sqlite.Load(); err != nil {
-		t.Skipf("sqlite native module is not ready (%v); run go tool mygo generate", err)
-	}
+	sqlitetest.Require(t)
 	ctx := context.Background()
 	path := t.TempDir() + "/shu.db"
 	// Build a v3 database by hand, as the previous release left it.

@@ -22,6 +22,9 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 		if a.undo != nil {
 			a.undoBanner(c, t)
 		}
+		if a.triage != nil {
+			a.triageBanner(c, t)
+		}
 		if a.err != "" {
 			a.errorBanner(c, t)
 		}
@@ -102,6 +105,10 @@ func (a *app) listHeader(c *ui.Context, t *ui.Theme) {
 		}
 		if chosen > 1 {
 			ui.Button(c, locales.ClearSelection()).OnClick(func() { a.clearSelection() })
+		} else if a.ai != nil {
+			ui.Button(c, "").Label(locales.TriageInbox()).Tooltip(locales.TriageInbox()).Padding(4, 6).
+				Disabled(len(a.all) == 0).OnClick(a.triageList).
+				Children(func() { ui.Icon(c, sparklesIcon).FontSize(15) })
 		}
 	})
 	ui.Text(c, a.listSummary()).FontSize(11).TextColor(t.TextMuted).SingleLine()
@@ -287,7 +294,11 @@ func (a *app) messageRow(row ui.ListRow) {
 				if !m.Seen {
 					subject.Bold()
 				}
-				ui.Text(c, m.Preview).FontSize(12).SingleLine().TextColor(muted)
+				if s, ok := a.suggestion(m); ok {
+					a.suggestionLine(c, t, s, chosen)
+				} else {
+					ui.Text(c, m.Preview).FontSize(12).SingleLine().TextColor(muted)
+				}
 			})
 		})
 	})

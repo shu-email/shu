@@ -7,6 +7,8 @@ import (
 	"log"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -14,6 +16,7 @@ import (
 	"github.com/egoist/mygo/plugins/sqlite"
 	"github.com/egoist/mygo/ui"
 
+	"shu/ai"
 	"shu/locales"
 	"shu/mail"
 	"shu/store"
@@ -32,6 +35,9 @@ type undoMove struct {
 
 type app struct {
 	svc mailService
+	// ai is the AI layer, nil where there is none: the AI controls then
+	// do not show.
+	ai aiService
 
 	win    *mygo.Window
 	run    func(func())
@@ -80,6 +86,17 @@ type app struct {
 	htmlKey  string
 	services ui.Services
 
+	// AI state: the settings form, the summaries of this account's
+	// messages by key, the triage of the list on screen, and the payload
+	// being inspected.
+	settingsTab int
+	aiForm      aiSettings
+	aiSaveMu    sync.Mutex
+	aiSaveSeq   atomic.Uint64
+	summaries   map[string]*aiJob
+	triage      *triageState
+	review      *aiReview
+
 	composes []*composeState
 
 	// Hooks the window sets; tests leave them nil.
@@ -101,6 +118,7 @@ func newApp(svc mailService) *app {
 		sidebarOpen:   true,
 		mailboxesOpen: true,
 		bodies:        map[string]mail.FetchResult{},
+		summaries:     map[string]*aiJob{},
 	}
 }
 
@@ -199,8 +217,21 @@ func (a *app) beginAccount() {
 	a.list = ui.ListState{}
 	a.sel.Clear()
 	a.bodies = map[string]mail.FetchResult{}
+	a.clearAI()
 	a.all = nil
 	a.loadCache(a.gen)
+}
+
+// clearAI drops the AI results of the account on screen, cancelling the
+// requests still running: they describe mail the window no longer shows.
+func (a *app) clearAI() {
+	for _, job := range a.summaries {
+		if job.cancel != nil {
+			job.cancel()
+		}
+	}
+	a.summaries = map[string]*aiJob{}
+	a.clearTriage()
 }
 
 // loadCache shows cached folders and messages at once.
@@ -539,6 +570,7 @@ func (a *app) selectFolder() {
 	a.setUndo(nil)
 	a.list = ui.ListState{}
 	a.sel.Clear()
+	a.clearTriage()
 	a.all = nil
 	a.query = ""
 	a.loadMessages(a.gen)
@@ -753,6 +785,7 @@ func (a *app) mailView(c *ui.Context) {
 		panes.OnShortcut(0, ui.KeyDelete, func() { a.moveSelected(mail.SpecialTrash) })
 	})
 	a.accountModal(c)
+	aiReviewModal(c, &a.review)
 }
 
 // titleBar draws the search field, sync and compose.
@@ -779,7 +812,7 @@ func (a *app) titleBar(c *ui.Context, t *ui.Theme, bar ui.TitleBar, height float
 		a.iconButton(c, refreshIcon, locales.Sync(), locales.SyncMail()).
 			OnClick(func() { a.refresh() })
 		a.iconButton(c, settingsIcon, locales.Settings(), locales.Settings()).
-			OnClick(func() { a.showSettings = true })
+			OnClick(func() { a.openSettings(settingsTabGeneral) })
 		ui.PrimaryButton(c, "").Children(func() {
 			ui.Icon(c, composeIcon).FontSize(14)
 			ui.Text(c, locales.Compose())
@@ -824,7 +857,7 @@ func (a *app) sidebar(c *ui.Context, t *ui.Theme) {
 					}
 				}
 				if m.Item(locales.Settings()).Chosen() {
-					a.showSettings = true
+					a.openSettings(settingsTabGeneral)
 				}
 			}).Label(locales.AccountsMenu()).Tooltip(locales.AccountsMenu())
 		})
@@ -888,9 +921,11 @@ func (a *app) iconButton(c *ui.Context, svg *ui.SVG, label, tip string) ui.Eleme
 		Children(func() { ui.Icon(c, svg).FontSize(16) })
 }
 
-// toolButton is a flat toolbar button showing only an icon.
+// toolButton is a flat toolbar button showing only an icon. Its padding
+// is the icon buttons', which lets the whole toolbar fit the reading pane
+// at the window's minimum width.
 func (a *app) toolButton(c *ui.Context, svg *ui.SVG, label string, on bool, fn func()) ui.Element {
-	b := ui.Button(c, "").Label(label).Tooltip(label).Disabled(!on)
+	b := ui.Button(c, "").Label(label).Tooltip(label).Disabled(!on).Padding(6, 8)
 	if on && fn != nil {
 		b = b.OnClick(fn)
 	}
@@ -935,6 +970,7 @@ func main() {
 			log.Fatal(err)
 		}
 		a := newApp(mail.NewService(db, keychain{}, cacheDir))
+		a.ai = ai.NewService(db, aiKeychain{})
 		win := mygo.NewWindow(mygo.WindowOptions{
 			Title:           locales.AppName(),
 			Width:           1220,

@@ -260,6 +260,252 @@
   "hideDetails": "Hide details",
   "replyTo": "Reply-To",
   "messageID": "Message-ID",
+  "general": "General",
+  "close": "Close",
+  "ai": "AI",
+  "aiTitle": "AI features",
+  "aiIntro": "Bring your own key. Mail text goes straight from this device to the provider you choose, and only when you press an AI button. Shu has no servers.",
+  "aiEnable": "Enable AI features",
+  "aiProviderLocal": "Local model (Ollama, LM Studio)",
+  "aiProviderCustom": "Custom (OpenAI-compatible)",
+  "aiBaseURL": "Server URL",
+  "aiModel": "Model",
+  "aiKey": "API key",
+  "aiKeyPlaceholder": "Paste your API key",
+  "aiKeyReplace": "Type a new key to replace the stored one",
+  "aiKeySave": "Save key",
+  "aiKeyStored": "A key is stored in the system keychain. It is never shown.",
+  "aiKeyMissing": "No key is stored.",
+  "aiKeyOptional": "This kind of server usually needs no key.",
+  "aiKeyDelete": "Delete key",
+  "aiKeySaved": "Key saved to the keychain.",
+  "aiKeyDeleted": "Key deleted.",
+  "aiTest": "Test connection",
+  "aiTesting": "Testing…",
+  "aiTestOK": "Connected: {model} answered.",
+  "@aiTestOK": {
+    "placeholders": {
+      "model": {
+        "type": "String",
+        "example": "gpt-4o-mini"
+      }
+    }
+  },
+  "aiHTTPWarning": "This server uses plain HTTP. Mail text and your key would cross the network unencrypted.",
+  "aiAllowHTTP": "Allow plain HTTP to this server",
+  "aiCapabilities": "Capabilities",
+  "aiSummaries": "Summaries",
+  "aiSummariesDetail": "Summarize the open message. Sends the subject, sender name, date and up to {limit} characters of the body.",
+  "@aiSummariesDetail": {
+    "placeholders": {
+      "limit": {
+        "type": "int",
+        "example": "4000"
+      }
+    }
+  },
+  "aiTriage": "Inbox triage",
+  "aiTriageDetail": "Suggest what needs you, what can wait and what can be archived. Sends the sender, subject and a short preview of up to {count} listed messages.",
+  "@aiTriageDetail": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "50"
+      }
+    }
+  },
+  "aiDrafts": "Draft replies",
+  "aiDraftsDetail": "Write an editable reply in the compose window. Sends the same excerpt as a summary, plus your guidance.",
+  "aiFeatureModel": "Model for this capability (optional)",
+  "aiNeverSent": "Never sent: quoted replies, signatures, link addresses, attachments and other recipients. You review the exact text the first time you use each capability.",
+  "summarize": "Summarize with AI",
+  "aiSummary": "Summary",
+  "aiSummarizing": "Summarizing with {model}…",
+  "@aiSummarizing": {
+    "placeholders": {
+      "model": {
+        "type": "String",
+        "example": "gpt-4o-mini"
+      }
+    }
+  },
+  "aiCopy": "Copy",
+  "aiCopied": "Copied",
+  "aiWhatWasSent": "What was sent",
+  "aiGenerated": "Written by {model}. Check the original before acting on it.",
+  "@aiGenerated": {
+    "placeholders": {
+      "model": {
+        "type": "String",
+        "example": "gpt-4o-mini"
+      }
+    }
+  },
+  "aiCachedNote": "Cached",
+  "aiDismissSummary": "Dismiss summary",
+  "aiDismissSuggestions": "Dismiss suggestions",
+  "aiDismissDraftNote": "Dismiss draft note",
+  "aiOff": "AI features are off. Turn them on in Settings and add your own key; nothing is sent until you do.",
+  "aiFeatureOff": "This AI capability is turned off in Settings.",
+  "aiNoKey": "No API key is stored for the provider. Add one in Settings.",
+  "aiNoModel": "No model is chosen. Pick one in Settings.",
+  "aiOpenSettings": "Open AI settings",
+  "aiErrInvalidKey": "The provider rejected the API key.",
+  "aiErrRateLimit": "The provider's rate limit was reached. Try again in a moment.",
+  "aiErrTimeout": "The model took too long to answer.",
+  "aiErrUnreachable": "The server could not be reached.",
+  "aiErrModel": "The provider does not offer this model.",
+  "aiErrInsecure": "The server uses plain HTTP, which is refused unless you allow it in Settings.",
+  "aiErrServer": "The provider answered with an error (HTTP {status}).",
+  "@aiErrServer": {
+    "placeholders": {
+      "status": {
+        "type": "int",
+        "example": "503"
+      }
+    }
+  },
+  "aiErrBadResponse": "The model's answer could not be read.",
+  "aiErrEmpty": "This message has no text to send.",
+  "aiErrConfig": "The provider settings are not valid.",
+  "aiErrKeychain": "The system keychain is not available.",
+  "aiErrOther": "The request failed.",
+  "aiReviewTitle": "Review what will be sent",
+  "aiReviewTarget": "To {provider} · {model} · {host}",
+  "@aiReviewTarget": {
+    "placeholders": {
+      "provider": {
+        "type": "String",
+        "example": "OpenAI"
+      },
+      "model": {
+        "type": "String",
+        "example": "gpt-4o-mini"
+      },
+      "host": {
+        "type": "String",
+        "example": "api.openai.com"
+      }
+    }
+  },
+  "aiReviewInstruction": "Shu's instruction to the model",
+  "aiReviewText": "From your mail",
+  "aiReviewSize": "{chars} characters, body limited to {limit}",
+  "@aiReviewSize": {
+    "placeholders": {
+      "chars": {
+        "type": "int",
+        "example": "812"
+      },
+      "limit": {
+        "type": "int",
+        "example": "4000"
+      }
+    }
+  },
+  "aiReviewTriageSize": "{count} messages, {chars} characters",
+  "@aiReviewTriageSize": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "12"
+      },
+      "chars": {
+        "type": "int",
+        "example": "1800"
+      }
+    }
+  },
+  "aiReviewLeftOut": "Left out",
+  "aiReviewQuoted": "{count, plural, one {# line of quoted history} other {# lines of quoted history}}",
+  "@aiReviewQuoted": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "6"
+      }
+    }
+  },
+  "aiReviewSignature": "The signature",
+  "aiReviewLinks": "{count, plural, one {# link address} other {# link addresses}}",
+  "@aiReviewLinks": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "aiReviewAlways": "Attachments, recipients and other headers are never sent.",
+  "aiReviewTruncated": "The body was cut at the limit.",
+  "aiReviewSend": "Send to {model}",
+  "@aiReviewSend": {
+    "placeholders": {
+      "model": {
+        "type": "String",
+        "example": "gpt-4o-mini"
+      }
+    }
+  },
+  "aiReviewOnce": "You will not be asked again for this capability; what is sent stays inspectable.",
+  "triageInbox": "Triage with AI",
+  "aiTriaging": "Triaging {count} messages with {model}…",
+  "@aiTriaging": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "12"
+      },
+      "model": {
+        "type": "String",
+        "example": "gpt-4o-mini"
+      }
+    }
+  },
+  "aiSuggestions": "AI suggestions",
+  "aiTriageCounts": "{needs, plural, one {# needs you} other {# need you}} · {wait} can wait · {archive} can archive",
+  "@aiTriageCounts": {
+    "placeholders": {
+      "needs": {
+        "type": "int",
+        "example": "2"
+      },
+      "wait": {
+        "type": "int",
+        "example": "1"
+      },
+      "archive": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "aiNeedsYou": "Needs you",
+  "aiCanWait": "Can wait",
+  "aiCanArchive": "Can archive",
+  "aiSelectArchive": "Select “can archive”",
+  "aiTriageNote": "Suggestions only: nothing moves until you move it.",
+  "aiDraft": "Draft with AI",
+  "aiGuidance": "Guidance for the draft",
+  "aiGuidancePlaceholder": "What should the reply say? (optional)",
+  "aiDrafting": "Drafting with {model}…",
+  "@aiDrafting": {
+    "placeholders": {
+      "model": {
+        "type": "String",
+        "example": "gpt-4o-mini"
+      }
+    }
+  },
+  "aiDrafted": "Drafted by {model}. Edit it before you send.",
+  "@aiDrafted": {
+    "placeholders": {
+      "model": {
+        "type": "String",
+        "example": "gpt-4o-mini"
+      }
+    }
+  },
   "@mailboxSummary": {
     "placeholders": {
       "messages": {

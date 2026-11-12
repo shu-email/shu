@@ -30,7 +30,8 @@ const draftSyncDelay = 3 * time.Second
 type composeState struct {
 	app *app
 	// accountID is the account the message is written from: the one
-	// active as the window opened, or the draft's. The draft is stored
+	// active as the window opened, the answered message's, or the
+	// draft's. The draft is stored
 	// under it, so switching accounts in the mail window does not move
 	// the message to another one.
 	accountID string
@@ -122,9 +123,10 @@ type draftStatus struct {
 	err string
 }
 
-// openReply opens a reply to a message, which an AI draft may read.
+// openReply opens a reply to a message, which an AI draft may read. The
+// message's account writes it.
 func (a *app) openReply(m mail.Summary, body string, all bool) {
-	cs := a.openCompose(replyDraft(a, m, body, all, false))
+	cs := a.composeFrom(m.Account, replyDraft(a, m, body, all, false))
 	if strings.TrimSpace(body) != "" {
 		source := a.aiMessage(m, body)
 		cs.source = &source
@@ -132,9 +134,12 @@ func (a *app) openReply(m mail.Summary, body string, all bool) {
 }
 
 // openCompose opens a compose window for a message to write, or an empty
-// one.
-func (a *app) openCompose(out *mail.Outgoing) *composeState {
-	cs := &composeState{app: a, accountID: a.active}
+// one, from the account on show.
+func (a *app) openCompose(out *mail.Outgoing) *composeState { return a.composeFrom(a.active, out) }
+
+// composeFrom opens a compose window writing from an account.
+func (a *app) composeFrom(accountID string, out *mail.Outgoing) *composeState {
+	cs := &composeState{app: a, accountID: accountID}
 	if out != nil {
 		cs.to = addressesText(out.To)
 		cs.cc = addressesText(out.Cc)

@@ -210,11 +210,10 @@ func (a *app) senderHeader(c *ui.Context, t *ui.Theme, m mail.Summary) {
 // msgHasHTML reports whether a loaded message has an HTML body to show.
 func msgHasHTML(m mail.Message) bool { return strings.TrimSpace(m.BodyHTML) != "" }
 
-// recipientLine writes "to me" when the account is the only recipient,
-// else the recipients.
+// recipientLine writes "to me" when the message's account is the only
+// recipient, else the recipients.
 func (a *app) recipientLine(m mail.Summary) string {
-	if len(m.To) == 1 && a.activeAccount() != nil &&
-		strings.EqualFold(m.To[0].Email, a.activeAccount().Email) {
+	if acc := a.account(m.Account); len(m.To) == 1 && acc != nil && strings.EqualFold(m.To[0].Email, acc.Email) {
 		return locales.ToMe()
 	}
 	if to := recipients(m.To); to != "" {
@@ -343,7 +342,7 @@ func (a *app) saveAttachment(m mail.Summary, att mail.Attachment) {
 	if a.saveFile == nil {
 		return
 	}
-	accountID, folder, uid, part := a.active, m.Folder, m.UID, att.Part
+	accountID, folder, uid, part := m.Account, m.Folder, m.UID, att.Part
 	name := safeFileName(att.Filename)
 	g := a.gen
 	a.run(func() {
@@ -387,6 +386,10 @@ func safeFileName(name string) string {
 // the one row chosen. In conversation view they are the rows' newest
 // messages, and the actions act on threadTargets.
 func (a *app) targets() []mail.Summary {
+	if a.selected >= 0 && a.selected < len(a.all) && a.sel.Len() == 1 && a.sel.Has(a.rowKey(a.selected)) {
+		// The usual case, which a long list need not be walked for.
+		return []mail.Summary{a.all[a.selected]}
+	}
 	if a.sel.Len() > 0 {
 		chosen := map[string]bool{}
 		for k := range a.sel.All() {
@@ -433,13 +436,12 @@ func (a *app) toggleStar() {
 		}
 	}
 	g := a.gen
-	accountID := a.active
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
 		var err error
 		for _, m := range targets {
-			if err = a.svc.SetFlag(ctx, accountID, m.Folder, m.UID, mail.FlagFlagged, on); err != nil {
+			if err = a.svc.SetFlag(ctx, m.Account, m.Folder, m.UID, mail.FlagFlagged, on); err != nil {
 				break
 			}
 		}
@@ -469,22 +471,30 @@ func (a *app) moveSelected(special string) {
 		a.moveThreads(special)
 		return
 	}
-	targets := a.targets()
+	all := a.targets()
 	// The keys reach here whatever the toolbar offers: a draft of this
 	// device is in no folder of the server to be moved from.
-	if len(targets) == 0 || localDrafts(targets) > 0 {
+	if len(all) == 0 || localDrafts(all) > 0 {
 		return
 	}
-	dest := a.folderBySpecial(special)
-	if dest == "" {
+	// Each message goes to the folder of its own account, and stays where
+	// that account has none.
+	var targets []mail.Summary
+	dests := map[string]string{}
+	for _, m := range all {
+		if dest := a.specialFolder(m.Account, special); dest != "" {
+			dests[m.Account] = dest
+			targets = append(targets, m)
+		}
+	}
+	if len(targets) == 0 {
 		return
 	}
 	chosen := map[string]bool{}
-	unread := map[string]int{}
 	for _, m := range targets {
 		chosen[summaryKey(m)] = true
 		if !m.Seen {
-			unread[m.Folder]++
+			a.addUnread(m.Account, m.Folder, -1)
 		}
 	}
 	kept := make([]mail.Summary, 0, len(a.all)-len(targets))
@@ -499,16 +509,8 @@ func (a *app) moveSelected(special string) {
 	if a.selected >= len(a.all) {
 		a.selected = len(a.all) - 1
 	}
-	for folder, n := range unread {
-		for i := range a.folders {
-			if a.folders[i].Name == folder {
-				a.folders[i].Unread = max(0, a.folders[i].Unread-n)
-			}
-		}
-	}
 	a.updateBadge()
 	g := a.gen
-	accountID := a.active
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
@@ -517,7 +519,7 @@ func (a *app) moveSelected(special string) {
 			err   error
 		)
 		for i, m := range targets {
-			result, moveErr := a.svc.Move(ctx, accountID, m.Folder, m.UID, dest)
+			result, moveErr := a.svc.Move(ctx, m.Account, m.Folder, m.UID, dests[m.Account])
 			if moveErr != nil {
 				err = moveErr
 				break
@@ -540,7 +542,8 @@ func (a *app) moveSelected(special string) {
 				case mail.SpecialJunk:
 					label = locales.MovedToJunk()
 				}
-				a.setUndo(&undoMove{accountID: accountID, source: targets[0].Folder, dest: dest, destUID: first.DestUID, label: label})
+				m := targets[0]
+				a.setUndo(&undoMove{accountID: m.Account, source: m.Folder, dest: dests[m.Account], destUID: first.DestUID, label: label})
 			}
 			a.loadMessages(g)
 		})
@@ -600,7 +603,7 @@ func (a *app) replyTo(m *mail.Summary, msg *mail.Message, all bool) {
 	}
 	if body == "" {
 		// Fetch the body first, then open the window.
-		accountID, folder, uid := a.active, summary.Folder, summary.UID
+		accountID, folder, uid := summary.Account, summary.Folder, summary.UID
 		g := a.gen
 		a.run(func() {
 			ctx, cancel := a.ctx()
@@ -645,7 +648,7 @@ func (a *app) forwardMessage(m *mail.Summary, msg *mail.Message) {
 		body = msg.BodyText
 	}
 	if body == "" {
-		accountID, folder, uid := a.active, summary.Folder, summary.UID
+		accountID, folder, uid := summary.Account, summary.Folder, summary.UID
 		g := a.gen
 		a.run(func() {
 			ctx, cancel := a.ctx()
@@ -660,20 +663,20 @@ func (a *app) forwardMessage(m *mail.Summary, msg *mail.Message) {
 					body = result.Message.BodyText
 					a.bodies[summaryKey(summary)] = result
 				}
-				a.openCompose(replyDraft(a, summary, body, false, true))
+				a.composeFrom(summary.Account, replyDraft(a, summary, body, false, true))
 			})
 		})
 		return
 	}
-	a.openCompose(replyDraft(a, summary, body, false, true))
+	a.composeFrom(summary.Account, replyDraft(a, summary, body, false, true))
 }
 
 // replyDraft builds the recipient, subject and quoted body of a reply or
-// forward.
+// forward. The account the message is in is the one that answers it.
 func replyDraft(a *app, m mail.Summary, body string, all, forward bool) *mail.Outgoing {
 	out := &mail.Outgoing{}
 	own := ""
-	if acc := a.activeAccount(); acc != nil {
+	if acc := a.account(m.Account); acc != nil {
 		own = strings.ToLower(acc.Email)
 	}
 	quote := func() string {
@@ -795,35 +798,24 @@ func (a *app) toggleRead() {
 		}
 	}
 	on := !allSeen
-	delta := map[string]int{}
+	var changed []mail.Summary
 	for i := range a.all {
 		m := &a.all[i]
 		if !chosen[summaryKey(*m)] || m.Seen == on {
 			continue
 		}
 		m.Seen = on
-		if on {
-			delta[m.Folder]--
-		} else {
-			delta[m.Folder]++
-		}
-	}
-	for folder, d := range delta {
-		for i := range a.folders {
-			if a.folders[i].Name == folder {
-				a.folders[i].Unread = max(0, a.folders[i].Unread+d)
-			}
-		}
+		a.addUnread(m.Account, m.Folder, unreadDelta(on))
+		changed = append(changed, *m)
 	}
 	a.updateBadge()
 	g := a.gen
-	accountID := a.active
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
 		var err error
 		for _, m := range targets {
-			if err = a.svc.SetFlag(ctx, accountID, m.Folder, m.UID, mail.FlagSeen, on); err != nil {
+			if err = a.svc.SetFlag(ctx, m.Account, m.Folder, m.UID, mail.FlagSeen, on); err != nil {
 				break
 			}
 		}
@@ -837,12 +829,8 @@ func (a *app) toggleRead() {
 						a.all[i].Seen = !on
 					}
 				}
-				for folder, d := range delta {
-					for i := range a.folders {
-						if a.folders[i].Name == folder {
-							a.folders[i].Unread = max(0, a.folders[i].Unread-d)
-						}
-					}
+				for _, m := range changed {
+					a.addUnread(m.Account, m.Folder, -unreadDelta(on))
 				}
 				a.err = err.Error()
 				a.updateBadge()

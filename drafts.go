@@ -82,7 +82,7 @@ func (a *app) runDraftSync(accountID string, full bool) {
 			result, err = a.svc.SyncDraftEdits(ctx, accountID)
 		}
 		if err == nil && result.Folder != "" && showing {
-			_ = a.svc.SyncFolder(ctx, accountID, result.Folder, 50)
+			_ = a.svc.SyncFolder(ctx, accountID, result.Folder, 0)
 		}
 		a.post(func() {
 			state.running = false
@@ -172,7 +172,7 @@ func (a *app) editDraft() {
 		cs.focus()
 		return
 	}
-	accountID := a.active
+	accountID := summary.Account
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
@@ -260,14 +260,18 @@ func (a *app) discardSelected() {
 	targets := a.targets()
 	ids := make([]string, 0, len(targets))
 	for _, m := range targets {
-		if m.DraftID == "" {
-			// A message of the server among them: Delete moves those, and
-			// one action does not do both.
+		// A message of the server among them: Delete moves those, and one
+		// action does not do both. Nor does one discard reach two
+		// accounts.
+		if m.DraftID == "" || m.Account != targets[0].Account {
 			return
 		}
 		ids = append(ids, m.DraftID)
 	}
-	a.discardDrafts(a.active, ids, a.win, func(err error) {
+	if len(ids) == 0 {
+		return
+	}
+	a.discardDrafts(targets[0].Account, ids, a.win, func(err error) {
 		a.err = locales.DraftDiscardFailed(err.Error())
 	})
 }

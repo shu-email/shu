@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -208,31 +209,41 @@ func TestNewMailAppearsInTheList(t *testing.T) {
 	}
 }
 
-// With nothing chosen, new mail leaves nothing chosen; and a chosen row
-// that new mail pushes out of the list is not replaced by its neighbour,
-// which would open that message and mark it read.
+// With nothing chosen, new mail leaves nothing chosen; new mail pushing
+// the rows down keeps the last one read, and chosen; and a chosen row
+// that leaves the list is not replaced by its neighbour, which would open
+// that message and mark it read.
 func TestNewMailOpensNothing(t *testing.T) {
 	fs := newFakeService()
 	var msgs []mail.Summary
-	for uid := mail.UID(1); uid <= 50; uid++ {
+	for uid := mail.UID(1); uid <= listPage; uid++ {
 		m := newMail(uid, "Sender", fmt.Sprintf("Message %d", uid))
 		msgs = append(msgs, m)
 	}
-	fs.addAccount(testAccount("a1", "Work", "work@example.com"), "secret", watchFolders(50, 50), msgs)
+	fs.addAccount(testAccount("a1", "Work", "work@example.com"), "secret", watchFolders(listPage, listPage), msgs)
 	w := watchApp(t, inMessageView(fs))
 	a := w.a
 	a.start()
 	tt := ui.NewTester(a.view, 1220, 800)
-	// The oldest message, at the end of the 50 the list holds.
+	// The oldest message, at the end of the page the list holds.
 	a.chooseRow(len(a.all) - 1)
 	a.reloadBody()
 	tt.Frame()
-	if a.selectedKey() != "INBOX/1" {
+	if a.selectedKey() != "a1/INBOX/1" {
 		t.Fatalf("chosen = %q", a.selectedKey())
 	}
 	flagged := len(fs.flagCalls)
 
-	w.arrive(t, "a1", newMail(60, "Noor", "One more"))
+	w.arrive(t, "a1", newMail(200, "Noor", "One more"))
+	tt.Frame()
+	if len(a.all) != listPage+1 || a.selectedKey() != "a1/INBOX/1" || a.sel.Len() != 1 {
+		t.Errorf("new mail pushed the chosen row out: %d rows, %q chosen", len(a.all), a.selectedKey())
+	}
+
+	// Another mail client deletes it.
+	key := listKey("a1", "INBOX")
+	fs.messages[key] = slices.DeleteFunc(fs.messages[key], func(m mail.Summary) bool { return m.UID == 1 })
+	w.report(t, fs.checked("a1", time.Now()))
 	tt.Frame()
 	if a.selected != -1 || a.sel.Len() != 0 {
 		t.Errorf("after the chosen row left, row %d is chosen (%d highlighted)", a.selected, a.sel.Len())
@@ -242,7 +253,7 @@ func TestNewMailOpensNothing(t *testing.T) {
 	}
 
 	// Nothing chosen stays nothing chosen.
-	w.arrive(t, "a1", newMail(61, "Noor", "And another"))
+	w.arrive(t, "a1", newMail(201, "Noor", "And another"))
 	tt.Frame()
 	if a.selected != -1 || len(fs.flagCalls) != flagged {
 		t.Errorf("new mail chose row %d; flags %v", a.selected, fs.flagCalls[flagged:])
@@ -564,7 +575,7 @@ func TestNotificationClickOpensTheMessage(t *testing.T) {
 	a.openSettings(settingsTabGeneral)
 	a.openNotification(w.notes[0].ID)
 	tt.Frame()
-	if a.active != "a2" || a.folder != "INBOX" || a.selectedKey() != "INBOX/20" {
+	if a.active != "a2" || a.folder != "INBOX" || a.selectedKey() != "a2/INBOX/20" {
 		t.Fatalf("opened account %q, folder %q, message %q", a.active, a.folder, a.selectedKey())
 	}
 	if a.showSettings || w.raised != 1 {
@@ -585,7 +596,7 @@ func TestNotificationClickOpensTheMessage(t *testing.T) {
 	// In the account and folder on screen, from another message.
 	a.openNotification(w.notes[1].ID)
 	tt.Frame()
-	if a.selectedKey() != "INBOX/21" || w.raised != 2 {
+	if a.selectedKey() != "a2/INBOX/21" || w.raised != 2 {
 		t.Fatalf("opened %q; raised %d", a.selectedKey(), w.raised)
 	}
 
@@ -595,7 +606,7 @@ func TestNotificationClickOpensTheMessage(t *testing.T) {
 	a.search()
 	a.openNotification(w.notes[0].ID)
 	tt.Frame()
-	if a.folder != "INBOX" || a.selectedKey() != "INBOX/20" || a.query != "" {
+	if a.folder != "INBOX" || a.selectedKey() != "a2/INBOX/20" || a.query != "" {
 		t.Fatalf("opened folder %q, message %q, search %q", a.folder, a.selectedKey(), a.query)
 	}
 
@@ -634,7 +645,7 @@ func TestNotificationClickAtLaunch(t *testing.T) {
 	}
 	a.start()
 	tt := ui.NewTester(a.view, 1220, 800)
-	if a.active != "a2" || a.folder != "INBOX" || a.selectedKey() != "INBOX/20" {
+	if a.active != "a2" || a.folder != "INBOX" || a.selectedKey() != "a2/INBOX/20" {
 		t.Fatalf("opened account %q, folder %q, message %q", a.active, a.folder, a.selectedKey())
 	}
 	if !tt.HasText("Body of Dinner on Friday") || w.raised != 1 {
@@ -652,7 +663,7 @@ func TestNotificationClickWaitsForTheSync(t *testing.T) {
 	a := w.a
 	id := noteTarget{account: "a1", folder: "INBOX", validity: 7, uid: 99, message: true}.id()
 	a.openNotification(id)
-	if a.selected != -1 && a.selectedKey() == "INBOX/99" {
+	if a.selected != -1 && a.selectedKey() == "a1/INBOX/99" {
 		t.Fatal("a message that is not there was chosen")
 	}
 	if a.aim != nil {
@@ -729,7 +740,7 @@ func TestNotificationClickIgnoresBadIDs(t *testing.T) {
 			t.Fatalf("%q acted: raised %d, settings %v, wish %+v", id, w.raised, a.showSettings, a.aim)
 		}
 	}
-	if len(w.fs.flagCalls) != 0 && a.selectedKey() != "INBOX/1" {
+	if len(w.fs.flagCalls) != 0 && a.selectedKey() != "a1/INBOX/1" {
 		t.Errorf("flags changed: %v", w.fs.flagCalls)
 	}
 }
@@ -1285,7 +1296,7 @@ func TestBackgroundMailEndToEnd(t *testing.T) {
 	// Opening the folder shows its first message, which marks it read.
 	queue.until(t, "the first check and the inbox", func() bool {
 		tt.Frame()
-		return a.watch["a1"].State == mail.WatchUpToDate && a.selectedKey() == "INBOX/1" &&
+		return a.watch["a1"].State == mail.WatchUpToDate && a.selectedKey() == "a1/INBOX/1" &&
 			tt.HasText("The text of Old mail.")
 	})
 	if a.err != "" {
@@ -1309,7 +1320,7 @@ func TestBackgroundMailEndToEnd(t *testing.T) {
 	if got := a.folderUnread("INBOX"); got != 1 || badge != 1 {
 		t.Errorf("inbox unread = %d, badge = %d, want 1 and 1", got, badge)
 	}
-	if a.selectedKey() != "INBOX/1" {
+	if a.selectedKey() != "a1/INBOX/1" {
 		t.Errorf("the choice moved to %q", a.selectedKey())
 	}
 	// On the server the new message is unread still: watching reads only.
@@ -1345,6 +1356,6 @@ func TestBackgroundMailEndToEnd(t *testing.T) {
 	a.openNotification(notes[0].ID)
 	queue.until(t, "the message to open", func() bool {
 		tt.Frame()
-		return a.selectedKey() == "INBOX/2" && tt.HasText("The text of Pushed mail.")
+		return a.selectedKey() == "a1/INBOX/2" && tt.HasText("The text of Pushed mail.")
 	})
 }

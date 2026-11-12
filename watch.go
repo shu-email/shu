@@ -4,10 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 
 	"shu/locales"
@@ -436,7 +438,7 @@ func (a *app) showTarget(target noteTarget) {
 	a.closeAccountForm()
 	a.aim = &noteAim{account: target.account, folder: target.folder}
 	if target.message {
-		a.aim.key = summaryKey(mail.Summary{Folder: target.folder, UID: target.uid})
+		a.aim.key = messageKey(target.account, target.folder, target.uid)
 		a.aim.uid = target.uid
 	}
 	switch {
@@ -547,6 +549,7 @@ func (a *app) setMailSettings(set mail.Settings) {
 			a.checkChoice = i
 		}
 	}
+	a.windowChoice = windowIndex(set.SyncWindow)
 	a.notifyOn = map[string]*bool{}
 	a.bindMailSettings()
 }
@@ -567,6 +570,7 @@ func (a *app) bindMailSettings() {
 func (a *app) saveMailSettings() {
 	set := a.mailSet
 	set.CheckMinutes = mail.CheckIntervals[min(max(a.checkChoice, 0), len(mail.CheckIntervals)-1)]
+	set.SyncWindow = mail.SyncWindows[min(max(a.windowChoice, 0), len(mail.SyncWindows)-1)]
 	set.Muted = map[string]bool{}
 	for _, acc := range a.accounts {
 		if on := a.notifyOn[acc.ID]; on != nil && !*on {
@@ -607,6 +611,20 @@ func (a *app) mailSettingsView(c *ui.Context, t *ui.Theme) {
 		})
 		ui.Text(c, locales.CheckEveryDetail()).FontSize(12).TextColor(t.TextMuted)
 	})
+	a.section(c, locales.MailOnDevice(), func() {
+		ui.Column(c).Gap(4).Children(func() {
+			ui.Text(c, locales.SyncWindow()).FontSize(11).Bold().TextColor(t.TextMuted)
+			labels := make([]string, 0, len(mail.SyncWindows))
+			for _, n := range mail.SyncWindows {
+				labels = append(labels, i18n.FormatNumber(c.Locale(), n, i18n.NumberOptions{}))
+			}
+			choice := ui.Segmented(c, &a.windowChoice, labels...).Label(locales.SyncWindow()).Width(320)
+			if choice.Changed() {
+				a.saveMailSettings()
+			}
+		})
+		ui.Text(c, locales.SyncWindowDetail()).FontSize(12).TextColor(t.TextMuted)
+	})
 	a.section(c, locales.Notifications(), func() {
 		ui.Column(c).Gap(12).Padding(2, 0, 0, 0).Children(func() {
 			a.switchRow(c, t, locales.NotifyNewMail(), locales.NotifyNewMailDetail(), &a.mailSet.Notify, false)
@@ -632,6 +650,15 @@ func (a *app) mailSettingsView(c *ui.Context, t *ui.Theme) {
 			}
 		})
 	})
+}
+
+// windowIndex is the place of a first-sync window among the choices, the
+// default's for one that is none of them.
+func windowIndex(n int) int {
+	if i := slices.Index(mail.SyncWindows, n); i >= 0 {
+		return i
+	}
+	return slices.Index(mail.SyncWindows, mail.DefaultSyncWindow)
 }
 
 // switchRow is a switch with its name and a line about it. The name

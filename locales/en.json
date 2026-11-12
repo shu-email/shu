@@ -1052,5 +1052,77 @@
         "example": "2"
       }
     }
-  }
+  },
+  "loadingMore": "Loading more…",
+  "loadMoreFailed": "Couldn't load more: {error}",
+  "@loadMoreFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "database is locked"
+      }
+    }
+  },
+  "retryLoadMore": "Retry loading more",
+  "loadOlder": "Load older messages from the server",
+  "fetchingOlder": "Fetching older messages from the server…",
+  "fetchOlderFailed": "Couldn't fetch older messages: {error}",
+  "serverTooSlow": "the server took too long to answer",
+  "@fetchOlderFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "connection refused"
+      }
+    }
+  },
+  "retryFetchOlder": "Retry fetching older messages",
+  "allOnDevice": "All mail in this folder is on this device.",
+  "noMoreHere": "No more messages on this device.",
+  "noMoreResultsHere": "No more results in the mail on this device.",
+  "noMoreResults": "No more results.",
+  "noMoreMail": "No more messages.",
+  "noneHere": "None of this folder's mail is on this device.",
+  "searchedHere": "Only the mail on this device was searched.",
+  "onDeviceSummary": "{cached} of {total} messages on this device · {unread} unread",
+  "@onDeviceSummary": {
+    "description": "How many of a folder's messages are cached on this computer, of how many the server has.",
+    "placeholders": {
+      "cached": {
+        "type": "int",
+        "example": "1240"
+      },
+      "total": {
+        "type": "int",
+        "example": "5310"
+      },
+      "unread": {
+        "type": "int",
+        "example": "12"
+      }
+    }
+  },
+  "messageCountMore": "{count}+ messages",
+  "@messageCountMore": {
+    "description": "The number of messages a list shows, when more follow.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "100"
+      }
+    }
+  },
+  "conversationCountMore": "{count}+ conversations",
+  "@conversationCountMore": {
+    "description": "The number of conversations a list shows, when more follow.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "100"
+      }
+    }
+  },
+  "mailOnDevice": "Mail on this device",
+  "syncWindow": "Messages to keep from each folder's first sync",
+  "syncWindowDetail": "A folder's first sync keeps this many of its newest messages on this device. Older mail stays on the server, and you can always fetch it from the end of the folder's list."
 }

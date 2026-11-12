@@ -80,10 +80,10 @@ Windows and Linux. It is written in Go with
   that writes the rows with their conversations. A sync reads References,
   In-Reply-To and Thread-Index with `BODY.PEEK[HEADER.FIELDS (...)]`, also
   for the cached window it refreshes. Views list conversations with
-  `Service.CachedConversations` and read one with
+  `Service.ConversationPage` and read one with
   `Service.CachedConversation`, from the cache alone; a conversation-wide
-  action acts on exactly what `CachedConversation` returns for the list's
-  scope, `MoveMessages` / `MoveBackMessages` move such a set and undo it,
+  action acts on exactly what `Service.ScopedConversation` returns for the
+  list's scope, `MoveMessages` / `MoveBackMessages` move such a set and undo it,
   and `SetFlags` stars it or marks it read with one connection and one
   STORE per folder, changing only `\Seen` and `\Flagged` and never moving
   or expunging. The window lists conversations unless the user switched
@@ -116,7 +116,11 @@ Windows and Linux. It is written in Go with
   cursor nor the watermark of announced mail, so older mail is never
   announced. `Folder.Complete` records that the cache lacks none of a
   folder's messages, and `Service.FolderCache` counts what is on this
-  device against what the server has.
+  device against what the server has. The window reads the next page as
+  the user nears the end of the rows read, reads a list again from the
+  top for as many rows as it shows, and calls `FetchOlder` only when the
+  user asks. Its keys of rows, bodies and summaries include the account,
+  and an action takes the account from the row it acts on.
 - `ai/` is the AI layer: provider settings, the excerpt that decides what
   part of a message may leave the device, the features (summary of a
   message or a conversation, triage, draft reply) and `Service.send`, the

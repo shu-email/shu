@@ -17,16 +17,27 @@ type mailService interface {
 	TestConnection(ctx context.Context, a mail.Account, password string) error
 
 	CachedFolders(ctx context.Context, accountID string) ([]mail.Folder, error)
-	CachedMessages(ctx context.Context, accountID, folder, query string, limit int) ([]mail.Summary, error)
 	CachedMessage(ctx context.Context, accountID, folder string, uid mail.UID) (mail.FetchResult, bool, error)
+	// The list reads the cache a page at a time, newest first, each page
+	// after the cursor the one before it ended at.
+	MessagePage(ctx context.Context, q mail.ListQuery) (mail.MessagePage, error)
+	ConversationPage(ctx context.Context, q mail.ListQuery) (mail.ConversationPage, error)
 	// Conversations, from the cache alone. A conversation-wide action acts
-	// on exactly what CachedConversation returns for the list's scope; a
+	// on exactly what ScopedConversation returns for the list's scope; a
 	// read that returns nothing is of a conversation that merged into
-	// another, or left, since the list was read.
-	CachedConversations(ctx context.Context, accountID, folder, query string, limit int) ([]mail.Conversation, error)
+	// another, or left, since the list was read. CachedConversation with
+	// no folder reads a conversation whole, to show it.
+	ScopedConversation(ctx context.Context, accountID string, scope mail.Scope, thread mail.ThreadID) ([]mail.Summary, error)
 	CachedConversation(ctx context.Context, accountID, folder string, thread mail.ThreadID) ([]mail.Summary, error)
+	// FolderCache says how much of a folder is on this device, and
+	// FetchOlder fetches what the cache lacks of it, n of zero being the
+	// settings' first-sync window. Only a user's action fetches.
+	FolderCache(ctx context.Context, accountID, folder string) (mail.FolderCache, error)
+	FetchOlder(ctx context.Context, accountID, folder string, n int) (mail.OlderResult, error)
 
 	SyncAccount(ctx context.Context, accountID string) ([]mail.Folder, error)
+	// SyncFolder with a limit of zero caches the settings' first-sync
+	// window of a folder synced for the first time.
 	SyncFolder(ctx context.Context, accountID, folder string, limit int) error
 	FetchMessage(ctx context.Context, accountID, folder string, uid mail.UID, markSeen bool) (mail.FetchResult, error)
 

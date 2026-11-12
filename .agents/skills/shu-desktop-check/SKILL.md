@@ -32,8 +32,9 @@ behavior change and run without a display.
 - Do not press Send, Delete, Move to Junk, Empty Trash or any AI button
   (summary, triage, draft reply) unless the user asked for that step. AI
   buttons send mail text to the user's model provider.
-- Leave the app as you found it: clear the search, go back to the folder
-  you started in, close windows you opened.
+- Leave the app as you found it: clear the search (`fill <field> ""`),
+  go back to the folder you started in, move the keyboard focus back to
+  the list (`focus <row>`), close windows you opened.
 - Screenshots hold mail. Keep them in a temporary directory; never commit
   them.
 
@@ -44,25 +45,40 @@ listens only when `MYGO_AUTOMATION` names a socket. Put the socket in a
 directory only the user can write to (`$TMPDIR` on macOS,
 `$XDG_RUNTIME_DIR` on Linux), not in `/tmp`.
 
+Shell calls of an agent keep no variables, so set `SOCK` in each one, and
+call the client through a function: zsh does not split `$A` in
+`A="go tool mygo-automation"; $A open`.
+
 ```sh
 SOCK="${XDG_RUNTIME_DIR:-${TMPDIR%/}}/shu-automation.sock"
+M() { go tool mygo-automation "$@"; }
+front() { osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true'; }
+```
+
+Note `front` (macOS), then start the app as a background job:
+
+```sh
+rm -f "$SOCK"   # a stopped app leaves its socket behind
 GOFLAGS=-tags=e2e MYGO_AUTOMATION="$SOCK" go tool mygo dev -background -lang en
 ```
 
-Run that as a background job. `-background` starts the app, and restarts
-it after each rebuild, without bringing it to the front. `-lang en` fixes
-the language for this run only and leaves the user's setting alone; use
-`-lang zh-Hans` to check the Chinese strings.
+`-background` starts the app, and restarts it after each rebuild, without
+bringing it to the front. `-lang en` fixes the language for this run only
+and leaves the user's setting alone. A cached build takes a few seconds.
 
-Wait until the socket exists, then attach:
+Attach once the app answers, then check that `front` still names the
+user's app:
 
 ```sh
-go tool mygo-automation open --socket "$SOCK"
+for i in $(seq 60); do M open --socket "$SOCK" 2>/dev/null && break; sleep 1; done
 ```
 
-When done, `go tool mygo-automation close` and stop the `mygo dev` job;
-`close` alone leaves the app running. A rebuild restarts the app, which
-ends the session's refs: `open` again.
+A rebuild restarts the app, which ends the session's refs: `open` again.
+To check the other language, relaunch: `close`, stop, start again with
+`-lang zh-Hans`, `open`. Keys stay the same; labels change.
+
+Stop with `M close`, which leaves the app running, then
+`pkill -INT -f 'mygo dev -background'`, which quits it.
 
 ## Observe, act, verify
 
@@ -71,21 +87,31 @@ version. Read it once per session. The loop is snapshot, act with
 `--settle`, read the diff, act again:
 
 ```sh
-go tool mygo-automation snapshot -i
-go tool mygo-automation press key=Archive --settle      # open a folder
-go tool mygo-automation fill @e2 "invoice" --settle     # @e2: the search field
-go tool mygo-automation wait --text "Search results"
+M snapshot -i
+M press key=Sent --settle
+M wait --text "Loading…" --gone
 ```
 
 - Prefer selectors by key, which last across runs, then refs from the
   latest snapshot or diff. Prefer `press` and `fill`; they need neither
   coordinates nor focus.
-- `--settle` waits for the frames the window asked for, not for work in
-  the background. For results Shu loads off the UI thread (search,
-  opening a message, sync, AI), wait for what you expect with
-  `wait <sel>` or `wait --text <s>`; never sleep.
+- The open conversation's row shares its key with the reading pane, so
+  `press` or `focus` by that key is refused as ambiguous; use the row's
+  ref.
 - `press` really presses. Check the state before you repeat one, or a
   second press archives a second message.
+
+`--settle` waits for the frames the window asked for, not for work Shu
+does off the UI thread. Wait for what that work shows; never sleep. Text
+that changes at once proves nothing: the "Search results" heading and the
+field's own value appear before any result does.
+
+| After | Wait for |
+| --- | --- |
+| opening a folder | `wait --text "Loading…" --gone`; it then syncs and opens its first conversation |
+| a search (`fill <field> "invoice"`) | `wait key=end` (the "No more results" row), `wait --text "Syncing…" --gone`, then read the count ("1 conversation") |
+| clearing it (`fill <field> ""`) | `wait --text "Syncing…" --gone`, then the folder's count is back |
+| opening a message | an element of the reading pane, not the subject, which the row already shows |
 
 ## Shu's tree
 
@@ -105,16 +131,24 @@ go tool mygo-automation wait --text "Search results"
 ## Screenshots
 
 The tree tells what is there, its name and its state, which is enough for
-behavior and labels. Take a screenshot only to judge looks: layout at the
-minimum window size (1000×640), light and dark appearance, clipping and
-overlap.
+behavior and labels. Take a screenshot only to judge looks: clipping,
+overlap, layout at the minimum window size.
 
 ```sh
-go tool mygo-automation screenshot "${TMPDIR%/}/shu.png"
+M screenshot "${TMPDIR%/}/shu.png"
 ```
 
-The plugin renders the window's content as it is now, without the title
-bar the system draws, even while the window is covered.
+- The plugin renders the window's content as it is now, without the title
+  bar the system draws, even while the window is covered. A window in the
+  background is drawn inactive: selections are gray and accents muted.
+- For the minimum size, `agent-desktop resize-window --app "shu Dev"
+  --width 1000 --height 640` resizes without taking focus. It may answer
+  `TIMEOUT` although the window did resize; check with `agent-desktop
+  list-windows --app "shu Dev"`. The window stops at its own minimum
+  height, which is a little more than 640 because of the title bar.
+- The app follows the system appearance and has no override. Do not
+  change System Settings; check the current appearance, say which one it
+  was, and leave the other to the user.
 
 ## agent-desktop
 
@@ -134,6 +168,11 @@ agent-desktop skills get platform   # what differs on this OS
 - Linux needs the graphical session's AT-SPI bus; an empty
   `supported_surfaces` means it did not answer.
 - Address the app as `--app "shu Dev"`. Names follow the app's language.
+- Reading the menu bar is headless:
+  `agent-desktop snapshot --app "shu Dev" --surface menubar -i --compact`.
+  Its Apple menu lists the user's recent items, which are their files:
+  report only the app's own menus. Items macOS adds itself follow the
+  system language, not `-lang`.
 - To see a later result through it, the window must show: run
   `agent-desktop focus-window --app "shu Dev"` only after an element has
   appeared (`snapshot --wait-for "textfield:"`), and tell the user, since
@@ -141,7 +180,14 @@ agent-desktop skills get platform   # what differs on this OS
 
 ## Auditing labels
 
-List the interactive elements of `snapshot -i` that have no label. A
+List the interactive elements that have no label, on each screen you
+touched and in both languages:
+
+```sh
+M snapshot -i | grep -v '"'
+```
+
+The message list (`[list] selectable multiselectable`) is a known one. A
 button without one is an icon-only button missing its `Label`, which
 AGENTS.md requires; fix it in the view and cover it in a `ui.NewTester`
 test. An unnamed container (`list`, `tree`) is worth a label too, so a

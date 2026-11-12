@@ -5,9 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -94,6 +96,27 @@ type fakeService struct {
 	bulkFlags  []bulkFlag
 	movedRefs  []string
 	convErr    error
+
+	// Pages. cursors are the rows the cursors handed out end at;
+	// pageReads counts the page reads, onPage runs as each begins, and
+	// pageErr fails them. syncCalls records each SyncFolder with its
+	// limit.
+	cursors   map[mail.Cursor]mail.Summary
+	pageReads int
+	onPage    func(q mail.ListQuery)
+	pageErr   error
+	syncCalls []string
+	// Older mail. older holds, by listKey, the messages of a folder that
+	// the server has and the cache lacks, newest first; FetchOlder moves
+	// them into the cache. olderCalls records each FetchOlder, onOlder
+	// runs as one begins, olderErr fails it and olderReset has it report
+	// that the folder was synced anew. cacheErr fails FolderCache.
+	older      map[string][]mail.Summary
+	olderCalls []string
+	onOlder    func()
+	olderErr   error
+	olderReset bool
+	cacheErr   error
 }
 
 // bulkFlag is one SetFlags call.
@@ -117,6 +140,8 @@ func newFakeService() *fakeService {
 		settings:  mail.DefaultSettings(),
 
 		ownThreads: map[string]mail.ThreadID{},
+		cursors:    map[mail.Cursor]mail.Summary{},
+		older:      map[string][]mail.Summary{},
 	}
 }
 
@@ -139,7 +164,7 @@ func (f *fakeService) addAccount(a mail.Account, password string, folders []mail
 		if folder == "" {
 			folder = "INBOX"
 		}
-		m.Folder = folder
+		m.Folder, m.Account = folder, a.ID
 		key := listKey(a.ID, folder)
 		f.messages[key] = append(f.messages[key], m)
 	}
@@ -213,29 +238,124 @@ func (f *fakeService) CachedFolders(ctx context.Context, accountID string) ([]ma
 	return append([]mail.Folder(nil), f.folders[accountID]...), nil
 }
 
-func (f *fakeService) CachedMessages(ctx context.Context, accountID, folder, query string, limit int) ([]mail.Summary, error) {
-	q := strings.ToLower(strings.TrimSpace(query))
-	var out []mail.Summary
-	if folder == "starred" {
-		for _, fl := range f.folders[accountID] {
-			for _, m := range f.messages[listKey(accountID, fl.Name)] {
-				if m.Flagged && f.matches(accountID, m, q) {
-					out = append(out, m)
+// MessagePage reads the messages of a scope a search finds, newest first,
+// a page after a cursor, as the engine does.
+func (f *fakeService) MessagePage(ctx context.Context, q mail.ListQuery) (mail.MessagePage, error) {
+	if err := f.beginPage(q); err != nil {
+		return mail.MessagePage{}, err
+	}
+	accounts := f.scopeAccounts(q.Scope)
+	var all []mail.Summary
+	if len(accounts) == 1 && q.Scope.Folder != "" && q.Search.IsZero() {
+		// A folder of an account, read as it is kept: a large folder is
+		// not copied for each page.
+		all = f.messages[listKey(accounts[0], q.Scope.Folder)]
+	} else {
+		for _, accountID := range accounts {
+			var list []mail.Summary
+			if q.Scope.Folder != "" {
+				list = f.messages[listKey(accountID, q.Scope.Folder)]
+			} else {
+				list = f.everyMessage(accountID)
+			}
+			for _, m := range list {
+				if f.inScope(q.Scope, m) && f.found(accountID, m, q.Search) {
+					m.Account = accountID
+					all = append(all, m)
 				}
 			}
 		}
-	} else {
-		for _, m := range f.messages[listKey(accountID, folder)] {
-			if f.matches(accountID, m, q) {
-				out = append(out, m)
-			}
+	}
+	byAge := func(i, j int) bool { return newer(all[i], all[j]) }
+	if !sort.SliceIsSorted(all, byAge) {
+		sort.SliceStable(all, byAge)
+	}
+	rows, next, more := page(f, all, q, func(m mail.Summary) mail.Summary { return m })
+	for i := range rows {
+		if rows[i].Account == "" {
+			rows[i].Account = accounts[0]
 		}
 	}
-	sortSummaries(out)
-	if limit > 0 && len(out) > limit {
-		out = out[:limit]
+	return mail.MessagePage{Messages: rows, Next: next, More: more}, nil
+}
+
+// beginPage counts a page read and runs what the test asked for.
+func (f *fakeService) beginPage(q mail.ListQuery) error {
+	f.pageReads++
+	if f.onPage != nil {
+		f.onPage(q)
 	}
-	return out, nil
+	if err := q.Scope.Check(); err != nil {
+		return err
+	}
+	return f.pageErr
+}
+
+// page takes the page of rows after the query's cursor: those older, in
+// the order of newer, than the row it ended at.
+func page[T any](f *fakeService, all []T, q mail.ListQuery, latest func(T) mail.Summary) ([]T, mail.Cursor, bool) {
+	start := 0
+	if q.After != "" {
+		end, ok := f.cursors[q.After]
+		if !ok {
+			return nil, q.After, false
+		}
+		start = sort.Search(len(all), func(i int) bool { return newer(end, latest(all[i])) })
+	}
+	limit := q.Limit
+	if limit <= 0 {
+		limit = mail.DefaultPageSize
+	}
+	rows := all[start:min(start+limit, len(all))]
+	if len(rows) == 0 {
+		return []T{}, q.After, false
+	}
+	last := latest(rows[len(rows)-1])
+	next := mail.Cursor(fmt.Sprintf("%d/%d/%s/%s", last.Date.UnixNano(), last.UID, last.Account, last.Folder))
+	f.cursors[next] = last
+	return append([]T(nil), rows...), next, start+len(rows) < len(all)
+}
+
+// scopeAccounts are the accounts a scope reads.
+func (f *fakeService) scopeAccounts(sc mail.Scope) []string {
+	if len(sc.Accounts) > 0 {
+		return sc.Accounts
+	}
+	var out []string
+	for _, a := range f.accounts {
+		out = append(out, a.ID)
+	}
+	return out
+}
+
+// inScope reports whether a message of an account is in a scope's
+// folders.
+func (f *fakeService) inScope(sc mail.Scope, m mail.Summary) bool {
+	switch {
+	case sc.Starred:
+		return m.Flagged
+	case sc.Folder != "":
+		return m.Folder == sc.Folder
+	case sc.Special != "":
+		for _, folder := range f.folders[m.Account] {
+			if folder.Name == m.Folder {
+				return folder.SpecialUse == sc.Special
+			}
+		}
+		return false
+	}
+	return true
+}
+
+// found reports whether a message matches every term of a search's text,
+// the one part of a search the window asks for.
+func (f *fakeService) found(accountID string, m mail.Summary, s mail.Search) bool {
+	for _, term := range s.Text {
+		if !f.matches(accountID, m, strings.ToLower(strings.TrimSpace(term))) {
+			return false
+		}
+	}
+	return true
 }
 
 func (f *fakeService) matches(accountID string, m mail.Summary, q string) bool {
@@ -267,6 +387,7 @@ func (f *fakeService) CachedMessage(ctx context.Context, accountID, folder strin
 func (f *fakeService) find(accountID, folder string, uid mail.UID) (mail.Summary, bool) {
 	for _, m := range f.messages[listKey(accountID, folder)] {
 		if m.UID == uid {
+			m.Account = accountID
 			return m, true
 		}
 	}
@@ -278,7 +399,49 @@ func (f *fakeService) SyncAccount(ctx context.Context, accountID string) ([]mail
 }
 
 func (f *fakeService) SyncFolder(ctx context.Context, accountID, folder string, limit int) error {
+	f.syncCalls = append(f.syncCalls, fmt.Sprintf("%s/%s/%d", accountID, folder, limit))
 	return nil
+}
+
+// FolderCache counts a folder's messages in the cache against those of
+// the server: those cached and those older still to fetch.
+func (f *fakeService) FolderCache(ctx context.Context, accountID, folder string) (mail.FolderCache, error) {
+	if f.cacheErr != nil {
+		return mail.FolderCache{}, f.cacheErr
+	}
+	key := listKey(accountID, folder)
+	cached, left := len(f.messages[key]), len(f.older[key])
+	total := cached + left
+	for _, fl := range f.folders[accountID] {
+		if fl.Name == folder {
+			total = max(total, fl.Total)
+		}
+	}
+	return mail.FolderCache{Cached: cached, Total: total, Complete: left == 0}, nil
+}
+
+// FetchOlder moves the newest n of a folder's messages still on the
+// server into the cache, the settings' window for n of zero.
+func (f *fakeService) FetchOlder(ctx context.Context, accountID, folder string, n int) (mail.OlderResult, error) {
+	f.olderCalls = append(f.olderCalls, fmt.Sprintf("%s/%s/%d", accountID, folder, n))
+	if f.onOlder != nil {
+		f.onOlder()
+	}
+	if f.olderErr != nil {
+		return mail.OlderResult{}, f.olderErr
+	}
+	if n <= 0 {
+		n = f.settings.SyncWindow
+	}
+	key := listKey(accountID, folder)
+	take := min(n, len(f.older[key]))
+	for _, m := range f.older[key][:take] {
+		m.Folder, m.Account = folder, accountID
+		f.messages[key] = append(f.messages[key], m)
+	}
+	f.older[key] = f.older[key][take:]
+	sortSummaries(f.messages[key])
+	return mail.OlderResult{Fetched: take, More: len(f.older[key]) > 0, Reset: f.olderReset}, nil
 }
 
 func (f *fakeService) FetchMessage(ctx context.Context, accountID, folder string, uid mail.UID, markSeen bool) (mail.FetchResult, error) {
@@ -495,7 +658,7 @@ func (f *fakeService) DraftList(ctx context.Context, accountID, query string, li
 			continue
 		}
 		out = append(out, mail.Summary{
-			DraftID: d.ID, MessageID: d.MessageID, From: from,
+			Account: accountID, DraftID: d.ID, MessageID: d.MessageID, From: from,
 			To: draftRecipients(d.To), Cc: draftRecipients(d.Cc),
 			Subject: strings.TrimSpace(d.Subject), Preview: strings.Join(strings.Fields(d.Body), " "),
 			Date: d.UpdatedAt, Seen: true, HasAttachments: len(d.Attachments) > 0,
@@ -506,6 +669,7 @@ func (f *fakeService) DraftList(ctx context.Context, accountID, query string, li
 		var server []mail.Summary
 		for _, m := range f.messages[listKey(accountID, folder)] {
 			if !uploaded[m.UID] && f.matches(accountID, m, q) {
+				m.Account = accountID
 				server = append(server, m)
 			}
 		}
@@ -827,7 +991,7 @@ func (f *fakeService) everyMessage(accountID string) []mail.Summary {
 	var out []mail.Summary
 	for _, folder := range f.folders[accountID] {
 		for _, m := range f.messages[listKey(accountID, folder.Name)] {
-			m.Thread = f.threadOf(accountID, m)
+			m.Account, m.Thread = accountID, f.threadOf(accountID, m)
 			out = append(out, m)
 		}
 	}
@@ -846,26 +1010,50 @@ func inFakeScope(scope string, m mail.Summary) bool {
 	return m.Folder == scope
 }
 
-// newer orders messages as the cache does: by date, then by UID.
+// newer orders messages as the cache does: by date, then by UID, and the
+// folder and the account for an order with no ties.
 func newer(a, b mail.Summary) bool {
 	if !a.Date.Equal(b.Date) {
 		return a.Date.After(b.Date)
 	}
-	return a.UID > b.UID
+	if a.UID != b.UID {
+		return a.UID > b.UID
+	}
+	if a.Folder != b.Folder {
+		return a.Folder > b.Folder
+	}
+	return a.Account > b.Account
 }
 
-func (f *fakeService) CachedConversations(ctx context.Context, accountID, folder, query string, limit int) ([]mail.Conversation, error) {
-	q := strings.ToLower(strings.TrimSpace(query))
+// ConversationPage reads the conversations with a message in a scope, the
+// one whose newest such message is newest first, a page after a cursor:
+// a conversation a new message moves above the cursor is in no later
+// page, as in the engine.
+func (f *fakeService) ConversationPage(ctx context.Context, q mail.ListQuery) (mail.ConversationPage, error) {
+	if err := f.beginPage(q); err != nil {
+		return mail.ConversationPage{}, err
+	}
+	var all []mail.Conversation
+	for _, accountID := range f.scopeAccounts(q.Scope) {
+		all = append(all, f.conversations(accountID, q)...)
+	}
+	sort.SliceStable(all, func(i, j int) bool { return newer(all[i].Latest, all[j].Latest) })
+	rows, next, more := page(f, all, q, func(c mail.Conversation) mail.Summary { return c.Latest })
+	return mail.ConversationPage{Conversations: rows, Next: next, More: more}, nil
+}
+
+// conversations are an account's rows of a scope a search finds.
+func (f *fakeService) conversations(accountID string, q mail.ListQuery) []mail.Conversation {
 	every := f.everyMessage(accountID)
 	byThread := map[mail.ThreadID]*mail.Conversation{}
 	var order []mail.ThreadID
 	for _, m := range every {
-		if !inFakeScope(folder, m) {
+		if !f.inScope(q.Scope, m) {
 			continue
 		}
 		c := byThread[m.Thread]
 		if c == nil {
-			c = &mail.Conversation{Thread: m.Thread, Latest: m}
+			c = &mail.Conversation{Thread: m.Thread, Account: accountID, Latest: m}
 			byThread[m.Thread] = c
 			order = append(order, m.Thread)
 		}
@@ -877,25 +1065,44 @@ func (f *fakeService) CachedConversations(ctx context.Context, accountID, folder
 			c.Latest = m
 		}
 	}
-	if q != "" {
+	search := len(q.Search.Text) > 0
+	if search {
 		// A conversation is found by any of its messages, in any folder.
 		sort.SliceStable(every, func(i, j int) bool { return newer(every[i], every[j]) })
 		for _, m := range every {
-			if c := byThread[m.Thread]; c != nil && f.matches(accountID, m, q) {
+			if c := byThread[m.Thread]; c != nil && f.found(accountID, m, q.Search) {
 				c.Matches = append(c.Matches, mail.MessageRef{Folder: m.Folder, UID: m.UID})
 			}
 		}
 	}
 	var out []mail.Conversation
 	for _, id := range order {
-		if c := byThread[id]; q == "" || len(c.Matches) > 0 {
+		if c := byThread[id]; !search || len(c.Matches) > 0 {
 			out = append(out, *c)
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return newer(out[i].Latest, out[j].Latest) })
-	if limit > 0 && len(out) > limit {
-		out = out[:limit]
+	return out
+}
+
+// ScopedConversation is the messages a conversation's row of a scope
+// stands for, oldest first.
+func (f *fakeService) ScopedConversation(ctx context.Context, accountID string, scope mail.Scope, thread mail.ThreadID) ([]mail.Summary, error) {
+	if f.convErr != nil {
+		return nil, f.convErr
 	}
+	if err := scope.Check(); err != nil {
+		return nil, err
+	}
+	if len(scope.Accounts) > 0 && !slices.Contains(scope.Accounts, accountID) {
+		return nil, nil
+	}
+	var out []mail.Summary
+	for _, m := range f.everyMessage(accountID) {
+		if m.Thread == thread && f.inScope(scope, m) {
+			out = append(out, m)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return newer(out[j], out[i]) })
 	return out, nil
 }
 

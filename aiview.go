@@ -170,7 +170,7 @@ func (a *app) aiInspect(show func(*aiReview), payload func(context.Context) (ai.
 // aiMessage is the part of a message the AI layer may read.
 func (a *app) aiMessage(m mail.Summary, body string) ai.Message {
 	return ai.Message{
-		Scope:     a.active,
+		Scope:     m.Account,
 		Subject:   m.Subject,
 		FromName:  m.From.Name,
 		FromEmail: m.From.Email,
@@ -252,7 +252,7 @@ func (a *app) summarizeThread() {
 	if a.ai == nil || cv == nil || a.openRow() != a.selected || len(cv.msgs) == 0 {
 		return
 	}
-	key := threadKey(cv.thread)
+	key := threadKey(cv.account, cv.thread)
 	if job := a.summaries[key]; job != nil && job.busy {
 		return
 	}
@@ -263,7 +263,7 @@ func (a *app) summarizeThread() {
 			have[summaryKey(m)] = true
 		}
 	}
-	g, accountID := a.gen, a.active
+	g, account := a.gen, cv.account
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
@@ -274,9 +274,9 @@ func (a *app) summarizeThread() {
 			if have[k] {
 				continue
 			}
-			result, cached, e := a.svc.CachedMessage(ctx, accountID, m.Folder, m.UID)
+			result, cached, e := a.svc.CachedMessage(ctx, m.Account, m.Folder, m.UID)
 			if e == nil && !cached {
-				result, e = a.svc.FetchMessage(ctx, accountID, m.Folder, m.UID, false)
+				result, e = a.svc.FetchMessage(ctx, m.Account, m.Folder, m.UID, false)
 			}
 			if e != nil {
 				err = e
@@ -297,15 +297,15 @@ func (a *app) summarizeThread() {
 				a.summaries[key] = &aiJob{err: locales.BodyFailed(err.Error())}
 				return
 			}
-			a.summarizeConversation(g, key, a.aiConversation(msgs))
+			a.summarizeConversation(g, key, a.aiConversation(account, msgs))
 		})
 	})
 }
 
-// aiConversation is the part of a conversation the AI layer may read: of
-// each message the sender, the date and the plain text.
-func (a *app) aiConversation(msgs []mail.Summary) ai.Conversation {
-	c := ai.Conversation{Scope: a.active, Language: aiLanguage()}
+// aiConversation is the part of an account's conversation the AI layer
+// may read: of each message the sender, the date and the plain text.
+func (a *app) aiConversation(account string, msgs []mail.Summary) ai.Conversation {
+	c := ai.Conversation{Scope: account, Language: aiLanguage()}
 	if len(msgs) > 0 {
 		c.Subject = msgs[0].Subject
 	}

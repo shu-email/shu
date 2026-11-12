@@ -5,8 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"path/filepath"
-	"strings"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,10 +32,10 @@ type undoMove struct {
 	dest      string
 	destUID   mail.UID
 	label     string
-	// moved is a move of several messages, as a conversation's, which
-	// MoveBackMessages takes back; source, dest and destUID are then not
-	// used.
-	moved []mail.MoveResult
+	// moved is a move of several messages, as a conversation's, by the
+	// account they are in, which MoveBackMessages takes back; accountID,
+	// source, dest and destUID are then not used.
+	moved map[string][]mail.MoveResult
 }
 
 type app struct {
@@ -71,11 +72,16 @@ type app struct {
 	sel         ui.Selection[string]
 	searchField ui.Handle
 	focusList   bool
-	bodies      map[string]mail.FetchResult
-	bodyLocked  bool
-	bodyErr     string
-	loading     bool
-	err         string
+	// pager is how far the list has read the cache, and older, by account
+	// and folder, how much of a folder the cache holds and the fetch of
+	// the rest from the server.
+	pager      pager
+	older      map[string]*olderMail
+	bodies     map[string]mail.FetchResult
+	bodyLocked bool
+	bodyErr    string
+	loading    bool
+	err        string
 
 	pending          []mail.PendingSend
 	pendingDismissed bool
@@ -135,6 +141,7 @@ type app struct {
 	// The settings of receiving mail, and the controls bound to them.
 	mailSet       mail.Settings
 	checkChoice   int
+	windowChoice  int
 	notifyOn      map[string]*bool
 	mailSaveMu    sync.Mutex
 	mailSaveSeq   atomic.Uint64
@@ -181,6 +188,7 @@ func newApp(svc mailService) *app {
 		sidebarOpen:   true,
 		mailboxesOpen: true,
 		bodies:        map[string]mail.FetchResult{},
+		older:         map[string]*olderMail{},
 		summaries:     map[string]*aiJob{},
 		draftSyncs:    map[string]*draftSync{},
 		watches:       true,
@@ -191,6 +199,7 @@ func newApp(svc mailService) *app {
 		mailSet:       mail.DefaultSettings(),
 		convToggle:    mail.DefaultSettings().Conversations,
 		checkChoice:   1,
+		windowChoice:  windowIndex(mail.DefaultSyncWindow),
 		notifyOn:      map[string]*bool{},
 	}
 }
@@ -351,7 +360,7 @@ func (a *app) beginAccount() {
 	a.sel.Clear()
 	a.bodies = map[string]mail.FetchResult{}
 	a.clearAI()
-	a.all, a.convs, a.conv = nil, nil, nil
+	a.clearRows()
 	a.loadCache(a.gen)
 }
 
@@ -427,7 +436,9 @@ func (a *app) syncAccount(g uint64) {
 	})
 }
 
-// syncFolder refreshes the selected folder and its unread counts.
+// syncFolder refreshes the selected folder and its unread counts. Synced
+// for the first time, a folder keeps the settings' window of its newest
+// mail.
 func (a *app) syncFolder(g uint64) {
 	accountID, folder := a.active, a.folder
 	if folder == "" || folder == "starred" {
@@ -440,7 +451,7 @@ func (a *app) syncFolder(g uint64) {
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
-		err := a.svc.SyncFolder(ctx, accountID, folder, 50)
+		err := a.svc.SyncFolder(ctx, accountID, folder, 0)
 		var folders []mail.Folder
 		if err == nil {
 			folders, _ = a.svc.CachedFolders(ctx, accountID)
@@ -480,7 +491,7 @@ func (a *app) syncSent(g uint64) {
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
-		err := a.svc.SyncFolder(ctx, accountID, sent, 50)
+		err := a.svc.SyncFolder(ctx, accountID, sent, 0)
 		a.post(func() {
 			if err == nil && !a.stale(g) && a.threaded() {
 				a.readList(g, false, false)
@@ -496,70 +507,98 @@ func (a *app) loadMessages(g uint64) { a.readMessages(g, true) }
 // did not ask for, none.
 func (a *app) readMessages(g uint64, progress bool) { a.readList(g, progress, true) }
 
-// readList is readMessages. Unless neighbour is set, a chosen row that
-// left the list leaves nothing chosen: new mail pushing it out must not
-// open, and so mark read, the message beside it.
+// readList reads the list from the top. A list read again reads as many
+// rows as it shows, and on to the last of them, so that no row read
+// leaves it while mail that came pushes them down. Unless neighbour is
+// set, a chosen row that left the list leaves nothing chosen: new mail
+// must not open, and so mark read, the message beside it.
 func (a *app) readList(g uint64, progress, neighbour bool) {
-	accountID, folder, query := a.active, a.folder, strings.TrimSpace(a.query)
-	threaded := a.threaded()
+	q := a.listQuery()
+	accountID, folder, query, threaded := q.account, q.folder, q.search, q.threaded
 	key, prev := a.selectedKey(), a.chosenMessage()
 	var aimAt mail.Summary
 	if aim := a.aim; threaded && aim != nil && aim.account == accountID && aim.folder == folder {
-		aimAt = mail.Summary{Folder: aim.folder, UID: aim.uid}
+		aimAt = mail.Summary{Account: aim.account, Folder: aim.folder, UID: aim.uid}
 	}
 	if folder == "" {
 		a.all, a.convs = nil, nil
 		a.loading = false
 		return
 	}
+	p := &a.pager
 	if progress {
-		a.loading = true
+		a.loading, p.spin = true, true
 	}
+	want := listPage
+	var first, last *rowMark
+	again := p.query == q && len(a.all) > 0
+	if again {
+		want = max(want, len(a.all))
+		f, l := a.mark(0), a.mark(len(a.all)-1)
+		first, last = &f, &l
+	}
+	p.reads++
+	seq, rows := p.reads, p.rows
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
 		var (
-			msgs  []mail.Summary
-			convs []mail.Conversation
-			err   error
+			got listRows
+			err error
 			// In conversation view, found is the conversation the chosen
 			// message is in now when its own left the list, as one that
 			// merged into another does, and aimed the conversation of the
 			// message a notification asked to see.
 			found, aimed mail.ThreadID
+			cache        mail.FolderCache
+			cacheErr     error
 		)
 		switch {
 		case folder == draftsFolder:
-			msgs, err = a.svc.DraftList(ctx, accountID, query, 50)
-		case threaded:
-			convs, err = a.svc.CachedConversations(ctx, accountID, folder, query, 50)
-			msgs = latestOf(convs)
-			if err == nil && prev.UID != 0 && !hasThread(convs, prev.Thread) {
-				found = a.threadOf(ctx, accountID, prev)
-			}
-			if err == nil && aimAt.UID != 0 {
-				aimed = a.threadOf(ctx, accountID, aimAt)
-			}
+			got.msgs, err = a.svc.DraftList(ctx, accountID, query, 50)
 		default:
-			msgs, err = a.svc.CachedMessages(ctx, accountID, folder, query, 50)
+			got, err = a.readTop(ctx, q, want, first, last)
+			if err == nil && threaded && prev.UID != 0 && !hasThread(got.convs, convRef{prev.Account, prev.Thread}) {
+				found = a.threadOf(ctx, prev)
+			}
+			if err == nil && threaded && aimAt.UID != 0 {
+				aimed = a.threadOf(ctx, aimAt)
+			}
+		}
+		if q.isFolder() {
+			cache, cacheErr = a.svc.FolderCache(ctx, accountID, folder)
 		}
 		a.post(func() {
-			if a.stale(g) || a.folder != folder || strings.TrimSpace(a.query) != query || a.threaded() != threaded {
+			// Only the latest read of the list shows.
+			if a.stale(g) || a.listQuery() != q || p.reads != seq {
 				return
 			}
-			if progress {
-				a.loading = false
-			} else if chosen := a.selectedKey(); chosen != key {
-				// Nobody waited for this read, so the row chosen since
-				// it began is the one to keep.
-				key, prev, found = chosen, a.chosenMessage(), 0
+			if again && p.rows != rows {
+				// A page was added meanwhile, which this read does not
+				// reach.
+				a.readList(g, progress, neighbour)
+				return
+			}
+			if p.spin {
+				a.loading, p.spin = false, false
+			}
+			if !progress {
+				if chosen := a.selectedKey(); chosen != key {
+					// Nobody waited for this read, so the row chosen since
+					// it began is the one to keep.
+					key, prev, found = chosen, a.chosenMessage(), 0
+				}
 			}
 			if err != nil {
 				a.err = err.Error()
 				return
 			}
+			if q.isFolder() && cacheErr == nil {
+				o := a.olderOf(accountID, folder)
+				o.cache, o.known = cache, true
+			}
 			was := a.selected
-			a.all, a.convs = msgs, convs
+			a.setRows(q, got)
 			a.pruneSelection()
 			a.restoreSelection(key)
 			if a.selected < 0 {
@@ -657,12 +696,21 @@ func (a *app) restoreSelection(key string) {
 	}
 }
 
+// summaryKey is the identity of a message: of its row, its body and its
+// summary. Two accounts can both have a message 1 in their INBOX, so the
+// account is part of it.
 func summaryKey(m mail.Summary) string {
 	if m.DraftID != "" {
 		// A draft of this device has no folder or UID to tell it by.
 		return "draft/" + m.DraftID
 	}
-	return fmt.Sprintf("%s/%d", m.Folder, m.UID)
+	return messageKey(m.Account, m.Folder, m.UID)
+}
+
+// messageKey is summaryKey of an account's message. The account comes
+// escaped, without a slash, as a folder's name may have one.
+func messageKey(account, folder string, uid mail.UID) string {
+	return url.PathEscape(account) + "/" + folder + "/" + strconv.FormatUint(uint64(uid), 10)
 }
 
 // reloadBody shows the body of the chosen row, if any, or in conversation
@@ -693,7 +741,7 @@ func (a *app) loadBody(g uint64) {
 		return
 	}
 	key := summaryKey(m)
-	accountID, folder, uid := a.active, m.Folder, m.UID
+	accountID, folder, uid := m.Account, m.Folder, m.UID
 	if result, ok := a.bodies[key]; ok {
 		a.bodyLocked = false
 		a.bodyErr = ""
@@ -752,11 +800,7 @@ func (a *app) applySeen(key string) {
 			continue
 		}
 		a.all[i].Seen = true
-		for j := range a.folders {
-			if a.folders[j].Name == a.all[i].Folder {
-				a.folders[j].Unread = max(0, a.folders[j].Unread-1)
-			}
-		}
+		a.addUnread(a.all[i].Account, a.all[i].Folder, -1)
 	}
 	a.updateBadge()
 }
@@ -816,9 +860,11 @@ func (a *app) loadPending(g uint64) {
 	})
 }
 
-// search re-reads the list with the search field's text.
+// search re-reads the list with the search field's text. Other rows show
+// from their top.
 func (a *app) search() {
 	a.sel.Clear()
+	a.list.ScrollTo(0, ui.Start)
 	a.loadMessages(a.gen)
 }
 
@@ -830,7 +876,7 @@ func (a *app) selectFolder() {
 	a.list = ui.ListState{}
 	a.sel.Clear()
 	a.clearTriage()
-	a.all, a.convs, a.conv = nil, nil, nil
+	a.clearRows()
 	a.query = ""
 	a.loadMessages(a.gen)
 	a.syncFolder(a.gen)
@@ -937,6 +983,19 @@ func (a *app) folderBySpecial(special string) string {
 	}
 	return ""
 }
+
+// specialFolder is an account's folder of a special use, where an action
+// on its mail moves it, or "": the window holds the folders of the
+// account on show.
+func (a *app) specialFolder(account, special string) string {
+	if account != a.foldersOf {
+		return ""
+	}
+	return a.folderBySpecial(special)
+}
+
+// listScope is the part of the cache the list shows.
+func (a *app) listScope() mail.Scope { return mail.AccountScope(a.active, a.folder) }
 
 func (a *app) folderLabel(id string) string {
 	if id == "starred" {

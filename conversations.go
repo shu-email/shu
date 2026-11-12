@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"maps"
+	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -11,8 +14,20 @@ import (
 	"shu/mail"
 )
 
-// threadKey is the key of a conversation's row in the list.
-func threadKey(id mail.ThreadID) string { return "thread/" + strconv.FormatInt(int64(id), 10) }
+// threadKey is the key of a conversation's row in the list, and of its
+// summary. A conversation is one account's, and two accounts' rows may
+// share a number.
+func threadKey(account string, id mail.ThreadID) string {
+	return "thread/" + url.PathEscape(account) + "/" + strconv.FormatInt(int64(id), 10)
+}
+
+// convRef names a conversation among those of every account.
+type convRef struct {
+	account string
+	thread  mail.ThreadID
+}
+
+func refOf(c mail.Conversation) convRef { return convRef{c.Account, c.Thread} }
 
 // threaded reports whether the list shows conversations. The Drafts entry
 // lists its drafts one by one in either view: a draft of this device is in
@@ -26,7 +41,7 @@ func (a *app) rowKey(i int) string {
 		return ""
 	}
 	if c := a.convAt(i); c != nil {
-		return threadKey(c.Thread)
+		return threadKey(c.Account, c.Thread)
 	}
 	return summaryKey(a.all[i])
 }
@@ -41,9 +56,9 @@ func (a *app) convAt(i int) *mail.Conversation {
 }
 
 // rowOf is the row of a conversation, or -1.
-func (a *app) rowOf(thread mail.ThreadID) int {
+func (a *app) rowOf(ref convRef) int {
 	for i := range a.convs {
-		if a.convs[i].Thread == thread {
+		if refOf(a.convs[i]) == ref {
 			return i
 		}
 	}
@@ -59,9 +74,9 @@ func latestOf(convs []mail.Conversation) []mail.Summary {
 	return out
 }
 
-func hasThread(convs []mail.Conversation, thread mail.ThreadID) bool {
+func hasThread(convs []mail.Conversation, ref convRef) bool {
 	for _, c := range convs {
-		if c.Thread == thread {
+		if refOf(c) == ref {
 			return true
 		}
 	}
@@ -70,8 +85,8 @@ func hasThread(convs []mail.Conversation, thread mail.ThreadID) bool {
 
 // threadOf reads which conversation a cached message is in now. It runs
 // in a job.
-func (a *app) threadOf(ctx context.Context, accountID string, m mail.Summary) mail.ThreadID {
-	result, _, err := a.svc.CachedMessage(ctx, accountID, m.Folder, m.UID)
+func (a *app) threadOf(ctx context.Context, m mail.Summary) mail.ThreadID {
+	result, _, err := a.svc.CachedMessage(ctx, m.Account, m.Folder, m.UID)
 	if err != nil {
 		return 0
 	}
@@ -88,7 +103,8 @@ func (a *app) findChosen(prev mail.Summary, found mail.ThreadID) {
 	for i := range a.all {
 		hit := summaryKey(a.all[i]) == summaryKey(prev)
 		if c := a.convAt(i); c != nil {
-			hit = (found != 0 && c.Thread == found) || (prev.Thread != 0 && c.Thread == prev.Thread)
+			hit = c.Account == prev.Account &&
+				((found != 0 && c.Thread == found) || (prev.Thread != 0 && c.Thread == prev.Thread))
 		}
 		if hit {
 			a.selected = i
@@ -105,11 +121,26 @@ func refsOf(list []mail.Summary) []mail.MessageRef {
 	return out
 }
 
-func refKey(r mail.MessageRef) string { return summaryKey(mail.Summary{Folder: r.Folder, UID: r.UID}) }
+// byAccount splits messages by their account: an action reaches each
+// account on its own.
+func byAccount(list []mail.Summary) (accounts []string, of map[string][]mail.Summary) {
+	of = map[string][]mail.Summary{}
+	for _, m := range list {
+		if _, ok := of[m.Account]; !ok {
+			accounts = append(accounts, m.Account)
+		}
+		of[m.Account] = append(of[m.Account], m)
+	}
+	return accounts, of
+}
+
+// refKey is the key of an account's message a reference names.
+func refKey(account string, r mail.MessageRef) string { return messageKey(account, r.Folder, r.UID) }
 
 // convView is the conversation open in the reading pane.
 type convView struct {
-	thread mail.ThreadID
+	account string
+	thread  mail.ThreadID
 	// scope is the list's folder it was opened from, and query the search
 	// whose matches it expanded.
 	scope string
@@ -133,9 +164,9 @@ type convView struct {
 	fetching map[string]bool
 }
 
-func newConvView(thread mail.ThreadID, scope string) *convView {
+func newConvView(ref convRef, scope string) *convView {
 	return &convView{
-		thread: thread, scope: scope,
+		account: ref.account, thread: ref.thread, scope: scope,
 		open: map[string]bool{}, details: map[string]bool{},
 		bodyErr: map[string]string{}, fetching: map[string]bool{},
 	}
@@ -181,12 +212,15 @@ func (cv *convView) drop(key string) {
 	}
 }
 
+// ref names the conversation the pane shows.
+func (cv *convView) ref() convRef { return convRef{cv.account, cv.thread} }
+
 // openRow is the row of the conversation on show, or -1.
 func (a *app) openRow() int {
 	if a.conv == nil || !a.threaded() {
 		return -1
 	}
-	return a.rowOf(a.conv.thread)
+	return a.rowOf(a.conv.ref())
 }
 
 // loadConversation shows the conversation of the chosen row: opened as it
@@ -198,24 +232,24 @@ func (a *app) loadConversation(g uint64) {
 		a.conv = nil
 		return
 	}
-	accountID, scope, thread := a.active, a.folder, row.Thread
+	ref, folder, scope := refOf(*row), a.folder, a.listScope()
 	query := strings.TrimSpace(a.query)
 	matches := append([]mail.MessageRef(nil), row.Matches...)
-	key := threadKey(thread)
+	key := threadKey(ref.account, ref.thread)
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
-		all, err := a.svc.CachedConversation(ctx, accountID, "", thread)
+		all, err := a.svc.CachedConversation(ctx, ref.account, "", ref.thread)
 		var members []mail.Summary
 		if err == nil {
-			members, err = a.svc.CachedConversation(ctx, accountID, scope, thread)
+			members, err = a.svc.ScopedConversation(ctx, ref.account, scope, ref.thread)
 		}
 		a.post(func() {
-			if a.stale(g) || a.folder != scope || a.selectedKey() != key {
+			if a.stale(g) || a.folder != folder || a.selectedKey() != key {
 				return
 			}
 			if err != nil {
-				cv := newConvView(thread, scope)
+				cv := newConvView(ref, folder)
 				cv.err = locales.ConversationFailed(err.Error())
 				a.conv = cv
 				return
@@ -226,7 +260,7 @@ func (a *app) loadConversation(g uint64) {
 				a.readList(g, false, false)
 				return
 			}
-			a.showConversation(g, thread, scope, query, all, members, matches)
+			a.showConversation(g, ref, folder, query, all, members, matches)
 		})
 	})
 }
@@ -236,18 +270,18 @@ func (a *app) loadConversation(g uint64) {
 // those in Drafts, Junk and Trash only when the list is that folder, the
 // row stands for them or a search found them. alias names, for each copy
 // left out, the one shown in its place.
-func (a *app) shownMessages(all, members []mail.Summary, matches []mail.MessageRef) (shown []mail.Summary, alias map[string]string) {
+func (a *app) shownMessages(account string, all, members []mail.Summary, matches []mail.MessageRef) (shown []mail.Summary, alias map[string]string) {
 	member := map[string]bool{}
 	for _, m := range members {
 		member[summaryKey(m)] = true
 	}
 	found := map[string]bool{}
 	for _, r := range matches {
-		found[refKey(r)] = true
+		found[refKey(account, r)] = true
 	}
 	hidden := map[string]bool{}
 	for _, special := range []string{mail.SpecialDrafts, mail.SpecialJunk, mail.SpecialTrash} {
-		if name := a.folderBySpecial(special); name != "" && name != a.folder {
+		if name := a.specialFolder(account, special); name != "" && name != a.folder {
 			hidden[name] = true
 		}
 	}
@@ -290,13 +324,14 @@ func messageIDKey(id string) string {
 // again, it keeps what the user expanded and collapsed, and a message
 // that came meanwhile stays collapsed: nothing is marked read that the
 // user did not open. A new search expands what it found in it.
-func (a *app) showConversation(g uint64, thread mail.ThreadID, scope, query string, all, members []mail.Summary, matches []mail.MessageRef) {
-	msgs, alias := a.shownMessages(all, members, matches)
+func (a *app) showConversation(g uint64, ref convRef, scope, query string, all, members []mail.Summary, matches []mail.MessageRef) {
+	msgs, alias := a.shownMessages(ref.account, all, members, matches)
 	cv := a.conv
-	again := cv != nil && cv.err == "" && cv.scope == scope && (cv.thread == thread || sharesMessage(cv.msgs, msgs))
+	again := cv != nil && cv.err == "" && cv.scope == scope && cv.account == ref.account &&
+		(cv.thread == ref.thread || sharesMessage(cv.msgs, msgs))
 	found := map[string]bool{}
 	for _, r := range matches {
-		k := refKey(r)
+		k := refKey(ref.account, r)
 		if shown, ok := alias[k]; ok {
 			k = shown
 		}
@@ -313,7 +348,7 @@ func (a *app) showConversation(g uint64, thread mail.ThreadID, scope, query stri
 		}
 	}
 	if !again {
-		cv = newConvView(thread, scope)
+		cv = newConvView(ref, scope)
 	}
 	cv.query = query
 	if k := a.convExpand; k != "" {
@@ -323,7 +358,7 @@ func (a *app) showConversation(g uint64, thread mail.ThreadID, scope, query stri
 		}
 		expand = append(expand, k)
 	}
-	cv.thread, cv.msgs, cv.members = thread, msgs, members
+	cv.thread, cv.msgs, cv.members = ref.thread, msgs, members
 	present := map[string]bool{}
 	for _, m := range msgs {
 		present[summaryKey(m)] = true
@@ -414,16 +449,16 @@ func (a *app) loadBodies(g uint64, cv *convView, load, unread []mail.Summary) {
 	for _, m := range load {
 		cv.fetching[summaryKey(m)] = true
 	}
-	accountID := a.active
+	accountID := cv.account
 	refs := refsOf(unread)
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
 		for i := len(load) - 1; i >= 0; i-- {
 			m := load[i]
-			result, cached, err := a.svc.CachedMessage(ctx, accountID, m.Folder, m.UID)
+			result, cached, err := a.svc.CachedMessage(ctx, m.Account, m.Folder, m.UID)
 			if err == nil && !cached {
-				result, err = a.svc.FetchMessage(ctx, accountID, m.Folder, m.UID, false)
+				result, err = a.svc.FetchMessage(ctx, m.Account, m.Folder, m.UID, false)
 			}
 			key := summaryKey(m)
 			a.post(func() {
@@ -477,7 +512,7 @@ func (a *app) seenInThread(list []mail.Summary, seen bool) {
 			continue
 		}
 		cv.update(summaryKey(m), func(s *mail.Summary) { s.Seen = seen })
-		a.addUnread(m.Folder, unreadDelta(seen))
+		a.addUnread(m.Account, m.Folder, unreadDelta(seen))
 	}
 	a.syncRow()
 	a.updateBadge()
@@ -493,8 +528,12 @@ func unreadDelta(seen bool) int {
 }
 
 // addUnread changes a folder's unread count by n, as the window shows it
-// until the server's comes.
-func (a *app) addUnread(folder string, n int) {
+// until the server's comes. The window holds the folders of the account
+// on show alone.
+func (a *app) addUnread(account, folder string, n int) {
+	if account != a.foldersOf {
+		return
+	}
 	for i := range a.folders {
 		if a.folders[i].Name == folder {
 			a.folders[i].Unread = max(0, a.folders[i].Unread+n)
@@ -526,10 +565,14 @@ func (a *app) syncRow() {
 // threadTargets are the conversations the toolbar acts on: the rows
 // chosen with Cmd or Shift, or the one chosen.
 func (a *app) threadTargets() []mail.Conversation {
+	if c := a.convAt(a.selected); c != nil && a.sel.Len() == 1 && a.sel.Has(a.rowKey(a.selected)) {
+		// The usual case, which a long list need not be walked for.
+		return []mail.Conversation{*c}
+	}
 	if a.sel.Len() > 0 {
 		var out []mail.Conversation
 		for i := range a.convs {
-			if a.sel.Has(threadKey(a.convs[i].Thread)) {
+			if a.sel.Has(threadKey(a.convs[i].Account, a.convs[i].Thread)) {
 				out = append(out, a.convs[i])
 			}
 		}
@@ -546,12 +589,12 @@ func (a *app) threadTargets() []mail.Conversation {
 // shownMembers is what the pane shows the row of the conversation on show
 // to stand for, when it is one of convs. It is taken before an action
 // changes what the pane shows.
-func (a *app) shownMembers(convs []mail.Conversation) map[mail.ThreadID][]mail.Summary {
+func (a *app) shownMembers(convs []mail.Conversation) map[convRef][]mail.Summary {
 	cv := a.conv
-	if cv == nil || !threadSet(convs)[cv.thread] {
+	if cv == nil || !threadSet(convs)[cv.ref()] {
 		return nil
 	}
-	return map[mail.ThreadID][]mail.Summary{cv.thread: append([]mail.Summary(nil), cv.members...)}
+	return map[convRef][]mail.Summary{cv.ref(): append([]mail.Summary(nil), cv.members...)}
 }
 
 // scopeMessages is what the rows of conversations stood for when they
@@ -559,14 +602,14 @@ func (a *app) shownMembers(convs []mail.Conversation) map[mail.ThreadID][]mail.S
 // the others their messages in the list's scope as the cache has them,
 // without any newer than the newest the row showed. Mail that came after
 // the list was drawn is not acted on. It runs in a job.
-func (a *app) scopeMessages(ctx context.Context, accountID, scope string, convs []mail.Conversation, shown map[mail.ThreadID][]mail.Summary) ([]mail.Summary, error) {
+func (a *app) scopeMessages(ctx context.Context, scope mail.Scope, convs []mail.Conversation, shown map[convRef][]mail.Summary) ([]mail.Summary, error) {
 	var out []mail.Summary
 	for _, c := range convs {
-		if list := shown[c.Thread]; len(list) > 0 {
+		if list := shown[refOf(c)]; len(list) > 0 {
 			out = append(out, list...)
 			continue
 		}
-		list, err := a.svc.CachedConversation(ctx, accountID, scope, c.Thread)
+		list, err := a.svc.ScopedConversation(ctx, c.Account, scope, c.Thread)
 		if err != nil {
 			return nil, err
 		}
@@ -579,10 +622,10 @@ func (a *app) scopeMessages(ctx context.Context, accountID, scope string, convs 
 	return out, nil
 }
 
-func threadSet(convs []mail.Conversation) map[mail.ThreadID]bool {
-	out := make(map[mail.ThreadID]bool, len(convs))
+func threadSet(convs []mail.Conversation) map[convRef]bool {
+	out := make(map[convRef]bool, len(convs))
 	for _, c := range convs {
-		out[c.Thread] = true
+		out[refOf(c)] = true
 	}
 	return out
 }
@@ -602,13 +645,13 @@ func (a *app) toggleThreadStar() {
 	shown := a.shownMembers(targets)
 	chosen := threadSet(targets)
 	for i := range a.convs {
-		if chosen[a.convs[i].Thread] {
+		if chosen[refOf(a.convs[i])] {
 			a.convs[i].Flagged = on
 			a.convs[i].Latest.Flagged = on
 			a.all[i].Flagged = on
 		}
 	}
-	if cv := a.conv; cv != nil && chosen[cv.thread] && len(cv.members) > 0 {
+	if cv := a.conv; cv != nil && chosen[cv.ref()] && len(cv.members) > 0 {
 		latest := summaryKey(cv.members[len(cv.members)-1])
 		for _, m := range cv.members {
 			if k := summaryKey(m); k == latest || !on {
@@ -616,29 +659,29 @@ func (a *app) toggleThreadStar() {
 			}
 		}
 	}
-	g, accountID, scope := a.gen, a.active, a.folder
+	g, scope, folder := a.gen, a.listScope(), a.folder
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
 		var (
-			refs []mail.MessageRef
+			msgs []mail.Summary
 			err  error
 		)
 		if on {
 			for _, c := range targets {
-				refs = append(refs, mail.MessageRef{Folder: c.Latest.Folder, UID: c.Latest.UID})
+				msgs = append(msgs, c.Latest)
 			}
 		} else {
 			var members []mail.Summary
-			members, err = a.scopeMessages(ctx, accountID, scope, targets, shown)
+			members, err = a.scopeMessages(ctx, scope, targets, shown)
 			for _, m := range members {
 				if m.Flagged {
-					refs = append(refs, mail.MessageRef{Folder: m.Folder, UID: m.UID})
+					msgs = append(msgs, m)
 				}
 			}
 		}
 		if err == nil {
-			err = a.svc.SetFlags(ctx, accountID, refs, mail.FlagFlagged, on)
+			err = a.setFlags(ctx, msgs, mail.FlagFlagged, on)
 		}
 		a.post(func() {
 			if a.stale(g) {
@@ -650,11 +693,23 @@ func (a *app) toggleThreadStar() {
 				// again, it shows what is so.
 				a.err = err.Error()
 				a.readMessages(g, false)
-			case scope == "starred" && !on:
+			case folder == "starred" && !on:
 				a.loadMessages(g)
 			}
 		})
 	})
+}
+
+// setFlags changes a flag of messages, with a call for each account they
+// are in: an action reaches one account at a time. It runs in a job.
+func (a *app) setFlags(ctx context.Context, msgs []mail.Summary, flag mail.Flag, on bool) error {
+	accounts, of := byAccount(msgs)
+	for _, id := range accounts {
+		if err := a.svc.SetFlags(ctx, id, refsOf(of[id]), flag, on); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // toggleThreadRead marks the chosen conversations read, every message the
@@ -671,22 +726,22 @@ func (a *app) toggleThreadRead() {
 	shown := a.shownMembers(targets)
 	chosen := threadSet(targets)
 	for i := range a.convs {
-		if chosen[a.convs[i].Thread] {
+		if chosen[refOf(a.convs[i])] {
 			a.convs[i].Unread = !seen
 			a.convs[i].Latest.Seen = seen
 			a.all[i].Seen = seen
 		}
 	}
-	if cv := a.conv; cv != nil && chosen[cv.thread] {
+	if cv := a.conv; cv != nil && chosen[cv.ref()] {
 		for _, m := range cv.members {
 			cv.update(summaryKey(m), func(s *mail.Summary) { s.Seen = seen })
 		}
 	}
-	g, accountID, scope := a.gen, a.active, a.folder
+	g, scope := a.gen, a.listScope()
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
-		members, err := a.scopeMessages(ctx, accountID, scope, targets, shown)
+		members, err := a.scopeMessages(ctx, scope, targets, shown)
 		var changed []mail.Summary
 		for _, m := range members {
 			if m.Seen != seen {
@@ -694,7 +749,7 @@ func (a *app) toggleThreadRead() {
 			}
 		}
 		if err == nil {
-			err = a.svc.SetFlags(ctx, accountID, refsOf(changed), mail.FlagSeen, seen)
+			err = a.setFlags(ctx, changed, mail.FlagSeen, seen)
 		}
 		a.post(func() {
 			if a.stale(g) {
@@ -706,7 +761,7 @@ func (a *app) toggleThreadRead() {
 				return
 			}
 			for _, m := range changed {
-				a.addUnread(m.Folder, unreadDelta(seen))
+				a.addUnread(m.Account, m.Folder, unreadDelta(seen))
 			}
 			a.updateBadge()
 		})
@@ -717,16 +772,24 @@ func (a *app) toggleThreadRead() {
 // messages their rows stand for, and no others. Their rows go at once and
 // come back if the move fails.
 func (a *app) moveThreads(special string) {
-	targets := a.threadTargets()
-	dest := a.folderBySpecial(special)
-	if len(targets) == 0 || dest == "" {
+	// Each conversation goes to the folder of its own account, and stays
+	// where that account has none.
+	dests := map[string]string{}
+	var targets []mail.Conversation
+	for _, c := range a.threadTargets() {
+		if dest := a.specialFolder(c.Account, special); dest != "" {
+			dests[c.Account] = dest
+			targets = append(targets, c)
+		}
+	}
+	if len(targets) == 0 {
 		return
 	}
 	shown := a.shownMembers(targets)
 	chosen := threadSet(targets)
 	keptAll, keptConvs := a.all[:0:0], a.convs[:0:0]
 	for i, c := range a.convs {
-		if !chosen[c.Thread] {
+		if !chosen[refOf(c)] {
 			keptAll, keptConvs = append(keptAll, a.all[i]), append(keptConvs, c)
 		}
 	}
@@ -736,18 +799,28 @@ func (a *app) moveThreads(special string) {
 	if a.selected >= len(a.all) {
 		a.selected = len(a.all) - 1
 	}
-	if a.conv != nil && chosen[a.conv.thread] {
+	if a.conv != nil && chosen[a.conv.ref()] {
 		a.conv = nil
 	}
-	g, accountID, scope := a.gen, a.active, a.folder
+	g, scope := a.gen, a.listScope()
 	label := threadMovedLabel(special, len(targets))
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
-		members, err := a.scopeMessages(ctx, accountID, scope, targets, shown)
-		var moved []mail.MoveResult
-		if err == nil && len(members) > 0 {
-			moved, err = a.svc.MoveMessages(ctx, accountID, refsOf(members), dest)
+		members, err := a.scopeMessages(ctx, scope, targets, shown)
+		moved := map[string][]mail.MoveResult{}
+		if err == nil {
+			accounts, of := byAccount(members)
+			for _, id := range accounts {
+				var done []mail.MoveResult
+				done, err = a.svc.MoveMessages(ctx, id, refsOf(of[id]), dests[id])
+				if len(done) > 0 {
+					moved[id] = done
+				}
+				if err != nil {
+					break
+				}
+			}
 		}
 		a.post(func() {
 			if a.stale(g) {
@@ -759,34 +832,39 @@ func (a *app) moveThreads(special string) {
 			}
 			// What moved before a failure can be taken back as well.
 			if canUndo(moved) {
-				a.setUndo(&undoMove{accountID: accountID, label: label, moved: moved})
+				a.setUndo(&undoMove{label: label, moved: moved})
 			}
 			a.loadMessages(g)
 		})
 	})
 }
 
-// movedOut lowers the unread counts of the folders messages left.
-func (a *app) movedOut(msgs []mail.Summary, moved []mail.MoveResult) {
+// movedOut lowers the unread counts of the folders messages left. moved
+// is what each account's move did.
+func (a *app) movedOut(msgs []mail.Summary, moved map[string][]mail.MoveResult) {
 	unread := map[string]bool{}
 	for _, m := range msgs {
 		if !m.Seen {
 			unread[summaryKey(m)] = true
 		}
 	}
-	for _, r := range moved {
-		if unread[summaryKey(mail.Summary{Folder: r.From, UID: r.UID})] {
-			a.addUnread(r.From, -1)
+	for account, list := range moved {
+		for _, r := range list {
+			if unread[messageKey(account, r.From, r.UID)] {
+				a.addUnread(account, r.From, -1)
+			}
 		}
 	}
 	a.updateBadge()
 }
 
 // canUndo reports whether the server said where any of the messages went.
-func canUndo(moved []mail.MoveResult) bool {
-	for _, r := range moved {
-		if r.DestUID != 0 {
-			return true
+func canUndo(moved map[string][]mail.MoveResult) bool {
+	for _, list := range moved {
+		for _, r := range list {
+			if r.DestUID != 0 {
+				return true
+			}
 		}
 	}
 	return false
@@ -805,27 +883,30 @@ func threadMovedLabel(special string, n int) string {
 // undoThreadMove takes back a move of several messages, then syncs the
 // folders they went back to, so that their rows return.
 func (a *app) undoThreadMove(u *undoMove) {
-	g := a.gen
-	var folders []string
-	seen := map[string]bool{}
-	for _, r := range u.moved {
-		if !seen[r.From] {
-			seen[r.From] = true
-			folders = append(folders, r.From)
-		}
-	}
+	g, shown := a.gen, a.active
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
-		err := a.svc.MoveBackMessages(ctx, u.accountID, u.moved)
-		// Those that went back are synced even when others could not.
-		var syncErr error
-		for _, f := range folders {
-			if e := a.svc.SyncFolder(ctx, u.accountID, f, 50); e != nil && syncErr == nil {
-				syncErr = e
+		var err, syncErr error
+		for _, account := range slices.Sorted(maps.Keys(u.moved)) {
+			moved := u.moved[account]
+			if e := a.svc.MoveBackMessages(ctx, account, moved); e != nil && err == nil {
+				err = e
+			}
+			// Those that went back are synced even when others could not.
+			var folders []string
+			for _, r := range moved {
+				if !slices.Contains(folders, r.From) {
+					folders = append(folders, r.From)
+				}
+			}
+			for _, f := range folders {
+				if e := a.svc.SyncFolder(ctx, account, f, 0); e != nil && syncErr == nil {
+					syncErr = e
+				}
 			}
 		}
-		list, foldersErr := a.svc.CachedFolders(ctx, u.accountID)
+		list, foldersErr := a.svc.CachedFolders(ctx, shown)
 		a.post(func() {
 			if a.stale(g) {
 				return
@@ -836,7 +917,7 @@ func (a *app) undoThreadMove(u *undoMove) {
 			case syncErr != nil:
 				a.err = locales.SyncFailed(syncErr.Error())
 			}
-			if foldersErr == nil && a.active == u.accountID {
+			if foldersErr == nil && a.active == shown {
 				a.setFolders(list)
 				a.updateBadge()
 			}
@@ -859,11 +940,11 @@ func (a *app) flagMessage(m mail.Summary, flag mail.Flag, on bool) {
 		cv.update(key, func(s *mail.Summary) { s.Flagged = on })
 		a.syncRow()
 	}
-	g, accountID, scope := a.gen, a.active, a.folder
+	g, folder := a.gen, a.folder
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
-		err := a.svc.SetFlag(ctx, accountID, m.Folder, m.UID, flag, on)
+		err := a.svc.SetFlag(ctx, m.Account, m.Folder, m.UID, flag, on)
 		a.post(func() {
 			if a.stale(g) {
 				return
@@ -872,7 +953,7 @@ func (a *app) flagMessage(m mail.Summary, flag mail.Flag, on bool) {
 			case err != nil:
 				a.err = err.Error()
 				a.readMessages(g, false)
-			case scope == "starred" && flag == mail.FlagFlagged && !on:
+			case folder == "starred" && flag == mail.FlagFlagged && !on:
 				a.readMessages(g, false)
 			}
 		})
@@ -884,7 +965,7 @@ func (a *app) flagMessage(m mail.Summary, flag mail.Flag, on bool) {
 // with none left, the row goes as a conversation's does.
 func (a *app) moveMessage(m mail.Summary, special string) {
 	cv := a.conv
-	dest := a.folderBySpecial(special)
+	dest := a.specialFolder(m.Account, special)
 	if cv == nil || dest == "" || m.Folder == dest {
 		return
 	}
@@ -892,7 +973,7 @@ func (a *app) moveMessage(m mail.Summary, special string) {
 	cv.drop(summaryKey(m))
 	a.setUndo(nil)
 	if !m.Seen {
-		a.addUnread(m.Folder, -1)
+		a.addUnread(m.Account, m.Folder, -1)
 		a.updateBadge()
 	}
 	if row >= 0 && len(cv.members) == 0 {
@@ -906,7 +987,7 @@ func (a *app) moveMessage(m mail.Summary, special string) {
 	} else {
 		a.syncRow()
 	}
-	g, accountID := a.gen, a.active
+	g := a.gen
 	label := locales.Archived()
 	if special == mail.SpecialTrash {
 		label = locales.Deleted()
@@ -914,7 +995,8 @@ func (a *app) moveMessage(m mail.Summary, special string) {
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
-		moved, err := a.svc.MoveMessages(ctx, accountID, []mail.MessageRef{{Folder: m.Folder, UID: m.UID}}, dest)
+		done, err := a.svc.MoveMessages(ctx, m.Account, []mail.MessageRef{{Folder: m.Folder, UID: m.UID}}, dest)
+		moved := map[string][]mail.MoveResult{m.Account: done}
 		a.post(func() {
 			if a.stale(g) {
 				return
@@ -922,7 +1004,7 @@ func (a *app) moveMessage(m mail.Summary, special string) {
 			if err != nil {
 				a.err = err.Error()
 			} else if canUndo(moved) {
-				a.setUndo(&undoMove{accountID: accountID, label: label, moved: moved})
+				a.setUndo(&undoMove{label: label, moved: moved})
 			}
 			a.loadMessages(g)
 		})
@@ -939,7 +1021,7 @@ func (a *app) newestShown() (*mail.Summary, *mail.Message) {
 	}
 	aside := map[string]bool{}
 	for _, special := range []string{mail.SpecialDrafts, mail.SpecialJunk, mail.SpecialTrash} {
-		if name := a.folderBySpecial(special); name != "" && name != a.folder {
+		if name := a.specialFolder(cv.account, special); name != "" && name != a.folder {
 			aside[name] = true
 		}
 	}

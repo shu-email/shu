@@ -214,10 +214,10 @@ func TestOpenConversation(t *testing.T) {
 	if cv == nil || cv.thread != 7 {
 		t.Fatalf("open conversation = %+v", cv)
 	}
-	if got := shownKeys(cv); !reflect.DeepEqual(got, []string{"INBOX/1", "Sent/2", "INBOX/3"}) {
+	if got := shownKeys(cv); !reflect.DeepEqual(got, []string{"a1/INBOX/1", "a1/Sent/2", "a1/INBOX/3"}) {
 		t.Fatalf("shown = %v", got)
 	}
-	if got := openKeys(cv); !reflect.DeepEqual(got, []string{"INBOX/3"}) {
+	if got := openKeys(cv); !reflect.DeepEqual(got, []string{"a1/INBOX/3"}) {
 		t.Errorf("expanded = %v", got)
 	}
 	texts := tt.Texts()
@@ -243,7 +243,7 @@ func TestOpenConversation(t *testing.T) {
 	flagged := len(fs.bulkFlags)
 	first := locales.MessageHeading(1, 3, "Lin Wei")
 	click(t, tt, first)
-	if !cv.open["INBOX/1"] || !tt.HasText(convBodies["INBOX/1"]) {
+	if !cv.open["a1/INBOX/1"] || !tt.HasText(convBodies["INBOX/1"]) {
 		t.Fatalf("a click did not expand the first message: %q", tt.Texts())
 	}
 	if len(fs.bulkFlags) != flagged {
@@ -253,29 +253,29 @@ func TestOpenConversation(t *testing.T) {
 		t.Fatalf("the header does not have the focus")
 	}
 	tt.Key(0, ui.KeyEnter)
-	if cv.open["INBOX/1"] || tt.HasText(convBodies["INBOX/1"]) {
+	if cv.open["a1/INBOX/1"] || tt.HasText(convBodies["INBOX/1"]) {
 		t.Error("Enter did not collapse the message")
 	}
 	tt.Key(0, ui.KeySpace)
-	if !cv.open["INBOX/1"] || !tt.HasText(convBodies["INBOX/1"]) {
+	if !cv.open["a1/INBOX/1"] || !tt.HasText(convBodies["INBOX/1"]) {
 		t.Error("Space did not expand the message")
 	}
 	if a, ok := tt.Access(first); !ok || !a.Expanded {
 		t.Errorf("the header does not say it is expanded: %+v", a)
 	}
 	click(t, tt, locales.MessageHeading(3, 3, "Lin Wei"))
-	if cv.open["INBOX/3"] {
+	if cv.open["a1/INBOX/3"] {
 		t.Error("a click did not collapse the newest message")
 	}
 
 	// In Archive, the copy there is the one shown, without a tag.
 	click(t, tt, locales.Archive())
-	if got := shownKeys(a.conv); !reflect.DeepEqual(got, []string{"Archive/4", "Sent/2", "INBOX/3"}) {
+	if got := shownKeys(a.conv); !reflect.DeepEqual(got, []string{"a1/Archive/4", "a1/Sent/2", "a1/INBOX/3"}) {
 		t.Errorf("shown from Archive = %v", got)
 	}
 	// In Trash, the Trash message joins; Drafts still stays out.
 	click(t, tt, locales.Trash())
-	if got := shownKeys(a.conv); !reflect.DeepEqual(got, []string{"INBOX/1", "Sent/2", "INBOX/3", "Trash/5"}) {
+	if got := shownKeys(a.conv); !reflect.DeepEqual(got, []string{"a1/INBOX/1", "a1/Sent/2", "a1/INBOX/3", "a1/Trash/5"}) {
 		t.Errorf("shown from Trash = %v", got)
 	}
 }
@@ -295,7 +295,7 @@ func TestReadingAConversationMarksItRead(t *testing.T) {
 	}
 	unread := a.folderUnread("INBOX")
 	click(t, tt, "Re: Lunch on Friday?")
-	if got := openKeys(a.conv); !reflect.DeepEqual(got, []string{"INBOX/10", "INBOX/11"}) {
+	if got := openKeys(a.conv); !reflect.DeepEqual(got, []string{"a1/INBOX/10", "a1/INBOX/11"}) {
 		t.Fatalf("expanded = %v", got)
 	}
 	if b := lastBulk(t, fs); b.flag != mail.FlagSeen || !b.on || !reflect.DeepEqual(b.refs, []string{"INBOX/10"}) {
@@ -318,7 +318,7 @@ func TestReadingAConversationMarksItRead(t *testing.T) {
 	if len(fs.flagCalls) != 1 || fs.flagCalls[0] != string(mail.FlagSeen) || !a.convs[1].Unread {
 		t.Fatalf("flag calls = %v, row %+v", fs.flagCalls, a.convs[1])
 	}
-	if !a.conv.open["INBOX/10"] {
+	if !a.conv.open["a1/INBOX/10"] {
 		t.Error("marking the message unread collapsed it")
 	}
 	bulk := len(fs.bulkFlags)
@@ -335,13 +335,13 @@ func TestReadingAConversationMarksItRead(t *testing.T) {
 	reply.Thread = 8
 	w.arrive(t, "a1", reply)
 	tt.Frame()
-	if got := shownKeys(a.conv); len(got) != 4 || got[3] != "INBOX/13" {
+	if got := shownKeys(a.conv); len(got) != 4 || got[3] != "a1/INBOX/13" {
 		t.Fatalf("shown after new mail = %v", got)
 	}
-	if a.conv.open["INBOX/13"] || len(fs.bulkFlags) != bulk {
+	if a.conv.open["a1/INBOX/13"] || len(fs.bulkFlags) != bulk {
 		t.Errorf("new mail was opened: expanded %v, flags %+v", openKeys(a.conv), fs.bulkFlags[bulk:])
 	}
-	if !a.convs[0].Unread || a.convs[0].Count != 4 || a.selectedKey() != "thread/8" {
+	if !a.convs[0].Unread || a.convs[0].Count != 4 || a.selectedKey() != "thread/a1/8" {
 		t.Errorf("row after new mail = %+v, chosen %q", a.convs[0], a.selectedKey())
 	}
 }
@@ -356,7 +356,7 @@ func TestConversationArchiveAndUndo(t *testing.T) {
 	if want := []string{"INBOX/1->Archive", "INBOX/3->Archive"}; !reflect.DeepEqual(fs.movedRefs, want) {
 		t.Fatalf("moved = %v, want %v", fs.movedRefs, want)
 	}
-	if a.rowOf(7) >= 0 || tt.HasText("Re: Venue for the offsite") {
+	if a.rowOf(convRef{"a1", 7}) >= 0 || tt.HasText("Re: Venue for the offsite") {
 		t.Errorf("the row stays: %q", tt.Texts())
 	}
 	if _, ok := fs.find("a1", "Sent", 2); !ok {
@@ -369,7 +369,7 @@ func TestConversationArchiveAndUndo(t *testing.T) {
 	if want := []string{"Archive->INBOX", "Archive->INBOX"}; !reflect.DeepEqual(fs.moveBacks, want) {
 		t.Fatalf("moved back = %v", fs.moveBacks)
 	}
-	if i := a.rowOf(7); i < 0 || a.convs[i].Count != 2 {
+	if i := a.rowOf(convRef{"a1", 7}); i < 0 || a.convs[i].Count != 2 {
 		t.Fatalf("the row did not come back: %+v", a.convs)
 	}
 	if _, ok := fs.find("a1", "INBOX", 1); !ok {
@@ -399,7 +399,7 @@ func TestConversationArchiveAndUndo(t *testing.T) {
 	if len(fs.movedRefs) != 1 || fs.movedRefs[0] != "INBOX/12->Junk" {
 		t.Errorf("junked = %v", fs.movedRefs)
 	}
-	if a.rowOf(9) < 0 || !tt.HasText("Quarterly numbers") {
+	if a.rowOf(convRef{"a1", 9}) < 0 || !tt.HasText("Quarterly numbers") {
 		t.Errorf("the failed move took the row: %q", tt.Texts())
 	}
 	if a.err == "" || a.undo != nil {
@@ -418,27 +418,27 @@ func TestArchiveOneMessageKeepsTheConversation(t *testing.T) {
 	if want := []string{"INBOX/10->Archive"}; !reflect.DeepEqual(fs.movedRefs, want) {
 		t.Fatalf("moved = %v", fs.movedRefs)
 	}
-	if a.conv == nil || a.conv.thread != 8 || a.selectedKey() != "thread/8" {
+	if a.conv == nil || a.conv.thread != 8 || a.selectedKey() != "thread/a1/8" {
 		t.Fatalf("the conversation closed: chosen %q", a.selectedKey())
 	}
-	if got := shownKeys(a.conv); !reflect.DeepEqual(got, []string{"INBOX/9", "Archive/1010", "INBOX/11"}) {
+	if got := shownKeys(a.conv); !reflect.DeepEqual(got, []string{"a1/INBOX/9", "a1/Archive/1010", "a1/INBOX/11"}) {
 		t.Errorf("shown = %v", got)
 	}
-	if c := a.convs[a.rowOf(8)]; c.Count != 2 || c.Flagged || c.HasAttachments {
+	if c := a.convs[a.rowOf(convRef{"a1", 8})]; c.Count != 2 || c.Flagged || c.HasAttachments {
 		t.Errorf("row = %+v", c)
 	}
 	if a.undo == nil || a.undo.label != locales.Archived() {
 		t.Fatalf("undo = %+v", a.undo)
 	}
 	click(t, tt, locales.Undo())
-	if c := a.convs[a.rowOf(8)]; c.Count != 3 {
+	if c := a.convs[a.rowOf(convRef{"a1", 8})]; c.Count != 3 {
 		t.Errorf("after the undo the row has %d messages", c.Count)
 	}
 
 	click(t, tt, "Quarterly numbers")
 	click(t, tt, locales.ForMessage(locales.MoreActions(), 1, 1))
 	click(t, tt, locales.DeleteThisMessage())
-	if a.rowOf(9) >= 0 {
+	if a.rowOf(convRef{"a1", 9}) >= 0 {
 		t.Error("the row of its one message stays")
 	}
 }
@@ -549,7 +549,7 @@ func TestConversationSearch(t *testing.T) {
 		t.Errorf("search header: %q", tt.Texts())
 	}
 	click(t, tt, "Re: Venue for the offsite")
-	if got := openKeys(a.conv); !reflect.DeepEqual(got, []string{"Sent/2", "INBOX/3"}) {
+	if got := openKeys(a.conv); !reflect.DeepEqual(got, []string{"a1/Sent/2", "a1/INBOX/3"}) {
 		t.Errorf("expanded = %v", got)
 	}
 	if !tt.HasText(convBodies["Sent/2"]) {
@@ -564,7 +564,7 @@ func TestConversationSearch(t *testing.T) {
 		t.Fatalf("results for a sender = %+v", a.convs)
 	}
 	click(t, tt, "Re: Lunch on Friday?")
-	if !a.conv.open["INBOX/9"] {
+	if !a.conv.open["a1/INBOX/9"] {
 		t.Errorf("Priya's message is not expanded: %v", openKeys(a.conv))
 	}
 	a.query = "nothing like this"
@@ -589,7 +589,7 @@ func TestViewToggle(t *testing.T) {
 	if fs.settings.Conversations || len(fs.saved) != 1 {
 		t.Errorf("stored = %+v", fs.saved)
 	}
-	if a.selectedKey() != "INBOX/11" {
+	if a.selectedKey() != "a1/INBOX/11" {
 		t.Errorf("chosen = %q, want the conversation's newest message", a.selectedKey())
 	}
 	for _, text := range []string{locales.ArchiveMessage(), locales.MarkUnread(), "See you at noon."} {
@@ -604,7 +604,7 @@ func TestViewToggle(t *testing.T) {
 	// message open.
 	click(t, tt, "Lunch on Friday?")
 	click(t, tt, locales.GroupByConversation())
-	if !a.threaded() || a.selectedKey() != "thread/8" || !a.conv.open["INBOX/9"] {
+	if !a.threaded() || a.selectedKey() != "thread/a1/8" || !a.conv.open["a1/INBOX/9"] {
 		t.Fatalf("conversation view: chosen %q", a.selectedKey())
 	}
 	if !fs.settings.Conversations || len(fs.saved) != 2 {
@@ -636,7 +636,7 @@ func TestConversationMultiSelect(t *testing.T) {
 	if len(a.convs) != 1 || !tt.HasText(locales.ConversationsArchived(2)) {
 		t.Errorf("rows %d: %q", len(a.convs), tt.Texts())
 	}
-	if a.sel.Len() != 1 || a.selectedKey() != "thread/8" {
+	if a.sel.Len() != 1 || a.selectedKey() != "thread/a1/8" {
 		t.Errorf("after the move: %d chosen, %q", a.sel.Len(), a.selectedKey())
 	}
 }
@@ -678,17 +678,17 @@ func TestSelectionFollowsAMerge(t *testing.T) {
 	a, fs := convApp(t)
 	tt := ui.NewTester(a.view, 1220, 800)
 	click(t, tt, "Quarterly numbers")
-	if a.selectedKey() != "thread/9" {
+	if a.selectedKey() != "thread/a1/9" {
 		t.Fatalf("chosen = %q", a.selectedKey())
 	}
 	// The lunch conversation, not the first row, which a list read again
 	// would choose anyway.
 	editFake(fs, "INBOX", 12, func(m *mail.Summary) { m.Thread = 8 })
 	click(t, tt, locales.Sync())
-	if a.selectedKey() != "thread/8" || a.sel.Len() != 1 || !a.sel.Has("thread/8") {
+	if a.selectedKey() != "thread/a1/8" || a.sel.Len() != 1 || !a.sel.Has("thread/a1/8") {
 		t.Fatalf("after the merge: chosen %q", a.selectedKey())
 	}
-	if a.conv == nil || a.conv.thread != 8 || !a.conv.open["INBOX/12"] {
+	if a.conv == nil || a.conv.thread != 8 || !a.conv.open["a1/INBOX/12"] {
 		t.Fatalf("open conversation = %+v", a.conv)
 	}
 	if !tt.HasText("Body of Quarterly numbers") || len(a.convs) != 2 {
@@ -705,7 +705,7 @@ func TestNotificationOpensItsConversation(t *testing.T) {
 	tt := ui.NewTester(a.view, 1220, 800)
 	a.openNotification(noteTarget{account: "a1", folder: "INBOX", validity: 7, uid: 9, message: true}.id())
 	tt.Frame()
-	if a.selectedKey() != "thread/8" || !a.conv.open["INBOX/9"] || w.raised != 1 {
+	if a.selectedKey() != "thread/a1/8" || !a.conv.open["a1/INBOX/9"] || w.raised != 1 {
 		t.Fatalf("opened %q, expanded %v, raised %d", a.selectedKey(), openKeys(a.conv), w.raised)
 	}
 	if !tt.HasText("Body of Lunch on Friday?") {
@@ -720,7 +720,7 @@ func TestNotificationOpensItsConversation(t *testing.T) {
 	}
 	a.openNotification(w.notes[0].ID)
 	tt.Frame()
-	if a.selectedKey() != "thread/7" || !a.conv.open["INBOX/20"] {
+	if a.selectedKey() != "thread/a1/7" || !a.conv.open["a1/INBOX/20"] {
 		t.Fatalf("opened %q, expanded %v", a.selectedKey(), openKeys(a.conv))
 	}
 	if m, _ := w.fs.find("a1", "INBOX", 20); !m.Seen {
@@ -831,7 +831,7 @@ func TestConversationMessageParts(t *testing.T) {
 		t.Fatalf("the attachment is missing: %q", tt.Texts())
 	}
 	click(t, tt, locales.ForMessage(locales.ShowHTML(), 2, 3))
-	if a.conv.html != "INBOX/10" || !tt.HasText(locales.ShowPlain()) {
+	if a.conv.html != "a1/INBOX/10" || !tt.HasText(locales.ShowPlain()) {
 		t.Fatalf("HTML of %q", a.conv.html)
 	}
 	click(t, tt, locales.ForMessage(locales.ShowPlain(), 2, 3))
@@ -851,11 +851,11 @@ func TestConversationShortcuts(t *testing.T) {
 	a, fs := convApp(t)
 	tt := ui.NewTester(a.view, 1220, 800)
 	tt.Key(0, ui.KeyJ)
-	if a.selectedKey() != "thread/8" || a.conv == nil || a.conv.thread != 8 {
+	if a.selectedKey() != "thread/a1/8" || a.conv == nil || a.conv.thread != 8 {
 		t.Fatalf("J chose %q", a.selectedKey())
 	}
 	tt.Key(0, ui.KeyK)
-	if a.selectedKey() != "thread/7" || a.conv.thread != 7 {
+	if a.selectedKey() != "thread/a1/7" || a.conv.thread != 7 {
 		t.Fatalf("K chose %q", a.selectedKey())
 	}
 	tt.Key(0, ui.KeyF)

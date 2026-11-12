@@ -39,7 +39,14 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 					ui.Icon(c, inboxIcon).FontSize(30).TextColor(t.TextMuted)
 				}
 				ui.Text(c, msg).FontSize(13).TextColor(t.TextMuted).TextAlign(ui.Center)
-				if strings.TrimSpace(a.query) != "" {
+				searching := strings.TrimSpace(a.query) != ""
+				if older := a.emptyOlder(); older != endNone {
+					if searching {
+						ui.Text(c, locales.SearchedHere()).FontSize(12).TextColor(t.TextMuted).TextAlign(ui.Center)
+					}
+					a.olderControls(c, t, older)
+				}
+				if searching {
 					ui.Button(c, locales.SearchClear()).OnClick(func() {
 						a.query = ""
 						a.sel.Clear()
@@ -49,8 +56,25 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 			})
 			return
 		}
-		a.list.Key = func(i int) any { return a.rowKey(i) }
+		// After the last row comes one that says what follows: the next
+		// page, older mail on the server, or nothing. It is a header,
+		// which the list never chooses. The frame goes on with the rows it
+		// was built with: a page added as it lays out shows in the next.
+		n, end := len(a.all), a.endState()
+		rows := n
+		if end != endNone {
+			rows++
+		}
+		a.list.Key = func(i int) any {
+			if i >= n {
+				return endKey
+			}
+			return a.rowKey(i)
+		}
 		a.list.Label = func(i int) string {
+			if i >= n {
+				return a.endText(end)
+			}
 			m := a.all[i]
 			if a.folder == draftsFolder {
 				who, title := a.rowHeading(m)
@@ -58,9 +82,10 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 			}
 			return m.From.Name + " " + m.Subject
 		}
+		a.list.Header = func(i int) bool { return i >= n }
 		a.list.Selected = &a.selected
 		a.list.Selection = &a.sel
-		ui.List(c, &a.list, len(a.all)).Grow(1).
+		ui.List(c, &a.list, rows).Grow(1).
 			OnChange(func() {
 				if a.sel.Len() == 0 {
 					a.selected = -1
@@ -70,7 +95,19 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 				a.reloadBody()
 			}).
 			OnSubmit(a.openSelected).
-			Rows(a.messageRow)
+			Rows(func(row ui.ListRow) {
+				if row.Index >= n {
+					a.endRow(row.Context, row.Context.Theme(), end)
+					return
+				}
+				a.messageRow(row)
+			})
+		// The next page is read as the user nears the end of the rows
+		// read, by scrolling or with the keys, so that it is there when
+		// they get to it.
+		if _, last := a.list.Visible(); last >= len(a.all)-listAhead {
+			a.loadMore()
+		}
 		// Put the keyboard in the list once mail loads, so J/K work
 		// without a first click. A search field that took the focus keeps
 		// it.
@@ -100,10 +137,25 @@ func (a *app) listHeader(c *ui.Context, t *ui.Theme) {
 		switch {
 		case chosen > 1:
 		case query != "":
-			ui.Badge(c, fmt.Sprint(len(a.all))).Background(t.Surface).TextColor(t.TextMuted)
+			found := fmt.Sprint(len(a.all))
+			if a.pager.more {
+				found += "+"
+			}
+			ui.Badge(c, found).Background(t.Surface).TextColor(t.TextMuted)
 		default:
-			if n := a.unread(); n > 0 {
-				ui.Badge(c, fmt.Sprint(n)).Background(t.Accent).TextColor(t.AccentText)
+			// A folder's badge is its unread count as the server keeps it,
+			// the number the sidebar shows: the rows read so far are only
+			// the newest pages. Other lists count their rows read.
+			n, more := a.unread(), a.pager.more
+			if a.isServerFolder(a.folder) {
+				n, more = a.folderUnread(a.folder), false
+			}
+			if n > 0 {
+				label := fmt.Sprint(n)
+				if more {
+					label += "+"
+				}
+				ui.Badge(c, label).Background(t.Accent).TextColor(t.AccentText)
 			}
 		}
 		ui.Spacer(c)
@@ -124,23 +176,40 @@ func (a *app) listHeader(c *ui.Context, t *ui.Theme) {
 	ui.Text(c, a.listSummary()).FontSize(11).TextColor(t.TextMuted).SingleLine()
 }
 
+// isServerFolder reports whether id names one of the account's folders,
+// not a list of Shu's own, as Starred and Drafts are.
+func (a *app) isServerFolder(id string) bool {
+	if id == "starred" || id == draftsFolder {
+		return false
+	}
+	for _, f := range a.folders {
+		if f.Name == id {
+			return true
+		}
+	}
+	return false
+}
+
 // listSummary is the line under the folder title. A folder's counts are
-// of its messages, as the server keeps them, in either view.
+// of its messages, as the server keeps them, in either view, with how
+// many of them are on this device when not all are. Other lists count
+// their rows read, and say when there are more.
 func (a *app) listSummary() string {
 	query := strings.TrimSpace(a.query)
 	if query == "" && a.folder != "starred" && a.folder != draftsFolder {
 		for _, f := range a.folders {
 			if f.Name == a.folder {
-				total := f.Total
-				if total == 0 {
-					total = len(a.all)
-				}
-				return locales.MailboxSummary(total, f.Unread)
+				return a.cacheLine(f)
 			}
 		}
 	}
-	if a.threaded() {
+	switch more := a.pager.more; {
+	case a.threaded() && more:
+		return locales.ConversationCountMore(len(a.all))
+	case a.threaded():
 		return locales.ConversationCount(len(a.all))
+	case more:
+		return locales.MessageCountMore(len(a.all))
 	}
 	return locales.MessageCount(len(a.all))
 }
@@ -172,6 +241,8 @@ func (a *app) emptyState() string {
 		return ""
 	case strings.TrimSpace(a.query) != "":
 		return locales.SearchNoResults(strings.TrimSpace(a.query))
+	case a.emptyOlder() != endNone:
+		return locales.NoneHere()
 	default:
 		return locales.EmptyFolder()
 	}

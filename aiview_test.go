@@ -371,7 +371,7 @@ func TestTriageSuggestsOnly(t *testing.T) {
 	}
 	// Selecting a group only selects.
 	click(t, tt, locales.AiSelectArchive())
-	if a.sel.Len() != 1 || !a.sel.Has("INBOX/2") {
+	if a.sel.Len() != 1 || !a.sel.Has("a1/INBOX/2") {
 		t.Fatalf("selection = %d", a.sel.Len())
 	}
 	if len(fs.moved) != 0 {

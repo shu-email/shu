@@ -3515,3 +3515,229 @@ func AiReviewEarlier(count int) string { return In(i18n.Locale()).AiReviewEarlie
 func (msgs Messages) AiReviewEarlier(count int) string {
 	return Catalog.Format(msgs.locale, "aiReviewEarlier", map[string]any{"count": count})
 }
+
+// LoadingMore says "Loading more…"
+// in the language the app shows.
+func LoadingMore() string { return In(i18n.Locale()).LoadingMore() }
+
+// LoadingMore says "Loading more…"
+// in the language of msgs.
+func (msgs Messages) LoadingMore() string {
+	return Catalog.Format(msgs.locale, "loadingMore", nil)
+}
+
+// LoadMoreFailed says "Couldn't load more: {error}"
+// in the language the app shows.
+func LoadMoreFailed(error string) string { return In(i18n.Locale()).LoadMoreFailed(error) }
+
+// LoadMoreFailed says "Couldn't load more: {error}"
+// in the language of msgs.
+func (msgs Messages) LoadMoreFailed(error string) string {
+	return Catalog.Format(msgs.locale, "loadMoreFailed", map[string]any{"error": error})
+}
+
+// RetryLoadMore says "Retry loading more"
+// in the language the app shows.
+func RetryLoadMore() string { return In(i18n.Locale()).RetryLoadMore() }
+
+// RetryLoadMore says "Retry loading more"
+// in the language of msgs.
+func (msgs Messages) RetryLoadMore() string {
+	return Catalog.Format(msgs.locale, "retryLoadMore", nil)
+}
+
+// LoadOlder says "Load older messages from the server"
+// in the language the app shows.
+func LoadOlder() string { return In(i18n.Locale()).LoadOlder() }
+
+// LoadOlder says "Load older messages from the server"
+// in the language of msgs.
+func (msgs Messages) LoadOlder() string {
+	return Catalog.Format(msgs.locale, "loadOlder", nil)
+}
+
+// FetchingOlder says "Fetching older messages from the server…"
+// in the language the app shows.
+func FetchingOlder() string { return In(i18n.Locale()).FetchingOlder() }
+
+// FetchingOlder says "Fetching older messages from the server…"
+// in the language of msgs.
+func (msgs Messages) FetchingOlder() string {
+	return Catalog.Format(msgs.locale, "fetchingOlder", nil)
+}
+
+// FetchOlderFailed says "Couldn't fetch older messages: {error}"
+// in the language the app shows.
+func FetchOlderFailed(error string) string { return In(i18n.Locale()).FetchOlderFailed(error) }
+
+// FetchOlderFailed says "Couldn't fetch older messages: {error}"
+// in the language of msgs.
+func (msgs Messages) FetchOlderFailed(error string) string {
+	return Catalog.Format(msgs.locale, "fetchOlderFailed", map[string]any{"error": error})
+}
+
+// ServerTooSlow says "the server took too long to answer"
+// in the language the app shows.
+func ServerTooSlow() string { return In(i18n.Locale()).ServerTooSlow() }
+
+// ServerTooSlow says "the server took too long to answer"
+// in the language of msgs.
+func (msgs Messages) ServerTooSlow() string {
+	return Catalog.Format(msgs.locale, "serverTooSlow", nil)
+}
+
+// RetryFetchOlder says "Retry fetching older messages"
+// in the language the app shows.
+func RetryFetchOlder() string { return In(i18n.Locale()).RetryFetchOlder() }
+
+// RetryFetchOlder says "Retry fetching older messages"
+// in the language of msgs.
+func (msgs Messages) RetryFetchOlder() string {
+	return Catalog.Format(msgs.locale, "retryFetchOlder", nil)
+}
+
+// AllOnDevice says "All mail in this folder is on this device."
+// in the language the app shows.
+func AllOnDevice() string { return In(i18n.Locale()).AllOnDevice() }
+
+// AllOnDevice says "All mail in this folder is on this device."
+// in the language of msgs.
+func (msgs Messages) AllOnDevice() string {
+	return Catalog.Format(msgs.locale, "allOnDevice", nil)
+}
+
+// NoMoreHere says "No more messages on this device."
+// in the language the app shows.
+func NoMoreHere() string { return In(i18n.Locale()).NoMoreHere() }
+
+// NoMoreHere says "No more messages on this device."
+// in the language of msgs.
+func (msgs Messages) NoMoreHere() string {
+	return Catalog.Format(msgs.locale, "noMoreHere", nil)
+}
+
+// NoMoreResultsHere says "No more results in the mail on this device."
+// in the language the app shows.
+func NoMoreResultsHere() string { return In(i18n.Locale()).NoMoreResultsHere() }
+
+// NoMoreResultsHere says "No more results in the mail on this device."
+// in the language of msgs.
+func (msgs Messages) NoMoreResultsHere() string {
+	return Catalog.Format(msgs.locale, "noMoreResultsHere", nil)
+}
+
+// NoMoreResults says "No more results."
+// in the language the app shows.
+func NoMoreResults() string { return In(i18n.Locale()).NoMoreResults() }
+
+// NoMoreResults says "No more results."
+// in the language of msgs.
+func (msgs Messages) NoMoreResults() string {
+	return Catalog.Format(msgs.locale, "noMoreResults", nil)
+}
+
+// NoMoreMail says "No more messages."
+// in the language the app shows.
+func NoMoreMail() string { return In(i18n.Locale()).NoMoreMail() }
+
+// NoMoreMail says "No more messages."
+// in the language of msgs.
+func (msgs Messages) NoMoreMail() string {
+	return Catalog.Format(msgs.locale, "noMoreMail", nil)
+}
+
+// NoneHere says "None of this folder's mail is on this device."
+// in the language the app shows.
+func NoneHere() string { return In(i18n.Locale()).NoneHere() }
+
+// NoneHere says "None of this folder's mail is on this device."
+// in the language of msgs.
+func (msgs Messages) NoneHere() string {
+	return Catalog.Format(msgs.locale, "noneHere", nil)
+}
+
+// SearchedHere says "Only the mail on this device was searched."
+// in the language the app shows.
+func SearchedHere() string { return In(i18n.Locale()).SearchedHere() }
+
+// SearchedHere says "Only the mail on this device was searched."
+// in the language of msgs.
+func (msgs Messages) SearchedHere() string {
+	return Catalog.Format(msgs.locale, "searchedHere", nil)
+}
+
+// OnDeviceSummary says "{cached} of {total} messages on this device · {unread} unread"
+// in the language the app shows.
+//
+// How many of a folder's messages are cached on this computer, of how many
+// the server has.
+func OnDeviceSummary(cached int, total int, unread int) string {
+	return In(i18n.Locale()).OnDeviceSummary(cached, total, unread)
+}
+
+// OnDeviceSummary says "{cached} of {total} messages on this device · {unread} unread"
+// in the language of msgs.
+//
+// How many of a folder's messages are cached on this computer, of how many
+// the server has.
+func (msgs Messages) OnDeviceSummary(cached int, total int, unread int) string {
+	return Catalog.Format(msgs.locale, "onDeviceSummary", map[string]any{"cached": cached, "total": total, "unread": unread})
+}
+
+// MessageCountMore says "{count}+ messages"
+// in the language the app shows.
+//
+// The number of messages a list shows, when more follow.
+func MessageCountMore(count int) string { return In(i18n.Locale()).MessageCountMore(count) }
+
+// MessageCountMore says "{count}+ messages"
+// in the language of msgs.
+//
+// The number of messages a list shows, when more follow.
+func (msgs Messages) MessageCountMore(count int) string {
+	return Catalog.Format(msgs.locale, "messageCountMore", map[string]any{"count": count})
+}
+
+// ConversationCountMore says "{count}+ conversations"
+// in the language the app shows.
+//
+// The number of conversations a list shows, when more follow.
+func ConversationCountMore(count int) string { return In(i18n.Locale()).ConversationCountMore(count) }
+
+// ConversationCountMore says "{count}+ conversations"
+// in the language of msgs.
+//
+// The number of conversations a list shows, when more follow.
+func (msgs Messages) ConversationCountMore(count int) string {
+	return Catalog.Format(msgs.locale, "conversationCountMore", map[string]any{"count": count})
+}
+
+// MailOnDevice says "Mail on this device"
+// in the language the app shows.
+func MailOnDevice() string { return In(i18n.Locale()).MailOnDevice() }
+
+// MailOnDevice says "Mail on this device"
+// in the language of msgs.
+func (msgs Messages) MailOnDevice() string {
+	return Catalog.Format(msgs.locale, "mailOnDevice", nil)
+}
+
+// SyncWindow says "Messages to keep from each folder's first sync"
+// in the language the app shows.
+func SyncWindow() string { return In(i18n.Locale()).SyncWindow() }
+
+// SyncWindow says "Messages to keep from each folder's first sync"
+// in the language of msgs.
+func (msgs Messages) SyncWindow() string {
+	return Catalog.Format(msgs.locale, "syncWindow", nil)
+}
+
+// SyncWindowDetail says "A folder's first sync keeps this many of its newest messages on this device. Older mail stays on the server, and you …"
+// in the language the app shows.
+func SyncWindowDetail() string { return In(i18n.Locale()).SyncWindowDetail() }
+
+// SyncWindowDetail says "A folder's first sync keeps this many of its newest messages on this device. Older mail stays on the server, and you …"
+// in the language of msgs.
+func (msgs Messages) SyncWindowDetail() string {
+	return Catalog.Format(msgs.locale, "syncWindowDetail", nil)
+}

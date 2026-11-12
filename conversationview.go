@@ -105,7 +105,7 @@ func (a *app) conversationPane(c *ui.Context, t *ui.Theme) {
 			ui.Text(c, locales.ShortcutsHint()).FontSize(11).TextColor(t.TextMuted.Alpha(0.7)).TextAlign(ui.Center)
 		})
 		return
-	case cv == nil || cv.thread != row.Thread:
+	case cv == nil || cv.ref() != refOf(*row):
 		ui.Row(c).Padding(24, 24).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Spinner(c).Size(14, 14)
 			ui.Text(c, locales.Loading()).FontSize(13).TextColor(t.TextMuted)
@@ -133,12 +133,13 @@ func (a *app) conversationPane(c *ui.Context, t *ui.Theme) {
 	if strings.TrimSpace(subject) == "" {
 		subject = locales.NoSubject()
 	}
-	ui.Scroll(c.Key(threadKey(cv.thread))).Grow(1).Children(func() {
+	key := threadKey(cv.account, cv.thread)
+	ui.Scroll(c.Key(key)).Grow(1).Children(func() {
 		ui.Column(c).Padding(20, 20, 24, 20).Gap(10).MinWidth(0).Children(func() {
 			ui.Text(c, subject).FontSize(21).Bold().Balance()
 			ui.Text(c, a.scopeLine(cv)).FontSize(12).TextColor(t.TextMuted)
-			if job := a.summaries[threadKey(cv.thread)]; job != nil {
-				a.summaryCard(c, t, threadKey(cv.thread), job)
+			if job := a.summaries[key]; job != nil {
+				a.summaryCard(c, t, key, job)
 			}
 			for i, m := range cv.msgs {
 				a.threadMessage(c, t, cv, i, m)

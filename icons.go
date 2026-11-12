@@ -59,4 +59,5 @@ var (
 	conversationsIcon = mustIcon("messages-square")
 	bookUserIcon      = mustIcon("book-user")
 	pencilIcon        = mustIcon("pencil")
+	cloudOffIcon      = mustIcon("cloud-off")
 )

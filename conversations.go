@@ -527,6 +527,7 @@ func (a *app) seenInThread(list []mail.Summary, seen bool) {
 		}
 		cv.update(summaryKey(m), func(s *mail.Summary) { s.Seen = seen })
 		a.addUnread(m.Account, m.Folder, unreadDelta(seen))
+		a.labelUnread(m, unreadDelta(seen))
 	}
 	a.syncRow()
 	a.updateBadge()
@@ -553,8 +554,8 @@ func (a *app) addUnread(account, folder string, n int) {
 }
 
 // syncRow makes the row of the conversation on show say what its messages
-// now do: how many there are, and whether any is unread, starred or has
-// attachments.
+// now do: how many there are, whether any is unread, starred or has
+// attachments, and the labels they have.
 func (a *app) syncRow() {
 	i := a.openRow()
 	if i < 0 || len(a.conv.members) == 0 {
@@ -563,12 +564,18 @@ func (a *app) syncRow() {
 	members := a.conv.members
 	c := &a.convs[i]
 	c.Count = len(members)
-	c.Unread, c.Flagged, c.HasAttachments = false, false, false
+	c.Unread, c.Flagged, c.HasAttachments, c.Labels = false, false, false, nil
 	for _, m := range members {
 		c.Unread = c.Unread || !m.Seen
 		c.Flagged = c.Flagged || m.Flagged
 		c.HasAttachments = c.HasAttachments || m.HasAttachments
+		for _, l := range m.Labels {
+			if !slices.Contains(c.Labels, l.ID) {
+				c.Labels = append(c.Labels, l.ID)
+			}
+		}
 	}
+	slices.SortStableFunc(c.Labels, func(x, y mail.LabelID) int { return a.labelPlace(c.Account, x) - a.labelPlace(c.Account, y) })
 	c.Latest = members[len(members)-1]
 	a.all[i] = c.Latest
 }
@@ -773,6 +780,7 @@ func (a *app) toggleThreadRead() {
 			}
 			for _, m := range changed {
 				a.addUnread(m.Account, m.Folder, unreadDelta(seen))
+				a.labelUnread(m, unreadDelta(seen))
 			}
 			a.updateBadge()
 		})

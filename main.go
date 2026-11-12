@@ -204,6 +204,9 @@ type app struct {
 
 	// book is the address book's view, open or not (contacts.go).
 	book addressBook
+	// labels are each account's labels and the views that change them
+	// (labels.go).
+	labels labelState
 
 	// Hooks the window sets; tests leave them nil.
 	newWindow func(mygo.WindowOptions) *mygo.Window
@@ -261,6 +264,7 @@ func newApp(svc mailService) *app {
 		composeChoice: choicesOf(mail.DefaultComposeSettings()),
 		signatures:    map[string]mail.Signature{},
 		aliases:       map[string][]mail.Identity{},
+		labels:        newLabelState(),
 	}
 }
 
@@ -440,6 +444,8 @@ func (a *app) beginAccount() {
 	a.scopeSet = false
 	a.selected = -1
 	a.setUndo(nil)
+	a.setLabelNote("")
+	a.labels.picker = false
 	a.list = ui.ListState{}
 	a.sel.Clear()
 	a.bodies = map[string]mail.FetchResult{}
@@ -529,7 +535,8 @@ func (a *app) syncAccount(g uint64) {
 // mail.
 func (a *app) syncFolder(g uint64) {
 	accountID, folder := a.active, a.folder
-	if folder == "" || folder == "starred" {
+	// Starred and a label's list read every folder from the cache.
+	if folder == "" || folder == "starred" || labelOf(folder) != 0 {
 		return
 	}
 	if folder == allInboxes {
@@ -719,6 +726,9 @@ func (a *app) readList(g uint64, progress, neighbour bool) {
 				a.sel.Add(a.rowKey(a.selected))
 			}
 			a.reloadBody()
+			// The labels' counts follow what the list shows, and the rows
+			// of each account show its labels.
+			a.loadLabels(a.labelAccounts()...)
 		})
 	})
 }
@@ -896,6 +906,7 @@ func (a *app) applySeen(key string) {
 		}
 		a.all[i].Seen = true
 		a.addUnread(a.all[i].Account, a.all[i].Folder, -1)
+		a.labelUnread(a.all[i], -1)
 	}
 	a.updateBadge()
 }
@@ -970,6 +981,8 @@ func (a *app) selectFolder() {
 	a.gen++
 	a.selected = -1
 	a.setUndo(nil)
+	a.setLabelNote("")
+	a.labels.picker = false
 	a.list = ui.ListState{}
 	a.sel.Clear()
 	a.clearTriage()
@@ -1065,6 +1078,9 @@ func (a *app) folderExists(id string) bool {
 	if id == "starred" || id == draftsFolder || id == allInboxes && len(a.accounts) > 1 {
 		return true
 	}
+	if label := labelOf(id); label != 0 {
+		return a.findLabel(a.active, label) != nil
+	}
 	for _, f := range a.folders {
 		if f.Name == id {
 			return true
@@ -1107,7 +1123,8 @@ func (a *app) listScope() mail.Scope { return a.listQuery().mailScope() }
 func (a *app) folderLabel(id string) string { return a.folderLabelOf(a.foldersOf, id) }
 
 // folderLabelOf is the name the window gives an account's folder: its
-// special use in the user's language, else the server's name.
+// special use in the user's language, else the server's name. A label's
+// list goes by the label's name.
 func (a *app) folderLabelOf(account, id string) string {
 	switch id {
 	case "starred":
@@ -1116,6 +1133,12 @@ func (a *app) folderLabelOf(account, id string) string {
 		return locales.Drafts()
 	case allInboxes:
 		return locales.AllInboxes()
+	}
+	if label := labelOf(id); label != 0 {
+		if l := a.findLabel(account, label); l != nil {
+			return l.Name
+		}
+		return ""
 	}
 	for _, f := range a.foldersFor(account) {
 		if f.Name != id {
@@ -1253,6 +1276,8 @@ func (a *app) mailView(c *ui.Context) {
 		})
 	})
 	a.accountModal(c)
+	a.labelDialog(c)
+	a.labelAlerts(c)
 	aiReviewModal(c, &a.review)
 }
 
@@ -1270,6 +1295,7 @@ func (a *app) paneShortcuts(panes ui.Element) {
 	panes.OnShortcut(ui.Shift, ui.KeyR, func() { a.reply(a.replyOrder()[1]) })
 	panes.OnShortcut(0, ui.KeyF, func() { a.forward() })
 	panes.OnShortcut(0, ui.KeyDelete, func() { a.deleteSelected() })
+	panes.OnShortcut(0, ui.KeyL, a.openLabelPicker)
 }
 
 // titleBar draws the search field, sync and compose over the panes. The
@@ -1391,6 +1417,7 @@ func (a *app) sidebar(c *ui.Context, t *ui.Theme, vibrant bool) {
 					}
 				}
 			})
+			a.labelsSection(c, t)
 		}).Grow(1).Label(locales.Mailboxes())
 		if vibrant {
 			changed.Background(ui.Transparent)
@@ -1453,9 +1480,10 @@ func (a *app) toolButton(c *ui.Context, svg *ui.SVG, label string, on bool, fn f
 	return b.Children(func() { ui.Icon(c, svg).FontSize(16) })
 }
 
-// toolDivider separates groups of toolbar buttons.
+// toolDivider separates groups of toolbar buttons. Its margins are narrow
+// enough for the reading toolbar to fit at the window's minimum width.
 func (a *app) toolDivider(c *ui.Context) {
-	ui.Box(c).Width(1).Height(18).Shrink(0).Margin(0, 4).Background(c.Theme().Border)
+	ui.Box(c).Width(1).Height(18).Shrink(0).Margin(0, 2).Background(c.Theme().Border)
 }
 
 // keychain adapts mygo.Secrets to the engine's SecretStore.

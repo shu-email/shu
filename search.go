@@ -112,10 +112,11 @@ func (a *app) leavesOutShown(q searchQuery) bool {
 
 // defaultScope is where a list's searches start. A folder's cover its
 // whole account, where what is looked for so often is: in Sent, in
-// Archive. The drafts of this device are in no folder of the server, and
-// the unified inbox is already a list of every account.
+// Archive. The drafts of this device are in no folder of the server, the
+// unified inbox is already a list of every account, and a label's list
+// of every folder of its own.
 func (a *app) defaultScope() searchScope {
-	if a.folder == draftsFolder || a.folder == allInboxes {
+	if a.folder == draftsFolder || a.folder == allInboxes || labelOf(a.folder) != 0 {
 		return scopeHere
 	}
 	return scopeAccount
@@ -209,10 +210,11 @@ func (a *app) spansAccounts() bool {
 }
 
 // spansFolders reports whether the list's rows may be of several folders
-// of an account: a search of every folder, or of every account.
+// of an account: a search of every folder, or of every account, and a
+// label's list.
 func (a *app) spansFolders() bool {
 	q := a.listQuery()
-	return q.search != "" && q.scope != scopeHere
+	return q.search != "" && q.scope != scopeHere || labelOf(q.folder) != 0
 }
 
 // hasFilters reports whether a search asks more than its free text.
@@ -242,7 +244,7 @@ func (p queryPart) filter() bool { return len(p.search.Text) == 0 && !p.search.I
 // phrase.
 var queryOperators = map[string]bool{
 	"from": true, "to": true, "subject": true, "body": true, "in": true,
-	"has": true, "is": true, "after": true, "before": true, "account": true,
+	"has": true, "is": true, "after": true, "before": true, "label": true, "account": true,
 }
 
 // isQuoteRune is a quote that opens or closes a phrase in a search.
@@ -385,6 +387,7 @@ func fieldNames(f mail.Field) []string {
 		{mail.FieldTo, locales.FieldTo},
 		{mail.FieldSubject, locales.FieldSubject},
 		{mail.FieldBody, locales.FieldBody},
+		{mail.FieldLabel, locales.FieldLabel},
 	} {
 		if f.Has(part.field) {
 			out = append(out, part.name())

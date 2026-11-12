@@ -4114,11 +4114,11 @@ func (msgs Messages) ClearFilters() string {
 	return Catalog.Format(msgs.locale, "clearFilters", nil)
 }
 
-// FilterSyntaxHint says "You can also type from:, to:, subject:, body:, after:, before:, is:unread, is:starred, has:attachment, in: and account:."
+// FilterSyntaxHint says "You can also type from:, to:, subject:, body:, after:, before:, is:unread, is:starred, has:attachment, in:, label: an…"
 // in the language the app shows.
 func FilterSyntaxHint() string { return In(i18n.Locale()).FilterSyntaxHint() }
 
-// FilterSyntaxHint says "You can also type from:, to:, subject:, body:, after:, before:, is:unread, is:starred, has:attachment, in: and account:."
+// FilterSyntaxHint says "You can also type from:, to:, subject:, body:, after:, before:, is:unread, is:starred, has:attachment, in:, label: an…"
 // in the language of msgs.
 func (msgs Messages) FilterSyntaxHint() string {
 	return Catalog.Format(msgs.locale, "filterSyntaxHint", nil)
@@ -6022,4 +6022,618 @@ func DeleteContactButton() string { return In(i18n.Locale()).DeleteContactButton
 // in the language of msgs.
 func (msgs Messages) DeleteContactButton() string {
 	return Catalog.Format(msgs.locale, "deleteContactButton", nil)
+}
+
+// NewLabel says "New label"
+// in the language the app shows.
+func NewLabel() string { return In(i18n.Locale()).NewLabel() }
+
+// NewLabel says "New label"
+// in the language of msgs.
+func (msgs Messages) NewLabel() string {
+	return Catalog.Format(msgs.locale, "newLabel", nil)
+}
+
+// NewLabelEllipsis says "New label…"
+// in the language the app shows.
+func NewLabelEllipsis() string { return In(i18n.Locale()).NewLabelEllipsis() }
+
+// NewLabelEllipsis says "New label…"
+// in the language of msgs.
+func (msgs Messages) NewLabelEllipsis() string {
+	return Catalog.Format(msgs.locale, "newLabelEllipsis", nil)
+}
+
+// EditLabel says "Edit label"
+// in the language the app shows.
+func EditLabel() string { return In(i18n.Locale()).EditLabel() }
+
+// EditLabel says "Edit label"
+// in the language of msgs.
+func (msgs Messages) EditLabel() string {
+	return Catalog.Format(msgs.locale, "editLabel", nil)
+}
+
+// EditLabelEllipsis says "Edit label…"
+// in the language the app shows.
+func EditLabelEllipsis() string { return In(i18n.Locale()).EditLabelEllipsis() }
+
+// EditLabelEllipsis says "Edit label…"
+// in the language of msgs.
+func (msgs Messages) EditLabelEllipsis() string {
+	return Catalog.Format(msgs.locale, "editLabelEllipsis", nil)
+}
+
+// DeleteLabelEllipsis says "Delete label…"
+// in the language the app shows.
+func DeleteLabelEllipsis() string { return In(i18n.Locale()).DeleteLabelEllipsis() }
+
+// DeleteLabelEllipsis says "Delete label…"
+// in the language of msgs.
+func (msgs Messages) DeleteLabelEllipsis() string {
+	return Catalog.Format(msgs.locale, "deleteLabelEllipsis", nil)
+}
+
+// CreateLabel says "Create label"
+// in the language the app shows.
+func CreateLabel() string { return In(i18n.Locale()).CreateLabel() }
+
+// CreateLabel says "Create label"
+// in the language of msgs.
+func (msgs Messages) CreateLabel() string {
+	return Catalog.Format(msgs.locale, "createLabel", nil)
+}
+
+// CancelLabelForm says "Close without saving the label"
+// in the language the app shows.
+func CancelLabelForm() string { return In(i18n.Locale()).CancelLabelForm() }
+
+// CancelLabelForm says "Close without saving the label"
+// in the language of msgs.
+func (msgs Messages) CancelLabelForm() string {
+	return Catalog.Format(msgs.locale, "cancelLabelForm", nil)
+}
+
+// LabelNameCaption says "Name"
+// in the language the app shows.
+func LabelNameCaption() string { return In(i18n.Locale()).LabelNameCaption() }
+
+// LabelNameCaption says "Name"
+// in the language of msgs.
+func (msgs Messages) LabelNameCaption() string {
+	return Catalog.Format(msgs.locale, "labelNameCaption", nil)
+}
+
+// LabelNamePlaceholder says "For example, Receipts"
+// in the language the app shows.
+func LabelNamePlaceholder() string { return In(i18n.Locale()).LabelNamePlaceholder() }
+
+// LabelNamePlaceholder says "For example, Receipts"
+// in the language of msgs.
+func (msgs Messages) LabelNamePlaceholder() string {
+	return Catalog.Format(msgs.locale, "labelNamePlaceholder", nil)
+}
+
+// LabelColorCaption says "Color"
+// in the language the app shows.
+func LabelColorCaption() string { return In(i18n.Locale()).LabelColorCaption() }
+
+// LabelColorCaption says "Color"
+// in the language of msgs.
+func (msgs Messages) LabelColorCaption() string {
+	return Catalog.Format(msgs.locale, "labelColorCaption", nil)
+}
+
+// LabelPreview says "Preview"
+// in the language the app shows.
+func LabelPreview() string { return In(i18n.Locale()).LabelPreview() }
+
+// LabelPreview says "Preview"
+// in the language of msgs.
+func (msgs Messages) LabelPreview() string {
+	return Catalog.Format(msgs.locale, "labelPreview", nil)
+}
+
+// ColorRed says "Red"
+// in the language the app shows.
+func ColorRed() string { return In(i18n.Locale()).ColorRed() }
+
+// ColorRed says "Red"
+// in the language of msgs.
+func (msgs Messages) ColorRed() string {
+	return Catalog.Format(msgs.locale, "colorRed", nil)
+}
+
+// ColorOrange says "Orange"
+// in the language the app shows.
+func ColorOrange() string { return In(i18n.Locale()).ColorOrange() }
+
+// ColorOrange says "Orange"
+// in the language of msgs.
+func (msgs Messages) ColorOrange() string {
+	return Catalog.Format(msgs.locale, "colorOrange", nil)
+}
+
+// ColorYellow says "Yellow"
+// in the language the app shows.
+func ColorYellow() string { return In(i18n.Locale()).ColorYellow() }
+
+// ColorYellow says "Yellow"
+// in the language of msgs.
+func (msgs Messages) ColorYellow() string {
+	return Catalog.Format(msgs.locale, "colorYellow", nil)
+}
+
+// ColorGreen says "Green"
+// in the language the app shows.
+func ColorGreen() string { return In(i18n.Locale()).ColorGreen() }
+
+// ColorGreen says "Green"
+// in the language of msgs.
+func (msgs Messages) ColorGreen() string {
+	return Catalog.Format(msgs.locale, "colorGreen", nil)
+}
+
+// ColorTeal says "Teal"
+// in the language the app shows.
+func ColorTeal() string { return In(i18n.Locale()).ColorTeal() }
+
+// ColorTeal says "Teal"
+// in the language of msgs.
+func (msgs Messages) ColorTeal() string {
+	return Catalog.Format(msgs.locale, "colorTeal", nil)
+}
+
+// ColorBlue says "Blue"
+// in the language the app shows.
+func ColorBlue() string { return In(i18n.Locale()).ColorBlue() }
+
+// ColorBlue says "Blue"
+// in the language of msgs.
+func (msgs Messages) ColorBlue() string {
+	return Catalog.Format(msgs.locale, "colorBlue", nil)
+}
+
+// ColorPurple says "Purple"
+// in the language the app shows.
+func ColorPurple() string { return In(i18n.Locale()).ColorPurple() }
+
+// ColorPurple says "Purple"
+// in the language of msgs.
+func (msgs Messages) ColorPurple() string {
+	return Catalog.Format(msgs.locale, "colorPurple", nil)
+}
+
+// ColorPink says "Pink"
+// in the language the app shows.
+func ColorPink() string { return In(i18n.Locale()).ColorPink() }
+
+// ColorPink says "Pink"
+// in the language of msgs.
+func (msgs Messages) ColorPink() string {
+	return Catalog.Format(msgs.locale, "colorPink", nil)
+}
+
+// LabelExists says "There is already a label named “{name}”."
+// in the language the app shows.
+//
+// In the label dialog: the name typed is another label's, in any case.
+func LabelExists(name string) string { return In(i18n.Locale()).LabelExists(name) }
+
+// LabelExists says "There is already a label named “{name}”."
+// in the language of msgs.
+//
+// In the label dialog: the name typed is another label's, in any case.
+func (msgs Messages) LabelExists(name string) string {
+	return Catalog.Format(msgs.locale, "labelExists", map[string]any{"name": name})
+}
+
+// LabelNameInvalid says "A label's name can't be empty or longer than {max} characters."
+// in the language the app shows.
+func LabelNameInvalid(max int) string { return In(i18n.Locale()).LabelNameInvalid(max) }
+
+// LabelNameInvalid says "A label's name can't be empty or longer than {max} characters."
+// in the language of msgs.
+func (msgs Messages) LabelNameInvalid(max int) string {
+	return Catalog.Format(msgs.locale, "labelNameInvalid", map[string]any{"max": max})
+}
+
+// LabelSaveFailed says "Couldn't save the label: {error}"
+// in the language the app shows.
+func LabelSaveFailed(error string) string { return In(i18n.Locale()).LabelSaveFailed(error) }
+
+// LabelSaveFailed says "Couldn't save the label: {error}"
+// in the language of msgs.
+func (msgs Messages) LabelSaveFailed(error string) string {
+	return Catalog.Format(msgs.locale, "labelSaveFailed", map[string]any{"error": error})
+}
+
+// LabelRenameNote says "Other mail apps still see this label by the name it was made with: its name and color are this device's."
+// in the language the app shows.
+func LabelRenameNote() string { return In(i18n.Locale()).LabelRenameNote() }
+
+// LabelRenameNote says "Other mail apps still see this label by the name it was made with: its name and color are this device's."
+// in the language of msgs.
+func (msgs Messages) LabelRenameNote() string {
+	return Catalog.Format(msgs.locale, "labelRenameNote", nil)
+}
+
+// LabelLocal says "On this device only"
+// in the language the app shows.
+func LabelLocal() string { return In(i18n.Locale()).LabelLocal() }
+
+// LabelLocal says "On this device only"
+// in the language of msgs.
+func (msgs Messages) LabelLocal() string {
+	return Catalog.Format(msgs.locale, "labelLocal", nil)
+}
+
+// LabelLocalDetail says "{name} is kept on this device only: the server keeps no labels in the folders of its messages, so other mail apps don…"
+// in the language the app shows.
+//
+// Why a label is marked as kept on this device only, as its mark's tooltip
+// says and screen readers read.
+func LabelLocalDetail(name string) string { return In(i18n.Locale()).LabelLocalDetail(name) }
+
+// LabelLocalDetail says "{name} is kept on this device only: the server keeps no labels in the folders of its messages, so other mail apps don…"
+// in the language of msgs.
+//
+// Why a label is marked as kept on this device only, as its mark's tooltip
+// says and screen readers read.
+func (msgs Messages) LabelLocalDetail(name string) string {
+	return Catalog.Format(msgs.locale, "labelLocalDetail", map[string]any{"name": name})
+}
+
+// LabelOnDevice says "{name}, on this device only"
+// in the language the app shows.
+//
+// A message's label that is kept on this device only, as screen readers
+// read its chip.
+func LabelOnDevice(name string) string { return In(i18n.Locale()).LabelOnDevice(name) }
+
+// LabelOnDevice says "{name}, on this device only"
+// in the language of msgs.
+//
+// A message's label that is kept on this device only, as screen readers
+// read its chip.
+func (msgs Messages) LabelOnDevice(name string) string {
+	return Catalog.Format(msgs.locale, "labelOnDevice", map[string]any{"name": name})
+}
+
+// LabelActions says "More actions for the label {name}"
+// in the language the app shows.
+func LabelActions(name string) string { return In(i18n.Locale()).LabelActions(name) }
+
+// LabelActions says "More actions for the label {name}"
+// in the language of msgs.
+func (msgs Messages) LabelActions(name string) string {
+	return Catalog.Format(msgs.locale, "labelActions", map[string]any{"name": name})
+}
+
+// ChangeLabels says "Change labels"
+// in the language the app shows.
+func ChangeLabels() string { return In(i18n.Locale()).ChangeLabels() }
+
+// ChangeLabels says "Change labels"
+// in the language of msgs.
+func (msgs Messages) ChangeLabels() string {
+	return Catalog.Format(msgs.locale, "changeLabels", nil)
+}
+
+// ChangeLabelsTip says "Put labels on the chosen mail, or take them off (L)"
+// in the language the app shows.
+func ChangeLabelsTip() string { return In(i18n.Locale()).ChangeLabelsTip() }
+
+// ChangeLabelsTip says "Put labels on the chosen mail, or take them off (L)"
+// in the language of msgs.
+func (msgs Messages) ChangeLabelsTip() string {
+	return Catalog.Format(msgs.locale, "changeLabelsTip", nil)
+}
+
+// NoLabelsYet says "No labels yet."
+// in the language the app shows.
+func NoLabelsYet() string { return In(i18n.Locale()).NoLabelsYet() }
+
+// NoLabelsYet says "No labels yet."
+// in the language of msgs.
+func (msgs Messages) NoLabelsYet() string {
+	return Catalog.Format(msgs.locale, "noLabelsYet", nil)
+}
+
+// LabelsChooseMail says "Choose messages to label them."
+// in the language the app shows.
+func LabelsChooseMail() string { return In(i18n.Locale()).LabelsChooseMail() }
+
+// LabelsChooseMail says "Choose messages to label them."
+// in the language of msgs.
+func (msgs Messages) LabelsChooseMail() string {
+	return Catalog.Format(msgs.locale, "labelsChooseMail", nil)
+}
+
+// LabelsSeveralAccounts says "These messages are in different accounts, and each account has labels of its own. Choose messages of one account to l…"
+// in the language the app shows.
+func LabelsSeveralAccounts() string { return In(i18n.Locale()).LabelsSeveralAccounts() }
+
+// LabelsSeveralAccounts says "These messages are in different accounts, and each account has labels of its own. Choose messages of one account to l…"
+// in the language of msgs.
+func (msgs Messages) LabelsSeveralAccounts() string {
+	return Catalog.Format(msgs.locale, "labelsSeveralAccounts", nil)
+}
+
+// LabelsNoDrafts says "Drafts take no labels."
+// in the language the app shows.
+func LabelsNoDrafts() string { return In(i18n.Locale()).LabelsNoDrafts() }
+
+// LabelsNoDrafts says "Drafts take no labels."
+// in the language of msgs.
+func (msgs Messages) LabelsNoDrafts() string {
+	return Catalog.Format(msgs.locale, "labelsNoDrafts", nil)
+}
+
+// LabelsKeptHereHint says "Labels with this mark stay on this device for these messages: their folder keeps no such label on the server."
+// in the language the app shows.
+func LabelsKeptHereHint() string { return In(i18n.Locale()).LabelsKeptHereHint() }
+
+// LabelsKeptHereHint says "Labels with this mark stay on this device for these messages: their folder keeps no such label on the server."
+// in the language of msgs.
+func (msgs Messages) LabelsKeptHereHint() string {
+	return Catalog.Format(msgs.locale, "labelsKeptHereHint", nil)
+}
+
+// LabelOnSome says "On some"
+// in the language the app shows.
+func LabelOnSome() string { return In(i18n.Locale()).LabelOnSome() }
+
+// LabelOnSome says "On some"
+// in the language of msgs.
+func (msgs Messages) LabelOnSome() string {
+	return Catalog.Format(msgs.locale, "labelOnSome", nil)
+}
+
+// LabelChangeFailed says "Couldn't change the label: {error}"
+// in the language the app shows.
+func LabelChangeFailed(error string) string { return In(i18n.Locale()).LabelChangeFailed(error) }
+
+// LabelChangeFailed says "Couldn't change the label: {error}"
+// in the language of msgs.
+func (msgs Messages) LabelChangeFailed(error string) string {
+	return Catalog.Format(msgs.locale, "labelChangeFailed", map[string]any{"error": error})
+}
+
+// LabelKeptHereNote says "“{name}” is kept on this device only for {count, plural, one {# message} other {# messages}}: their folder keeps …"
+// in the language the app shows.
+//
+// Above the list, after a label was put on messages whose folder keeps no
+// labels on the server.
+func LabelKeptHereNote(name string, count int) string {
+	return In(i18n.Locale()).LabelKeptHereNote(name, count)
+}
+
+// LabelKeptHereNote says "“{name}” is kept on this device only for {count, plural, one {# message} other {# messages}}: their folder keeps …"
+// in the language of msgs.
+//
+// Above the list, after a label was put on messages whose folder keeps no
+// labels on the server.
+func (msgs Messages) LabelKeptHereNote(name string, count int) string {
+	return Catalog.Format(msgs.locale, "labelKeptHereNote", map[string]any{"name": name, "count": count})
+}
+
+// DismissLabelNote says "Dismiss the note about labels"
+// in the language the app shows.
+func DismissLabelNote() string { return In(i18n.Locale()).DismissLabelNote() }
+
+// DismissLabelNote says "Dismiss the note about labels"
+// in the language of msgs.
+func (msgs Messages) DismissLabelNote() string {
+	return Catalog.Format(msgs.locale, "dismissLabelNote", nil)
+}
+
+// DeleteLabelTitle says "Delete the label “{name}”?"
+// in the language the app shows.
+func DeleteLabelTitle(name string) string { return In(i18n.Locale()).DeleteLabelTitle(name) }
+
+// DeleteLabelTitle says "Delete the label “{name}”?"
+// in the language of msgs.
+func (msgs Messages) DeleteLabelTitle(name string) string {
+	return Catalog.Format(msgs.locale, "deleteLabelTitle", map[string]any{"name": name})
+}
+
+// DeleteLabelMessage says "Its messages keep everything but this label: none of them is moved or deleted. It also comes off them on the server, …"
+// in the language the app shows.
+func DeleteLabelMessage() string { return In(i18n.Locale()).DeleteLabelMessage() }
+
+// DeleteLabelMessage says "Its messages keep everything but this label: none of them is moved or deleted. It also comes off them on the server, …"
+// in the language of msgs.
+func (msgs Messages) DeleteLabelMessage() string {
+	return Catalog.Format(msgs.locale, "deleteLabelMessage", nil)
+}
+
+// DeleteLabelMessageLocal says "Its messages keep everything but this label: none of them is moved or deleted."
+// in the language the app shows.
+func DeleteLabelMessageLocal() string { return In(i18n.Locale()).DeleteLabelMessageLocal() }
+
+// DeleteLabelMessageLocal says "Its messages keep everything but this label: none of them is moved or deleted."
+// in the language of msgs.
+func (msgs Messages) DeleteLabelMessageLocal() string {
+	return Catalog.Format(msgs.locale, "deleteLabelMessageLocal", nil)
+}
+
+// DeleteLabelButton says "Delete label"
+// in the language the app shows.
+func DeleteLabelButton() string { return In(i18n.Locale()).DeleteLabelButton() }
+
+// DeleteLabelButton says "Delete label"
+// in the language of msgs.
+func (msgs Messages) DeleteLabelButton() string {
+	return Catalog.Format(msgs.locale, "deleteLabelButton", nil)
+}
+
+// LabelPartlyTitle says "“{name}” is still on some messages"
+// in the language the app shows.
+func LabelPartlyTitle(name string) string { return In(i18n.Locale()).LabelPartlyTitle(name) }
+
+// LabelPartlyTitle says "“{name}” is still on some messages"
+// in the language of msgs.
+func (msgs Messages) LabelPartlyTitle(name string) string {
+	return Catalog.Format(msgs.locale, "labelPartlyTitle", map[string]any{"name": name})
+}
+
+// LabelPartlyMessage says "It came off some of its messages on the server before the connection failed. Every message is still there, unchanged …"
+// in the language the app shows.
+func LabelPartlyMessage() string { return In(i18n.Locale()).LabelPartlyMessage() }
+
+// LabelPartlyMessage says "It came off some of its messages on the server before the connection failed. Every message is still there, unchanged …"
+// in the language of msgs.
+func (msgs Messages) LabelPartlyMessage() string {
+	return Catalog.Format(msgs.locale, "labelPartlyMessage", nil)
+}
+
+// NotNow says "Not now"
+// in the language the app shows.
+func NotNow() string { return In(i18n.Locale()).NotNow() }
+
+// NotNow says "Not now"
+// in the language of msgs.
+func (msgs Messages) NotNow() string {
+	return Catalog.Format(msgs.locale, "notNow", nil)
+}
+
+// FinishDeleting says "Finish deleting"
+// in the language the app shows.
+func FinishDeleting() string { return In(i18n.Locale()).FinishDeleting() }
+
+// FinishDeleting says "Finish deleting"
+// in the language of msgs.
+func (msgs Messages) FinishDeleting() string {
+	return Catalog.Format(msgs.locale, "finishDeleting", nil)
+}
+
+// LabelDeleteFailed says "Couldn't delete the label “{name}”: {error}"
+// in the language the app shows.
+func LabelDeleteFailed(name string, error string) string {
+	return In(i18n.Locale()).LabelDeleteFailed(name, error)
+}
+
+// LabelDeleteFailed says "Couldn't delete the label “{name}”: {error}"
+// in the language of msgs.
+func (msgs Messages) LabelDeleteFailed(name string, error string) string {
+	return Catalog.Format(msgs.locale, "labelDeleteFailed", map[string]any{"name": name, "error": error})
+}
+
+// LabelEmpty says "No message has this label."
+// in the language the app shows.
+func LabelEmpty() string { return In(i18n.Locale()).LabelEmpty() }
+
+// LabelEmpty says "No message has this label."
+// in the language of msgs.
+func (msgs Messages) LabelEmpty() string {
+	return Catalog.Format(msgs.locale, "labelEmpty", nil)
+}
+
+// ThisLabel says "This label"
+// in the language the app shows.
+func ThisLabel() string { return In(i18n.Locale()).ThisLabel() }
+
+// ThisLabel says "This label"
+// in the language of msgs.
+func (msgs Messages) ThisLabel() string {
+	return Catalog.Format(msgs.locale, "thisLabel", nil)
+}
+
+// RowLabels says "Labels: {labels}"
+// in the language the app shows.
+//
+// A row's labels, as screen readers read the row.
+func RowLabels(labels string) string { return In(i18n.Locale()).RowLabels(labels) }
+
+// RowLabels says "Labels: {labels}"
+// in the language of msgs.
+//
+// A row's labels, as screen readers read the row.
+func (msgs Messages) RowLabels(labels string) string {
+	return Catalog.Format(msgs.locale, "rowLabels", map[string]any{"labels": labels})
+}
+
+// MoreLabels says "{count, plural, one {# more label} other {# more labels}}"
+// in the language the app shows.
+//
+// After the label chips a row has room for: how many more it has.
+func MoreLabels(count int) string { return In(i18n.Locale()).MoreLabels(count) }
+
+// MoreLabels says "{count, plural, one {# more label} other {# more labels}}"
+// in the language of msgs.
+//
+// After the label chips a row has room for: how many more it has.
+func (msgs Messages) MoreLabels(count int) string {
+	return Catalog.Format(msgs.locale, "moreLabels", map[string]any{"count": count})
+}
+
+// MessageLabels says "Labels of this message"
+// in the language the app shows.
+func MessageLabels() string { return In(i18n.Locale()).MessageLabels() }
+
+// MessageLabels says "Labels of this message"
+// in the language of msgs.
+func (msgs Messages) MessageLabels() string {
+	return Catalog.Format(msgs.locale, "messageLabels", nil)
+}
+
+// ConversationLabels says "Labels of this conversation"
+// in the language the app shows.
+func ConversationLabels() string { return In(i18n.Locale()).ConversationLabels() }
+
+// ConversationLabels says "Labels of this conversation"
+// in the language of msgs.
+func (msgs Messages) ConversationLabels() string {
+	return Catalog.Format(msgs.locale, "conversationLabels", nil)
+}
+
+// RemoveLabel says "Remove the label {name}"
+// in the language the app shows.
+func RemoveLabel(name string) string { return In(i18n.Locale()).RemoveLabel(name) }
+
+// RemoveLabel says "Remove the label {name}"
+// in the language of msgs.
+func (msgs Messages) RemoveLabel(name string) string {
+	return Catalog.Format(msgs.locale, "removeLabel", map[string]any{"name": name})
+}
+
+// FieldLabel says "label"
+// in the language the app shows.
+func FieldLabel() string { return In(i18n.Locale()).FieldLabel() }
+
+// FieldLabel says "label"
+// in the language of msgs.
+func (msgs Messages) FieldLabel() string {
+	return Catalog.Format(msgs.locale, "fieldLabel", nil)
+}
+
+// FilterLabel says "Label"
+// in the language the app shows.
+func FilterLabel() string { return In(i18n.Locale()).FilterLabel() }
+
+// FilterLabel says "Label"
+// in the language of msgs.
+func (msgs Messages) FilterLabel() string {
+	return Catalog.Format(msgs.locale, "filterLabel", nil)
+}
+
+// AnyLabel says "Any label"
+// in the language the app shows.
+func AnyLabel() string { return In(i18n.Locale()).AnyLabel() }
+
+// AnyLabel says "Any label"
+// in the language of msgs.
+func (msgs Messages) AnyLabel() string {
+	return Catalog.Format(msgs.locale, "anyLabel", nil)
+}
+
+// FilterLabelValue says "Label: {value}"
+// in the language the app shows.
+func FilterLabelValue(value string) string { return In(i18n.Locale()).FilterLabelValue(value) }
+
+// FilterLabelValue says "Label: {value}"
+// in the language of msgs.
+func (msgs Messages) FilterLabelValue(value string) string {
+	return Catalog.Format(msgs.locale, "filterLabelValue", map[string]any{"value": value})
 }

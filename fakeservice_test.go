@@ -192,6 +192,21 @@ type fakeService struct {
 	onSuggest       func(typed string)
 	recipientChecks []string
 	contactErr      error
+
+	// Labels, kept as the engine keeps them. labels are each account's,
+	// in order. A message's summary holds the labels it has as the server
+	// keeps them, and localLabels those kept on this device, by the
+	// account and the mail.LabelKey the copies of a message share: a
+	// label goes on as a keyword unless the folder's PermanentFlags are
+	// known and keep none of it. setLabelErr fails SetLabel as a server
+	// that refuses, the cache put back; deleteLabelErr fails DeleteLabel,
+	// which with mail.ErrLabelPartlyRemoved has taken the label off the
+	// messages of the first folder that had it.
+	labels         map[string][]mail.Label
+	nextLabel      mail.LabelID
+	localLabels    map[string]map[mail.LabelID]bool
+	setLabelErr    error
+	deleteLabelErr error
 }
 
 // fakeScheduled is a message Schedule wrote: its outbox entry, whose
@@ -262,6 +277,9 @@ func newFakeService() *fakeService {
 		forwardFail: map[string]error{},
 
 		book: map[string]*mail.ContactState{},
+
+		labels:      map[string][]mail.Label{},
+		localLabels: map[string]map[mail.LabelID]bool{},
 	}
 }
 
@@ -390,6 +408,7 @@ func (f *fakeService) MessagePage(ctx context.Context, q mail.ListQuery) (mail.M
 			}
 			for _, m := range list {
 				m.Account = accountID
+				m = f.withLabels(accountID, m)
 				if fields, ok := f.found(accountID, m, q.Search); ok && f.inScope(q.Scope, m) {
 					m.Matched = fields
 					all = append(all, m)
@@ -406,6 +425,7 @@ func (f *fakeService) MessagePage(ctx context.Context, q mail.ListQuery) (mail.M
 		if rows[i].Account == "" {
 			rows[i].Account = accounts[0]
 		}
+		rows[i] = f.withLabels(rows[i].Account, rows[i])
 	}
 	return mail.MessagePage{Messages: rows, Next: next, More: more}, nil
 }
@@ -465,6 +485,8 @@ func (f *fakeService) inScope(sc mail.Scope, m mail.Summary) bool {
 	switch {
 	case sc.Starred:
 		return m.Flagged
+	case sc.Label != 0:
+		return m.HasLabel(sc.Label) && f.inLabelScope(m.Account, m.Folder)
 	case sc.Folder != "":
 		return m.Folder == sc.Folder
 	case sc.Special != "":
@@ -522,6 +544,17 @@ func (f *fakeService) found(accountID string, m mail.Summary, s mail.Search) (ma
 			}
 		}
 	}
+	// Each label: part keeps the messages with a label of the account so
+	// named, in any case; what such a search finds is found by its labels.
+	for _, name := range s.Labels {
+		key := mail.LabelNameKey(strings.TrimSpace(name))
+		ok = ok && slices.ContainsFunc(f.labels[accountID], func(l mail.Label) bool {
+			return mail.LabelNameKey(l.Name) == key && m.HasLabel(l.ID)
+		})
+	}
+	if ok && len(s.Labels) > 0 {
+		fields |= mail.FieldLabel
+	}
 	return fields, ok
 }
 
@@ -542,7 +575,7 @@ func (f *fakeService) CachedMessage(ctx context.Context, accountID, folder strin
 		s.Thread = f.threadOf(accountID, s)
 	}
 	if b, ok := f.bodies[bodyKey(accountID, folder, uid)]; ok {
-		b.Thread = s.Thread
+		b.Thread, b.Labels, b.LabelsLocal = s.Thread, s.Labels, s.LabelsLocal
 		return mail.FetchResult{Message: b}, true, nil
 	}
 	if found {
@@ -555,7 +588,7 @@ func (f *fakeService) find(accountID, folder string, uid mail.UID) (mail.Summary
 	for _, m := range f.messages[listKey(accountID, folder)] {
 		if m.UID == uid {
 			m.Account = accountID
-			return m, true
+			return f.withLabels(accountID, m), true
 		}
 	}
 	return mail.Summary{}, false
@@ -628,7 +661,7 @@ func (f *fakeService) FetchMessage(ctx context.Context, accountID, folder string
 	}
 	s.Thread = f.threadOf(accountID, s)
 	if b, ok := f.bodies[bodyKey(accountID, folder, uid)]; ok {
-		b.Thread = s.Thread
+		b.Thread, b.Labels, b.LabelsLocal = s.Thread, s.Labels, s.LabelsLocal
 		return mail.FetchResult{Message: b}, nil
 	}
 	msg := mail.Message{Summary: s, BodyText: "Body of " + s.Subject, BodyCached: true}
@@ -1208,7 +1241,7 @@ func (f *fakeService) everyMessage(accountID string) []mail.Summary {
 	for _, folder := range f.folders[accountID] {
 		for _, m := range f.messages[listKey(accountID, folder.Name)] {
 			m.Account, m.Thread = accountID, f.threadOf(accountID, m)
-			out = append(out, m)
+			out = append(out, f.withLabels(accountID, m))
 		}
 	}
 	return out
@@ -1277,9 +1310,18 @@ func (f *fakeService) conversations(accountID string, q mail.ListQuery) []mail.C
 		c.Unread = c.Unread || !m.Seen
 		c.Flagged = c.Flagged || m.Flagged
 		c.HasAttachments = c.HasAttachments || m.HasAttachments
+		for _, l := range m.Labels {
+			if !slices.Contains(c.Labels, l.ID) {
+				c.Labels = append(c.Labels, l.ID)
+			}
+		}
 		if newer(m, c.Latest) {
 			c.Latest = m
 		}
+	}
+	// A row's labels are in the order of its account's.
+	for _, c := range byThread {
+		slices.SortFunc(c.Labels, func(x, y mail.LabelID) int { return f.labelPlace(accountID, x) - f.labelPlace(accountID, y) })
 	}
 	search := !q.Search.IsZero()
 	if search {
@@ -2062,4 +2104,258 @@ func (f *fakeService) CheckRecipients(ctx context.Context, field string) (mail.R
 		}}
 	}
 	return check, nil
+}
+
+// fakeFolder is an account's folder, by its name.
+func (f *fakeService) fakeFolder(accountID, name string) (mail.Folder, bool) {
+	for _, folder := range f.folders[accountID] {
+		if folder.Name == name {
+			return folder, true
+		}
+	}
+	return mail.Folder{}, false
+}
+
+// inLabelScope reports whether a label's list shows the messages of an
+// account's folder: those of every folder but Junk, Trash and Drafts.
+func (f *fakeService) inLabelScope(accountID, folder string) bool {
+	fl, ok := f.fakeFolder(accountID, folder)
+	return ok && fl.InLabelScope()
+}
+
+// labelPlace is where a label is among its account's, or -1.
+func (f *fakeService) labelPlace(accountID string, id mail.LabelID) int {
+	return slices.IndexFunc(f.labels[accountID], func(l mail.Label) bool { return l.ID == id })
+}
+
+// localLabelKey is what the labels kept on this device know an account's
+// message by, whichever copy of it.
+func localLabelKey(accountID string, m mail.Summary) string {
+	return accountID + "\x00" + mail.LabelKey(m)
+}
+
+// withLabels gives a message of an account the labels it has, as the
+// engine's reads do: those of its summary, as the server keeps them, and
+// those kept on this device for any copy of it, in the order of the
+// account's labels; and whether its folder keeps no new keyword.
+func (f *fakeService) withLabels(accountID string, m mail.Summary) mail.Summary {
+	here := f.localLabels[localLabelKey(accountID, m)]
+	var out []mail.MessageLabel
+	for _, l := range f.labels[accountID] {
+		switch {
+		case slices.ContainsFunc(m.Labels, func(ml mail.MessageLabel) bool { return ml.ID == l.ID && !ml.Local }):
+			out = append(out, mail.MessageLabel{ID: l.ID})
+		case here[l.ID]:
+			out = append(out, mail.MessageLabel{ID: l.ID, Local: true})
+		}
+	}
+	m.Labels = out
+	folder, _ := f.fakeFolder(accountID, m.Folder)
+	m.LabelsLocal = folder.KeywordsKnown() && !folder.KeepsNewKeywords()
+	return m
+}
+
+// addLabel gives an account a label, as the user made it.
+func (f *fakeService) addLabel(accountID, name string, color mail.LabelColor) mail.Label {
+	l, err := f.CreateLabel(context.Background(), accountID, name, color)
+	if err != nil {
+		panic(err)
+	}
+	return l
+}
+
+// putLabel puts a label on messages of a folder as the server keeps it,
+// as another mail client or a sync did.
+func (f *fakeService) putLabel(accountID, folder string, id mail.LabelID, uids ...mail.UID) {
+	list := f.messages[listKey(accountID, folder)]
+	for i := range list {
+		if slices.Contains(uids, list[i].UID) && !list[i].HasLabel(id) {
+			list[i].Labels = append(slices.Clone(list[i].Labels), mail.MessageLabel{ID: id})
+		}
+	}
+}
+
+// keepNoKeywords has an account's folders keep no keyword, as Outlook's,
+// once they were opened to change.
+func (f *fakeService) keepNoKeywords(accountID string) {
+	for i := range f.folders[accountID] {
+		f.folders[accountID][i].PermanentFlags = []string{`\Seen`, `\Answered`, `\Flagged`, `\Deleted`, `\Draft`}
+	}
+}
+
+// labelNow is a label with how many unread messages of its list have it,
+// and whether it is kept on this device only.
+func (f *fakeService) labelNow(accountID string, l mail.Label) mail.Label {
+	l.Local, l.Unread = mail.KeptLocally(f.folders[accountID], l.Keyword), 0
+	for _, m := range f.everyMessage(accountID) {
+		if !m.Seen && m.HasLabel(l.ID) && f.inLabelScope(accountID, m.Folder) {
+			l.Unread++
+		}
+	}
+	return l
+}
+
+func (f *fakeService) Labels(ctx context.Context, accountID string) ([]mail.Label, error) {
+	out := make([]mail.Label, 0, len(f.labels[accountID]))
+	for _, l := range f.labels[accountID] {
+		out = append(out, f.labelNow(accountID, l))
+	}
+	return out, nil
+}
+
+// CreateLabel adds a label after an account's others, refusing what the
+// engine refuses.
+func (f *fakeService) CreateLabel(ctx context.Context, accountID, name string, color mail.LabelColor) (mail.Label, error) {
+	name, err := mail.CleanLabelName(name)
+	if err != nil {
+		return mail.Label{}, err
+	}
+	if color != "" && !color.Valid() {
+		return mail.Label{}, mail.ErrLabelColor
+	}
+	if _, ok := f.fakeAccount(accountID); !ok {
+		return mail.Label{}, mail.ErrNotFound
+	}
+	list := f.labels[accountID]
+	if slices.ContainsFunc(list, func(l mail.Label) bool { return mail.LabelNameKey(l.Name) == mail.LabelNameKey(name) }) {
+		return mail.Label{}, mail.ErrLabelExists
+	}
+	if color == "" {
+		color = mail.LabelColorAt(len(list))
+	}
+	keyword := mail.FreeKeyword(mail.LabelKeyword(name), func(lower string) bool {
+		return slices.ContainsFunc(list, func(l mail.Label) bool { return strings.ToLower(l.Keyword) == lower })
+	})
+	f.nextLabel++
+	l := mail.Label{ID: f.nextLabel, Account: accountID, Name: name, Color: color, Keyword: keyword}
+	f.labels[accountID] = append(slices.Clone(list), l)
+	return f.labelNow(accountID, l), nil
+}
+
+// UpdateLabel renames a label and changes its color, "" keeping it; its
+// keyword stays.
+func (f *fakeService) UpdateLabel(ctx context.Context, accountID string, id mail.LabelID, name string, color mail.LabelColor) (mail.Label, error) {
+	name, err := mail.CleanLabelName(name)
+	if err != nil {
+		return mail.Label{}, err
+	}
+	if color != "" && !color.Valid() {
+		return mail.Label{}, mail.ErrLabelColor
+	}
+	i := f.labelPlace(accountID, id)
+	if i < 0 {
+		return mail.Label{}, mail.ErrNotFound
+	}
+	list := slices.Clone(f.labels[accountID])
+	if slices.ContainsFunc(list, func(l mail.Label) bool { return l.ID != id && mail.LabelNameKey(l.Name) == mail.LabelNameKey(name) }) {
+		return mail.Label{}, mail.ErrLabelExists
+	}
+	list[i].Name = name
+	if color != "" {
+		list[i].Color = color
+	}
+	f.labels[accountID] = list
+	return f.labelNow(accountID, list[i]), nil
+}
+
+// SetLabel puts a label on messages or takes it off, as the engine does:
+// as a keyword where the folder keeps it or is not known yet, else on
+// this device by the message's key; taking it off takes it off both.
+// Only a change of keywords reaches the server.
+func (f *fakeService) SetLabel(ctx context.Context, accountID string, msgs []mail.MessageRef, id mail.LabelID, on bool) error {
+	refs := make([]string, 0, len(msgs))
+	for _, r := range msgs {
+		refs = append(refs, r.Folder+"/"+itoa(r.UID))
+	}
+	f.act(accountID, "SetLabel %s %d %v", strings.Join(refs, ","), id, on)
+	i := f.labelPlace(accountID, id)
+	if i < 0 {
+		return mail.ErrNotFound
+	}
+	label := f.labels[accountID][i]
+	kept := func(folder string) bool {
+		fl, _ := f.fakeFolder(accountID, folder)
+		return !fl.KeywordsKnown() || fl.KeepsKeyword(label.Keyword)
+	}
+	if slices.ContainsFunc(msgs, func(r mail.MessageRef) bool { return kept(r.Folder) }) {
+		if err := f.signedOut(accountID); err != nil {
+			return err
+		}
+		if f.setLabelErr != nil {
+			return f.setLabelErr
+		}
+	}
+	for _, r := range msgs {
+		list := f.messages[listKey(accountID, r.Folder)]
+		for j := range list {
+			if list[j].UID != r.UID {
+				continue
+			}
+			key := localLabelKey(accountID, list[j])
+			switch {
+			case on && !kept(r.Folder):
+				if f.localLabels[key] == nil {
+					f.localLabels[key] = map[mail.LabelID]bool{}
+				}
+				f.localLabels[key][id] = true
+			case on:
+				if !list[j].HasLabel(id) {
+					list[j].Labels = append(slices.Clone(list[j].Labels), mail.MessageLabel{ID: id})
+				}
+			default:
+				list[j].Labels = slices.DeleteFunc(slices.Clone(list[j].Labels), func(ml mail.MessageLabel) bool { return ml.ID == id })
+				delete(f.localLabels[key], id)
+			}
+		}
+	}
+	return nil
+}
+
+// DeleteLabel takes a label off every message, as the server keeps it
+// and on this device, then drops it; no message moves. It reaches the
+// server unless every folder is known to keep none of its keyword.
+func (f *fakeService) DeleteLabel(ctx context.Context, accountID string, id mail.LabelID) error {
+	f.act(accountID, "DeleteLabel %d", id)
+	i := f.labelPlace(accountID, id)
+	if i < 0 {
+		return mail.ErrNotFound
+	}
+	label := f.labels[accountID][i]
+	if slices.ContainsFunc(f.folders[accountID], func(fl mail.Folder) bool { return !fl.KeywordsKnown() || fl.KeepsKeyword(label.Keyword) }) {
+		if err := f.signedOut(accountID); err != nil {
+			return err
+		}
+		if err := f.deleteLabelErr; err != nil {
+			if errors.Is(err, mail.ErrLabelPartlyRemoved) {
+				for _, folder := range f.folders[accountID] {
+					if f.unlabelFolder(accountID, folder.Name, id) {
+						break
+					}
+				}
+			}
+			return err
+		}
+	}
+	for _, folder := range f.folders[accountID] {
+		f.unlabelFolder(accountID, folder.Name, id)
+	}
+	for _, here := range f.localLabels {
+		delete(here, id)
+	}
+	f.labels[accountID] = slices.Delete(slices.Clone(f.labels[accountID]), i, i+1)
+	return nil
+}
+
+// unlabelFolder takes a label off the messages of a folder as the server
+// keeps it, and reports whether any had it.
+func (f *fakeService) unlabelFolder(accountID, folder string, id mail.LabelID) bool {
+	list := f.messages[listKey(accountID, folder)]
+	had := false
+	for j := range list {
+		if slices.ContainsFunc(list[j].Labels, func(ml mail.MessageLabel) bool { return ml.ID == id }) {
+			list[j].Labels = slices.DeleteFunc(slices.Clone(list[j].Labels), func(ml mail.MessageLabel) bool { return ml.ID == id })
+			had = true
+		}
+	}
+	return had
 }

@@ -1248,7 +1248,7 @@
   "filterFolder": "Folder",
   "anyFolder": "Any folder",
   "clearFilters": "Clear filters",
-  "filterSyntaxHint": "You can also type from:, to:, subject:, body:, after:, before:, is:unread, is:starred, has:attachment, in: and account:.",
+  "filterSyntaxHint": "You can also type from:, to:, subject:, body:, after:, before:, is:unread, is:starred, has:attachment, in:, label: and account:.",
   "filterFromValue": "From: {value}",
   "@filterFromValue": {
     "placeholders": {
@@ -2069,5 +2069,197 @@
       }
     }
   },
-  "deleteContactButton": "Delete contact"
+  "deleteContactButton": "Delete contact",
+  "newLabel": "New label",
+  "newLabelEllipsis": "New label…",
+  "editLabel": "Edit label",
+  "editLabelEllipsis": "Edit label…",
+  "deleteLabelEllipsis": "Delete label…",
+  "createLabel": "Create label",
+  "cancelLabelForm": "Close without saving the label",
+  "labelNameCaption": "Name",
+  "labelNamePlaceholder": "For example, Receipts",
+  "labelColorCaption": "Color",
+  "labelPreview": "Preview",
+  "colorRed": "Red",
+  "colorOrange": "Orange",
+  "colorYellow": "Yellow",
+  "colorGreen": "Green",
+  "colorTeal": "Teal",
+  "colorBlue": "Blue",
+  "colorPurple": "Purple",
+  "colorPink": "Pink",
+  "labelExists": "There is already a label named “{name}”.",
+  "@labelExists": {
+    "description": "In the label dialog: the name typed is another label's, in any case.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Receipts"
+      }
+    }
+  },
+  "labelNameInvalid": "A label's name can't be empty or longer than {max} characters.",
+  "@labelNameInvalid": {
+    "placeholders": {
+      "max": {
+        "type": "int",
+        "example": "64"
+      }
+    }
+  },
+  "labelSaveFailed": "Couldn't save the label: {error}",
+  "@labelSaveFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "database is locked"
+      }
+    }
+  },
+  "labelRenameNote": "Other mail apps still see this label by the name it was made with: its name and color are this device's.",
+  "labelLocal": "On this device only",
+  "labelLocalDetail": "{name} is kept on this device only: the server keeps no labels in the folders of its messages, so other mail apps don't see it.",
+  "@labelLocalDetail": {
+    "description": "Why a label is marked as kept on this device only, as its mark's tooltip says and screen readers read.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Receipts"
+      }
+    }
+  },
+  "labelOnDevice": "{name}, on this device only",
+  "@labelOnDevice": {
+    "description": "A message's label that is kept on this device only, as screen readers read its chip.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Receipts"
+      }
+    }
+  },
+  "labelActions": "More actions for the label {name}",
+  "@labelActions": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Receipts"
+      }
+    }
+  },
+  "changeLabels": "Change labels",
+  "changeLabelsTip": "Put labels on the chosen mail, or take them off (L)",
+  "noLabelsYet": "No labels yet.",
+  "labelsChooseMail": "Choose messages to label them.",
+  "labelsSeveralAccounts": "These messages are in different accounts, and each account has labels of its own. Choose messages of one account to label them.",
+  "labelsNoDrafts": "Drafts take no labels.",
+  "labelsKeptHereHint": "Labels with this mark stay on this device for these messages: their folder keeps no such label on the server.",
+  "labelOnSome": "On some",
+  "labelChangeFailed": "Couldn't change the label: {error}",
+  "@labelChangeFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "connection refused"
+      }
+    }
+  },
+  "labelKeptHereNote": "“{name}” is kept on this device only for {count, plural, one {# message} other {# messages}}: their folder keeps no labels on the server.",
+  "@labelKeptHereNote": {
+    "description": "Above the list, after a label was put on messages whose folder keeps no labels on the server.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Receipts"
+      },
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "dismissLabelNote": "Dismiss the note about labels",
+  "deleteLabelTitle": "Delete the label “{name}”?",
+  "@deleteLabelTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Receipts"
+      }
+    }
+  },
+  "deleteLabelMessage": "Its messages keep everything but this label: none of them is moved or deleted. It also comes off them on the server, where other mail apps see it.",
+  "deleteLabelMessageLocal": "Its messages keep everything but this label: none of them is moved or deleted.",
+  "deleteLabelButton": "Delete label",
+  "labelPartlyTitle": "“{name}” is still on some messages",
+  "@labelPartlyTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Receipts"
+      }
+    }
+  },
+  "labelPartlyMessage": "It came off some of its messages on the server before the connection failed. Every message is still there, unchanged but for this label. Deleting it again finishes.",
+  "notNow": "Not now",
+  "finishDeleting": "Finish deleting",
+  "labelDeleteFailed": "Couldn't delete the label “{name}”: {error}",
+  "@labelDeleteFailed": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Receipts"
+      },
+      "error": {
+        "type": "String",
+        "example": "connection refused"
+      }
+    }
+  },
+  "labelEmpty": "No message has this label.",
+  "thisLabel": "This label",
+  "rowLabels": "Labels: {labels}",
+  "@rowLabels": {
+    "description": "A row's labels, as screen readers read the row.",
+    "placeholders": {
+      "labels": {
+        "type": "String",
+        "example": "Receipts, Travel"
+      }
+    }
+  },
+  "moreLabels": "{count, plural, one {# more label} other {# more labels}}",
+  "@moreLabels": {
+    "description": "After the label chips a row has room for: how many more it has.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "messageLabels": "Labels of this message",
+  "conversationLabels": "Labels of this conversation",
+  "removeLabel": "Remove the label {name}",
+  "@removeLabel": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Receipts"
+      }
+    }
+  },
+  "fieldLabel": "label",
+  "filterLabel": "Label",
+  "anyLabel": "Any label",
+  "filterLabelValue": "Label: {value}",
+  "@filterLabelValue": {
+    "placeholders": {
+      "value": {
+        "type": "String",
+        "example": "Receipts"
+      }
+    }
+  }
 }

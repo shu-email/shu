@@ -141,6 +141,12 @@ func (a *app) accountsChanged() {
 			delete(a.needSignIn, id)
 		}
 	}
+	for id := range a.labels.of {
+		if a.account(id) == nil {
+			delete(a.labels.of, id)
+			delete(a.labels.read, id)
+		}
+	}
 	a.watchAccounts()
 	a.updateBadge()
 }
@@ -309,8 +315,11 @@ func (a *app) watchEvent(ev mail.WatchEvent) {
 	case a.folder != shown:
 		// The folder on show is gone from the server.
 		a.selectFolder()
-	case a.folder == ev.Folder, a.isUnified() && a.isInboxOf(ev.AccountID, ev.Folder):
+	case a.folder == ev.Folder, a.isUnified() && a.isInboxOf(ev.AccountID, ev.Folder), labelOf(a.folder) != 0:
 		a.readList(a.gen, false, false)
+	default:
+		// The labels' counts follow the mail that came.
+		a.loadLabels(ev.AccountID)
 	}
 }
 

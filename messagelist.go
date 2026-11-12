@@ -32,6 +32,9 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 		if a.undo != nil {
 			a.undoBanner(c, t)
 		}
+		if a.labels.note != "" {
+			a.labelNoteBanner(c, t)
+		}
 		if a.triage != nil {
 			a.triageBanner(c, t)
 		}
@@ -44,9 +47,12 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 		}
 		if msg := a.emptyState(); msg != "" {
 			ui.Column(c.Key("empty")).Grow(1).Center().Gap(8).Padding(24, 20).Children(func() {
-				if a.loading {
+				switch {
+				case a.loading:
 					ui.Spinner(c).Size(18, 18)
-				} else {
+				case labelOf(a.folder) != 0 && !searching:
+					ui.Icon(c, tagIcon).FontSize(30).TextColor(t.TextMuted)
+				default:
 					ui.Icon(c, inboxIcon).FontSize(30).TextColor(t.TextMuted)
 				}
 				ui.Text(c, msg).FontSize(13).TextColor(t.TextMuted).TextAlign(ui.Center)
@@ -98,6 +104,9 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 			if account != "" {
 				parts = append(parts, locales.InAccount(account))
 			}
+			if labels := a.labelNames(m.Account, a.rowLabelsOf(i)); labels != "" {
+				parts = append(parts, locales.RowLabels(labels))
+			}
 			if reason := a.rowReason(i); reason != "" {
 				parts = append(parts, reason)
 			}
@@ -106,6 +115,9 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 		a.list.Header = func(i int) bool { return i >= n }
 		a.list.Selected = &a.selected
 		a.list.Selection = &a.sel
+		// The menu is the list's, after its rows: a right-click on a row
+		// chooses it first, and a choice in the menu changes the rows
+		// once they are built.
 		ui.List(c.Key("messages"), &a.list, rows).Grow(1).Transition(listMotion).
 			OnChange(func() {
 				if a.sel.Len() == 0 {
@@ -122,7 +134,8 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 					return
 				}
 				a.messageRow(row)
-			})
+			}).
+			PopoverMenu(a.rowMenu)
 		// The next page is read as the user nears the end of the rows
 		// read, by scrolling or with the keys, so that it is there when
 		// they get to it.
@@ -173,6 +186,8 @@ func (a *app) listHeader(c *ui.Context, t *ui.Theme) {
 				n, more = a.folderUnread(a.folder), false
 			case a.isUnified():
 				n, more = a.unifiedUnread(), false
+			case a.shownLabel() != nil:
+				n, more = a.shownLabel().Unread, false
 			}
 			if n > 0 {
 				label := fmt.Sprint(n)
@@ -187,6 +202,9 @@ func (a *app) listHeader(c *ui.Context, t *ui.Theme) {
 			ui.Spinner(c).Size(14, 14)
 		}
 		a.viewToggle(c)
+		if l := a.shownLabel(); l != nil && chosen <= 1 {
+			a.labelHeaderMenu(c, *l)
+		}
 		if chosen > 1 {
 			ui.Button(c, locales.ClearSelection()).OnClick(func() { a.clearSelection() })
 		} else if a.ai != nil {
@@ -245,6 +263,9 @@ func (a *app) listSummary() string {
 	if query != "" {
 		return count + " · " + a.scopeWhere()
 	}
+	if l := a.shownLabel(); l != nil && l.Local {
+		return count + " · " + locales.LabelLocal()
+	}
 	return count
 }
 
@@ -277,6 +298,8 @@ func (a *app) emptyState() string {
 		return noResultsText(a.query)
 	case a.emptyOlder() != endNone:
 		return locales.NoneHere()
+	case labelOf(a.folder) != 0:
+		return locales.LabelEmpty()
 	default:
 		return locales.EmptyFolder()
 	}
@@ -424,9 +447,21 @@ func (a *app) messageRow(row ui.ListRow) {
 					}
 					ui.Text(c, a.messageTime(c, m.Date)).FontSize(11).TextColor(muted).Shrink(0)
 				})
-				subject := ui.Text(c, title).FontSize(13).SingleLine()
-				if unread {
-					subject.Bold()
+				// A row's labels end its subject's line, of which they take
+				// at most half.
+				if labels := a.rowLabelsOf(row.Index); len(labels) > 0 {
+					ui.Row(c).Gap(6).AlignItems(ui.Center).MinWidth(0).Children(func() {
+						subject := ui.Text(c, title).FontSize(13).SingleLine().Grow(1).MinWidth(0)
+						if unread {
+							subject.Bold()
+						}
+						a.labelChips(c, t, m.Account, labels, rowLabels, chosen).Shrink(0).MaxWidth(170)
+					})
+				} else {
+					subject := ui.Text(c, title).FontSize(13).SingleLine()
+					if unread {
+						subject.Bold()
+					}
 				}
 				if s, ok := a.suggestion(a.rowKey(row.Index)); ok {
 					a.suggestionLine(c, t, s, chosen)

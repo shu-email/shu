@@ -477,7 +477,7 @@ func TestSearchStringsInChinese(t *testing.T) {
 	}
 	search(a, tt, "pergola account:home")
 	click(t, tt, "搜索筛选条件")
-	for _, text := range []string{"账户：home", "账户", "也可以直接输入 from:、to:、subject:、body:、after:、before:、is:unread、is:starred、has:attachment、in: 和 account:。"} {
+	for _, text := range []string{"账户：home", "账户", "也可以直接输入 from:、to:、subject:、body:、after:、before:、is:unread、is:starred、has:attachment、in:、label: 和 account:。"} {
 		if !tt.HasText(text) {
 			t.Errorf("missing %q in %q", text, tt.Texts())
 		}

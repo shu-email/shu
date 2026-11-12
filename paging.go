@@ -28,8 +28,8 @@ const (
 )
 
 // listQuery is what the rows of the list are a read of: an account's
-// folder, its starred mail or the unified inbox, searched or not, in a
-// scope, by conversation or by message.
+// folder, its starred mail, a label's mail or the unified inbox, searched
+// or not, in a scope, by conversation or by message.
 type listQuery struct {
 	account, folder, search string
 	// scope is the search's, scopeHere when there is none.
@@ -55,7 +55,7 @@ func (a *app) listQuery() listQuery {
 // older mail can be fetched.
 func (q listQuery) isFolder() bool {
 	return q.folder != "" && q.folder != "starred" && q.folder != draftsFolder && q.folder != allInboxes &&
-		q.scope == scopeHere
+		labelOf(q.folder) == 0 && q.scope == scopeHere
 }
 
 // drafts reports whether the list is of the drafts, which their own read
@@ -72,6 +72,8 @@ func (q listQuery) mailScope() mail.Scope {
 		sc = mail.AccountScope(q.account, "")
 	case q.folder == allInboxes:
 		sc = mail.AllInboxes()
+	case labelOf(q.folder) != 0:
+		sc = mail.LabelScope(q.account, labelOf(q.folder))
 	default:
 		sc = mail.AccountScope(q.account, q.folder)
 	}
@@ -531,7 +533,7 @@ func (a *app) endText(state listEnd) string {
 		case q.search != "":
 			// A search reads the cache alone, whatever its scope.
 			return locales.NoMoreResultsHere()
-		case q.folder == allInboxes:
+		case q.folder == allInboxes, labelOf(q.folder) != 0:
 			return locales.NoMoreHere()
 		}
 		return locales.NoMoreMail()
@@ -544,7 +546,7 @@ func (a *app) endText(state listEnd) string {
 // list, one folder at a time.
 func (a *app) endHint(state listEnd) string {
 	q := a.listQuery()
-	if state == endNoMore && (q.folder == allInboxes || q.search != "" && q.scope != scopeHere) {
+	if state == endNoMore && (q.folder == allInboxes || labelOf(q.folder) != 0 || q.search != "" && q.scope != scopeHere) {
 		return locales.OlderInFolderHint()
 	}
 	return ""

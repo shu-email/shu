@@ -96,6 +96,20 @@ type mailService interface {
 	DeleteContact(ctx context.Context, email string) error
 	CheckRecipients(ctx context.Context, field string) (mail.RecipientCheck, error)
 
+	// Labels, an account's each. Labels reads them from the cache, with
+	// their unread counts and whether each is kept on this device only;
+	// a label's name and color are this device's. SetLabel puts a label
+	// on messages of one account, or takes it off, the cache first, and
+	// keeps it on this device where their folder keeps no such keyword.
+	// DeleteLabel, which the window asks about first, takes it off every
+	// message, on the server too, moving and deleting none; it may need
+	// to run again (mail.ErrLabelPartlyRemoved).
+	Labels(ctx context.Context, accountID string) ([]mail.Label, error)
+	CreateLabel(ctx context.Context, accountID, name string, color mail.LabelColor) (mail.Label, error)
+	UpdateLabel(ctx context.Context, accountID string, id mail.LabelID, name string, color mail.LabelColor) (mail.Label, error)
+	SetLabel(ctx context.Context, accountID string, msgs []mail.MessageRef, id mail.LabelID, on bool) error
+	DeleteLabel(ctx context.Context, accountID string, id mail.LabelID) error
+
 	// Drafts. SaveDraft never needs the network; SyncDrafts is the step
 	// that does, and may fail and run again.
 	DraftList(ctx context.Context, accountID, query string, limit int) ([]mail.Summary, error)

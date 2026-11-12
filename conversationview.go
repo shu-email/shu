@@ -57,6 +57,8 @@ func (a *app) threadToolbar(c *ui.Context, t *ui.Theme) {
 	trash := a.canMove(places, mail.SpecialTrash)
 	junk := a.canMove(places, mail.SpecialJunk)
 	newest, _ := a.newestShown()
+	lt := a.labelTargets()
+	var labels ui.Element
 	ui.Toolbar(c, func() {
 		a.toolButton(c, archiveIcon, locales.ArchiveConversations(n), has && archive, func() {
 			a.moveThreads(mail.SpecialArchive)
@@ -81,6 +83,7 @@ func (a *app) threadToolbar(c *ui.Context, t *ui.Theme) {
 			readLabel, readIcon = locales.MarkConversationsUnread(n), mailIcon
 		}
 		a.toolButton(c, readIcon, readLabel, has, a.toggleThreadRead)
+		labels = a.labelButton(c, lt)
 		a.toolDivider(c)
 		reply := has && newest != nil
 		for _, all := range a.replyOrder() {
@@ -96,8 +99,9 @@ func (a *app) threadToolbar(c *ui.Context, t *ui.Theme) {
 			a.toolDivider(c)
 			a.toolButton(c, sparklesIcon, locales.SummarizeConversation(), n == 1 && newest != nil, a.summarize)
 		}
-	}).Height(48).Padding(6, 12).Label(locales.ConversationActions()).
+	}).Height(48).Padding(6, 8).Label(locales.ConversationActions()).
 		BorderWidth(0, 0, 1, 0).BorderColor(t.Border)
+	a.labelPicker(c, t, labels, lt)
 }
 
 // conversationPane is the reading pane in conversation view: the chosen
@@ -146,6 +150,14 @@ func (a *app) conversationPane(c *ui.Context, t *ui.Theme) {
 		ui.Column(c).Padding(20, 20, 24, 20).Gap(10).MinWidth(0).Children(func() {
 			ui.Text(c, subject).FontSize(21).Bold().Balance()
 			ui.Text(c, a.scopeLine(cv)).FontSize(12).TextColor(t.TextMuted)
+			// The conversation's labels, as its row has them.
+			if labels := a.convLabels(*row); len(labels) > 0 {
+				ui.Row(c).Wrap().Gap(6).Label(locales.ConversationLabels()).Children(func() {
+					for _, ml := range labels {
+						labelChip(c, t, *a.findLabel(row.Account, ml.ID), ml.Local, false, 11)
+					}
+				})
+			}
 			if job := a.summaries[key]; job != nil {
 				a.summaryCard(c, t, key, job)
 			}
@@ -235,8 +247,13 @@ func (a *app) threadMessage(c *ui.Context, t *ui.Theme, cv *convView, i int, m m
 func (a *app) threadHeader(c *ui.Context, t *ui.Theme, cv *convView, n, total int, m mail.Summary, open bool) {
 	key := summaryKey(m)
 	name := displayName(m.From)
-	ui.ButtonBase(c).Label(locales.MessageHeading(n, total, name)).Expanded(open).
-		OnClick(func() { a.toggleMessage(key) }).Padding(10, 14).Children(func() {
+	labels := a.shownLabels(m.Account, m.Labels)
+	header := ui.ButtonBase(c).Label(locales.MessageHeading(n, total, name)).Expanded(open).
+		OnClick(func() { a.toggleMessage(key) }).Padding(10, 14)
+	if len(labels) > 0 {
+		header.Description(locales.RowLabels(a.labelNames(m.Account, labels)))
+	}
+	header.Children(func() {
 		ui.Row(c).Grow(1).Gap(10).AlignItems(ui.Center).MinWidth(0).Children(func() {
 			ui.Avatar(c, name, nil)
 			ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
@@ -251,6 +268,9 @@ func (a *app) threadHeader(c *ui.Context, t *ui.Theme, cv *convView, n, total in
 					if a.outsideList(cv, m) {
 						ui.Text(c, a.folderLabelOf(m.Account, m.Folder)).FontSize(10).TextColor(t.TextMuted).Shrink(0).
 							Padding(0, 5).Radius(6).Background(t.Surface).Border(1, t.Border)
+					}
+					if len(labels) > 0 {
+						a.labelChips(c, t, m.Account, labels, rowLabels, false).MaxWidth(170)
 					}
 				})
 				detail := m.Preview
@@ -362,6 +382,8 @@ func (a *app) messageMenu(menu *ui.Menu, key string) {
 	if menu.Item(locales.DeleteThisMessage()).Disabled(trash == "" || m.Folder == trash).Chosen() {
 		a.moveMessage(m, mail.SpecialTrash)
 	}
+	menu.Separator()
+	menu.Submenu(locales.Labels(), func(menu *ui.Menu) { a.labelMenuItems(menu, oneMessage(m)) })
 }
 
 // messageFields are the raw sender and recipient fields of a message.

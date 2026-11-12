@@ -133,6 +133,7 @@ func (a *app) filterPanel(c *ui.Context, t *ui.Theme, now time.Time) {
 			a.flagFilter(c, locales.FilterAttachment(), &f.attachment, "has:attachment", func(s searchQuery) bool { return s.Attachment })
 		})
 		a.folderFilter(c, q)
+		a.labelFilter(c, q)
 		a.accountFilter(c, q)
 		ui.Divider(c)
 		ui.Text(c, locales.FilterSyntaxHint()).FontSize(11).TextColor(t.TextMuted).MaxLines(3)
@@ -355,6 +356,8 @@ func (a *app) describeFilter(c *ui.Context, s searchQuery) string {
 		return locales.FilterBeforeDay(dayText(c, s.Before))
 	case s.In != "":
 		return locales.FilterInFolder(a.inLabel(s.In))
+	case len(s.Labels) > 0:
+		return locales.FilterLabelValue(a.labelValueName(s.Labels))
 	}
 	return ""
 }
@@ -382,6 +385,8 @@ func (a *app) scopeLabel(s searchScope) string {
 		return locales.AllAccounts()
 	case a.isUnified():
 		return locales.ScopeInboxes()
+	case labelOf(a.folder) != 0:
+		return locales.ThisLabel()
 	}
 	return locales.ThisFolder()
 }

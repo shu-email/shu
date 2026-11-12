@@ -19,6 +19,8 @@ import (
 	"io"
 	"math/big"
 	"net"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -72,7 +74,35 @@ func Cert() (tls.Certificate, *x509.CertPool, error) {
 // waits for the client's next command. Servers in use do not do that
 // (they sync as an IDLE begins), and a test of pushed mail would pass or
 // fail by which side won that race. This one looks at short intervals.
-type PromptSession struct{ imapserver.SessionIMAP4rev2 }
+type PromptSession struct {
+	imapserver.SessionIMAP4rev2
+	// noKeywords is IMAPOptions.KeepsNoKeywords.
+	noKeywords bool
+}
+
+// Select selects a mailbox as the in-memory server does, which keeps any
+// keyword, but for a server that keeps none: its PERMANENTFLAGS name the
+// system's flags alone.
+func (s PromptSession) Select(mailbox string, options *imap.SelectOptions) (*imap.SelectData, error) {
+	data, err := s.SessionIMAP4rev2.Select(mailbox, options)
+	if err == nil && s.noKeywords {
+		data.PermanentFlags = slices.DeleteFunc(data.PermanentFlags, func(f imap.Flag) bool { return !systemFlag(f) })
+	}
+	return data, err
+}
+
+// Store changes flags as the in-memory server does, but a server that
+// keeps no keywords answers NO to a STORE that would add one.
+func (s PromptSession) Store(w *imapserver.FetchWriter, numSet imap.NumSet, flags *imap.StoreFlags, options *imap.StoreOptions) error {
+	if s.noKeywords && flags.Op != imap.StoreFlagsDel && slices.ContainsFunc(flags.Flags, func(f imap.Flag) bool { return !systemFlag(f) }) {
+		return &imap.Error{Type: imap.StatusResponseTypeNo, Text: "This mailbox keeps no keywords"}
+	}
+	return s.SessionIMAP4rev2.Store(w, numSet, flags, options)
+}
+
+// systemFlag reports whether a flag is one of the system's, as \Seen, and
+// not \*, which stands for any keyword.
+func systemFlag(f imap.Flag) bool { return strings.HasPrefix(string(f), `\`) && f != imap.FlagWildcard }
 
 func (s PromptSession) Idle(w *imapserver.UpdateWriter, stop <-chan struct{}) error {
 	tick := time.NewTicker(time.Millisecond)
@@ -97,7 +127,11 @@ type IMAPOptions struct {
 	Mailboxes []string
 	// Session, if set, wraps each session, as to sign in another way.
 	Session func(PromptSession) imapserver.Session
-	Logger  Logger
+	// KeepsNoKeywords has every mailbox keep no keyword, as Outlook's: a
+	// SELECT's PERMANENTFLAGS name the system's flags alone, and a STORE
+	// that would add a keyword is answered NO.
+	KeepsNoKeywords bool
+	Logger          Logger
 }
 
 // IMAP is a running IMAP server.
@@ -125,7 +159,7 @@ func StartIMAP(o IMAPOptions) (*IMAP, error) {
 	}
 	server := imapserver.New(&imapserver.Options{
 		NewSession: func(*imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
-			session := PromptSession{mem.NewSession().(imapserver.SessionIMAP4rev2)}
+			session := PromptSession{SessionIMAP4rev2: mem.NewSession().(imapserver.SessionIMAP4rev2), noKeywords: o.KeepsNoKeywords}
 			if o.Session != nil {
 				return o.Session(session), &imapserver.GreetingData{}, nil
 			}

@@ -673,6 +673,68 @@ server or a model carries it, and `ai/` has no way to it.
   the keyboard goes back to the row's button, or after a delete to the next row's.
   Edits show in the next suggestion.
 
+### Labels (added since)
+
+The engine keeps labels, as IMAP keywords where a folder keeps them and on this device
+otherwise (`AGENTS.md` says how); the window shows them and changes them through the
+`mailService` calls above, and reads them again, with their unread counts, after each
+read of the list (`labels.go`).
+
+- The sidebar: under the folders, a Labels section of the account on screen, in the
+  engine's order: each label's color where a folder has its icon, its name, its unread
+  count (`Label.Unread`), and on a label kept on this device only (`Label.Local`) a
+  mark whose tooltip says why, which screen readers read as the entry's description.
+  "New label" ends the section. A label's entry opens its list (`mail.LabelScope`) as
+  a folder's opens the folder: pages read as the user nears their end, conversations,
+  the toolbar's actions, the label's unread count as the header's badge, each row's
+  folder, and an empty state. It reads the cache alone and fetches no older mail, which
+  its end says. Its header's line says when the label is kept on this device only, and
+  a "⋯" button there, as the entry's context menu, edits the label or deletes it. A
+  search from it covers the label's list ("This label") unless widened.
+- Making and changing a label: a dialog takes its name, whose errors are the engine's
+  in the user's words (empty or too long, another label's in any case) and keep the
+  dialog open, and one color of the palette, with a preview of the chip. Renaming a
+  label on the server says that other mail apps keep its first name. Each color has a
+  shade for the light appearance and one for the dark; a label's name reads on its chip
+  at 4.5:1 in both.
+- Putting labels on and taking them off: the toolbar's tag button, and L, open a
+  checklist of the account's labels over the rows chosen. A label is checked when every
+  row has it and mixed when some do; a click puts it on all of them, or takes it off all
+  once they all have it, and the checklist stays open. A conversation stands for its
+  messages in the list's scope, as its other actions do, and has a label when any of
+  them has it. The list's context menu (a right-click chooses the row first) has a
+  Labels submenu that does the same, a label some rows have said to be on some; a
+  message of the conversation pane has one in its own menu, for it alone; and each chip
+  of the reading pane has a button that takes its label off. "New label…" in the
+  checklist and the submenus makes a label and puts it on the rows chosen. Rows of
+  several accounts (the unified inbox, a search of every account) take their own
+  account's labels; rows of two accounts take none together, which the checklist and the
+  menu say. The rows show a change at once; the list is then read again, which shows
+  what the engine did and puts back what the server refused, and the line above the
+  list says why. A label that would stay on this device for the rows chosen, their
+  folder keeping no such keyword (`Folder.PermanentFlags`), is marked in the checklist,
+  and once it is on, a note above the list says it is kept on this device only.
+- Chips: a row ends its subject's line with its labels, at most two chips and then how
+  many more, so that they stay on one line; a conversation's row has the labels of its
+  messages in the list. The reading pane shows the message's labels, or the
+  conversation's under its subject and each message's beside its sender. A chip is the
+  label's dot and name, in its color over a tint of it, with the mark of a label the
+  message has on this device only (`MessageLabel.Local`); on the row chosen it takes
+  the row's colors. A row's labels are read with it to screen readers.
+- Deleting a label asks first, in an alert that says its messages keep everything but
+  the label, none moved or deleted, and, for a label on the server, that it comes off
+  them there too. A deletion that took it off some messages only
+  (`ErrLabelPartlyRemoved`) says so in another alert, which offers to finish by
+  deleting it again; any other failure keeps the label and says why above the list.
+  The list of a label deleted gives way to the inbox.
+- Search: `label:` is one of the operators the search field splits its text by; the
+  filters have a Label menu (any label, the account's labels, and in a search of
+  several accounts the others' of other names) that writes it, quoting a name with a
+  space; its chip names the label as the label writes it, and a row it found says it
+  matched by its labels (`mail.FieldLabel`).
+- Counts: marking messages read or unread changes their labels' unread counts at
+  once, as it does their folders', until the labels are read again.
+
 ## Testing discipline
 
 Tests are part of each change, not a later phase:

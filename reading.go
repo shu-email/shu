@@ -46,6 +46,7 @@ func (a *app) readingPane(c *ui.Context, t *ui.Theme) {
 					if place := a.placeLine(*m); place != "" {
 						ui.Text(c, place).FontSize(12).TextColor(t.TextMuted).SingleLine()
 					}
+					a.messageLabels(c, t, *m)
 				})
 				a.senderHeader(c, t, *m)
 				if msg != nil && len(msg.Attachments) > 0 {
@@ -104,6 +105,8 @@ func (a *app) readingToolbar(c *ui.Context, t *ui.Theme) {
 	drafts := localDrafts(targets)
 	onlyDrafts := has && drafts == len(targets)
 	has = has && drafts == 0
+	lt := a.labelTargets()
+	var labels ui.Element
 	ui.Toolbar(c, func() {
 		a.toolButton(c, archiveIcon, locales.ArchiveMessage(), has && archive, func() {
 			a.moveSelected(mail.SpecialArchive)
@@ -138,6 +141,7 @@ func (a *app) readingToolbar(c *ui.Context, t *ui.Theme) {
 			readLabel, readIcon = locales.MarkUnread(), mailIcon
 		}
 		a.toolButton(c, readIcon, readLabel, has, func() { a.toggleRead() })
+		labels = a.labelButton(c, lt)
 		a.toolDivider(c)
 		for _, all := range a.replyOrder() {
 			icon, label := replyLook(all)
@@ -150,8 +154,9 @@ func (a *app) readingToolbar(c *ui.Context, t *ui.Theme) {
 			a.toolDivider(c)
 			a.toolButton(c, sparklesIcon, locales.Summarize(), msg != nil && len(targets) == 1 && has, a.summarize)
 		}
-	}).Height(48).Padding(6, 12).Label(locales.MessageActions()).
+	}).Height(48).Padding(6, 8).Label(locales.MessageActions()).
 		BorderWidth(0, 0, 1, 0).BorderColor(t.Border)
+	a.labelPicker(c, t, labels, lt)
 }
 
 // toggleHTML switches between the plain text and the isolated web view.
@@ -825,6 +830,7 @@ func (a *app) toggleRead() {
 		}
 		m.Seen = on
 		a.addUnread(m.Account, m.Folder, unreadDelta(on))
+		a.labelUnread(*m, unreadDelta(on))
 		changed = append(changed, *m)
 	}
 	a.updateBadge()
@@ -850,6 +856,7 @@ func (a *app) toggleRead() {
 				}
 				for _, m := range changed {
 					a.addUnread(m.Account, m.Folder, -unreadDelta(on))
+					a.labelUnread(m, -unreadDelta(on))
 				}
 				a.err = failureText(err)
 				a.updateBadge()

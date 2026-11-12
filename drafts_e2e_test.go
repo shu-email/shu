@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/plugins/sqlite"
 	"github.com/egoist/mygo/ui"
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
@@ -29,6 +28,7 @@ import (
 	"github.com/emersion/go-sasl"
 	smtp "github.com/emersion/go-smtp"
 
+	"shu/internal/sqlitetest"
 	"shu/locales"
 	"shu/mail"
 	"shu/store"
@@ -323,9 +323,7 @@ func hostPort(t *testing.T, addr string) (string, int) {
 // discarded and sent, and after each step the server's Drafts folder and
 // the Drafts list are what they should be.
 func TestDraftsEndToEnd(t *testing.T) {
-	if err := sqlite.Load(); err != nil {
-		t.Skipf("sqlite native module is not ready (%v); run go tool mygo generate", err)
-	}
+	sqlitetest.Require(t)
 	ctx := context.Background()
 	imapServer := startLocalIMAP(t, "INBOX", "Drafts", "Sent", "Trash")
 	smtpServer := startLocalSMTP(t)

@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - LICENSE
+      - "docs/**"
+  pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - LICENSE
+      - "docs/**"
+
+permissions:
+  contents: read
+
+# A new push to a pull request supersedes its older runs; runs on main
+# always finish, so main keeps a record of which commit broke it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::run gofmt on these files:"
+            echo "$unformatted"
+            exit 1
+          fi
+      - run: go vet ./...
+      - name: Check stored elements and goroutine captures
+        run: go tool mygo vet .
+      # SHU_REQUIRE_SQLITE turns sqlitetest.Require's skip into a failure,
+      # so the store, draft and watcher suites cannot pass without running.
+      - name: Test
+        env:
+          CGO_ENABLED: "0"
+          SHU_REQUIRE_SQLITE: "1"
+        run: go test ./...
+
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macOS, os: macos-latest }
+          - { name: Linux, os: ubuntu-latest }
+          - { name: Windows, os: windows-latest }
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      # A smoke build for this runner's platform: no disk image, installer,
+      # signing or upload, only proof that the app compiles and packages.
+      - name: Build the app
+        run: go tool mygo build -skip-dmg -skip-installer
+      # mygo build regenerates the locale accessors; a diff means a change
+      # edited the catalogs without committing the generated code.
+      # Linux only, so Windows line-ending conversion cannot cause a diff.
+      - name: Check generated files are committed
+        if: runner.os == 'Linux'
+        run: git diff --exit-code

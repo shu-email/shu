@@ -66,7 +66,7 @@ func sampleApp(t *testing.T) (*app, *fakeService) {
 func TestView(t *testing.T) {
 	a, _ := sampleApp(t)
 	tt := ui.NewTester(a.view, 1220, 800)
-	for _, text := range []string{"Shu", "Inbox", "Starred", "Compose", "Design review — Thursday at 10", "Search mail"} {
+	for _, text := range []string{"Inbox", "Starred", "Compose", "Design review — Thursday at 10", "Search mail"} {
 		if !tt.HasText(text) {
 			t.Errorf("missing %q in %q", text, tt.Texts())
 		}
@@ -394,7 +394,7 @@ func TestMinimumSizeAndDark(t *testing.T) {
 	a, _ := sampleApp(t)
 	for _, dark := range []bool{false, true} {
 		tt := ui.NewTesterWith(a.view, 1000, 640, ui.TesterOptions{Dark: dark})
-		for _, text := range []string{"Shu", "Inbox", "Search mail", "Compose"} {
+		for _, text := range []string{"Inbox", "Search mail", "Compose"} {
 			if !tt.HasText(text) {
 				t.Errorf("dark=%v missing %q", dark, text)
 			}

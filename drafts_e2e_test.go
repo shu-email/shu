@@ -3,19 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"errors"
-	"io"
-	"math/big"
 	"net"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -25,9 +16,8 @@ import (
 	"github.com/emersion/go-imap/v2/imapclient"
 	"github.com/emersion/go-imap/v2/imapserver"
 	"github.com/emersion/go-imap/v2/imapserver/imapmemserver"
-	"github.com/emersion/go-sasl"
-	smtp "github.com/emersion/go-smtp"
 
+	"shu/internal/fakemail"
 	"shu/internal/sqlitetest"
 	"shu/locales"
 	"shu/mail"
@@ -41,24 +31,11 @@ import (
 // localCert is a certificate for the local servers.
 func localCert(t *testing.T) tls.Certificate {
 	t.Helper()
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	cert, _, err := fakemail.Cert()
 	if err != nil {
 		t.Fatal(err)
 	}
-	tmpl := &x509.Certificate{
-		SerialNumber: big.NewInt(1),
-		Subject:      pkix.Name{CommonName: "127.0.0.1"},
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(24 * time.Hour),
-		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1")},
-	}
-	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}
+	return cert
 }
 
 // localIMAP is an in-memory IMAP server the test can also reach as a
@@ -73,28 +50,8 @@ type serverLog struct{ t *testing.T }
 func (l serverLog) Printf(format string, args ...any) { l.t.Logf("server: "+format, args...) }
 func (l serverLog) Println(args ...any)               { l.t.Log(args...) }
 
-// promptSession is the in-memory server's session with an Idle that holds
-// nothing back. The server's own reports only what happens once an IDLE
-// has begun: a change made between the client's last command and its IDLE
-// waits for the client's next command. Servers in use do not do that
-// (they sync as an IDLE begins), and a test of pushed mail would pass or
-// fail by which side won that race. This one looks at short intervals.
-type promptSession struct{ imapserver.SessionIMAP4rev2 }
-
-func (s promptSession) Idle(w *imapserver.UpdateWriter, stop <-chan struct{}) error {
-	tick := time.NewTicker(time.Millisecond)
-	defer tick.Stop()
-	for {
-		if err := s.SessionIMAP4rev2.Poll(w, true); err != nil {
-			return err
-		}
-		select {
-		case <-stop:
-			return nil
-		case <-tick.C:
-		}
-	}
-}
+// promptSession is the local server's session (see fakemail.PromptSession).
+type promptSession = fakemail.PromptSession
 
 func startLocalIMAP(t *testing.T, mailboxes ...string) *localIMAP {
 	t.Helper()
@@ -106,39 +63,19 @@ func startLocalIMAP(t *testing.T, mailboxes ...string) *localIMAP {
 // and takes no password (see oauth_e2e_test.go).
 func startLocalIMAPWith(t *testing.T, xoauth func(user, token string) bool, mailboxes ...string) *localIMAP {
 	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	o := fakemail.IMAPOptions{
+		Cert: localCert(t), Username: "ann", Password: "secret",
+		Mailboxes: mailboxes, Logger: serverLog{t},
+	}
+	if xoauth != nil {
+		o.Session = func(s fakemail.PromptSession) imapserver.Session { return xoauthSession{s, xoauth} }
+	}
+	server, err := fakemail.StartIMAP(o)
 	if err != nil {
 		t.Fatal(err)
 	}
-	mem := imapmemserver.New()
-	user := imapmemserver.NewUser("ann", "secret")
-	mem.AddUser(user)
-	for _, name := range mailboxes {
-		if err := user.Create(name, nil); err != nil {
-			t.Fatal(err)
-		}
-	}
-	server := imapserver.New(&imapserver.Options{
-		NewSession: func(*imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
-			session := promptSession{mem.NewSession().(imapserver.SessionIMAP4rev2)}
-			if xoauth != nil {
-				return xoauthSession{session, xoauth}, &imapserver.GreetingData{}, nil
-			}
-			return session, &imapserver.GreetingData{}, nil
-		},
-		Caps: imap.CapSet{
-			imap.CapIMAP4rev1: {}, imap.CapMove: {}, imap.CapUIDPlus: {},
-			imap.CapListStatus: {}, imap.CapSpecialUse: {},
-		},
-		TLSConfig: &tls.Config{Certificates: []tls.Certificate{localCert(t)}, MinVersion: tls.VersionTLS12},
-		Logger:    serverLog{t},
-	})
-	go func() { _ = server.Serve(ln) }()
-	t.Cleanup(func() {
-		server.Close()
-		ln.Close()
-	})
-	return &localIMAP{addr: ln.Addr().String(), user: user}
+	t.Cleanup(func() { server.Close() })
+	return &localIMAP{addr: server.Addr, user: server.User}
 }
 
 // serverDraft is a message of the server's Drafts mailbox.
@@ -233,13 +170,8 @@ func (b appendBody) Size() int64 { return int64(b.Len()) }
 // localSMTP is a server that records the messages it is given: their
 // data, and the envelope each came in, and how many connections it took.
 type localSMTP struct {
-	addr      string
-	mu        sync.Mutex
-	got       []string
-	envelopes []smtpEnvelope
-	sessions  int
-	// refuse is the server's answer to a message it does not take.
-	refuse error
+	addr   string
+	server *fakemail.SMTP
 }
 
 // smtpEnvelope is the sender and the recipients of a message the server
@@ -249,108 +181,32 @@ type smtpEnvelope struct {
 	to   []string
 }
 
-func (s *localSMTP) setRefuse(err error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.refuse = err
-}
+func (s *localSMTP) setRefuse(err error) { s.server.SetRefuse(err) }
 
-func (s *localSMTP) NewSession(*smtp.Conn) (smtp.Session, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.sessions++
-	return &smtpSession{server: s}, nil
-}
-
-func (s *localSMTP) received() []string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return append([]string(nil), s.got...)
-}
+func (s *localSMTP) received() []string { return s.server.Received() }
 
 // envelopesGot is the envelope of each message received, in order.
 func (s *localSMTP) envelopesGot() []smtpEnvelope {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return append([]smtpEnvelope(nil), s.envelopes...)
+	var out []smtpEnvelope
+	for _, e := range s.server.Envelopes() {
+		out = append(out, smtpEnvelope{from: e.From, to: e.To})
+	}
+	return out
 }
 
 // connections counts the sessions the server opened.
-func (s *localSMTP) connections() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.sessions
-}
-
-type smtpSession struct {
-	server *localSMTP
-	authed bool
-	// from and to are the envelope of the message under way.
-	from string
-	to   []string
-}
-
-func (s *smtpSession) AuthMechanisms() []string { return []string{sasl.Plain} }
-
-func (s *smtpSession) Auth(string) (sasl.Server, error) {
-	return sasl.NewPlainServer(func(identity, username, password string) error {
-		if username != "ann" || password != "secret" {
-			return errors.New("invalid credentials")
-		}
-		s.authed = true
-		return nil
-	}), nil
-}
-
-func (s *smtpSession) Mail(from string, _ *smtp.MailOptions) error {
-	if !s.authed {
-		return smtp.ErrAuthRequired
-	}
-	s.from, s.to = from, nil
-	return nil
-}
-
-func (s *smtpSession) Rcpt(to string, _ *smtp.RcptOptions) error {
-	s.to = append(s.to, to)
-	return nil
-}
-
-func (s *smtpSession) Data(r io.Reader) error {
-	b, err := io.ReadAll(r)
-	if err != nil {
-		return err
-	}
-	s.server.mu.Lock()
-	defer s.server.mu.Unlock()
-	if s.server.refuse != nil {
-		return s.server.refuse
-	}
-	s.server.got = append(s.server.got, string(b))
-	s.server.envelopes = append(s.server.envelopes, smtpEnvelope{from: s.from, to: s.to})
-	return nil
-}
-
-func (s *smtpSession) Reset()        { s.from, s.to = "", nil }
-func (s *smtpSession) Logout() error { return nil }
+func (s *localSMTP) connections() int { return s.server.Connections() }
 
 func startLocalSMTP(t *testing.T) *localSMTP {
 	t.Helper()
-	s := &localSMTP{}
-	server := smtp.NewServer(s)
-	server.Domain = "localhost"
-	server.TLSConfig = &tls.Config{Certificates: []tls.Certificate{localCert(t)}, MinVersion: tls.VersionTLS12}
-	server.ErrorLog = serverLog{t}
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	server, err := fakemail.StartSMTP(fakemail.SMTPOptions{
+		Cert: localCert(t), Username: "ann", Password: "secret", Logger: serverLog{t},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.addr = ln.Addr().String()
-	go func() { _ = server.Serve(ln) }()
-	t.Cleanup(func() {
-		server.Close()
-		ln.Close()
-	})
-	return s
+	t.Cleanup(func() { server.Close() })
+	return &localSMTP{addr: server.Addr, server: server}
 }
 
 // sendAtOnce has the engine send without a delay, as it did before there

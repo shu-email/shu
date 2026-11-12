@@ -10,14 +10,13 @@ import (
 	"github.com/egoist/mygo/plugins/sqlite"
 
 	"shu/ai"
+	"shu/internal/sqlitetest"
 	"shu/mail"
 )
 
 func openTest(t *testing.T) *Store {
 	t.Helper()
-	if err := sqlite.Load(); err != nil {
-		t.Skipf("sqlite native module is not ready (%v); run go tool mygo generate", err)
-	}
+	sqlitetest.Require(t)
 	s, err := InMemory(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -737,9 +736,7 @@ func TestOutboxEnvelopeLeavesOutTheDraft(t *testing.T) {
 
 // A database from before drafts gains the table and keeps its data.
 func TestMigrationAddsDraftsToAnOlderDatabase(t *testing.T) {
-	if err := sqlite.Load(); err != nil {
-		t.Skipf("sqlite native module is not ready (%v); run go tool mygo generate", err)
-	}
+	sqlitetest.Require(t)
 	ctx := context.Background()
 	path := t.TempDir() + "/shu.db"
 	// Build a v2 database by hand, as the previous release left it.

@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/plugins/sqlite"
 	"github.com/egoist/mygo/ui"
 
+	"shu/internal/sqlitetest"
 	"shu/locales"
 	"shu/mail"
 	"shu/store"
@@ -42,9 +42,7 @@ func (k memKeychain) Delete(key string) error {
 // a message, quit without closing the window, launch again, and the
 // draft is in Drafts and opens exactly as it was left.
 func TestDraftRestoredFromDiskAfterRestart(t *testing.T) {
-	if err := sqlite.Load(); err != nil {
-		t.Skipf("sqlite native module is not ready (%v); run go tool mygo generate", err)
-	}
+	sqlitetest.Require(t)
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "shu.db")
 	keys := memKeychain{}

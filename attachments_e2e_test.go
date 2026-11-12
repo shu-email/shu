@@ -9,10 +9,10 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/egoist/mygo/plugins/sqlite"
 	"github.com/egoist/mygo/ui"
 	smtp "github.com/emersion/go-smtp"
 
+	"shu/internal/sqlitetest"
 	"shu/locales"
 	"shu/mail"
 	"shu/store"
@@ -55,9 +55,7 @@ func storedDraftFiles(t *testing.T, dataDir string) []string {
 // takes it; and what it was given is the files still attached, by their
 // names and to the byte.
 func TestAttachmentsEndToEnd(t *testing.T) {
-	if err := sqlite.Load(); err != nil {
-		t.Skipf("sqlite native module is not ready (%v); run go tool mygo generate", err)
-	}
+	sqlitetest.Require(t)
 	ctx := context.Background()
 	imapServer := startLocalIMAP(t, "INBOX", "Drafts", "Sent", "Trash")
 	smtpServer := startLocalSMTP(t)

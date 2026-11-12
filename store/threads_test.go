@@ -12,6 +12,7 @@ import (
 
 	"github.com/egoist/mygo/plugins/sqlite"
 
+	"shu/internal/sqlitetest"
 	"shu/mail"
 )
 
@@ -680,9 +681,7 @@ func TestConcurrentWritesMakeOneConversation(t *testing.T) {
 // A database of the release before, with mail in it, gains conversations
 // for every row from what it holds, per account.
 func TestMigrationThreadsAnOlderDatabase(t *testing.T) {
-	if err := sqlite.Load(); err != nil {
-		t.Skipf("sqlite native module is not ready (%v); run go tool mygo generate", err)
-	}
+	sqlitetest.Require(t)
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "shu.db")
 	db, err := sqlite.Open(ctx, path, sqlite.OpenOptions{})

@@ -15,10 +15,10 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/i18n"
-	"github.com/egoist/mygo/plugins/sqlite"
 	"github.com/egoist/mygo/ui"
 	"github.com/emersion/go-imap/v2"
 
+	"shu/internal/sqlitetest"
 	"shu/locales"
 	"shu/mail"
 	"shu/store"
@@ -1214,9 +1214,7 @@ func (q uiQueue) until(t *testing.T, what string, done func() bool) {
 // nothing appears in the list and is notified, once, and stays unread on
 // the server; a click on the notification opens it.
 func TestBackgroundMailEndToEnd(t *testing.T) {
-	if err := sqlite.Load(); err != nil {
-		t.Skipf("sqlite native module is not ready (%v); run go tool mygo generate", err)
-	}
+	sqlitetest.Require(t)
 	ctx := context.Background()
 	imapServer := startLocalIMAP(t, "INBOX", "Sent", "Trash")
 	host, port := hostPort(t, imapServer.addr)

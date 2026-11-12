@@ -491,8 +491,8 @@ func TestSendingDraftRemovesItsRow(t *testing.T) {
 	}
 	// The half-typed addresses stop the send, and the draft stays.
 	click(t, tt, locales.Send())
-	if len(fs.sent) != 0 || cs.err == "" || len(fs.drafts) != 1 {
-		t.Fatalf("sent %+v with an unfinished recipient, err %q", fs.sent, cs.err)
+	if len(fs.sent) != 0 || !cs.hasProblems() || len(fs.drafts) != 1 {
+		t.Fatalf("sent %+v with an unfinished recipient, problems %+v", fs.sent, cs.rcpt.checks)
 	}
 	cs.to, cs.cc = "Bob <bob@example.com>", ""
 	tt.Frame()

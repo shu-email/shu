@@ -5631,3 +5631,395 @@ func IdentityRemoveFailed(error string) string { return In(i18n.Locale()).Identi
 func (msgs Messages) IdentityRemoveFailed(error string) string {
 	return Catalog.Format(msgs.locale, "identityRemoveFailed", map[string]any{"error": error})
 }
+
+// ContactSuggestions says "Contact suggestions"
+// in the language the app shows.
+//
+// The list of contacts offered below a recipient field as the user types.
+func ContactSuggestions() string { return In(i18n.Locale()).ContactSuggestions() }
+
+// ContactSuggestions says "Contact suggestions"
+// in the language of msgs.
+//
+// The list of contacts offered below a recipient field as the user types.
+func (msgs Messages) ContactSuggestions() string {
+	return Catalog.Format(msgs.locale, "contactSuggestions", nil)
+}
+
+// RecipientsNotSent says "Not sent. Fix these recipients first."
+// in the language the app shows.
+func RecipientsNotSent() string { return In(i18n.Locale()).RecipientsNotSent() }
+
+// RecipientsNotSent says "Not sent. Fix these recipients first."
+// in the language of msgs.
+func (msgs Messages) RecipientsNotSent() string {
+	return Catalog.Format(msgs.locale, "recipientsNotSent", nil)
+}
+
+// RecipientNotAddress says "“{entry}” is not an email address."
+// in the language the app shows.
+func RecipientNotAddress(entry string) string { return In(i18n.Locale()).RecipientNotAddress(entry) }
+
+// RecipientNotAddress says "“{entry}” is not an email address."
+// in the language of msgs.
+func (msgs Messages) RecipientNotAddress(entry string) string {
+	return Catalog.Format(msgs.locale, "recipientNotAddress", map[string]any{"entry": entry})
+}
+
+// RecipientUnknown says "No contact is called “{entry}”. Write their email address."
+// in the language the app shows.
+func RecipientUnknown(entry string) string { return In(i18n.Locale()).RecipientUnknown(entry) }
+
+// RecipientUnknown says "No contact is called “{entry}”. Write their email address."
+// in the language of msgs.
+func (msgs Messages) RecipientUnknown(entry string) string {
+	return Catalog.Format(msgs.locale, "recipientUnknown", map[string]any{"entry": entry})
+}
+
+// RecipientAmbiguous says "Several contacts match “{entry}”. Choose one:"
+// in the language the app shows.
+func RecipientAmbiguous(entry string) string { return In(i18n.Locale()).RecipientAmbiguous(entry) }
+
+// RecipientAmbiguous says "Several contacts match “{entry}”. Choose one:"
+// in the language of msgs.
+func (msgs Messages) RecipientAmbiguous(entry string) string {
+	return Catalog.Format(msgs.locale, "recipientAmbiguous", map[string]any{"entry": entry})
+}
+
+// RecipientMatch says "“{entry}” is not an email address. Did you mean {name}?"
+// in the language the app shows.
+func RecipientMatch(entry string, name string) string {
+	return In(i18n.Locale()).RecipientMatch(entry, name)
+}
+
+// RecipientMatch says "“{entry}” is not an email address. Did you mean {name}?"
+// in the language of msgs.
+func (msgs Messages) RecipientMatch(entry string, name string) string {
+	return Catalog.Format(msgs.locale, "recipientMatch", map[string]any{"entry": entry, "name": name})
+}
+
+// UseContact says "Use {address}"
+// in the language the app shows.
+//
+// The button that writes the one contact a name matches in place of the
+// name.
+func UseContact(address string) string { return In(i18n.Locale()).UseContact(address) }
+
+// UseContact says "Use {address}"
+// in the language of msgs.
+//
+// The button that writes the one contact a name matches in place of the
+// name.
+func (msgs Messages) UseContact(address string) string {
+	return Catalog.Format(msgs.locale, "useContact", map[string]any{"address": address})
+}
+
+// UseContactFor says "Use {address} for “{entry}”"
+// in the language the app shows.
+//
+// What assistive technology calls a button offering a contact in place of
+// an entry of a recipient field.
+func UseContactFor(address string, entry string) string {
+	return In(i18n.Locale()).UseContactFor(address, entry)
+}
+
+// UseContactFor says "Use {address} for “{entry}”"
+// in the language of msgs.
+//
+// What assistive technology calls a button offering a contact in place of
+// an entry of a recipient field.
+func (msgs Messages) UseContactFor(address string, entry string) string {
+	return Catalog.Format(msgs.locale, "useContactFor", map[string]any{"address": address, "entry": entry})
+}
+
+// RecipientsCheckFailed says "Couldn't check the recipients: {error}"
+// in the language the app shows.
+func RecipientsCheckFailed(error string) string {
+	return In(i18n.Locale()).RecipientsCheckFailed(error)
+}
+
+// RecipientsCheckFailed says "Couldn't check the recipients: {error}"
+// in the language of msgs.
+func (msgs Messages) RecipientsCheckFailed(error string) string {
+	return Catalog.Format(msgs.locale, "recipientsCheckFailed", map[string]any{"error": error})
+}
+
+// Contacts says "Contacts"
+// in the language the app shows.
+func Contacts() string { return In(i18n.Locale()).Contacts() }
+
+// Contacts says "Contacts"
+// in the language of msgs.
+func (msgs Messages) Contacts() string {
+	return Catalog.Format(msgs.locale, "contacts", nil)
+}
+
+// ContactsDetail says "The people you write to and who write to you. They stay on this device: no server and no AI model sees them."
+// in the language the app shows.
+func ContactsDetail() string { return In(i18n.Locale()).ContactsDetail() }
+
+// ContactsDetail says "The people you write to and who write to you. They stay on this device: no server and no AI model sees them."
+// in the language of msgs.
+func (msgs Messages) ContactsDetail() string {
+	return Catalog.Format(msgs.locale, "contactsDetail", nil)
+}
+
+// SearchContacts says "Search contacts"
+// in the language the app shows.
+func SearchContacts() string { return In(i18n.Locale()).SearchContacts() }
+
+// SearchContacts says "Search contacts"
+// in the language of msgs.
+func (msgs Messages) SearchContacts() string {
+	return Catalog.Format(msgs.locale, "searchContacts", nil)
+}
+
+// AddContact says "Add contact"
+// in the language the app shows.
+func AddContact() string { return In(i18n.Locale()).AddContact() }
+
+// AddContact says "Add contact"
+// in the language of msgs.
+func (msgs Messages) AddContact() string {
+	return Catalog.Format(msgs.locale, "addContact", nil)
+}
+
+// ContactName says "Name"
+// in the language the app shows.
+func ContactName() string { return In(i18n.Locale()).ContactName() }
+
+// ContactName says "Name"
+// in the language of msgs.
+func (msgs Messages) ContactName() string {
+	return Catalog.Format(msgs.locale, "contactName", nil)
+}
+
+// ContactNamePlaceholder says "Their name"
+// in the language the app shows.
+func ContactNamePlaceholder() string { return In(i18n.Locale()).ContactNamePlaceholder() }
+
+// ContactNamePlaceholder says "Their name"
+// in the language of msgs.
+func (msgs Messages) ContactNamePlaceholder() string {
+	return Catalog.Format(msgs.locale, "contactNamePlaceholder", nil)
+}
+
+// ContactEmail says "Email address"
+// in the language the app shows.
+func ContactEmail() string { return In(i18n.Locale()).ContactEmail() }
+
+// ContactEmail says "Email address"
+// in the language of msgs.
+func (msgs Messages) ContactEmail() string {
+	return Catalog.Format(msgs.locale, "contactEmail", nil)
+}
+
+// ContactAdd says "Add to contacts"
+// in the language the app shows.
+func ContactAdd() string { return In(i18n.Locale()).ContactAdd() }
+
+// ContactAdd says "Add to contacts"
+// in the language of msgs.
+func (msgs Messages) ContactAdd() string {
+	return Catalog.Format(msgs.locale, "contactAdd", nil)
+}
+
+// ContactAddCancel says "Cancel adding a contact"
+// in the language the app shows.
+func ContactAddCancel() string { return In(i18n.Locale()).ContactAddCancel() }
+
+// ContactAddCancel says "Cancel adding a contact"
+// in the language of msgs.
+func (msgs Messages) ContactAddCancel() string {
+	return Catalog.Format(msgs.locale, "contactAddCancel", nil)
+}
+
+// ContactNotAddress says "Enter one email address, such as name@example.com."
+// in the language the app shows.
+func ContactNotAddress() string { return In(i18n.Locale()).ContactNotAddress() }
+
+// ContactNotAddress says "Enter one email address, such as name@example.com."
+// in the language of msgs.
+func (msgs Messages) ContactNotAddress() string {
+	return Catalog.Format(msgs.locale, "contactNotAddress", nil)
+}
+
+// ContactExists says "{email} is in your contacts already."
+// in the language the app shows.
+func ContactExists(email string) string { return In(i18n.Locale()).ContactExists(email) }
+
+// ContactExists says "{email} is in your contacts already."
+// in the language of msgs.
+func (msgs Messages) ContactExists(email string) string {
+	return Catalog.Format(msgs.locale, "contactExists", map[string]any{"email": email})
+}
+
+// ContactOwn says "{email} is one of your own addresses."
+// in the language the app shows.
+func ContactOwn(email string) string { return In(i18n.Locale()).ContactOwn(email) }
+
+// ContactOwn says "{email} is one of your own addresses."
+// in the language of msgs.
+func (msgs Messages) ContactOwn(email string) string {
+	return Catalog.Format(msgs.locale, "contactOwn", map[string]any{"email": email})
+}
+
+// ContactAddFailed says "Couldn't add the contact: {error}"
+// in the language the app shows.
+func ContactAddFailed(error string) string { return In(i18n.Locale()).ContactAddFailed(error) }
+
+// ContactAddFailed says "Couldn't add the contact: {error}"
+// in the language of msgs.
+func (msgs Messages) ContactAddFailed(error string) string {
+	return Catalog.Format(msgs.locale, "contactAddFailed", map[string]any{"error": error})
+}
+
+// ContactEditFailed says "Couldn't change the contact: {error}"
+// in the language the app shows.
+func ContactEditFailed(error string) string { return In(i18n.Locale()).ContactEditFailed(error) }
+
+// ContactEditFailed says "Couldn't change the contact: {error}"
+// in the language of msgs.
+func (msgs Messages) ContactEditFailed(error string) string {
+	return Catalog.Format(msgs.locale, "contactEditFailed", map[string]any{"error": error})
+}
+
+// ContactsReadFailed says "Couldn't read the contacts: {error}"
+// in the language the app shows.
+func ContactsReadFailed(error string) string { return In(i18n.Locale()).ContactsReadFailed(error) }
+
+// ContactsReadFailed says "Couldn't read the contacts: {error}"
+// in the language of msgs.
+func (msgs Messages) ContactsReadFailed(error string) string {
+	return Catalog.Format(msgs.locale, "contactsReadFailed", map[string]any{"error": error})
+}
+
+// ContactsEmpty says "No contacts yet. The people you write to, and those who write to you, show up here."
+// in the language the app shows.
+func ContactsEmpty() string { return In(i18n.Locale()).ContactsEmpty() }
+
+// ContactsEmpty says "No contacts yet. The people you write to, and those who write to you, show up here."
+// in the language of msgs.
+func (msgs Messages) ContactsEmpty() string {
+	return Catalog.Format(msgs.locale, "contactsEmpty", nil)
+}
+
+// ContactsNoMatch says "No contacts match “{search}”."
+// in the language the app shows.
+func ContactsNoMatch(search string) string { return In(i18n.Locale()).ContactsNoMatch(search) }
+
+// ContactsNoMatch says "No contacts match “{search}”."
+// in the language of msgs.
+func (msgs Messages) ContactsNoMatch(search string) string {
+	return Catalog.Format(msgs.locale, "contactsNoMatch", map[string]any{"search": search})
+}
+
+// FavoriteContact says "Add {name} to favorites"
+// in the language the app shows.
+func FavoriteContact(name string) string { return In(i18n.Locale()).FavoriteContact(name) }
+
+// FavoriteContact says "Add {name} to favorites"
+// in the language of msgs.
+func (msgs Messages) FavoriteContact(name string) string {
+	return Catalog.Format(msgs.locale, "favoriteContact", map[string]any{"name": name})
+}
+
+// UnfavoriteContact says "Remove {name} from favorites"
+// in the language the app shows.
+func UnfavoriteContact(name string) string { return In(i18n.Locale()).UnfavoriteContact(name) }
+
+// UnfavoriteContact says "Remove {name} from favorites"
+// in the language of msgs.
+func (msgs Messages) UnfavoriteContact(name string) string {
+	return Catalog.Format(msgs.locale, "unfavoriteContact", map[string]any{"name": name})
+}
+
+// RenameContact says "Rename {name}"
+// in the language the app shows.
+func RenameContact(name string) string { return In(i18n.Locale()).RenameContact(name) }
+
+// RenameContact says "Rename {name}"
+// in the language of msgs.
+func (msgs Messages) RenameContact(name string) string {
+	return Catalog.Format(msgs.locale, "renameContact", map[string]any{"name": name})
+}
+
+// ContactNewName says "New name for {email}"
+// in the language the app shows.
+func ContactNewName(email string) string { return In(i18n.Locale()).ContactNewName(email) }
+
+// ContactNewName says "New name for {email}"
+// in the language of msgs.
+func (msgs Messages) ContactNewName(email string) string {
+	return Catalog.Format(msgs.locale, "contactNewName", map[string]any{"email": email})
+}
+
+// ContactNameFromMail says "Leave empty to use the name from their mail"
+// in the language the app shows.
+func ContactNameFromMail() string { return In(i18n.Locale()).ContactNameFromMail() }
+
+// ContactNameFromMail says "Leave empty to use the name from their mail"
+// in the language of msgs.
+func (msgs Messages) ContactNameFromMail() string {
+	return Catalog.Format(msgs.locale, "contactNameFromMail", nil)
+}
+
+// ContactRenameSave says "Save name"
+// in the language the app shows.
+func ContactRenameSave() string { return In(i18n.Locale()).ContactRenameSave() }
+
+// ContactRenameSave says "Save name"
+// in the language of msgs.
+func (msgs Messages) ContactRenameSave() string {
+	return Catalog.Format(msgs.locale, "contactRenameSave", nil)
+}
+
+// ContactRenameCancel says "Cancel renaming {name}"
+// in the language the app shows.
+func ContactRenameCancel(name string) string { return In(i18n.Locale()).ContactRenameCancel(name) }
+
+// ContactRenameCancel says "Cancel renaming {name}"
+// in the language of msgs.
+func (msgs Messages) ContactRenameCancel(name string) string {
+	return Catalog.Format(msgs.locale, "contactRenameCancel", map[string]any{"name": name})
+}
+
+// DeleteContact says "Delete {name}"
+// in the language the app shows.
+func DeleteContact(name string) string { return In(i18n.Locale()).DeleteContact(name) }
+
+// DeleteContact says "Delete {name}"
+// in the language of msgs.
+func (msgs Messages) DeleteContact(name string) string {
+	return Catalog.Format(msgs.locale, "deleteContact", map[string]any{"name": name})
+}
+
+// DeleteContactTitle says "Delete {name} from your contacts?"
+// in the language the app shows.
+func DeleteContactTitle(name string) string { return In(i18n.Locale()).DeleteContactTitle(name) }
+
+// DeleteContactTitle says "Delete {name} from your contacts?"
+// in the language of msgs.
+func (msgs Messages) DeleteContactTitle(name string) string {
+	return Catalog.Format(msgs.locale, "deleteContactTitle", map[string]any{"name": name})
+}
+
+// DeleteContactMessage says "{email} will no longer be suggested. Writing to them again brings them back."
+// in the language the app shows.
+func DeleteContactMessage(email string) string { return In(i18n.Locale()).DeleteContactMessage(email) }
+
+// DeleteContactMessage says "{email} will no longer be suggested. Writing to them again brings them back."
+// in the language of msgs.
+func (msgs Messages) DeleteContactMessage(email string) string {
+	return Catalog.Format(msgs.locale, "deleteContactMessage", map[string]any{"email": email})
+}
+
+// DeleteContactButton says "Delete contact"
+// in the language the app shows.
+func DeleteContactButton() string { return In(i18n.Locale()).DeleteContactButton() }
+
+// DeleteContactButton says "Delete contact"
+// in the language of msgs.
+func (msgs Messages) DeleteContactButton() string {
+	return Catalog.Format(msgs.locale, "deleteContactButton", nil)
+}

@@ -179,6 +179,19 @@ type fakeService struct {
 	forwards    []string
 	forwardFail map[string]error
 	forwardErr  error
+
+	// The address book, kept as the engine keeps it: a contact of each
+	// address by its key, changed by mail.ContactState's rules, found by
+	// its terms and ranked as the store ranks it. A message sent counts
+	// its recipients, as the engine's outbox does. suggested records the
+	// text of each Suggest and onSuggest runs as one begins;
+	// recipientChecks records the field of each CheckRecipients;
+	// contactErr fails the book's reads and edits as a store would.
+	book            map[string]*mail.ContactState
+	suggested       []string
+	onSuggest       func(typed string)
+	recipientChecks []string
+	contactErr      error
 }
 
 // fakeScheduled is a message Schedule wrote: its outbox entry, whose
@@ -247,6 +260,8 @@ func newFakeService() *fakeService {
 		signatures:  map[string]mail.Signature{},
 		identities:  map[string][]mail.Identity{},
 		forwardFail: map[string]error{},
+
+		book: map[string]*mail.ContactState{},
 	}
 }
 
@@ -763,6 +778,7 @@ func (f *fakeService) Send(ctx context.Context, accountID string, out mail.Outgo
 		}
 	}
 	f.sent = append(f.sent, out)
+	f.countSent(out)
 	// The message is out: its draft goes, here and on the server.
 	f.removeDraft(out.DraftID)
 	return mail.SendResult{Copied: f.sendWarn == nil, Warning: f.sendWarn, Outbox: mail.PendingSend{ID: "out-1"}}, nil
@@ -1722,6 +1738,7 @@ func (f *fakeService) SendScheduled(ctx context.Context, id string) (mail.SendRe
 	}
 	s.State, s.SentAt = mail.StateSent, f.now()
 	f.sent = append(f.sent, s.Envelope)
+	f.countSent(s.Envelope)
 	f.removeDraft(s.DraftID)
 	return mail.SendResult{Copied: f.sendWarn == nil, Warning: f.sendWarn, Outbox: s.PendingSend}, nil
 }
@@ -1803,4 +1820,246 @@ func (f *fakeService) AttachFromMessage(ctx context.Context, d mail.Draft, accou
 	}
 	cur.Attachments = list
 	return f.touchDraft(cur), failures, nil
+}
+
+// wrote has the user write to someone at a time, as a message sent does
+// in the engine's address book.
+func (f *fakeService) wrote(name, email string, at time.Time) {
+	f.countContact(mail.ContactEvent{Email: email, Name: name, Sent: true, At: at})
+}
+
+// heard has someone write to the user at a time, as a message cached
+// does.
+func (f *fakeService) heard(name, email string, at time.Time) {
+	f.countContact(mail.ContactEvent{Email: email, Name: name, At: at})
+}
+
+func (f *fakeService) countContact(e mail.ContactEvent) {
+	key := mail.ContactKey(e.Email)
+	c := f.book[key]
+	if c == nil {
+		c = &mail.ContactState{}
+	}
+	if c.Apply(e) {
+		f.book[key] = c
+	}
+}
+
+// countSent counts the recipients of a message sent, as the engine's
+// outbox does once it records it as sent.
+func (f *fakeService) countSent(out mail.Outgoing) {
+	for _, e := range mail.SentContacts(out, f.now(), f.ownAddress) {
+		f.countContact(e)
+	}
+}
+
+// ownAddress reports whether an address is the user's, as the engine
+// reads it: an account's or an identity's, whatever its case.
+func (f *fakeService) ownAddress(email string) bool {
+	key := mail.ContactKey(email)
+	for _, a := range f.accounts {
+		if mail.ContactKey(a.Email) == key {
+			return true
+		}
+	}
+	for _, ids := range f.identities {
+		for _, id := range ids {
+			if mail.ContactKey(id.Email) == key {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// contactRanksBefore orders the address book as the store does: the
+// favorites, then those the user wrote to or added, by what the user
+// wrote them, then those that only wrote to the user, by what they
+// wrote; the key breaks what is left of a tie.
+func contactRanksBefore(ka string, a *mail.ContactState, kb string, b *mail.ContactState) bool {
+	wrote := func(c *mail.ContactState) bool { return c.Sent > 0 || c.Added }
+	score := func(c *mail.ContactState) float64 {
+		if wrote(c) {
+			return c.SentScore
+		}
+		return c.ReceivedScore
+	}
+	switch {
+	case a.Favorite != b.Favorite:
+		return a.Favorite
+	case wrote(a) != wrote(b):
+		return wrote(a)
+	case score(a) != score(b):
+		return score(a) > score(b)
+	case a.ReceivedScore != b.ReceivedScore:
+		return a.ReceivedScore > b.ReceivedScore
+	}
+	return ka < kb
+}
+
+// readBook reads the address book as the store does (mail.ContactQuery):
+// the live contacts that are not the user's and not left out, each word
+// beginning a term of theirs, best first.
+func (f *fakeService) readBook(q mail.ContactQuery) ([]mail.Contact, error) {
+	if f.contactErr != nil {
+		return nil, f.contactErr
+	}
+	excluded := map[string]bool{}
+	for _, email := range q.Exclude {
+		excluded[mail.ContactKey(email)] = true
+	}
+	var keys []string
+	for key, c := range f.book {
+		if c.Deleted || f.ownAddress(c.Email) || excluded[key] {
+			continue
+		}
+		terms := mail.ContactTerms(c.Name, c.Email)
+		found := true
+		for _, w := range q.Words {
+			found = found && slices.ContainsFunc(terms, func(t string) bool { return strings.HasPrefix(t, w) })
+		}
+		if found {
+			keys = append(keys, key)
+		}
+	}
+	sort.Slice(keys, func(i, j int) bool { return contactRanksBefore(keys[i], f.book[keys[i]], keys[j], f.book[keys[j]]) })
+	keys = keys[min(max(q.Offset, 0), len(keys)):]
+	if q.Limit > 0 && len(keys) > q.Limit {
+		keys = keys[:q.Limit]
+	}
+	out := []mail.Contact{}
+	for _, key := range keys {
+		out = append(out, f.book[key].Contact())
+	}
+	return out, nil
+}
+
+func (f *fakeService) Suggest(ctx context.Context, typed string, exclude []string, limit int) ([]mail.Contact, error) {
+	f.suggested = append(f.suggested, typed)
+	if f.onSuggest != nil {
+		f.onSuggest(typed)
+	}
+	words := mail.ContactWords(typed)
+	if len(words) == 0 {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = mail.DefaultSuggestions
+	}
+	return f.readBook(mail.ContactQuery{Words: words, Exclude: exclude, Limit: limit})
+}
+
+func (f *fakeService) Contacts(ctx context.Context, search string, offset, limit int) (mail.ContactPage, error) {
+	if limit <= 0 {
+		limit = mail.DefaultPageSize
+	}
+	list, err := f.readBook(mail.ContactQuery{Words: mail.ContactWords(search), Offset: max(offset, 0), Limit: limit + 1})
+	if err != nil {
+		return mail.ContactPage{}, err
+	}
+	page := mail.ContactPage{Contacts: list, More: len(list) > limit}
+	if page.More {
+		page.Contacts = list[:limit]
+	}
+	return page, nil
+}
+
+// cleanContactName is a name as the engine keeps it, its spaces
+// collapsed.
+func cleanContactName(name string) string { return strings.Join(strings.Fields(name), " ") }
+
+// AddContact refuses what the engine refuses: what is not one address
+// alone, one of the user's own, and one the book has.
+func (f *fakeService) AddContact(ctx context.Context, name, email string) (mail.Contact, error) {
+	email = strings.TrimSpace(email)
+	if a, err := netmail.ParseAddress(email); err != nil || a.Name != "" || a.Address != email {
+		return mail.Contact{}, mail.ErrContactAddress
+	}
+	if f.contactErr != nil {
+		return mail.Contact{}, f.contactErr
+	}
+	if f.ownAddress(email) {
+		return mail.Contact{}, mail.ErrContactOwn
+	}
+	key := mail.ContactKey(email)
+	c := f.book[key]
+	if c != nil && !c.Deleted {
+		return mail.Contact{}, mail.ErrContactExists
+	}
+	if c == nil {
+		c = &mail.ContactState{}
+		f.book[key] = c
+	}
+	c.Add(cleanContactName(name), email)
+	return c.Contact(), nil
+}
+
+// editContact changes a contact of the book: one there and not deleted.
+func (f *fakeService) editContact(email string, edit func(*mail.ContactState)) (mail.Contact, error) {
+	if f.contactErr != nil {
+		return mail.Contact{}, f.contactErr
+	}
+	c := f.book[mail.ContactKey(email)]
+	if c == nil || c.Deleted {
+		return mail.Contact{}, mail.ErrNotFound
+	}
+	edit(c)
+	return c.Contact(), nil
+}
+
+func (f *fakeService) RenameContact(ctx context.Context, email, name string) (mail.Contact, error) {
+	return f.editContact(email, func(c *mail.ContactState) { c.Rename(cleanContactName(name)) })
+}
+
+func (f *fakeService) FavoriteContact(ctx context.Context, email string, on bool) (mail.Contact, error) {
+	return f.editContact(email, func(c *mail.ContactState) { c.Favorite = on })
+}
+
+func (f *fakeService) DeleteContact(ctx context.Context, email string) error {
+	_, err := f.editContact(email, func(c *mail.ContactState) { c.Forget(f.now()) })
+	return err
+}
+
+// CheckRecipients reads a recipient field as the engine does: whole when
+// net/mail reads it so, else entry by entry, a bare name or word asked of
+// the address book.
+func (f *fakeService) CheckRecipients(ctx context.Context, field string) (mail.RecipientCheck, error) {
+	f.recipientChecks = append(f.recipientChecks, field)
+	if strings.TrimSpace(field) == "" {
+		return mail.RecipientCheck{}, nil
+	}
+	if list, err := mail.ParseAddressList([]string{field}); err == nil {
+		return mail.RecipientCheck{Addresses: list}, nil
+	}
+	var check mail.RecipientCheck
+	for _, e := range mail.RecipientEntries(field) {
+		if e.Valid {
+			check.Addresses = append(check.Addresses, e.Addresses...)
+			continue
+		}
+		p := mail.RecipientProblem{RecipientEntry: e, Kind: mail.RecipientInvalid}
+		if words := mail.ContactWords(e.Text); len(words) > 0 && !strings.ContainsAny(e.Text, `@<>":;`) {
+			matches, err := f.readBook(mail.ContactQuery{Words: words, Limit: mail.DefaultSuggestions})
+			if err != nil {
+				return mail.RecipientCheck{}, err
+			}
+			p.Matches = matches
+			switch len(matches) {
+			case 0:
+				p.Kind = mail.RecipientUnknown
+			case 1:
+				p.Kind = mail.RecipientMatch
+			default:
+				p.Kind = mail.RecipientAmbiguous
+			}
+		}
+		check.Problems = append(check.Problems, p)
+	}
+	if len(check.Problems) == 0 {
+		check.Problems = []mail.RecipientProblem{{
+			RecipientEntry: mail.RecipientEntry{Text: strings.TrimSpace(field), End: len(field)},
+			Kind:           mail.RecipientInvalid,
+		}}
+	}
+	return check, nil
 }

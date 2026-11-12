@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -183,5 +184,116 @@ func TestTriageCarriesNoContactData(t *testing.T) {
 		if strings.Contains(sent, secret) {
 			t.Errorf("the triage carried %q:\n%s", secret, sent)
 		}
+	}
+}
+
+// The address book end to end: the window on the real engine, a database
+// on disk and local IMAP and SMTP servers. Once the inbox is synced and a
+// message sent, two letters typed in a new message offer the person
+// written to above a sender who wrote once, and later; Enter takes her,
+// and the message goes to her address. Renamed in the address book, she
+// is offered under the new name; deleted there, she is not offered.
+func TestAddressBookEndToEnd(t *testing.T) {
+	sqlitetest.Require(t)
+	ctx := context.Background()
+	imapServer := startLocalIMAP(t, "INBOX", "Sent", "Trash")
+	smtpServer := startLocalSMTP(t)
+	date := time.Date(2026, time.March, 2, 9, 0, 0, 0, time.UTC)
+	for _, m := range []struct {
+		from, subject, id string
+		at                time.Time
+	}{
+		{"Mark Stone <mark.stone@example.net>", "Quarterly newsletter", "news", date},
+		{"Lena Park <lena@example.com>", "Contract signed", "contract", date.Add(-time.Hour)},
+	} {
+		raw := "From: " + m.from + "\r\nTo: Ann <ann@example.com>\r\nSubject: " + m.subject + "\r\nDate: " + m.at.Format(time.RFC1123Z) +
+			"\r\nMessage-ID: <" + m.id + "@example.com>\r\n\r\nHello.\r\n"
+		if _, err := imapServer.user.Append("INBOX", appendBody{bytes.NewReader([]byte(raw))}, &imap.AppendOptions{Time: m.at}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	imapHost, imapPort := hostPort(t, imapServer.addr)
+	smtpHost, smtpPort := hostPort(t, smtpServer.addr)
+	account := mail.Account{
+		ID: "a1", Name: "Ann", Email: "ann@example.com", Username: "ann",
+		IMAP: mail.Server{Host: imapHost, Port: imapPort, TLS: mail.TLSStartTLS},
+		SMTP: mail.Server{Host: smtpHost, Port: smtpPort, TLS: mail.TLSStartTLS},
+	}
+	db, err := store.Open(ctx, filepath.Join(t.TempDir(), "shu.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	svc := mail.NewService(db, memKeychain{}, t.TempDir())
+	svc.SetTLSConfig(&tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12}) // #nosec G402 -- local test servers
+	if err := svc.AddAccount(ctx, account, "secret"); err != nil {
+		t.Fatal(err)
+	}
+	sendAtOnce(t, svc)
+	a := newTestApp(svc)
+	a.setLocale = func(string) {}
+	a.start()
+	if a.err != "" || len(a.all) != 2 {
+		t.Fatalf("start: %q, %d rows", a.err, len(a.all))
+	}
+
+	// One message sent, to Maya, written as an address.
+	cs := a.openCompose(nil)
+	ct := ui.NewTester(cs.view, 720, 620)
+	typeIn(t, ct, locales.To(), "Maya Chen <maya@example.com>")
+	typeIn(t, ct, locales.Subject(), "Design review")
+	typeIn(t, ct, locales.Body(), "See you Thursday.")
+	click(t, ct, locales.Send())
+	if !cs.closed || len(smtpServer.received()) != 1 {
+		t.Fatalf("the first send: closed %v, err %q, %d delivered", cs.closed, cs.err, len(smtpServer.received()))
+	}
+
+	// Two letters: Maya, written to, above Mark, who wrote once, later.
+	next := a.openCompose(nil)
+	nt := ui.NewTester(next.view, 720, 620)
+	typeIn(t, nt, locales.To(), "ma")
+	names, on := offers(nt)
+	if want := []string{"Maya Chen maya@example.com", "Mark Stone mark.stone@example.net"}; !slices.Equal(names, want) || on != want[0] {
+		t.Fatalf("“ma” offers %q, the arrows on %q", names, on)
+	}
+	nt.Key(0, ui.KeyEnter)
+	if next.to != "Maya Chen <maya@example.com>, " {
+		t.Fatalf("Enter wrote %q", next.to)
+	}
+	typeIn(t, nt, locales.Subject(), "Agenda")
+	typeIn(t, nt, locales.Body(), "Attached below.")
+	click(t, nt, locales.Send())
+	envelopes := smtpServer.envelopesGot()
+	if !next.closed || len(envelopes) != 2 || !slices.Equal(envelopes[1].to, []string{"maya@example.com"}) {
+		t.Fatalf("the second send: closed %v, err %q, envelopes %+v", next.closed, next.err, envelopes)
+	}
+	if to := addressesOf(t, readMessage(t, smtpServer.received()[1]), "To"); len(to) != 1 || to[0].Name != "Maya Chen" || to[0].Address != "maya@example.com" {
+		t.Errorf("delivered to %+v", to)
+	}
+
+	// Renamed in the address book. Nothing of the book reaches a server:
+	// the suggestions and the edits below open no connection.
+	connections := smtpServer.connections()
+	main := ui.NewTester(a.view, 1220, 800)
+	click(t, main, locales.Contacts())
+	click(t, main, locales.RenameContact("Maya Chen"))
+	main.Key(ui.Cmd, ui.KeyA)
+	main.Type("Maya Q. Chen")
+	main.Key(0, ui.KeyEnter)
+	if got := suggestedFirst(t, a, "ma"); len(got) != 2 || got[0] != "Maya Q. Chen maya@example.com" {
+		t.Fatalf("renamed, “ma” offers %q", got)
+	}
+
+	// Deleted there, after the question.
+	click(t, main, locales.DeleteContact("Maya Q. Chen"))
+	click(t, main, locales.DeleteContactButton())
+	if got := suggestedFirst(t, a, "ma"); !slices.Equal(got, []string{"Mark Stone mark.stone@example.net"}) {
+		t.Fatalf("deleted, “ma” offers %q", got)
+	}
+	if page, err := svc.Contacts(ctx, "maya", 0, 0); err != nil || len(page.Contacts) != 0 {
+		t.Errorf("the book still finds Maya: %+v, %v", page, err)
+	}
+	if n := smtpServer.connections(); n != connections {
+		t.Errorf("the address book opened %d connections to the mail server", n-connections)
 	}
 }

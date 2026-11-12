@@ -202,6 +202,9 @@ type app struct {
 	sigSaveSeq atomic.Uint64
 	idForm     identityForm
 
+	// book is the address book's view, open or not (contacts.go).
+	book addressBook
+
 	// Hooks the window sets; tests leave them nil.
 	newWindow func(mygo.WindowOptions) *mygo.Window
 	saveFile  func(parent *mygo.Window, name string) (string, error)
@@ -1180,13 +1183,16 @@ func (a *app) longTime(c *ui.Context, t time.Time) string {
 	return i18n.FormatDate(c.Locale(), t, i18n.DateOptions{Date: i18n.MediumStyle, Time: i18n.ShortStyle})
 }
 
-// view is the window's root: settings, account setup or the three panes.
+// view is the window's root: settings, account setup, the address book
+// or the three panes.
 func (a *app) view(c *ui.Context) {
 	switch {
 	case a.showSettings:
 		a.settingsView(c)
 	case a.showAccounts || len(a.accounts) == 0:
 		a.accountsView(c)
+	case a.book.open:
+		a.contactsView(c)
 	default:
 		a.mailView(c)
 	}
@@ -1298,6 +1304,8 @@ func (a *app) titleBar(c *ui.Context, t *ui.Theme, bar ui.TitleBar, height float
 		}
 		a.iconButton(c, refreshIcon, locales.Sync(), locales.SyncMail()).
 			OnClick(func() { a.refresh() })
+		a.iconButton(c, bookUserIcon, locales.Contacts(), locales.Contacts()).
+			OnClick(a.openContacts)
 		a.iconButton(c, settingsIcon, locales.Settings(), locales.Settings()).
 			OnClick(func() { a.openSettings(settingsTabGeneral) })
 		ui.PrimaryButton(c, "").Children(func() {

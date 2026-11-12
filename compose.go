@@ -91,9 +91,13 @@ type composeState struct {
 	removing    map[string]bool
 	attaching   int
 	picking     bool
-	// focused is the control the keyboard is on, among the To, Bcc and
-	// body fields, the attach button and the attachments.
+	// focused is the control the keyboard is on, among the fields of
+	// recipients and the body, the attach button and the attachments.
 	focused string
+	// rcpt is what the window keeps of the fields of recipients: the
+	// contacts offered as they are typed, and what a send found in them
+	// (recipients.go).
+	rcpt recipientState
 
 	// source is the message being replied to, which an AI draft reads;
 	// nil for a new message or a forward. guidance is what the user asks
@@ -313,16 +317,25 @@ func (cs *composeState) view(c *ui.Context) {
 		if len(ids) > 1 {
 			cs.fromRow(c, t, ids)
 		}
-		cs.row(c, locales.To(), "name@example.com", &cs.to, focusTo, nil)
-		cs.row(c, locales.Cc(), "", &cs.cc, "", func() {
+		var fields [recipientFieldCount]ui.Element
+		fields[fieldTo] = cs.recipientRow(c, fieldTo, locales.To(), "name@example.com", nil)
+		fields[fieldCc] = cs.recipientRow(c, fieldCc, locales.Cc(), "", func() {
 			if !cs.showBcc {
 				cs.bccButton(c, t)
 			}
 		})
 		if cs.showBcc {
-			cs.row(c, locales.Bcc(), "", &cs.bcc, focusBcc, nil)
+			fields[fieldBcc] = cs.recipientRow(c, fieldBcc, locales.Bcc(), "", nil)
 		}
-		cs.row(c, locales.Subject(), "", &cs.subject, "", nil)
+		problems := cs.hasProblems()
+		if problems {
+			for f, msgs := range cs.recipientProblems(c, t) {
+				for _, msg := range msgs {
+					fields[f].ErrorMessage(msg)
+				}
+			}
+		}
+		cs.row(c, locales.Subject(), &cs.subject)
 		if drafting {
 			cs.draftRow(c, t)
 		}
@@ -341,6 +354,9 @@ func (cs *composeState) view(c *ui.Context) {
 			}
 		}
 		bodyMin = max(bodyMin, 56)
+		if problems {
+			bodyMin = problemsBodyMin
+		}
 		body := ui.TextArea(c, &cs.body).Grow(1).MinHeight(bodyMin).Label(locales.Body()).
 			Placeholder(locales.ComposeBodyPlaceholder()).FocusBind(&cs.focused, focusBody).OnChange(cs.changed)
 		if cs.caret >= 0 {
@@ -437,6 +453,7 @@ const extraRowRoom = 40
 // The fields and the attach button among the controls cs.focused names.
 const (
 	focusTo     = "to"
+	focusCc     = "cc"
 	focusBcc    = "bcc"
 	focusBody   = "body"
 	focusAttach = "attach"
@@ -567,21 +584,13 @@ func (cs *composeState) dropHint(c *ui.Context, t *ui.Theme) {
 }
 
 // row is a compact compose field with its label inline, as mail apps
-// show recipients and the subject. focus names the field among the
-// controls the window puts the keyboard on, when it is one, and trailing
-// adds controls after it.
-func (cs *composeState) row(c *ui.Context, label, placeholder string, value *string, focus string, trailing func()) {
+// show the subject; the recipients' are recipientRow.
+func (cs *composeState) row(c *ui.Context, label string, value *string) {
 	t := c.Theme()
 	ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
 		// The caption names the input, so a click on it focuses the field.
 		caption := ui.Text(c, label).FontSize(12).TextColor(t.TextMuted).Width(52)
-		in := ui.TextInput(c, value).Grow(1).LabelledBy(caption).Placeholder(placeholder).OnChange(cs.changed)
-		if focus != "" {
-			in.FocusBind(&cs.focused, focus)
-		}
-		if trailing != nil {
-			trailing()
-		}
+		ui.TextInput(c, value).Grow(1).LabelledBy(caption).OnChange(cs.changed)
 	})
 }
 
@@ -1153,23 +1162,21 @@ func (cs *composeState) send() {
 	if cs.sending || cs.closed {
 		return
 	}
-	to, err := parseRecipients(cs.to)
-	if err != nil {
-		cs.err = locales.SendFailed(err.Error())
+	// A field net/mail reads whole is what CheckRecipients would return
+	// for it. One that it does not read goes to the engine, which tells
+	// which of its entries are no address and what contact a name may be:
+	// the message waits until they are fixed.
+	to, toErr := parseRecipients(cs.to)
+	cc, ccErr := parseRecipients(cs.cc)
+	bcc, bccErr := parseRecipients(cs.bcc)
+	if toErr != nil || ccErr != nil || bccErr != nil {
+		cs.err = ""
+		cs.checkRecipients(true, recipientFields[:]...)
 		return
 	}
+	cs.rcpt.checks = [recipientFieldCount]*fieldCheck{}
 	if len(to) == 0 {
 		cs.err = locales.SendFailed(locales.NoRecipients())
-		return
-	}
-	cc, err := parseRecipients(cs.cc)
-	if err != nil {
-		cs.err = locales.SendFailed(err.Error())
-		return
-	}
-	bcc, err := parseRecipients(cs.bcc)
-	if err != nil {
-		cs.err = locales.SendFailed(err.Error())
 		return
 	}
 	if cs.attaching > 0 || len(cs.removing) > 0 {

@@ -1851,5 +1851,223 @@
         "example": "database is locked"
       }
     }
-  }
+  },
+  "contactSuggestions": "Contact suggestions",
+  "@contactSuggestions": {
+    "description": "The list of contacts offered below a recipient field as the user types."
+  },
+  "recipientsNotSent": "Not sent. Fix these recipients first.",
+  "recipientNotAddress": "“{entry}” is not an email address.",
+  "@recipientNotAddress": {
+    "placeholders": {
+      "entry": {
+        "type": "String",
+        "example": "bob@"
+      }
+    }
+  },
+  "recipientUnknown": "No contact is called “{entry}”. Write their email address.",
+  "@recipientUnknown": {
+    "placeholders": {
+      "entry": {
+        "type": "String",
+        "example": "Zed"
+      }
+    }
+  },
+  "recipientAmbiguous": "Several contacts match “{entry}”. Choose one:",
+  "@recipientAmbiguous": {
+    "placeholders": {
+      "entry": {
+        "type": "String",
+        "example": "Lee"
+      }
+    }
+  },
+  "recipientMatch": "“{entry}” is not an email address. Did you mean {name}?",
+  "@recipientMatch": {
+    "placeholders": {
+      "entry": {
+        "type": "String",
+        "example": "Maya"
+      },
+      "name": {
+        "type": "String",
+        "example": "Maya Chen"
+      }
+    }
+  },
+  "useContact": "Use {address}",
+  "@useContact": {
+    "description": "The button that writes the one contact a name matches in place of the name.",
+    "placeholders": {
+      "address": {
+        "type": "String",
+        "example": "Maya Chen <maya@example.com>"
+      }
+    }
+  },
+  "useContactFor": "Use {address} for “{entry}”",
+  "@useContactFor": {
+    "description": "What assistive technology calls a button offering a contact in place of an entry of a recipient field.",
+    "placeholders": {
+      "address": {
+        "type": "String",
+        "example": "Lena Lee <lena@example.com>"
+      },
+      "entry": {
+        "type": "String",
+        "example": "Lee"
+      }
+    }
+  },
+  "recipientsCheckFailed": "Couldn't check the recipients: {error}",
+  "@recipientsCheckFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "database is locked"
+      }
+    }
+  },
+  "contacts": "Contacts",
+  "contactsDetail": "The people you write to and who write to you. They stay on this device: no server and no AI model sees them.",
+  "searchContacts": "Search contacts",
+  "addContact": "Add contact",
+  "contactName": "Name",
+  "contactNamePlaceholder": "Their name",
+  "contactEmail": "Email address",
+  "contactAdd": "Add to contacts",
+  "contactAddCancel": "Cancel adding a contact",
+  "contactNotAddress": "Enter one email address, such as name@example.com.",
+  "contactExists": "{email} is in your contacts already.",
+  "@contactExists": {
+    "placeholders": {
+      "email": {
+        "type": "String",
+        "example": "maya@example.com"
+      }
+    }
+  },
+  "contactOwn": "{email} is one of your own addresses.",
+  "@contactOwn": {
+    "placeholders": {
+      "email": {
+        "type": "String",
+        "example": "ann@example.com"
+      }
+    }
+  },
+  "contactAddFailed": "Couldn't add the contact: {error}",
+  "@contactAddFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "database is locked"
+      }
+    }
+  },
+  "contactEditFailed": "Couldn't change the contact: {error}",
+  "@contactEditFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "database is locked"
+      }
+    }
+  },
+  "contactsReadFailed": "Couldn't read the contacts: {error}",
+  "@contactsReadFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "database is locked"
+      }
+    }
+  },
+  "contactsEmpty": "No contacts yet. The people you write to, and those who write to you, show up here.",
+  "contactsNoMatch": "No contacts match “{search}”.",
+  "@contactsNoMatch": {
+    "placeholders": {
+      "search": {
+        "type": "String",
+        "example": "maya"
+      }
+    }
+  },
+  "favoriteContact": "Add {name} to favorites",
+  "@favoriteContact": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Maya Chen"
+      }
+    }
+  },
+  "unfavoriteContact": "Remove {name} from favorites",
+  "@unfavoriteContact": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Maya Chen"
+      }
+    }
+  },
+  "renameContact": "Rename {name}",
+  "@renameContact": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Maya Chen"
+      }
+    }
+  },
+  "contactNewName": "New name for {email}",
+  "@contactNewName": {
+    "placeholders": {
+      "email": {
+        "type": "String",
+        "example": "maya@example.com"
+      }
+    }
+  },
+  "contactNameFromMail": "Leave empty to use the name from their mail",
+  "contactRenameSave": "Save name",
+  "contactRenameCancel": "Cancel renaming {name}",
+  "@contactRenameCancel": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Maya Chen"
+      }
+    }
+  },
+  "deleteContact": "Delete {name}",
+  "@deleteContact": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Maya Chen"
+      }
+    }
+  },
+  "deleteContactTitle": "Delete {name} from your contacts?",
+  "@deleteContactTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Maya Chen"
+      }
+    }
+  },
+  "deleteContactMessage": "{email} will no longer be suggested. Writing to them again brings them back.",
+  "@deleteContactMessage": {
+    "placeholders": {
+      "email": {
+        "type": "String",
+        "example": "maya@example.com"
+      }
+    }
+  },
+  "deleteContactButton": "Delete contact"
 }

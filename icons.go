@@ -57,4 +57,6 @@ var (
 	copyIcon          = mustIcon("copy")
 	offlineIcon       = mustIcon("wifi-off")
 	conversationsIcon = mustIcon("messages-square")
+	bookUserIcon      = mustIcon("book-user")
+	pencilIcon        = mustIcon("pencil")
 )

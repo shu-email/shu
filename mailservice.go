@@ -83,6 +83,19 @@ type mailService interface {
 	DeleteIdentity(ctx context.Context, accountID, id string) error
 	Attachment(ctx context.Context, accountID, folder string, uid mail.UID, part string) (mail.Attachment, []byte, error)
 
+	// The address book, kept on this device alone. Suggest reads the
+	// contacts a recipient being typed may be, best first, leaving out
+	// the addresses exclude holds; Contacts reads a page of the book;
+	// the edits show in both at once. CheckRecipients reads a recipient
+	// field as a send takes it, and says what of it is no address.
+	Suggest(ctx context.Context, typed string, exclude []string, limit int) ([]mail.Contact, error)
+	Contacts(ctx context.Context, search string, offset, limit int) (mail.ContactPage, error)
+	AddContact(ctx context.Context, name, email string) (mail.Contact, error)
+	RenameContact(ctx context.Context, email, name string) (mail.Contact, error)
+	FavoriteContact(ctx context.Context, email string, on bool) (mail.Contact, error)
+	DeleteContact(ctx context.Context, email string) error
+	CheckRecipients(ctx context.Context, field string) (mail.RecipientCheck, error)
+
 	// Drafts. SaveDraft never needs the network; SyncDrafts is the step
 	// that does, and may fail and run again.
 	DraftList(ctx context.Context, accountID, query string, limit int) ([]mail.Summary, error)

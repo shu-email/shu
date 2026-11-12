@@ -376,6 +376,15 @@ AddOAuthAccount(ctx, provider, name string, prompt OAuthPrompt) (Account, error)
 SignInAgain(ctx, accountID string, prompt OAuthPrompt) error    // as the account's own address only
 SignOut(ctx, accountID string) error                            // removes the tokens, keeps the account
 NeedsSignIn(ctx, accountID string) (bool, error)                // reads the keychain, not the network
+
+// The address book, added since: on this device alone (see Address book below)
+Suggest(ctx, typed string, exclude []string, limit int) ([]Contact, error) // best first, without exclude; limit <= 0 is 8
+Contacts(ctx, search string, offset, limit int) (ContactPage, error)      // a page of the book, best first, and More
+AddContact(ctx, name, email string) (Contact, error)        // ErrContactAddress, ErrContactExists, ErrContactOwn
+RenameContact(ctx, email, name string) (Contact, error)     // "" hands the naming back to the mail
+FavoriteContact(ctx, email string, on bool) (Contact, error)
+DeleteContact(ctx, email string) error                      // writing to it again brings it back
+CheckRecipients(ctx, field string) (RecipientCheck, error)  // what of a field is no address, and whom a name may mean
 ```
 
 IMAP details:
@@ -543,10 +552,12 @@ lines). Keep the original HTML for the webview.
 - `mygo.NewWindow` (720×620, min 520×420, no StateKey, multiple windows allowed)
   hosts `compose.view`; To/Cc/Subject use `ui.TextInput`, the body is an
   auto-sizing `ui.TextArea`; a Send button and a `ui.Cmd+Enter` shortcut.
-- Recipients are validated with `net/mail.ParseAddressList`; the button is disabled
-  while sending; on failure the window stays open with an inline error and the
-  outbox row is left `failed` with its error; on success the window closes and
-  Sent/the current folder refresh.
+- Recipients are validated with `net/mail.ParseAddressList`, and a field it does not
+  read whole with the engine's `CheckRecipients` (see Address book, autocomplete and
+  recipient validation, added since); the button is disabled while sending; on
+  failure the window stays open with an inline error and the outbox row is left
+  `failed` with its error; on success the window closes and Sent/the current folder
+  refresh.
 - Closing the window cancels the sending context; the outbox row remains so a
   restart can report "delivery unknown" instead of silently losing the message.
 
@@ -601,6 +612,59 @@ Added since: Bcc, identities, signatures, quoting and a send delay with Undo.
   the quote style, replies above or below the quote, and forwards with attachments,
   each saved as it is chosen. The format is plain text, the only one, which the
   section says rather than offering a choice; rich text stays out of scope.
+
+### Address book, autocomplete and recipient validation (added since)
+
+The engine keeps the address book in the database and ranks it (`AGENTS.md` says how
+it counts and orders contacts); the window shows it and asks it through the
+`mailService` calls above. Nothing of it leaves the device: no request to a mail
+server or a model carries it, and `ai/` has no way to it.
+
+- Autocomplete: To, Cc and Bcc are combo boxes. For the entry under the caret (the
+  text between the commas around it, as `mail.RecipientEntries` splits a field), once
+  it holds two characters, or one of a script that writes names without spaces (a
+  Chinese family name), a job asks `Suggest`, leaving out the addresses the three
+  fields hold already. A list below the field shows what it returns in the engine's
+  order, at most eight, each contact with its name and address, the parts the typed
+  words begin in bold and a star on a favorite. The first is chosen, unless the entry
+  is already a whole address, which then stays as typed unless the user moves to an
+  offer. Up and Down move, Enter or Tab writes the chosen contact's address
+  (`Contact.Address().String()`) in place of that entry, the entries around it kept,
+  with ", " after it and the caret after both, as one step of undo; a click does the
+  same, and Escape closes the list (the window again once it is closed). A query that
+  a later keystroke overtook does not run, and an answer for text typed over since is
+  dropped; until the new answer comes, the list keeps those it showed that the text
+  still finds by the engine's own rules (`mail.ContactWords`, `mail.ContactTerms`), so
+  it neither blinks at each key nor offers someone the text no longer finds. Typing
+  never waits for the book. To assistive technology each field is a combo box whose
+  suggestions complete what is typed (`aria-autocomplete=list`, expanded while the list
+  shows), the list a list box of options with their place in it, and the field points
+  at the chosen one (active descendant), as MyGo's comboboxes do.
+- Validation before sending: a field `net/mail` reads whole goes as before, being
+  exactly what `CheckRecipients` returns for it. When one does not, Send sends nothing:
+  a job runs `CheckRecipients` on To, Cc and Bcc, the keyboard goes to the first field
+  with problems, those fields are marked invalid with their messages as their errors,
+  and a panel below the fields says, field by field, what each entry is: not an email
+  address; a name no contact has; a name several contacts match, each offered as a
+  button; a name one contact matches, offered with "Use …". An offer writes the
+  contact's address in place of that entry, the spaces around it kept. A field with
+  problems is checked again as it changes, so an entry fixed by typing loses its
+  message. Drafts keep saving whatever is typed, unvalidated.
+- The address book view: a contacts button beside Settings in the mail window's title
+  bar opens it in place of the three panes (Done or Escape go back); it is no mail
+  folder. It says that the contacts stay on this device, has a search field, which
+  takes the keyboard as the view opens and finds contacts as suggestions do, and lists
+  them in the engine's order in a virtual list read a page at a time (`Contacts` with
+  an offset) as it nears the end of those read; after each change it reads them again
+  from the top for as many as it showed, so the change shows at once where it puts the
+  contact. Each row has the name and address and buttons, named for the contact, to
+  make it a favorite or not, rename it in place (Enter saves, Escape cancels, an empty
+  name hands the naming back to the mail) and delete it after a question that says
+  writing to it again brings it back. "Add contact" opens a form whose errors are the
+  engine's in the user's words: not one address, already in the book, one of the
+  user's own addresses. Every action is reachable with Tab and Enter, and after an edit
+  the keyboard goes back to the row's button, or after a delete to the next row's.
+  Edits show in the next suggestion.
 
 ## Testing discipline
 

@@ -94,7 +94,7 @@ func TestBccFoldedAwayUntilAsked(t *testing.T) {
 	a, fs := draftsApp(t)
 	cs := a.openCompose(nil)
 	tt := ui.NewTester(cs.view, 720, 620)
-	if _, ok := tt.AccessByRole(ui.RoleTextField, locales.Bcc()); ok || cs.showBcc {
+	if _, ok := tt.AccessByRole(ui.RoleComboBox, locales.Bcc()); ok || cs.showBcc {
 		t.Fatalf("a new message shows the Bcc field: %q", tt.Texts())
 	}
 	typeIn(t, tt, locales.To(), "Bob <bob@example.com>")
@@ -118,7 +118,7 @@ func TestBccFoldedAwayUntilAsked(t *testing.T) {
 	// Emptied, the field stays where the address was.
 	cs.bcc = ""
 	tt.Frame()
-	if _, ok := tt.AccessByRole(ui.RoleTextField, locales.Bcc()); !ok {
+	if _, ok := tt.AccessByRole(ui.RoleComboBox, locales.Bcc()); !ok {
 		t.Fatal("the Bcc field folded away as it was emptied")
 	}
 	typeIn(t, tt, locales.Bcc(), "erin@example.com")

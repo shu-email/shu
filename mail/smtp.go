@@ -14,6 +14,7 @@ import (
 	"time"
 
 	gomail "github.com/wneessen/go-mail"
+	"github.com/wneessen/go-mail/smtp"
 )
 
 // ErrDeliveryUnknown is a send that stopped once the message had begun
@@ -219,11 +220,7 @@ func (s *Service) transmit(ctx context.Context, a Account, password string, msg 
 	if err != nil {
 		return false, fmt.Errorf("smtp: %w", err)
 	}
-	client, err := s.smtpClient(a, password)
-	if err != nil {
-		return false, fmt.Errorf("smtp: %w", err)
-	}
-	conn, err := client.DialToSMTPClientWithContext(ctx)
+	conn, err := s.dialSMTP(ctx, a, password)
 	if err != nil {
 		return false, stopped(ctx, err)
 	}
@@ -447,13 +444,58 @@ func toStdAddresses(list []Address) []*mail.Address {
 	return out
 }
 
-// smtpClient configures go-mail for implicit TLS or STARTTLS.
+// dialSMTP connects to the account's SMTP server, secures the connection
+// and signs in. An account that signs in with OAuth takes no password: it
+// signs in with its access token, and when the server refuses one that
+// had not expired, with a renewed one once more.
+func (s *Service) dialSMTP(ctx context.Context, a Account, password string) (*smtp.Client, error) {
+	if a.OAuth == "" {
+		return s.dialSMTPAs(ctx, a, password)
+	}
+	token, err := s.accessToken(ctx, a, "")
+	if err != nil {
+		return nil, err
+	}
+	conn, err := s.dialSMTPAs(ctx, a, token)
+	if !smtpRefused(err) {
+		return conn, err
+	}
+	if token, err = s.accessToken(ctx, a, token); err != nil {
+		return nil, err
+	}
+	return s.dialSMTPAs(ctx, a, token)
+}
+
+// dialSMTPAs connects and signs in with secret: the account's password,
+// or its access token.
+func (s *Service) dialSMTPAs(ctx context.Context, a Account, secret string) (*smtp.Client, error) {
+	client, err := s.smtpClient(a, secret)
+	if err != nil {
+		return nil, err
+	}
+	return client.DialToSMTPClientWithContext(ctx)
+}
+
+// smtpRefused reports whether a server refused the credentials it was
+// given (535, RFC 4954, section 6).
+func smtpRefused(err error) bool {
+	var reply *textproto.Error
+	return errors.As(err, &reply) && reply.Code == 535
+}
+
+// smtpClient configures go-mail for implicit TLS or STARTTLS. An account
+// that signs in with OAuth gives its access token for the password, by
+// XOAUTH2.
 func (s *Service) smtpClient(a Account, password string) (*gomail.Client, error) {
+	auth := gomail.SMTPAuthAutoDiscover
+	if a.OAuth != "" {
+		auth = gomail.SMTPAuthXOAUTH2
+	}
 	opts := []gomail.Option{
 		gomail.WithPort(a.SMTP.Port),
 		gomail.WithUsername(a.Username),
 		gomail.WithPassword(password),
-		gomail.WithSMTPAuth(gomail.SMTPAuthAutoDiscover),
+		gomail.WithSMTPAuth(auth),
 		gomail.WithTLSPolicy(gomail.TLSMandatory),
 		gomail.WithTLSConfig(s.tlsConfigFor(a.SMTP.Host)),
 		gomail.WithTimeout(30 * time.Second),

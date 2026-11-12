@@ -183,7 +183,7 @@ func TestMigrationIndexesRecipientsOfAnOlderDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if got := countRows(t, s, "PRAGMA user_version"); got != int64(SchemaVersion) || SchemaVersion != 8 {
+	if got := countRows(t, s, "PRAGMA user_version"); got != int64(SchemaVersion) || SchemaVersion < 8 {
 		t.Fatalf("user_version = %d, want %d", got, SchemaVersion)
 	}
 	for _, tc := range []struct {

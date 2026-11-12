@@ -9,8 +9,10 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"fmt"
 	"math/big"
 	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -49,6 +51,11 @@ type fakeIMAP struct {
 	// holdsBack has an idling session behave as the in-memory server
 	// does by itself: see fakeSession.Idle.
 	holdsBack atomic.Bool
+	// xoauth, when set, has the server take XOAUTH2 with the access
+	// tokens it holds valid, and no password (see oauthfake_test.go).
+	// xoauthTries counts the exchanges.
+	xoauth      func(user, token string) bool
+	xoauthTries atomic.Int32
 }
 
 // fakeSelect is one SELECT or EXAMINE the fake server received.
@@ -110,6 +117,13 @@ func (s *fakeSession) Close() error {
 
 func startFakeIMAP(t *testing.T, caps imap.CapSet) *fakeIMAP {
 	t.Helper()
+	return startFakeIMAPWith(t, caps, nil)
+}
+
+// startFakeIMAPWith starts a fake server that, when xoauth is set, signs
+// in by XOAUTH2 with the tokens xoauth holds valid instead of a password.
+func startFakeIMAPWith(t *testing.T, caps imap.CapSet, xoauth func(user, token string) bool) *fakeIMAP {
+	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -123,8 +137,9 @@ func startFakeIMAP(t *testing.T, caps imap.CapSet) *fakeIMAP {
 	}
 	f := &fakeIMAP{
 		addr: ln.Addr().String(), user: user, mem: mem, caps: caps, cert: cert,
-		ended: make(chan struct{}, 64),
-		log:   &testLogger{t: t},
+		ended:  make(chan struct{}, 64),
+		log:    &testLogger{t: t},
+		xoauth: xoauth,
 	}
 	f.serve(ln)
 	t.Cleanup(func() {
@@ -140,8 +155,11 @@ func (f *fakeIMAP) serve(ln net.Listener) {
 		NewSession: func(*imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
 			f.open.Add(1)
 			f.sessions.Add(1)
-			session := f.mem.NewSession().(imapserver.SessionIMAP4rev2)
-			return &fakeSession{SessionIMAP4rev2: session, f: f}, &imapserver.GreetingData{}, nil
+			session := &fakeSession{SessionIMAP4rev2: f.mem.NewSession().(imapserver.SessionIMAP4rev2), f: f}
+			if f.xoauth != nil {
+				return &xoauthSession{session}, &imapserver.GreetingData{}, nil
+			}
+			return session, &imapserver.GreetingData{}, nil
 		},
 		Caps:      f.caps,
 		TLSConfig: &tls.Config{Certificates: []tls.Certificate{f.cert}, MinVersion: tls.VersionTLS12},
@@ -170,18 +188,29 @@ func (f *fakeIMAP) restart(t *testing.T) {
 
 // testLogger writes the server's log to the test's while the test runs.
 // A connection the server hung up on may log after that, from its own
-// goroutine, when the test's log is no longer there to write to.
+// goroutine, when the test's log is no longer there to write to. It keeps
+// the lines, for a test to read what was logged.
 type testLogger struct {
-	mu sync.Mutex
-	t  *testing.T
+	mu    sync.Mutex
+	t     *testing.T
+	lines []string
 }
 
 func (l *testLogger) Printf(format string, args ...any) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	line := fmt.Sprintf(format, args...)
+	l.lines = append(l.lines, line)
 	if l.t != nil {
-		l.t.Logf("imapserver: "+format, args...)
+		l.t.Logf("imapserver: %s", line)
 	}
+}
+
+// text is what the server logged.
+func (l *testLogger) text() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return strings.Join(l.lines, "\n")
 }
 
 func (l *testLogger) close() {

@@ -89,8 +89,32 @@ func (s *Service) dialIMAP(ctx context.Context, a Account, password string) (*im
 
 // dialIMAPWith is dialIMAP for a connection that stays open: handler
 // hears what the server says of the selected mailbox between commands.
-// The connection is closed when ctx ends.
+// The connection is closed when ctx ends. An account that signs in with
+// OAuth takes no password: it signs in with its access token, and when
+// the server refuses one that had not expired, as one revoked early,
+// with a renewed one once more.
 func (s *Service) dialIMAPWith(ctx context.Context, a Account, password string, handler *imapclient.UnilateralDataHandler) (*imapSession, error) {
+	if a.OAuth == "" {
+		return s.dialIMAPAs(ctx, a, password, handler)
+	}
+	token, err := s.accessToken(ctx, a, "")
+	if err != nil {
+		return nil, err
+	}
+	c, err := s.dialIMAPAs(ctx, a, token, handler)
+	var refused *loginError
+	if !errors.As(err, &refused) {
+		return c, err
+	}
+	if token, err = s.accessToken(ctx, a, token); err != nil {
+		return nil, err
+	}
+	return s.dialIMAPAs(ctx, a, token, handler)
+}
+
+// dialIMAPAs connects and signs in with secret: the account's password,
+// or its access token.
+func (s *Service) dialIMAPAs(ctx context.Context, a Account, secret string, handler *imapclient.UnilateralDataHandler) (*imapSession, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -117,7 +141,7 @@ func (s *Service) dialIMAPWith(ctx context.Context, a Account, password string, 
 	if a.Username == "" {
 		return nil, errors.New("imap: the username is empty")
 	}
-	if err := c.Login(a.Username, password).Wait(); err != nil {
+	if err := signIn(c, a, secret); err != nil {
 		// A connection that broke during the exchange is no refusal.
 		var refused *imap.Error
 		if errors.As(err, &refused) {
@@ -131,6 +155,18 @@ func (s *Service) dialIMAPWith(ctx context.Context, a Account, password string, 
 	}
 	ok = true
 	return &imapSession{client: c, caps: caps, release: release}, nil
+}
+
+// signIn logs in with the password, or authenticates with XOAUTH2 and
+// the access token, which Gmail and Outlook both take.
+func signIn(c *imapclient.Client, a Account, secret string) error {
+	if a.OAuth == "" {
+		return c.Login(a.Username, secret).Wait()
+	}
+	if !c.Caps().Has(imap.AuthCap(xoauth2Mechanism)) {
+		return errors.New("the server does not take OAuth tokens (XOAUTH2)")
+	}
+	return c.Authenticate(&xoauth2Client{user: a.Username, token: secret})
 }
 
 // close logs out, or just hangs up when that is not possible.

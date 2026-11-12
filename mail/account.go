@@ -31,7 +31,8 @@ type Server struct {
 // Addr is host:port.
 func (s Server) Addr() string { return net.JoinHostPort(s.Host, strconv.Itoa(s.Port)) }
 
-// Account is a mail account. Its password is in the keychain, never here.
+// Account is a mail account. Its password, or the refresh token of one
+// that signs in with OAuth, is in the keychain, never here.
 type Account struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
@@ -39,6 +40,10 @@ type Account struct {
 	Username string `json:"username"`
 	IMAP     Server `json:"imap"`
 	SMTP     Server `json:"smtp"`
+	// OAuth is the provider the account signs in with through OAuth
+	// (OAuthGoogle, OAuthMicrosoft), "" for one that signs in with a
+	// password.
+	OAuth string `json:"oauth"`
 }
 
 // NewAccountID returns a random account ID.
@@ -113,6 +118,9 @@ func (a Account) Validate() error {
 	}
 	if strings.TrimSpace(a.Username) == "" {
 		return errors.New("the username is empty")
+	}
+	if a.OAuth != "" && a.OAuth != OAuthGoogle && a.OAuth != OAuthMicrosoft {
+		return fmt.Errorf("signing in with %q is not supported", a.OAuth)
 	}
 	if err := a.IMAP.validate("IMAP"); err != nil {
 		return err

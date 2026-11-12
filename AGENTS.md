@@ -68,6 +68,18 @@ Windows and Linux. It is written in Go with
   network reach the window through hook fields on `app` that `attach`
   sets. The target of a notification travels in its ID, which is parsed
   as untrusted input.
+- An account signs in with a password or, for Google and Microsoft, with
+  OAuth (`Account.OAuth`, `mail/oauth.go`, `mail/signin.go`,
+  `docs/oauth.md`). The engine runs the whole flow, PKCE and a one-answer
+  listener on 127.0.0.1, but never opens the browser: the window passes
+  an `OAuthPrompt` that opens the URL it is given. The refresh token is
+  in the keychain and the access token in memory only; each connection
+  takes a token from `accessToken`, which renews an account's token one
+  call at a time. A sign-in the provider refuses to renew is deleted, and
+  the account then fails fast with `ErrSignInRequired` (its watcher
+  reports `WatchSignIn` and waits) until `SignInAgain`, which takes only
+  the account's own address; its cache and settings are never touched.
+  Client IDs are set at build time (`-X shu/mail.GoogleClientID=…`).
 - Conversations are the cache's own. `store/` puts every message in one
   (`thread_id`) as it writes it, by the keys of `mail.ThreadKeys`: its
   Message-ID, In-Reply-To and References, and the conversation part of an
@@ -131,9 +143,10 @@ Windows and Linux. It is written in Go with
   returns text and suggestions, and has no way to change the mailbox.
 - `locales/` holds the catalogs and their generated accessors. Every
   user-visible string comes from there, in en and zh-Hans together.
-- Passwords live only in `mygo.Secrets`; the database keeps accounts,
-  folders, message headers and bodies, attachment metadata, the outbox
-  and the drafts. Attachment bytes never go into SQLite: those of
+- Passwords and OAuth refresh tokens live only in `mygo.Secrets`, and
+  access tokens only in memory; the database keeps accounts (with how
+  they sign in), folders, message headers and bodies, attachment
+  metadata, the outbox and the drafts. Attachment bytes never go into SQLite: those of
   received mail go to the cache directory, those of drafts to the
   user-data directory, both keyed by content hash.
 

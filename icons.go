@@ -51,4 +51,6 @@ var (
 	alertIcon       = mustIcon("circle-alert")
 	mailIcon        = mustIcon("mail")
 	mailOpenIcon    = mustIcon("mail-open")
+	sparklesIcon    = mustIcon("sparkles")
+	copyIcon        = mustIcon("copy")
 )

@@ -35,6 +35,13 @@ Windows and Linux. It is written in Go with
   implementation of the `mail.Store` interface and owns the schema,
   migrations, FTS5 index and outbox. Views read through `Service` and
   never open a connection or write a row themselves.
+- `ai/` is the AI layer: provider settings, the excerpt that decides what
+  part of a message may leave the device, the features (summary, triage,
+  draft reply) and `Service.send`, the single egress point every model
+  request passes through. It imports neither the UI nor `mail/`; views
+  reach it through the `aiService` value. Its settings and the summary
+  cache live in `store/`; its keys live only in `mygo.Secrets`. It
+  returns text and suggestions, and has no way to change the mailbox.
 - `locales/` holds the catalogs and their generated accessors. Every
   user-visible string comes from there, in en and zh-Hans together.
 - Passwords live only in `mygo.Secrets`; the database keeps accounts,

@@ -34,6 +34,9 @@ func (a *app) readingPane(c *ui.Context, t *ui.Theme) {
 				if msg != nil && len(msg.Attachments) > 0 {
 					a.attachments(c, t, *m, msg.Attachments)
 				}
+				if job := a.summaries[summaryKey(*m)]; job != nil {
+					a.summaryCard(c, t, summaryKey(*m), job)
+				}
 				ui.Divider(c)
 				a.body(c, t, m, msg)
 			})
@@ -103,6 +106,12 @@ func (a *app) readingToolbar(c *ui.Context, t *ui.Theme) {
 		a.toolButton(c, replyIcon, locales.Reply(), has, func() { a.reply(false) })
 		a.toolButton(c, replyAllIcon, locales.ReplyAll(), has, func() { a.reply(true) })
 		a.toolButton(c, forwardIcon, locales.Forward(), has, func() { a.forward() })
+		if a.ai != nil {
+			// A summary is of the one message open, once its body is here.
+			_, msg := a.current()
+			a.toolDivider(c)
+			a.toolButton(c, sparklesIcon, locales.Summarize(), msg != nil && len(targets) == 1, a.summarize)
+		}
 	}).Height(48).Padding(6, 12).Label(locales.MessageActions()).
 		BorderWidth(0, 0, 1, 0).BorderColor(t.Border)
 }
@@ -550,12 +559,12 @@ func (a *app) reply(all bool) {
 					body = result.Message.BodyText
 					a.bodies[summaryKey(summary)] = result
 				}
-				a.openCompose(replyDraft(a, summary, body, all, false))
+				a.openReply(summary, body, all)
 			})
 		})
 		return
 	}
-	a.openCompose(replyDraft(a, summary, body, all, false))
+	a.openReply(summary, body, all)
 }
 
 // forward opens a forwarded message with the original quoted.

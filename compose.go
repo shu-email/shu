@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"shu/ai"
 	"shu/locales"
 	"shu/mail"
 )
@@ -25,6 +26,15 @@ type composeState struct {
 	inReplyTo  string
 	references []string
 
+	// source is the message being replied to, which an AI draft reads;
+	// nil for a new message or a forward. guidance is what the user asks
+	// the draft to say, job the draft in progress and review its payload
+	// under inspection.
+	source   *ai.Message
+	guidance string
+	job      *aiJob
+	review   *aiReview
+
 	sending bool
 	sent    bool
 	err     string
@@ -36,8 +46,17 @@ type composeState struct {
 	cancel context.CancelFunc
 }
 
+// openReply opens a reply to a message, which an AI draft may read.
+func (a *app) openReply(m mail.Summary, body string, all bool) {
+	cs := a.openCompose(replyDraft(a, m, body, all, false))
+	if strings.TrimSpace(body) != "" {
+		source := a.aiMessage(m, body)
+		cs.source = &source
+	}
+}
+
 // openCompose opens a compose window for a draft, or an empty one.
-func (a *app) openCompose(out *mail.Outgoing) {
+func (a *app) openCompose(out *mail.Outgoing) *composeState {
 	cs := &composeState{app: a}
 	if out != nil {
 		cs.to = addressesText(out.To)
@@ -50,7 +69,7 @@ func (a *app) openCompose(out *mail.Outgoing) {
 	cs.ctx, cs.cancel = context.WithCancel(context.Background())
 	a.composes = append(a.composes, cs)
 	if a.newWindow == nil {
-		return
+		return cs
 	}
 	title := locales.ComposeTitle()
 	lower := strings.ToLower(strings.TrimSpace(cs.subject))
@@ -73,6 +92,7 @@ func (a *app) openCompose(out *mail.Outgoing) {
 		cs.win = win
 		win.OnClosed(cs.close)
 	}
+	return cs
 }
 
 // addressesText joins addresses for a text field.
@@ -96,6 +116,9 @@ func (cs *composeState) view(c *ui.Context) {
 		cs.row(c, locales.To(), "name@example.com", &cs.to)
 		cs.row(c, locales.Cc(), "", &cs.cc)
 		cs.row(c, locales.Subject(), "", &cs.subject)
+		if cs.source != nil && cs.app.ai != nil {
+			cs.draftRow(c, t)
+		}
 		ui.Divider(c)
 		ui.TextArea(c, &cs.body).Grow(1).MinHeight(220).Label(locales.Body()).
 			Placeholder(locales.ComposeBodyPlaceholder())
@@ -124,6 +147,7 @@ func (cs *composeState) view(c *ui.Context) {
 				OnClick(func() { cs.send() })
 		})
 	})
+	aiReviewModal(c, &cs.review)
 }
 
 // row is a compact compose field with its label inline, as mail apps
@@ -174,6 +198,9 @@ func (cs *composeState) send() {
 			if err != nil {
 				cs.err = locales.SendFailed(err.Error())
 				app.loadPending(app.gen)
+				// The failure belongs to this window, which the mail
+				// window's update does not redraw.
+				cs.redraw()
 				return
 			}
 			cs.sent = true

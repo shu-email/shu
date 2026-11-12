@@ -462,30 +462,3 @@ func (a *app) languageChoice(c *ui.Context) ui.Element {
 	}
 	return e
 }
-
-// settingsView is the small settings window with the language choice.
-func (a *app) settingsView(c *ui.Context) {
-	t := c.Theme()
-	bar := c.TitleBar()
-	top := max(bar.Bottom, 52)
-	ui.Column(c).Fill().Background(t.Background).Children(func() {
-		ui.Row(c).Height(top).Shrink(0).AlignItems(ui.Center).Gap(10).
-			Padding(0, max(bar.Right, 0)+16, 0, max(bar.Left, 0)+16).
-			BorderWidth(0, 0, 1, 0).BorderColor(t.Border).DragWindow().Children(func() {
-			ui.Text(c, locales.Settings()).FontSize(17).Bold()
-			ui.Spacer(c)
-			ui.Button(c, locales.Done()).OnClick(func() { a.showSettings = false })
-		})
-		ui.Column(c).Padding(28, 32, 28, 32).Gap(14).MaxWidth(640).Children(func() {
-			ui.Text(c, locales.Language()).FontSize(12).Bold().TextColor(t.TextMuted)
-			a.languageChoice(c).Width(320)
-			ui.Divider(c)
-			ui.Row(c).Gap(10).Children(func() {
-				ui.Button(c, locales.ManageAccounts()).OnClick(func() {
-					a.showSettings = false
-					a.openAccountForm(a.activeAccount())
-				})
-			})
-		})
-	})
-}

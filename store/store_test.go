@@ -73,6 +73,7 @@ func TestMigrationsFromEmpty(t *testing.T) {
 		"watermarks",
 		"threads", "threads_account", "thread_refs", "thread_refs_thread", "messages_thread",
 		"messages_thread_insert", "messages_thread_update",
+		"messages_date", "messages_flagged",
 	} {
 		if !have[name] {
 			t.Errorf("missing schema object %q", name)

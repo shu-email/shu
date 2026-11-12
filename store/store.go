@@ -218,6 +218,51 @@ var migrations = [][]string{
 		END`,
 		`INSERT INTO messages_fts(messages_fts) VALUES ('rebuild')`,
 	},
+	// v8: pages and searches over every folder and account. The
+	// recipients of a message, To and Cc as text, join the full-text
+	// index, which is made anew with them and rebuilt. A date a message
+	// lacks is 0, never null, so that the order of the pages, newest
+	// first and then by row, is total. A folder's list index gains the
+	// row that breaks a tie of dates; messages_date reads every folder
+	// newest first, for a scope of several, and messages_flagged the
+	// starred messages. folders.complete records that the cache lacks
+	// none of the folder's messages up to its sync cursor.
+	{
+		`DROP TRIGGER messages_ai`,
+		`DROP TRIGGER messages_ad`,
+		`DROP TRIGGER messages_au`,
+		`DROP TABLE messages_fts`,
+		`ALTER TABLE messages ADD COLUMN recipients TEXT`,
+		`UPDATE messages SET recipients = (
+			SELECT group_concat(trim(COALESCE(value ->> 'name', '') || ' ' || COALESCE(value ->> 'email', '')), ', ')
+			FROM (SELECT value FROM json_each(CASE WHEN json_valid(to_json) THEN to_json ELSE '[]' END)
+				UNION ALL
+				SELECT value FROM json_each(CASE WHEN json_valid(cc_json) THEN cc_json ELSE '[]' END)))`,
+		`UPDATE messages SET date = 0 WHERE date IS NULL`,
+		`ALTER TABLE folders ADD COLUMN complete INTEGER NOT NULL DEFAULT 0`,
+		`DROP INDEX messages_list`,
+		`CREATE INDEX messages_list ON messages (folder_id, date DESC, id DESC)`,
+		`CREATE INDEX messages_date ON messages (date DESC, id DESC, folder_id)`,
+		`CREATE INDEX messages_flagged ON messages (date DESC, id DESC, folder_id) WHERE flagged = 1`,
+		`CREATE VIRTUAL TABLE messages_fts USING fts5(
+			subject, from_name, from_email, body_text, preview, recipients,
+			content='messages', content_rowid='id', tokenize='trigram')`,
+		`CREATE TRIGGER messages_ai AFTER INSERT ON messages BEGIN
+			INSERT INTO messages_fts(rowid, subject, from_name, from_email, body_text, preview, recipients)
+			VALUES (new.id, new.subject, new.from_name, new.from_email, new.body_text, new.preview, new.recipients);
+		END`,
+		`CREATE TRIGGER messages_ad AFTER DELETE ON messages BEGIN
+			INSERT INTO messages_fts(messages_fts, rowid, subject, from_name, from_email, body_text, preview, recipients)
+			VALUES ('delete', old.id, old.subject, old.from_name, old.from_email, old.body_text, old.preview, old.recipients);
+		END`,
+		`CREATE TRIGGER messages_au AFTER UPDATE OF subject, from_name, from_email, body_text, preview, recipients ON messages BEGIN
+			INSERT INTO messages_fts(messages_fts, rowid, subject, from_name, from_email, body_text, preview, recipients)
+			VALUES ('delete', old.id, old.subject, old.from_name, old.from_email, old.body_text, old.preview, old.recipients);
+			INSERT INTO messages_fts(rowid, subject, from_name, from_email, body_text, preview, recipients)
+			VALUES (new.id, new.subject, new.from_name, new.from_email, new.body_text, new.preview, new.recipients);
+		END`,
+		`INSERT INTO messages_fts(messages_fts) VALUES ('rebuild')`,
+	},
 }
 
 // backfills compute, from the rows of the version before, statements a
@@ -387,6 +432,15 @@ func unix(v any) time.Time {
 func unixPtr(t time.Time) any {
 	if t.IsZero() {
 		return nil
+	}
+	return t.Unix()
+}
+
+// dateColumn writes a message's date, 0 for none: the pages order by it,
+// and a null would fall out of their comparisons.
+func dateColumn(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
 	}
 	return t.Unix()
 }

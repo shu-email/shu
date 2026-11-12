@@ -257,6 +257,91 @@ func (s *Service) CachedConversation(ctx context.Context, accountID, folder stri
 	return s.store.ConversationMessages(ctx, accountID, folder, thread)
 }
 
+// MessagePage reads a page of messages from the cache, without network:
+// the newest of a scope, which may span folders and accounts, that a
+// search finds, after a cursor. Each row has its account, and the parts
+// a search found its terms in.
+func (s *Service) MessagePage(ctx context.Context, q ListQuery) (MessagePage, error) {
+	return s.store.MessagePage(ctx, q)
+}
+
+// ConversationPage reads a page of conversations from the cache, without
+// network: a row for each conversation with a message in the scope, made
+// of the scope's messages, the one with the newest first. A search keeps
+// the conversations any message of which, in any folder of its account,
+// matches it whole, and each row names those messages with the parts the
+// terms were found in.
+func (s *Service) ConversationPage(ctx context.Context, q ListQuery) (ConversationPage, error) {
+	return s.store.ConversationPage(ctx, q)
+}
+
+// ScopedConversation reads the messages of an account's conversation in a
+// scope, oldest first: those a row of ConversationPage for that scope
+// stands for, which a conversation-wide action acts on. Nothing is in the
+// scope of an account it leaves out.
+func (s *Service) ScopedConversation(ctx context.Context, accountID string, scope Scope, thread ThreadID) ([]Summary, error) {
+	if err := scope.Check(); err != nil {
+		return nil, err
+	}
+	if len(scope.Accounts) > 0 && !slices.Contains(scope.Accounts, accountID) {
+		return nil, nil
+	}
+	all, err := s.store.ConversationMessages(ctx, accountID, "", thread)
+	if err != nil {
+		return nil, err
+	}
+	special := map[string]bool{}
+	if scope.Special != "" {
+		folders, err := s.store.Folders(ctx, accountID)
+		if err != nil {
+			return nil, err
+		}
+		for _, f := range folders {
+			special[f.Name] = f.SpecialUse == scope.Special
+		}
+	}
+	return slices.DeleteFunc(all, func(m Summary) bool {
+		switch {
+		case scope.Starred:
+			return !m.Flagged
+		case scope.Folder != "":
+			return m.Folder != scope.Folder
+		case scope.Special != "":
+			return !special[m.Folder]
+		}
+		return false
+	}), nil
+}
+
+// Inboxes returns the inbox of every account, with its counts, in the
+// order the accounts were added: what a unified inbox shows of each.
+func (s *Service) Inboxes(ctx context.Context) ([]AccountFolder, error) {
+	accounts, err := s.store.Accounts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []AccountFolder
+	for _, a := range accounts {
+		folders, err := s.store.Folders(ctx, a.ID)
+		if err != nil {
+			return nil, err
+		}
+		for _, f := range folders {
+			if f.IsInbox() {
+				out = append(out, AccountFolder{AccountID: a.ID, Folder: f})
+			}
+		}
+	}
+	return out, nil
+}
+
+// FolderCache says how much of a folder is on this device: how many of
+// its messages, of how many on the server, and whether older ones are
+// left there for FetchOlder.
+func (s *Service) FolderCache(ctx context.Context, accountID, folder string) (FolderCache, error) {
+	return s.store.FolderCache(ctx, accountID, folder)
+}
+
 // CachedMessage reads one cached message. The bool is false when only the
 // header is cached and the body must be fetched.
 func (s *Service) CachedMessage(ctx context.Context, accountID, folder string, uid UID) (FetchResult, bool, error) {
@@ -291,7 +376,12 @@ func (s *Service) SyncAccount(ctx context.Context, accountID string) ([]Folder, 
 	return s.store.Folders(ctx, accountID)
 }
 
-// SyncFolder fetches a folder's changes into the cache.
+// SyncFolder fetches a folder's changes into the cache. Its first sync
+// caches the newest limit messages, the settings' window (SyncWindow)
+// when limit is not above zero; every sync refreshes the flags of as
+// many, and of the messages that arrived since the last it keeps the
+// newest 2000, or limit if that is more. What it leaves out FetchOlder
+// fetches.
 func (s *Service) SyncFolder(ctx context.Context, accountID, folder string, limit int) error {
 	a, password, err := s.account(ctx, accountID)
 	if err != nil {

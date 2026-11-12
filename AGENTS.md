@@ -93,6 +93,30 @@ Windows and Linux. It is written in Go with
   the conversation across folders, each message once and without the
   copies in Drafts, Junk and Trash the list does not show, and each
   expanded message has actions of its own.
+- Lists read the cache a page at a time. A `mail.Scope` says what a list
+  covers: a folder of an account, every folder of one or more accounts,
+  or each account's folder of a special use (the unified inbox is every
+  account's `\Inbox`). `Service.MessagePage` and
+  `Service.ConversationPage` return the rows newest first after a
+  `mail.Cursor`, the date and row of the last one, so mail that arrives
+  meanwhile neither repeats nor skips a row of the pages after it. Every
+  row carries its account, and every action still takes one account:
+  nothing in the engine acts on two in one call. A `mail.Search`, which
+  `mail.ParseSearch` reads from typed text, combines its parts with AND;
+  each term is one phrase, through the trigram index from three
+  characters and LIKE below, never an operator of the index, and each
+  row says in which parts (`mail.Field`) its terms were found. The index
+  holds the subject, sender, recipients, body and preview. The older
+  reads that take an account, a folder and a query are this read, with
+  the query as one term.
+- A folder's first sync caches its newest `mail.Settings.SyncWindow`
+  messages, the window's and the watcher's alike. `Service.FetchOlder`
+  fetches on demand, read-only and as a sync fetches, the newest
+  messages the cache lacks below the sync cursor; it moves neither the
+  cursor nor the watermark of announced mail, so older mail is never
+  announced. `Folder.Complete` records that the cache lacks none of a
+  folder's messages, and `Service.FolderCache` counts what is on this
+  device against what the server has.
 - `ai/` is the AI layer: provider settings, the excerpt that decides what
   part of a message may leave the device, the features (summary of a
   message or a conversation, triage, draft reply) and `Service.send`, the

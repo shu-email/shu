@@ -160,6 +160,7 @@ func (d Draft) outgoing() Outgoing {
 // summary is the draft's row in the Drafts folder.
 func (d Draft) summary(a Account) Summary {
 	return Summary{
+		Account:        a.ID,
 		DraftID:        d.ID,
 		MessageID:      d.MessageID,
 		InReplyTo:      d.InReplyTo,

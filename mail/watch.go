@@ -22,8 +22,8 @@ import (
 
 const (
 	// watchWindow is how many of the inbox's newest messages a check
-	// caches at first and refreshes the flags of, as the window's own
-	// sync of a folder does.
+	// refreshes the flags of. Its first check caches the settings'
+	// window, as the window's own first sync of a folder does.
 	watchWindow = 50
 	// watchBackoffMin and watchBackoffMax bound the wait after a failed
 	// check, which doubles with every failure in a row.
@@ -527,7 +527,8 @@ func (w *watcher) checkOn(ctx context.Context, c *watchConn, full bool) error {
 	if c.folder != "" {
 		// What the server signalled until now, this sync covers.
 		taken(c.changed)
-		if err := w.svc.syncSelected(ctx, c.imapSession, w.accountID, c.folder, c.uidValidity, watchWindow, defaultSyncCap); err != nil {
+		span := syncSpan{first: w.svc.firstSyncWindow(ctx), refresh: watchWindow, keep: defaultSyncCap}
+		if _, err := w.svc.syncSelected(ctx, c.imapSession, w.accountID, c.folder, c.uidValidity, span); err != nil {
 			return err
 		}
 		var err error

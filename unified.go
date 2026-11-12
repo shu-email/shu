@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -71,13 +72,22 @@ func (a *app) syncInboxes(g uint64) {
 		defer cancel()
 		var failed error
 		folders := map[string][]mail.Folder{}
+		// An account that has to sign in again is no failure: its banner
+		// says so.
+		var signedOut []string
+		fail := func(in inbox, err error) {
+			switch {
+			case errors.Is(err, mail.ErrSignInRequired):
+				signedOut = append(signedOut, in.account)
+			case failed == nil:
+				failed = fmt.Errorf("%s: %w", in.label, err)
+			}
+		}
 		for _, in := range inboxes {
 			if in.folder == "" {
 				list, err := a.svc.SyncAccount(ctx, in.account)
 				if err != nil {
-					if failed == nil {
-						failed = fmt.Errorf("%s: %w", in.label, err)
-					}
+					fail(in, err)
 					continue
 				}
 				folders[in.account] = list
@@ -91,9 +101,7 @@ func (a *app) syncInboxes(g uint64) {
 				}
 			}
 			if err := a.svc.SyncFolder(ctx, in.account, in.folder, 0); err != nil {
-				if failed == nil {
-					failed = fmt.Errorf("%s: %w", in.label, err)
-				}
+				fail(in, err)
 				continue
 			}
 			if list, err := a.svc.CachedFolders(ctx, in.account); err == nil {
@@ -101,6 +109,9 @@ func (a *app) syncInboxes(g uint64) {
 			}
 		}
 		a.post(func() {
+			for _, id := range signedOut {
+				a.markSignIn(id)
+			}
 			if a.stale(g) || !a.isUnified() {
 				return
 			}
@@ -140,7 +151,7 @@ func (a *app) syncMovedBack(g uint64, account, folder string) {
 			if a.stale(g) {
 				return
 			}
-			if err != nil {
+			if err != nil && !a.signInRequired(account, err) {
 				a.err = locales.SyncFailed(err.Error())
 			}
 			if foldersErr == nil {

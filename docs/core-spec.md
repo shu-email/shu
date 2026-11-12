@@ -27,7 +27,8 @@ from real installs (`mygo dev` already renames the app to `shu Dev` and appends
 
 In this round:
 
-- Multiple accounts (IMAP/SMTP, manual server configuration + common provider presets)
+- Multiple accounts (IMAP/SMTP, manual server configuration + common provider presets;
+  signing in with Google and Microsoft came later, see below and `docs/oauth.md`)
 - Folder list (special-use first, name heuristics as fallback), unread counts
 - Message list (cached headers + incremental sync of new mail), local FTS search,
   manual sync
@@ -38,10 +39,18 @@ In this round:
 - Attachment list and "Save as"
 - en / zh-Hans, following the system locale with a manual override
 
-Explicitly out of scope: OAuth (Gmail/Outlook need app passwords), IDLE/background
-polling, conversation threading (the schema leaves room for a `threads` migration,
-but v1 ships none and the UI has no threading), draft autosave, rich-text compose,
-PGP/S-MIME, inline image rendering, storing raw `.eml` blobs.
+Explicitly out of scope: IDLE/background polling, conversation threading (the
+schema leaves room for a `threads` migration, but v1 ships none and the UI has no
+threading), draft autosave, rich-text compose, PGP/S-MIME, inline image rendering,
+storing raw `.eml` blobs.
+
+OAuth was out of scope in this round too, and has been added since: a Gmail or
+Outlook account can be added by signing in at Google or Microsoft in the system
+browser, with no host, port or app password to type. `docs/oauth.md` describes
+the flow, the tokens and what the maintainers do to turn it on. The manual
+configuration below, IMAP and SMTP servers with a password, is unchanged and is
+the fallback: for every other provider, for a build without the providers'
+client IDs, and for an account whose organization does not allow Shu.
 
 ## Architecture and package boundaries
 
@@ -105,7 +114,9 @@ search work.
   `PRAGMA user_version` and run inside a transaction.
 - Passwords never enter the database: `mygo.Secrets` with key
   `account:<id>:password`; `mail.Service` takes a `SecretStore` interface
-  (`mygo.Secrets` in production, an in-memory fake in tests).
+  (`mygo.Secrets` in production, an in-memory fake in tests). The same holds
+  for the refresh token of an account that signs in with OAuth
+  (`account:<id>:oauth`); its access token stays in memory (`docs/oauth.md`).
 - The server is the source of truth; the local database is a cache and an offline
   copy. Server semantics such as `UIDVALIDITY` are stored and compared, never
   interpreted or used for reasoning about message identity.
@@ -120,7 +131,7 @@ search work.
 | Attachment metadata | DB | Listing and rendering need it while offline |
 | Attachment bytes | Disk cache, path in `attachments.cache_path` | Keeps the database small; deduped by content hash, LRU-cleaned |
 | Outbox entries and their state | DB | Sending must survive a crash and never double-send |
-| Passwords, API keys | Keychain only | Established rule, never in the DB or the repo |
+| Passwords, OAuth refresh tokens, API keys | Keychain only | Established rule, never in the DB or the repo; OAuth access tokens live in memory only |
 
 Bodies are stored inline in the `messages` row: consistency
 in one transaction, and the FTS triggers keep the index in step. The cost is a
@@ -345,6 +356,13 @@ SetFlag(ctx, accountID, folder string, uid UID, flag Flag, on bool) error
 Move(ctx, accountID, folder string, uid UID, dest string) error
 Send(ctx, accountID string, out Outgoing) (SendResult, error) // outbox → SMTP → APPEND to Sent
 PendingSends(ctx, accountID string) ([]PendingSend, error)     // crash recovery surface
+
+// Signing in with Google and Microsoft, added since (docs/oauth.md)
+OAuthConfigured(provider string) bool                          // false: the build has no client, no button
+AddOAuthAccount(ctx, provider, name string, prompt OAuthPrompt) (Account, error)
+SignInAgain(ctx, accountID string, prompt OAuthPrompt) error    // as the account's own address only
+SignOut(ctx, accountID string) error                            // removes the tokens, keeps the account
+NeedsSignIn(ctx, accountID string) (bool, error)                // reads the keychain, not the network
 ```
 
 IMAP details:
@@ -432,8 +450,25 @@ lines). Keep the original HTML for the webview.
   empty password while editing means unchanged; deletion requires
   `mygo.Dialog.Message` confirmation (an explicitly destructive action) and clears
   the SQLite rows (cascaded) and the keychain entry.
-- Password note: Gmail/Outlook with two-factor auth require an app password (no
-  OAuth this round).
+- Password note: on this manual path, Gmail with two-factor auth requires an app
+  password, and Microsoft has been retiring passwords for IMAP and SMTP.
+- Signing in with Google and Microsoft (added after this round, `docs/oauth.md`):
+  in a build that has a provider's client ID, the add view offers "Sign in with
+  Google" and "Sign in with Microsoft" above the manual form, which follows them
+  unchanged under "Or set up manually with a password"; a build without one
+  shows the manual form alone. A provider's button signs in in the system
+  browser while the window waits, with a way to open the page again and Cancel
+  (or Escape); denial, timeout, a provider error and a network error each say
+  so in the user's words, and the button tries again. The account added opens
+  as one saved by hand. Its editor shows the provider and the address, changes
+  only the name, and offers Sign out, which asks first and removes the tokens
+  from the keychain while the account, its cache and settings stay.
+- An account that has to sign in again (revoked, expired or signed out) says
+  so in a banner above its cached mail, which stays readable, in the account
+  menu when it is not on screen, and in the sidebar's footer; its syncs, sends
+  and downloads wait instead of failing with an error line. "Sign in again"
+  signs in as the account's own address; a send that failed for it stays in its
+  window and in Drafts until the user sends it again.
 
 ### Folders and message list
 
@@ -606,10 +641,12 @@ Manual:
   and the SQLite native module); `go tool mygo i18n check` (if available).
 - `go vet ./...`, `go tool mygo vet .`, `CGO_ENABLED=0 go test ./...` and
   `go test -cover ./...` for the changed packages.
-- `go tool mygo dev` with a throwaway test account (app password) to walk through
-  login, reading, starring, archiving, replying, sending and the HTML toggle; the
-  dev data directory is `shu Dev` and never touches a real install; commit no
-  credentials and no real mail.
+- `go tool mygo dev` with a throwaway test account to walk through login,
+  reading, starring, archiving, replying, sending and the HTML toggle: on the
+  manual path with an app password, or by signing in with Google or Microsoft
+  with development clients set as `docs/oauth.md` describes; the dev data
+  directory is `shu Dev` and never touches a real install; commit no
+  credentials, no client secrets and no real mail.
 
 ## Risks and caveats
 

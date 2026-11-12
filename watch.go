@@ -135,6 +135,11 @@ func (a *app) accountsChanged() {
 			delete(a.otherFolders, id)
 		}
 	}
+	for id := range a.needSignIn {
+		if a.account(id) == nil {
+			delete(a.needSignIn, id)
+		}
+	}
 	a.watchAccounts()
 	a.updateBadge()
 }
@@ -268,6 +273,10 @@ func (a *app) watchEvent(ev mail.WatchEvent) {
 		return
 	}
 	a.watch[ev.AccountID] = ev.Status
+	if ev.Status.State == mail.WatchSignIn {
+		// The watcher waits for the sign-in, which the window offers.
+		a.markSignIn(ev.AccountID)
+	}
 	if ev.Folders == nil {
 		return
 	}
@@ -520,6 +529,11 @@ func (a *app) watchLine(c *ui.Context, t *ui.Theme) {
 	if !ok {
 		return
 	}
+	if a.needSignIn[a.active] {
+		// The account's sync or send found it out before the watcher
+		// did, or the watcher has not said it yet: it waits all the same.
+		status.State = mail.WatchSignIn
+	}
 	var (
 		icon *ui.SVG
 		text string
@@ -544,6 +558,9 @@ func (a *app) watchLine(c *ui.Context, t *ui.Theme) {
 	case mail.WatchOffline:
 		icon = offlineIcon
 		text = locales.WatchOffline()
+	case mail.WatchSignIn:
+		icon = alertIcon
+		text = locales.WatchSignIn()
 	default:
 		text = locales.WatchConnecting()
 	}

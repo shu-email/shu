@@ -360,7 +360,9 @@ func (a *app) saveAttachment(m mail.Summary, att mail.Attachment) {
 		_, data, err := a.svc.Attachment(ctx, accountID, folder, uid, part)
 		if err != nil {
 			a.post(func() {
-				if !a.stale(g) {
+				// The banner of an account that has to sign in again says
+				// that downloads wait for it.
+				if !a.signInRequired(accountID, err) && !a.stale(g) {
 					a.err = locales.SaveFileFailed(err.Error())
 				}
 			})
@@ -464,7 +466,7 @@ func (a *app) toggleStar() {
 						a.all[i].Flagged = !on
 					}
 				}
-				a.err = err.Error()
+				a.err = failureText(err)
 				return
 			}
 			if a.folder == "starred" && !on {
@@ -542,7 +544,7 @@ func (a *app) moveSelected(special string) {
 				return
 			}
 			if err != nil {
-				a.err = err.Error()
+				a.err = failureText(err)
 			} else if len(targets) == 1 && first.DestUID != 0 {
 				label := locales.Archived()
 				switch special {
@@ -581,7 +583,7 @@ func (a *app) undoLastMove() {
 				return
 			}
 			if err != nil {
-				a.err = err.Error()
+				a.err = failureText(err)
 				return
 			}
 			a.syncMovedBack(g, u.accountID, u.source)
@@ -841,7 +843,7 @@ func (a *app) toggleRead() {
 				for _, m := range changed {
 					a.addUnread(m.Account, m.Folder, -unreadDelta(on))
 				}
-				a.err = err.Error()
+				a.err = failureText(err)
 				a.updateBadge()
 			}
 		})

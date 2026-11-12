@@ -88,8 +88,9 @@ func (a *app) runDraftSync(accountID string, full bool) {
 			state.running = false
 			// A failure is not put in the list's banner: the account sync
 			// reports an unreachable server, and each compose window says
-			// that its draft waits.
+			// that its draft waits, for the network or for a sign-in.
 			state.waiting = err != nil
+			a.signInRequired(accountID, err)
 			for _, cs := range a.composes {
 				if cs.accountID == accountID {
 					cs.draftSynced(result, err)

@@ -32,6 +32,7 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 		if a.err != "" {
 			a.errorBanner(c, t)
 		}
+		a.signInBanners(c, t)
 		if len(a.pending) > 0 && !a.pendingDismissed {
 			a.pendingBanner(c, t)
 		}
@@ -348,7 +349,7 @@ func (a *app) retryPending() {
 			if a.stale(g) || a.active != accountID {
 				return
 			}
-			if err != nil {
+			if err != nil && !a.signInRequired(accountID, err) {
 				a.err = locales.SendFailed(err.Error())
 			}
 			a.loadPending(g)

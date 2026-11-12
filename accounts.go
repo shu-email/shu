@@ -26,6 +26,9 @@ type accountForm struct {
 	SMTPPort string
 	SMTPTLS  string
 	editing  bool
+	// OAuth is the provider the account edited signs in with, "" for
+	// one with a password.
+	OAuth string
 }
 
 // providerNames are the Select labels: the presets then Custom.
@@ -46,7 +49,7 @@ func formFromAccount(a mail.Account) accountForm {
 		ID: a.ID, Name: a.Name, Email: a.Email, Provider: locales.ProviderCustom(),
 		Host: a.IMAP.Host, Port: strconv.Itoa(a.IMAP.Port), TLS: tlsLabel(a.IMAP.TLS),
 		SMTPHost: a.SMTP.Host, SMTPPort: strconv.Itoa(a.SMTP.Port), SMTPTLS: tlsLabel(a.SMTP.TLS),
-		editing: true,
+		editing: true, OAuth: a.OAuth,
 	}
 	if p, ok := mail.ProviderFor(a.Email); ok && p.IMAP == a.IMAP && p.SMTP == a.SMTP {
 		f.Provider = p.Name
@@ -96,6 +99,13 @@ func (a *app) openAccountForm(acc *mail.Account) {
 	a.showSettings = false
 	a.accountErr = ""
 	a.accountNote = ""
+	a.signOutOpen = false
+	if !a.addingWithProvider() {
+		a.signInName = ""
+	}
+	if f := a.signInErr; f != nil && f.account == "" {
+		a.signInErr = nil
+	}
 	if len(a.accounts) == 0 {
 		a.showAccounts = true
 		a.accountOpen = false
@@ -115,11 +125,22 @@ func (a *app) openAccountForm(acc *mail.Account) {
 	a.accountForm = formFromAccount(*acc)
 }
 
-// closeAccountForm dismisses the floating form.
+// closeAccountForm dismisses the floating form, and with it an account
+// being added by signing in.
 func (a *app) closeAccountForm() {
+	a.cancelAdding()
 	a.accountOpen = false
+	a.signOutOpen = false
 	a.accountErr = ""
 	a.accountNote = ""
+}
+
+// cancelAdding stops the sign-in of an account being added, whose view
+// goes.
+func (a *app) cancelAdding() {
+	if a.addingWithProvider() {
+		a.cancelSignIn()
+	}
 }
 
 // accountModal floats the account form over the mail window.
@@ -128,7 +149,7 @@ func (a *app) accountModal(c *ui.Context) {
 		return
 	}
 	t := c.Theme()
-	ui.Modal(c, &a.accountOpen, func() {
+	modal := ui.Modal(c, &a.accountOpen, func() {
 		ui.Column(c).Width(560).Gap(12).Children(func() {
 			ui.Row(c).AlignItems(ui.Center).Gap(10).Children(func() {
 				title := locales.AddAccount()
@@ -139,16 +160,44 @@ func (a *app) accountModal(c *ui.Context) {
 				ui.Spacer(c)
 				a.iconButton(c, closeIcon, locales.Cancel(), locales.Cancel()).OnClick(a.closeAccountForm)
 			})
-			ui.Scroll(c).Height(430).KeepScrollbars(true).Children(func() {
-				ui.Column(c).Padding(2, 2).PaddingEnd(10).Gap(14).Children(func() {
-					a.accountFields(c, t)
+			switch {
+			case a.addingWithProvider():
+				// The browser has the sign-in: the form waits beside it.
+				ui.Column(c).Padding(2, 2, 6, 2).Children(func() { a.providerSignIn(c, t) })
+				return
+			case a.oauthEditing():
+				ui.Column(c).Padding(2, 2).Gap(14).Children(func() {
+					a.oauthAccountFields(c, t)
 					a.accountStatus(c, t)
 				})
-			})
+			default:
+				ui.Scroll(c).Height(430).KeepScrollbars(true).Children(func() {
+					ui.Column(c).Padding(2, 2).PaddingEnd(10).Gap(14).Children(func() {
+						if !a.accountForm.editing && a.providerSignIn(c, t) {
+							a.manualHeading(c)
+						}
+						a.accountFields(c, t)
+						a.accountStatus(c, t)
+					})
+				})
+			}
 			ui.Divider(c)
 			a.accountActions(c, true)
 		})
+		a.signOutAlert(c)
 	})
+	if modal.Dismissed() && a.signIn != nil && (a.addingWithProvider() || a.signIn.account == a.accountForm.ID) {
+		// Escape stops the sign-in the form waits for, as its Cancel
+		// does, and leaves the form open.
+		a.cancelSignIn()
+		a.accountOpen = true
+	}
+}
+
+// manualHeading heads the manual form, under the sign-in with a
+// provider: the way for any other provider, and the fallback.
+func (a *app) manualHeading(c *ui.Context) {
+	ui.Text(c, locales.ManualSetup()).FontSize(14).Bold().Margin(6, 0, 0, 0)
 }
 
 // accountStatus draws the progress, error and success lines.
@@ -186,6 +235,11 @@ func (a *app) accountActions(c *ui.Context, modal bool) {
 		} else if len(a.accounts) > 0 {
 			ui.Button(c, locales.Cancel()).OnClick(func() { a.showAccounts = false })
 		}
+		if a.oauthEditing() {
+			// Its name alone changes, which needs no test of the servers.
+			ui.PrimaryButton(c, locales.Save()).Disabled(a.accountBusy).OnClick(a.saveOAuthAccount)
+			return
+		}
 		ui.PrimaryButton(c, locales.TestAndSave()).Disabled(a.accountBusy).
 			OnClick(func() { a.saveAccount() })
 	})
@@ -206,13 +260,20 @@ func (a *app) accountsView(c *ui.Context) {
 	t := c.Theme()
 	bar := c.TitleBar()
 	top := max(bar.Bottom, 52)
+	if a.addingWithProvider() {
+		// Escape stops the sign-in, as its Cancel does.
+		c.OnShortcut(0, ui.KeyEscape, a.cancelSignIn)
+	}
 	ui.Column(c).Fill().Background(t.Background).Children(func() {
 		ui.Row(c).Height(top).Shrink(0).AlignItems(ui.Center).Gap(10).
 			Padding(0, max(bar.Right, 0)+16, 0, max(bar.Left, 0)+16).
 			BorderWidth(0, 0, 1, 0).BorderColor(t.Border).DragWindow().Children(func() {
 			if len(a.accounts) > 0 {
 				a.iconButton(c, chevronLeftIcon, locales.Back(), locales.Back()).
-					OnClick(func() { a.showAccounts = false })
+					OnClick(func() {
+						a.cancelAdding()
+						a.showAccounts = false
+					})
 			}
 			title := locales.AccountsTitle()
 			if a.accountForm.editing {
@@ -227,11 +288,22 @@ func (a *app) accountsView(c *ui.Context) {
 				if len(a.accounts) == 0 {
 					ui.Text(c, locales.AccountsIntro()).FontSize(14).TextColor(t.TextMuted)
 				}
-				a.accountFields(c, t)
+				if !a.accountForm.editing && a.providerSignIn(c, t) {
+					if a.addingWithProvider() {
+						return
+					}
+					a.manualHeading(c)
+				}
+				if a.oauthEditing() {
+					a.oauthAccountFields(c, t)
+				} else {
+					a.accountFields(c, t)
+				}
 				a.accountStatus(c, t)
 				a.accountActions(c, false)
 			})
 		})
+		a.signOutAlert(c)
 	})
 }
 

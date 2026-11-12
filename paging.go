@@ -374,7 +374,11 @@ func (a *app) fetchOlder() {
 		result, err := a.svc.FetchOlder(ctx, q.account, q.folder, 0)
 		a.post(func() {
 			o.fetching = false
-			if err != nil {
+			switch {
+			case a.signInRequired(q.account, err):
+				o.err = locales.OlderNeedsSignIn()
+				return
+			case err != nil:
 				o.err = olderError(err)
 				return
 			}
@@ -493,7 +497,7 @@ func (a *app) olderControls(c *ui.Context, t *ui.Theme, state listEnd) {
 	case endFetchFailed:
 		q := a.listQuery()
 		ui.Text(c, a.olderAt(q.account, q.folder).err).FontSize(12).TextColor(t.Warning).TextAlign(ui.Center).MaxLines(3)
-		ui.Button(c, locales.Retry()).Label(locales.RetryFetchOlder()).OnClick(a.fetchOlder)
+		a.retryOlderButton(c, q.account)
 	case endOnServer:
 		ui.Button(c, locales.LoadOlder()).OnClick(a.fetchOlder)
 	}
@@ -576,11 +580,21 @@ func (a *app) endRow(c *ui.Context, t *ui.Theme, state listEnd) {
 		case endLoadFailed:
 			ui.Button(c, locales.Retry()).Label(locales.RetryLoadMore()).OnClick(a.retryMore)
 		case endFetchFailed:
-			ui.Button(c, locales.Retry()).Label(locales.RetryFetchOlder()).OnClick(a.fetchOlder)
+			a.retryOlderButton(c, a.listQuery().account)
 		case endOnServer:
 			ui.Button(c, locales.LoadOlder()).OnClick(a.fetchOlder)
 		}
 	})
+}
+
+// retryOlderButton fetches older mail again after a failure. An account
+// that has to sign in again gets none: a fetch could only fail the same
+// way, and the banner above the list offers the sign-in.
+func (a *app) retryOlderButton(c *ui.Context, account string) {
+	if a.needSignIn[account] {
+		return
+	}
+	ui.Button(c, locales.Retry()).Label(locales.RetryFetchOlder()).OnClick(a.fetchOlder)
 }
 
 // cacheLine is the list header's line on a folder that is not searched:

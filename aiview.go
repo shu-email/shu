@@ -294,7 +294,7 @@ func (a *app) summarizeThread() {
 				}
 			}
 			if err != nil {
-				a.summaries[key] = &aiJob{err: locales.BodyFailed(err.Error())}
+				a.summaries[key] = &aiJob{err: a.bodyError(account, err)}
 				return
 			}
 			a.summarizeConversation(g, key, a.aiConversation(account, msgs))

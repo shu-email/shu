@@ -8,7 +8,10 @@ Shu with each provider and building with the client IDs they give.
 
 None of this has been tried against Google or Microsoft yet: the clients are
 not registered. Everything is tested against a fake provider and fake IMAP
-and SMTP servers on 127.0.0.1 (`mail/oauth*_test.go`, `mail/signin_test.go`).
+and SMTP servers on 127.0.0.1: the engine in `mail/oauth*_test.go` and
+`mail/signin_test.go`, the window against a fake service in
+`signin_test.go`, and both together, on a database on disk, in
+`oauth_e2e_test.go`.
 
 ## How it works
 
@@ -56,6 +59,37 @@ and SMTP servers on 127.0.0.1 (`mail/oauth*_test.go`, `mail/signin_test.go`).
   [Google](https://myaccount.google.com/permissions) or
   [Microsoft](https://account.live.com/consent/Manage)
   ([work accounts](https://myapps.microsoft.com)).
+
+## In the window
+
+- **Adding an account.** The add view offers "Sign in with Google" and "Sign
+  in with Microsoft" for the providers the build has a client for, above the
+  manual form, which follows unchanged under "Or set up manually with a
+  password". Nothing is typed but, optionally, the name the account goes by;
+  left empty, the account goes by its address. While the browser has the
+  sign-in, the window says to go on there, can open the page again for a tab
+  that was closed, and stops with Cancel or Escape, which end the engine's
+  sign-in at once. A sign-in the user declined, one not finished in five
+  minutes, a provider's error and an unreachable provider each say so in the
+  user's words, the provider's own description following as detail; the button
+  tries again. The account added opens as one saved by hand.
+- **The account's editor** shows that it signs in with Google or Microsoft
+  and its address. Only its name changes; it has no password or server
+  fields. Sign out asks first, saying that the tokens are removed from this
+  computer's keychain, that the mail on this device and the settings stay, and
+  that new mail needs a sign-in again.
+- **An account that has to sign in again** is known at startup
+  (`NeedsSignIn`), from its watcher (`WatchSignIn`) and from any sync, fetch,
+  download or send that fails with `ErrSignInRequired`. It is said in a banner
+  above the list while the account is on screen, under its name in the
+  account menu when it is not, and in the sidebar's footer, never as an error
+  line; its cached mail stays listed and readable. "Sign in again" waits as
+  adding does. A sign-in as another address says which address the account is.
+  A message whose send failed for it stays in its window and in Drafts, says
+  why and offers the sign-in; it is sent only when the user sends it again.
+- The window opens the page the engine gives it with `mygo.Shell.OpenExternal`
+  in a job of its own (`app.openBrowser`, which the tests replace), and builds
+  no text from a token: the engine's errors carry none.
 
 ## The manual path stays
 

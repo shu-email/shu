@@ -43,6 +43,21 @@ jobs:
       - run: go vet ./...
       - name: Check stored elements and goroutine captures
         run: go tool mygo vet .
+      # The dev build's local mail servers and seeded account must never
+      # reach a release: not by default, and not when GOFLAGS adds e2e to
+      # what mygo build compiles, which always carries mygo_nodownload.
+      - name: Check release builds leave out the dev seed
+        run: |
+          for tags in "" "e2e,mygo_nodownload,mygo_noinspector" "e2e,mygo_nodownload"; do
+            if go list -deps -tags "$tags" . | grep -qx 'shu/internal/fakemail'; then
+              echo "::error::a build with tags '$tags' links shu/internal/fakemail"
+              exit 1
+            fi
+          done
+          go list -deps -tags e2e . | grep -qx 'shu/internal/fakemail' || {
+            echo "::error::the e2e dev build no longer links the seed; fix this check"
+            exit 1
+          }
       # SHU_REQUIRE_SQLITE turns sqlitetest.Require's skip into a failure,
       # so the store, draft and watcher suites cannot pass without running.
       - name: Test

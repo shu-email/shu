@@ -36,7 +36,7 @@ type Logger interface {
 }
 
 // Cert returns a new self-signed certificate for 127.0.0.1, valid for a
-// day, and a pool that trusts it alone. Shu speaks only TLS to mail
+// month (as long as a dev build may stay open), and a pool that trusts it alone. Shu speaks only TLS to mail
 // servers, so the local ones need a certificate; the pool lets a client
 // verify it rather than skip verification.
 func Cert() (tls.Certificate, *x509.CertPool, error) {
@@ -48,7 +48,7 @@ func Cert() (tls.Certificate, *x509.CertPool, error) {
 		SerialNumber: big.NewInt(1),
 		Subject:      pkix.Name{CommonName: "127.0.0.1"},
 		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(24 * time.Hour),
+		NotAfter:     time.Now().Add(30 * 24 * time.Hour),
 		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1")},

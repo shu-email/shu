@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo/plugins/sqlite"
 
+	"shu/internal/sqlitetest"
 	"shu/mail"
 )
 
@@ -175,9 +176,7 @@ func TestTakeNewAfterUIDValidityChange(t *testing.T) {
 // The watermark is on disk: what was announced before the app quit is
 // not announced after it starts again, and what arrived meanwhile is.
 func TestWatermarkSurvivesReopen(t *testing.T) {
-	if err := sqlite.Load(); err != nil {
-		t.Skipf("sqlite native module is not ready (%v); run go tool mygo generate", err)
-	}
+	sqlitetest.Require(t)
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "shu.db")
 	s, err := Open(ctx, path)
@@ -213,9 +212,7 @@ func TestWatermarkSurvivesReopen(t *testing.T) {
 // A database of the release before, with mail in it and no watermark,
 // gains the table, and the mail it already holds is not announced.
 func TestMigrationAddsWatermarksToAnOlderDatabase(t *testing.T) {
-	if err := sqlite.Load(); err != nil {
-		t.Skipf("sqlite native module is not ready (%v); run go tool mygo generate", err)
-	}
+	sqlitetest.Require(t)
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "shu.db")
 	db, err := sqlite.Open(ctx, path, sqlite.OpenOptions{})

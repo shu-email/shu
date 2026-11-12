@@ -85,6 +85,7 @@ func TestAttachmentsEndToEnd(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
+		sendAtOnce(t, svc)
 		a := newTestApp(svc)
 		a.setLocale = func(string) {}
 		a.start()

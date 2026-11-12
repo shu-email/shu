@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"time"
 
 	"shu/mail"
 )
@@ -60,6 +61,26 @@ type mailService interface {
 	Send(ctx context.Context, accountID string, out mail.Outgoing) (mail.SendResult, error)
 	RetryPending(ctx context.Context, id string) (mail.SendResult, error)
 	PendingSends(ctx context.Context, accountID string) ([]mail.PendingSend, error)
+	// Sending with a delay. Schedule writes the message to the outbox and
+	// sends nothing; SendScheduled waits until it is due and sends it, so
+	// a job that lasts as long as the app calls it; Unsend takes it back
+	// until then and returns its draft. DeliverScheduled sends what an
+	// earlier run left waiting, once, as the app starts.
+	Schedule(ctx context.Context, accountID string, out mail.Outgoing, delay time.Duration) (mail.PendingSend, error)
+	SendScheduled(ctx context.Context, id string) (mail.SendResult, error)
+	Unsend(ctx context.Context, id string) (mail.Draft, error)
+	DeliverScheduled(ctx context.Context) ([]mail.ScheduledResult, error)
+
+	// How messages are written: the settings of every account, and each
+	// account's signature and the addresses it sends from, its own first.
+	ComposeSettings(ctx context.Context) (mail.ComposeSettings, error)
+	SaveComposeSettings(ctx context.Context, set mail.ComposeSettings) error
+	Signature(ctx context.Context, accountID string) (mail.Signature, error)
+	SaveSignature(ctx context.Context, accountID string, sig mail.Signature) error
+	Identities(ctx context.Context, accountID string) ([]mail.Identity, error)
+	AddIdentity(ctx context.Context, accountID, name, email string) (mail.Identity, error)
+	UpdateIdentity(ctx context.Context, id mail.Identity) (mail.Identity, error)
+	DeleteIdentity(ctx context.Context, accountID, id string) error
 	Attachment(ctx context.Context, accountID, folder string, uid mail.UID, part string) (mail.Attachment, []byte, error)
 
 	// Drafts. SaveDraft never needs the network; SyncDrafts is the step
@@ -77,6 +98,10 @@ type mailService interface {
 	AttachFile(ctx context.Context, d mail.Draft, path string) (mail.Draft, mail.Attachment, error)
 	RemoveAttachment(ctx context.Context, id string, att mail.Attachment) (mail.Draft, error)
 	SweepDraftFiles(ctx context.Context) error
+	// AttachFromMessage copies a received message's attachments into a
+	// draft, as a forward of it carries them, and reports each it could
+	// not copy without failing the others.
+	AttachFromMessage(ctx context.Context, d mail.Draft, accountID, folder string, uid mail.UID) (mail.Draft, []mail.AttachFailure, error)
 	DiscardDraft(ctx context.Context, id string) error
 	AdoptDraft(ctx context.Context, accountID, folder string, uid mail.UID) (mail.Draft, error)
 	DismissDraftConflict(ctx context.Context, id string) error

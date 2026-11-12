@@ -83,8 +83,14 @@ func (a *app) threadToolbar(c *ui.Context, t *ui.Theme) {
 		a.toolButton(c, readIcon, readLabel, has, a.toggleThreadRead)
 		a.toolDivider(c)
 		reply := has && newest != nil
-		a.toolButtonTip(c, replyIcon, locales.Reply(), locales.ReplyNewest(), reply, func() { a.reply(false) })
-		a.toolButtonTip(c, replyAllIcon, locales.ReplyAll(), locales.ReplyAllNewest(), reply, func() { a.reply(true) })
+		for _, all := range a.replyOrder() {
+			icon, label := replyLook(all)
+			tip := locales.ReplyNewest()
+			if all {
+				tip = locales.ReplyAllNewest()
+			}
+			a.toolButtonTip(c, icon, label, tip, reply, func() { a.reply(all) })
+		}
 		a.toolButtonTip(c, forwardIcon, locales.Forward(), locales.ForwardNewest(), reply, func() { a.forward() })
 		if a.ai != nil {
 			a.toolDivider(c)
@@ -287,10 +293,15 @@ func (a *app) threadHeader(c *ui.Context, t *ui.Theme, cv *convView, n, total in
 func (a *app) threadActions(c *ui.Context, t *ui.Theme, cv *convView, n, total int, m mail.Summary) {
 	key := summaryKey(m)
 	ui.Row(c).Gap(2).AlignItems(ui.Center).MinWidth(0).Children(func() {
-		a.iconButton(c, replyIcon, locales.ForMessage(locales.Reply(), n, total), locales.ReplyToThis()).
-			OnClick(func() { a.replyToShown(key, false) })
-		a.iconButton(c, replyAllIcon, locales.ForMessage(locales.ReplyAll(), n, total), locales.ReplyAllToThis()).
-			OnClick(func() { a.replyToShown(key, true) })
+		for _, all := range a.replyOrder() {
+			icon, label := replyLook(all)
+			tip := locales.ReplyToThis()
+			if all {
+				tip = locales.ReplyAllToThis()
+			}
+			a.iconButton(c, icon, locales.ForMessage(label, n, total), tip).
+				OnClick(func() { a.replyToShown(key, all) })
+		}
 		a.iconButton(c, forwardIcon, locales.ForMessage(locales.Forward(), n, total), locales.ForwardThis()).
 			OnClick(func() { a.forwardShown(key) })
 		ui.Button(c, "").Label(locales.ForMessage(locales.MoreActions(), n, total)).Tooltip(locales.MoreActionsThis()).

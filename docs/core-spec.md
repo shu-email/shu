@@ -357,6 +357,19 @@ Move(ctx, accountID, folder string, uid UID, dest string) error
 Send(ctx, accountID string, out Outgoing) (SendResult, error) // outbox → SMTP → APPEND to Sent
 PendingSends(ctx, accountID string) ([]PendingSend, error)     // crash recovery surface
 
+// Sending with a delay, added since (see Compose and send)
+Schedule(ctx, accountID string, out Outgoing, delay time.Duration) (PendingSend, error) // outbox, sends nothing
+SendScheduled(ctx, id string) (SendResult, error) // waits until due, then as Send; ErrUnsent if taken back
+Unsend(ctx, id string) (Draft, error)             // takes it back and returns its draft; ErrAlreadyLeft too late
+DeliverScheduled(ctx) ([]ScheduledResult, error)  // at startup: what an earlier run left waiting
+
+// How messages are written, added since: settings, signatures, identities
+ComposeSettings(ctx) (ComposeSettings, error); SaveComposeSettings(ctx, ComposeSettings) error
+Signature(ctx, accountID) (Signature, error); SaveSignature(ctx, accountID, Signature) error
+Identities(ctx, accountID) ([]Identity, error) // the account's own address first, then aliases
+AddIdentity / UpdateIdentity / DeleteIdentity  // ErrIdentityAddress, ErrIdentityExists
+AttachFromMessage(ctx, d Draft, accountID, folder string, uid UID) (Draft, []AttachFailure, error) // a forward's files
+
 // Signing in with Google and Microsoft, added since (docs/oauth.md)
 OAuthConfigured(provider string) bool                          // false: the build has no client, no button
 AddOAuthAccount(ctx, provider, name string, prompt OAuthPrompt) (Account, error)
@@ -390,7 +403,8 @@ IMAP details:
   saved".
 
 SMTP: go-mail `NewMsg` + `FromFormat/To/Cc/Subject/SetBodyString(text/plain; charset=utf-8)`
-+ `SetDate/SetMessageID` + `In-Reply-To/References`;
++ `SetDate/SetMessageID` + `In-Reply-To/References` (From, and the envelope sender,
+are the identity's, added since; Bcc goes in the envelope only);
 `NewClient(host, WithPort, WithUsername, WithPassword, WithSMTPAuth, WithTLSPolicy(mandatory)/WithSSL, WithTLSConfig, WithTimeout)`,
 then `DialAndSendWithContext`. The raw message from `msg.WriteTo(&buf)` is stored
 in the outbox and reused for APPEND.
@@ -513,8 +527,14 @@ lines). Keep the original HTML for the webview.
   update the unread badges. The row goes through the tombstone path, so a failure
   leaves the message visible.
 - Reply/reply-all/forward: open a compose window with To/Subject/quoted body
-  prefilled; reply-all excludes the user's own address and dedupes; forward leaves
-  the recipients empty. Set `In-Reply-To/References`.
+  prefilled; reply-all excludes the user's own addresses, every identity of the
+  account's, and dedupes; forward leaves the recipients empty. Set
+  `In-Reply-To/References`. A reply or forward goes from the identity the message
+  reached (`mail.ReplyIdentity`: its To, then Cc, then Delivered-To, else the
+  account's own address), and a reply to the user's own message from the identity it
+  went from. The Reply button that comes first and the R key do the default reply of
+  the settings (reply to the sender, or to all); the button beside it and Shift+R do
+  the other.
 - Every send, delete and move is triggered only by a user click and is always
   visible in the UI.
 
@@ -529,6 +549,58 @@ lines). Keep the original HTML for the webview.
   Sent/the current folder refresh.
 - Closing the window cancels the sending context; the outbox row remains so a
   restart can report "delivery unknown" instead of silently losing the message.
+
+Added since: Bcc, identities, signatures, quoting and a send delay with Undo.
+
+- Bcc: the field is folded away behind a Bcc button at the end of the Cc row, which
+  the keyboard reaches; asked for, it opens with the keyboard in it and stays. A
+  draft that has a Bcc opens with the field shown, and drafts keep it. Bcc recipients
+  get the message through the envelope only: the message delivered names none of
+  them, and the copy the engine saves in Sent alone has a `Bcc` header.
+- Identities: an account sends from its own address and from aliases the user adds
+  in the account editor ("Send from": add, edit, remove; the engine's
+  `ErrIdentityAddress` and `ErrIdentityExists` are said in the user's words). Neither
+  IMAP nor SMTP can list them, so the engine cannot check them: a server that does
+  not allow one refuses the message. With more than one, compose shows a From picker,
+  the account's own address first; the choice is kept in the draft
+  (`Draft.Identity`) and the message goes from it, in its From, its envelope sender
+  and its Sent copy.
+- Signatures: each account has one (account editor: the text, plain and multi-line,
+  and a switch each for new messages, replies and forwards, on by default), saved as
+  it is typed. The engine's builders write the bodies: `NewBody` for a new message
+  (room to write, then the signature), `ReplyBody` for a reply (above the quote by
+  default, or at the end of a reply written below it) and `ForwardBody` (a note, the
+  signature, then the message under its headers), the signature after the RFC 3676
+  "-- " line. The caret starts where `Body.Caret` says: the window opens with the
+  keyboard in the text of a reply, and in To otherwise. Tab into the body puts the
+  caret there too rather than selecting everything, which the next key would erase.
+  A new message whose body is still only its signature counts as empty and leaves no
+  draft.
+- Quoting: the settings choose how a reply quotes (`> ` before each line under a
+  line saying who wrote it, or the message as it was under an "Original Message"
+  block of its headers) and whether a reply is written above or below the quote. The
+  words of the quotes come from the catalog, in the user's language, and the dates
+  are written as the window writes them. An AI draft goes where the reply is written.
+- Forwards carry the original's attachments when the settings say so (on by
+  default): `AttachFromMessage` copies them into the forward's draft in a job, the
+  window shows them coming and Send waits for them, and each one that could not be
+  copied says why while the others stay attached. A reply never carries them.
+- Send delay: the settings offer Off, 5, 10 (the default), 20 and 30 seconds. With a
+  delay, Send saves the draft with exactly what is scheduled, calls `Schedule`, and
+  closes the window; the mail window then shows "Sending in N s" above the list with
+  the subject, counting down, and Undo, which the keyboard reaches. A job that lasts
+  as long as the app, not the compose window, runs `SendScheduled`; its result is
+  said as a send's is (a Sent copy not saved, or why it failed, the message then
+  among the unsent ones to retry and in Drafts), in a note that stays until it is
+  dismissed. Undo calls `Unsend` and opens the returned draft as it was written:
+  text, recipients, Bcc, identity and attachments. An Undo that comes too late
+  (`ErrAlreadyLeft`) says the message already left. A delay of 0 sends at once as
+  before. At startup `DeliverScheduled` runs once in a job and the window says what
+  it sent, and what it could not, which stays in the outbox.
+- Settings, General tab, "Writing and sending": the send delay, the default reply,
+  the quote style, replies above or below the quote, and forwards with attachments,
+  each saved as it is chosen. The format is plain text, the only one, which the
+  section says rather than offering a choice; rich text stays out of scope.
 
 ## Testing discipline
 

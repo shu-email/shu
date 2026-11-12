@@ -12,6 +12,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -41,9 +42,26 @@ type composeState struct {
 	bcc     string
 	subject string
 	body    string
-	// showBcc keeps the Bcc field of a draft that came with one, also
-	// while it is being emptied.
+	// showBcc shows the Bcc field, which stays folded away until the user
+	// asks for it, or a draft comes with one; then it stays, also while
+	// it is being emptied.
 	showBcc bool
+	// identity is the identity the message goes from, by ID: "" for the
+	// account's own address. from is the From picker's choice, which
+	// names it.
+	identity string
+	from     string
+	// startBody is the body the window opened with, as the signature of
+	// a new message: it is nothing the user wrote. caret is where the
+	// body's caret goes as the window opens, in runes, until it is there,
+	// and -1 then; lead is the body before it, which a reply written
+	// below its quote starts with.
+	startBody string
+	caret     int
+	lead      string
+	// bodyFocused is whether the body had the keyboard in the last
+	// build, to tell when it comes to it.
+	bodyFocused bool
 
 	inReplyTo  string
 	references []string
@@ -73,8 +91,8 @@ type composeState struct {
 	removing    map[string]bool
 	attaching   int
 	picking     bool
-	// focused is the control the keyboard is on, among the attach button
-	// and the attachments.
+	// focused is the control the keyboard is on, among the To, Bcc and
+	// body fields, the attach button and the attachments.
 	focused string
 
 	// source is the message being replied to, which an AI draft reads;
@@ -130,28 +148,59 @@ type draftStatus struct {
 
 // openReply opens a reply to a message, which an AI draft may read. The
 // message's account writes it.
-func (a *app) openReply(m mail.Summary, body string, all bool) {
-	cs := a.composeFrom(m.Account, replyDraft(a, m, body, all, false))
-	if strings.TrimSpace(body) != "" {
-		source := a.aiMessage(m, body)
+func (a *app) openReply(m mail.Message, all bool) {
+	out, caret := a.replyDraft(m, all, false)
+	cs := a.composeFrom(m.Account, out, caret)
+	if strings.TrimSpace(m.BodyText) != "" {
+		source := a.aiMessage(m.Summary, m.BodyText)
 		cs.source = &source
 	}
 }
 
-// openCompose opens a compose window for a message to write, or an empty
-// one, from the account on show.
-func (a *app) openCompose(out *mail.Outgoing) *composeState { return a.composeFrom(a.active, out) }
+// openForward opens a forward of a message, with the message's
+// attachments where the settings say so.
+func (a *app) openForward(m mail.Message) {
+	out, caret := a.replyDraft(m, false, true)
+	cs := a.composeFrom(m.Account, out, caret)
+	if a.composeSet.ForwardAttachments && len(m.Attachments) > 0 {
+		cs.attachOriginal(m)
+	}
+}
 
-// composeFrom opens a compose window writing from an account.
-func (a *app) composeFrom(accountID string, out *mail.Outgoing) *composeState {
-	cs := &composeState{app: a, accountID: accountID}
+// openCompose opens a compose window from the account on show for a
+// message to write, or for a new one, which starts with the account's
+// signature where it signs new mail.
+func (a *app) openCompose(out *mail.Outgoing) *composeState {
+	if out == nil {
+		body := mail.NewBody(a.signatureOf(a.active))
+		return a.composeFrom(a.active, &mail.Outgoing{Text: body.Text}, body.Caret)
+	}
+	return a.composeFrom(a.active, out, -1)
+}
+
+// composeFrom opens a compose window writing from an account, with the
+// body's caret at caret, in runes, or where the input puts it for -1.
+// The keyboard starts where there is something to write: the
+// recipients, or the text of a message whose recipients are known.
+func (a *app) composeFrom(accountID string, out *mail.Outgoing, caret int) *composeState {
+	cs := &composeState{app: a, accountID: accountID, caret: caret, focused: focusTo}
 	if out != nil {
 		cs.to = addressesText(out.To)
 		cs.cc = addressesText(out.Cc)
+		cs.bcc = addressesText(out.Bcc)
+		cs.showBcc = cs.bcc != ""
 		cs.subject = out.Subject
 		cs.body = out.Text
+		cs.identity = out.Identity
 		cs.inReplyTo = out.InReplyTo
 		cs.references = append([]string(nil), out.References...)
+	}
+	cs.startBody = cs.body
+	if body := []rune(cs.body); caret >= 0 && caret <= len(body) {
+		cs.lead = string(body[:caret])
+	}
+	if strings.TrimSpace(cs.to) != "" {
+		cs.focused = focusBody
 	}
 	return a.showCompose(cs)
 }
@@ -167,6 +216,8 @@ func (a *app) resumeDraft(d mail.Draft) *composeState {
 		app: a, accountID: d.AccountID, draftID: d.ID,
 		to: d.To, cc: d.Cc, bcc: d.Bcc, subject: d.Subject, body: d.Body,
 		showBcc:    d.Bcc != "",
+		identity:   d.Identity,
+		caret:      -1,
 		inReplyTo:  d.InReplyTo,
 		references: append([]string(nil), d.References...),
 	}
@@ -255,28 +306,60 @@ func (cs *composeState) view(c *ui.Context) {
 		dragOver = root.FileDragOver()
 	}
 	hasFiles := len(cs.attachments) > 0 || cs.attaching > 0
+	ids := cs.app.identitiesOf(cs.accountID)
+	drafting := cs.source != nil && cs.app.ai != nil
 	root.Children(func() {
-		cs.row(c, locales.To(), "name@example.com", &cs.to)
-		cs.row(c, locales.Cc(), "", &cs.cc)
-		if cs.showBcc {
-			// Compose has no way to add a Bcc yet, but one that came with
-			// a draft must show: it will be sent to.
-			cs.row(c, locales.Bcc(), "", &cs.bcc)
+		// The account's own address alone needs no choice.
+		if len(ids) > 1 {
+			cs.fromRow(c, t, ids)
 		}
-		cs.row(c, locales.Subject(), "", &cs.subject)
-		if cs.source != nil && cs.app.ai != nil {
+		cs.row(c, locales.To(), "name@example.com", &cs.to, focusTo, nil)
+		cs.row(c, locales.Cc(), "", &cs.cc, "", func() {
+			if !cs.showBcc {
+				cs.bccButton(c, t)
+			}
+		})
+		if cs.showBcc {
+			cs.row(c, locales.Bcc(), "", &cs.bcc, focusBcc, nil)
+		}
+		cs.row(c, locales.Subject(), "", &cs.subject, "", nil)
+		if drafting {
 			cs.draftRow(c, t)
 		}
 		ui.Divider(c)
 		// The body takes the room there is. Its minimum leaves the
 		// attachments, the notices and the actions below it on screen at
-		// the window's smallest.
+		// the window's smallest, and each row shown besides To, Cc and
+		// Subject takes its room from it.
 		bodyMin := float32(120)
 		if hasFiles {
 			bodyMin = 56
 		}
-		ui.TextArea(c, &cs.body).Grow(1).MinHeight(bodyMin).Label(locales.Body()).
-			Placeholder(locales.ComposeBodyPlaceholder()).OnChange(cs.changed)
+		for _, more := range []bool{len(ids) > 1, cs.showBcc, drafting} {
+			if more {
+				bodyMin -= extraRowRoom
+			}
+		}
+		bodyMin = max(bodyMin, 56)
+		body := ui.TextArea(c, &cs.body).Grow(1).MinHeight(bodyMin).Label(locales.Body()).
+			Placeholder(locales.ComposeBodyPlaceholder()).FocusBind(&cs.focused, focusBody).OnChange(cs.changed)
+		if cs.caret >= 0 {
+			// Once, as the window opens: the input keeps its caret from
+			// then on.
+			body.SetTextSelection(cs.caret, cs.caret)
+			cs.caret = -1
+		}
+		focused := ui.FocusedValue(c, &cs.focused) == focusBody
+		if focused && !cs.bodyFocused {
+			// Tab selects all of a field it comes to, which in a body
+			// with a signature or a quote the next key typed would
+			// replace: the caret goes where the user writes instead.
+			if start, end := body.TextSelection(); start == 0 && end > 0 && end == utf8.RuneCountInString(cs.body) {
+				at := cs.writeAt()
+				body.SetTextSelection(at, at)
+			}
+		}
+		cs.bodyFocused = focused
 		if hasFiles {
 			cs.attachmentList(c, t)
 		}
@@ -347,8 +430,17 @@ func (cs *composeState) view(c *ui.Context) {
 	aiReviewModal(c, &cs.review)
 }
 
-// focusAttach is the attach button among the controls cs.focused names.
-const focusAttach = "attach"
+// extraRowRoom is the room a row of the compose window's fields takes
+// with the gap above it, with some to spare for fonts of taller lines.
+const extraRowRoom = 40
+
+// The fields and the attach button among the controls cs.focused names.
+const (
+	focusTo     = "to"
+	focusBcc    = "bcc"
+	focusBody   = "body"
+	focusAttach = "attach"
+)
 
 // attachmentFocus names an attachment among them. A draft has a file
 // once under a name, so the two tell its attachments apart.
@@ -475,13 +567,76 @@ func (cs *composeState) dropHint(c *ui.Context, t *ui.Theme) {
 }
 
 // row is a compact compose field with its label inline, as mail apps
-// show recipients and the subject.
-func (cs *composeState) row(c *ui.Context, label, placeholder string, value *string) {
+// show recipients and the subject. focus names the field among the
+// controls the window puts the keyboard on, when it is one, and trailing
+// adds controls after it.
+func (cs *composeState) row(c *ui.Context, label, placeholder string, value *string, focus string, trailing func()) {
 	t := c.Theme()
 	ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
 		// The caption names the input, so a click on it focuses the field.
 		caption := ui.Text(c, label).FontSize(12).TextColor(t.TextMuted).Width(52)
-		ui.TextInput(c, value).Grow(1).LabelledBy(caption).Placeholder(placeholder).OnChange(cs.changed)
+		in := ui.TextInput(c, value).Grow(1).LabelledBy(caption).Placeholder(placeholder).OnChange(cs.changed)
+		if focus != "" {
+			in.FocusBind(&cs.focused, focus)
+		}
+		if trailing != nil {
+			trailing()
+		}
+	})
+}
+
+// bccButton unfolds the Bcc field, which a message seldom needs, and
+// puts the keyboard in it.
+func (cs *composeState) bccButton(c *ui.Context, t *ui.Theme) {
+	ui.ButtonBase(c).Label(locales.ShowBcc()).Tooltip(locales.ShowBcc()).Padding(4, 8).Radius(6).
+		OnClick(func() { cs.showBcc, cs.focused = true, focusBcc }).
+		Children(func() { ui.Text(c, locales.Bcc()).FontSize(12).TextColor(t.Accent) })
+}
+
+// writeAt is where in the body the user writes, in runes: after the
+// quote of a reply written below it, while the body still starts with
+// that quote, and at the start otherwise.
+func (cs *composeState) writeAt() int {
+	if cs.lead != "" && strings.HasPrefix(cs.body, cs.lead) {
+		return utf8.RuneCountInString(cs.lead)
+	}
+	return 0
+}
+
+// identityLabel is an identity as the From picker names it: its name and
+// address, written for people rather than for a header. An account has
+// an address once, so the labels tell its identities apart.
+func identityLabel(id mail.Identity) string {
+	if strings.TrimSpace(id.Name) == "" {
+		return id.Email
+	}
+	return id.Name + " <" + id.Email + ">"
+}
+
+// fromRow chooses the identity the message goes from: the account's own
+// address or one added to it. An identity deleted meanwhile is the
+// account's own, as the engine sends it.
+func (cs *composeState) fromRow(c *ui.Context, t *ui.Theme, ids []mail.Identity) {
+	labels := make([]string, len(ids))
+	chosen := 0
+	for i, id := range ids {
+		labels[i] = identityLabel(id)
+		if id.ID == cs.identity {
+			chosen = i
+		}
+	}
+	// The picker's own choice stands until its change is taken below.
+	if !slices.Contains(labels, cs.from) {
+		cs.from = labels[chosen]
+	}
+	ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+		caption := ui.Text(c, locales.From()).FontSize(12).TextColor(t.TextMuted).Width(52)
+		ui.Select(c, &cs.from, labels).Grow(1).LabelledBy(caption).Disabled(cs.sending).OnChange(func() {
+			if i := slices.Index(labels, cs.from); i >= 0 && ids[i].ID != cs.identity {
+				cs.identity = ids[i].ID
+				cs.changed()
+			}
+		})
 	})
 }
 
@@ -550,12 +705,16 @@ func (cs *composeState) conflictNotice(c *ui.Context, t *ui.Theme) {
 }
 
 // empty reports a window with nothing written in it and nothing
-// attached.
+// attached. The body it opened with, as a new message's signature, is
+// nothing written.
 func (cs *composeState) empty() bool {
-	for _, field := range []string{cs.to, cs.cc, cs.bcc, cs.subject, cs.body} {
+	for _, field := range []string{cs.to, cs.cc, cs.bcc, cs.subject} {
 		if strings.TrimSpace(field) != "" {
 			return false
 		}
+	}
+	if body := strings.TrimSpace(cs.body); body != "" && body != strings.TrimSpace(cs.startBody) {
+		return false
 	}
 	return len(cs.attachments) == 0 && cs.attaching == 0
 }
@@ -657,6 +816,81 @@ func (cs *composeState) attachmentsChanged() {
 	default:
 		cs.scheduleSync()
 	}
+}
+
+// attachOriginal attaches to a forward the files of the message it
+// passes on, copied by the engine, as attaching files does: the window
+// shows them coming and Send waits for them. One that could not be
+// copied says why, and the others stay attached.
+func (cs *composeState) attachOriginal(m mail.Message) {
+	a := cs.app
+	if cs.draftID == "" {
+		cs.draftID = mail.NewDraftID()
+	}
+	n := len(m.Attachments)
+	cs.attaching += n
+	// The engine makes the draft from this, as it is not stored yet.
+	d := cs.snapshot()
+	accountID, folder, uid := m.Account, m.Folder, m.UID
+	a.run(func() {
+		var (
+			saved    mail.Draft
+			failures []mail.AttachFailure
+			err      error
+		)
+		cs.saveMu.Lock()
+		gone := cs.gone.Load()
+		if !gone {
+			ctx, cancel := context.WithTimeout(context.Background(), attachTimeout)
+			saved, failures, err = a.svc.AttachFromMessage(ctx, d, accountID, folder, uid)
+			cancel()
+		}
+		cs.saveMu.Unlock()
+		a.post(func() {
+			cs.attaching -= n
+			var texts []string
+			switch {
+			case gone || cs.gone.Load():
+			case errors.Is(err, mail.ErrNotFound):
+				texts = append(texts, locales.ForwardOriginalMissing())
+			case err != nil:
+				a.signInRequired(accountID, err)
+				texts = append(texts, locales.ForwardAttachmentsFailed(failureText(err)))
+			default:
+				cs.draft.err = ""
+				cs.noteDraft(saved)
+				cs.takeAttachments(saved)
+				a.reloadDrafts(accountID)
+				for _, f := range failures {
+					texts = append(texts, forwardFailureText(f))
+				}
+			}
+			if len(texts) > 0 {
+				if cs.err != "" {
+					texts = append([]string{cs.err}, texts...)
+				}
+				cs.err = strings.Join(texts, "\n")
+			}
+			cs.attachmentsChanged()
+			cs.redraw()
+		})
+	})
+}
+
+// forwardFailureText says why an attachment of a forwarded message was
+// not attached.
+func forwardFailureText(f mail.AttachFailure) string {
+	name := f.Attachment.Filename
+	if name == "" {
+		name = locales.Attachment()
+	}
+	switch {
+	case errors.Is(f.Err, mail.ErrAttachTooLarge):
+		return locales.AttachTooLarge(name, wholeMB(mail.MaxAttachmentBytes))
+	case errors.Is(f.Err, mail.ErrNotFound):
+		return locales.ForwardAttachMissing(name)
+	}
+	return locales.ForwardAttachFailed(name, failureText(f.Err))
 }
 
 // attachErrorText says why a file was not attached.
@@ -765,6 +999,7 @@ func (cs *composeState) snapshot() mail.Draft {
 		To: cs.to, Cc: cs.cc, Bcc: cs.bcc, Subject: cs.subject, Body: cs.body,
 		InReplyTo:  cs.inReplyTo,
 		References: append([]string(nil), cs.references...),
+		Identity:   cs.identity,
 	}
 }
 
@@ -948,6 +1183,11 @@ func (cs *composeState) send() {
 		InReplyTo: cs.inReplyTo, References: cs.references,
 		Attachments: slices.Clone(cs.attachments),
 		DraftID:     cs.draftID,
+		Identity:    cs.identity,
+	}
+	if set := cs.app.composeSet; set.SendDelay > 0 {
+		cs.schedule(out, set)
+		return
 	}
 	cs.sending = true
 	cs.err = ""
@@ -994,19 +1234,7 @@ func (cs *composeState) send() {
 		app.post(func() {
 			cs.sending, cs.sendCancel, cs.cancelling = false, nil, false
 			if err != nil {
-				// Whatever stopped it, the window stays as it was, with
-				// the draft and its attachments, to send again or not.
-				if app.signInRequired(accountID, err) {
-					// Nothing went out. The window offers the sign-in, and
-					// the message waits for the user to send it again.
-					cs.err, cs.needsSignIn = locales.SendNeedsSignIn(app.accountLabel(accountID)), true
-				} else {
-					cs.err = sendErrorText(err)
-				}
-				app.loadPending(app.gen)
-				// The failure belongs to this window, which the mail
-				// window's update does not redraw.
-				cs.redraw()
+				cs.sendFailed(err)
 				return
 			}
 			cs.sent = true
@@ -1018,6 +1246,77 @@ func (cs *composeState) send() {
 			app.loadPending(app.gen)
 			cs.close()
 		})
+	})
+}
+
+// sendFailed says why the message did not go. Whatever stopped it, the
+// window stays as it was, with the draft and its attachments, to send
+// again or not.
+func (cs *composeState) sendFailed(err error) {
+	app := cs.app
+	if app.signInRequired(cs.accountID, err) {
+		// Nothing went out. The window offers the sign-in, and the
+		// message waits for the user to send it again.
+		cs.err, cs.needsSignIn = locales.SendNeedsSignIn(app.accountLabel(cs.accountID)), true
+	} else {
+		cs.err = sendErrorText(err)
+	}
+	app.loadPending(app.gen)
+	// The failure belongs to this window, which the mail window's update
+	// does not redraw.
+	cs.redraw()
+}
+
+// schedule sends the message with the settings' delay. The draft is
+// saved with exactly what is scheduled, which Undo gives back, and the
+// engine writes the message to the outbox; then the window closes, and
+// the mail window counts the delay down with Undo while a job sends the
+// message once it is due. Nothing leaves before then.
+func (cs *composeState) schedule(out mail.Outgoing, set mail.ComposeSettings) {
+	app := cs.app
+	if cs.draftID == "" {
+		// Undo gives the message back as a draft, this window's.
+		cs.draftID = mail.NewDraftID()
+		out.DraftID = cs.draftID
+	}
+	cs.sending = true
+	cs.err, cs.note, cs.needsSignIn = "", "", false
+	accountID := cs.accountID
+	draft := cs.snapshot()
+	// The saves still waiting give way to the one below, which writes what
+	// is scheduled whatever was saved before it.
+	cs.saveSeq.Add(1)
+	app.run(func() {
+		ctx, cancel := app.ctx()
+		defer cancel()
+		cs.saveMu.Lock()
+		_, err := app.svc.SaveDraft(ctx, draft)
+		var p mail.PendingSend
+		if err == nil {
+			p, err = app.svc.Schedule(ctx, accountID, out, set.Delay())
+		}
+		if err == nil {
+			// The draft says what was scheduled: no save of this window
+			// changes it any more.
+			cs.gone.Store(true)
+		}
+		cs.saveMu.Unlock()
+		app.post(func() {
+			cs.sending = false
+			if err != nil {
+				cs.sendFailed(err)
+				return
+			}
+			cs.sent = true
+			app.waitForSend(p, set.SendDelay)
+			app.reloadDrafts(accountID)
+			cs.close()
+		})
+		if err == nil {
+			// Not from the post: the message leaves when it is due even
+			// with the mail window closed.
+			app.sendWhenDue(p)
+		}
 	})
 }
 

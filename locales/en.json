@@ -1634,5 +1634,222 @@
   "signInDonePage": "You're signed in. You can close this page and return to Shu.",
   "@signInDonePage": {
     "description": "The page the browser shows once the sign-in at the provider is done."
+  },
+  "showBcc": "Add Bcc recipients",
+  "@showBcc": {
+    "description": "The name of the compose window's Bcc button, which shows the Bcc field."
+  },
+  "quoteDate": "Date",
+  "@quoteDate": {
+    "description": "The name of the date in the headers of a quoted or forwarded message."
+  },
+  "quoteOriginal": "-------- Original Message --------",
+  "@quoteOriginal": {
+    "description": "The line above the headers of a message a reply quotes as it was."
+  },
+  "forwardAttachFailed": "“{name}” was not attached from the original: {error}",
+  "@forwardAttachFailed": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "report.pdf"
+      },
+      "error": {
+        "type": "String",
+        "example": "connection refused"
+      }
+    }
+  },
+  "forwardAttachMissing": "“{name}” is no longer in the original message on the server, so it was not attached.",
+  "@forwardAttachMissing": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "report.pdf"
+      }
+    }
+  },
+  "forwardOriginalMissing": "The original message is no longer on this device or on the server, so its files were not attached.",
+  "forwardAttachmentsFailed": "Could not attach the original's files: {error}",
+  "@forwardAttachmentsFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "connection refused"
+      }
+    }
+  },
+  "sendingIn": "Sending in {seconds} s",
+  "@sendingIn": {
+    "description": "A message sent with a delay, counting down to when it leaves.",
+    "placeholders": {
+      "seconds": {
+        "type": "int",
+        "example": "9"
+      }
+    }
+  },
+  "undoSendOf": "Undo sending “{subject}”",
+  "@undoSendOf": {
+    "description": "The name of the Undo button of a message waiting to be sent.",
+    "placeholders": {
+      "subject": {
+        "type": "String",
+        "example": "Quarterly plan"
+      }
+    }
+  },
+  "undoTooLate": "Too late to undo: the message had already left.",
+  "undoSendFailed": "Could not take the message back: {error}",
+  "@undoSendFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "database is locked"
+      }
+    }
+  },
+  "dismissSendNote": "Dismiss the note about sending",
+  "waitingNotSent": "“{subject}” was not sent. {reason}",
+  "@waitingNotSent": {
+    "description": "A message sent with a delay that failed once it was due; the reason says why.",
+    "placeholders": {
+      "subject": {
+        "type": "String",
+        "example": "Quarterly plan"
+      },
+      "reason": {
+        "type": "String",
+        "example": "The server refused the message: 550 No such user"
+      }
+    }
+  },
+  "sentAtStart": "{count, plural, one {A message that was waiting to be sent when Shu quit has been sent.} other {# messages that were waiting to be sent when Shu quit have been sent.}}",
+  "@sentAtStart": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "notSentAtStart": "{count, plural, one {A message that was waiting to be sent when Shu quit could not be sent. It stays among the unsent messages, to send again.} other {# messages that were waiting to be sent when Shu quit could not be sent. They stay among the unsent messages, to send again.}}",
+  "@notSentAtStart": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "deliverAtStartFailed": "Could not send the messages that were waiting when Shu quit: {error}",
+  "@deliverAtStartFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "database is locked"
+      }
+    }
+  },
+  "composeSection": "Writing and sending",
+  "sendDelay": "Time to undo a send",
+  "sendDelayDetail": "After you press Send, a message waits this long in the mail window, where Undo takes it back, and then leaves. Off sends at once.",
+  "sendDelayOff": "Off",
+  "sendDelaySeconds": "{seconds} s",
+  "@sendDelaySeconds": {
+    "placeholders": {
+      "seconds": {
+        "type": "int",
+        "example": "10"
+      }
+    }
+  },
+  "replyDefault": "Reply goes to",
+  "replyDefaultSender": "The sender",
+  "replyDefaultAll": "Everyone",
+  "replyDefaultDetail": "What the first reply button and R do. The button beside it, and Shift+R, do the other.",
+  "quoteStyle": "Quote the message",
+  "quoteStylePrefix": "With “>”",
+  "quoteStyleHeader": "Original message",
+  "quoteStylePrefixDetail": "Each line of the message starts with “>”, under a line saying who wrote it and when.",
+  "quoteStyleHeaderDetail": "The message as it was, under a block of its sender, date, subject and recipients.",
+  "replyPosition": "Write replies",
+  "replyAboveQuote": "Above the quote",
+  "replyBelowQuote": "Below the quote",
+  "forwardAttachments": "Forward attachments",
+  "forwardAttachmentsDetail": "A forward carries the original message's attachments. A reply never does.",
+  "composeFormat": "Messages are written and sent as plain text.",
+  "signatureSection": "Signature",
+  "signatureText": "Signature text",
+  "signaturePlaceholder": "Your name, and a line or two about you",
+  "signatureDetail": "Added below a line of “-- ”, which mail apps know a signature by.",
+  "signatureNew": "Add to new messages",
+  "signatureReply": "Add to replies",
+  "signatureForward": "Add to forwards",
+  "signatureSaveFailed": "Couldn't save the signature: {error}",
+  "@signatureSaveFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "database is locked"
+      }
+    }
+  },
+  "identitiesSection": "Send from",
+  "identitiesDetail": "Add the other addresses your provider lets this account send from, such as aliases. Shu cannot check them: a server that does not allow one refuses the message.",
+  "identityOwn": "This account's address",
+  "addIdentity": "Add an address",
+  "identityName": "Name",
+  "identityNamePlaceholder": "The name recipients see",
+  "identityEmail": "Address",
+  "identitySave": "Save address",
+  "identityCancel": "Cancel editing the address",
+  "edit": "Edit",
+  "remove": "Remove",
+  "editIdentity": "Edit {address}",
+  "@editIdentity": {
+    "placeholders": {
+      "address": {
+        "type": "String",
+        "example": "ann@lab.example.org"
+      }
+    }
+  },
+  "removeIdentity": "Remove {address}",
+  "@removeIdentity": {
+    "placeholders": {
+      "address": {
+        "type": "String",
+        "example": "ann@lab.example.org"
+      }
+    }
+  },
+  "identityNotAddress": "Enter one email address, such as name@example.com.",
+  "identityExists": "This account already sends from {email}.",
+  "@identityExists": {
+    "placeholders": {
+      "email": {
+        "type": "String",
+        "example": "ann@lab.example.org"
+      }
+    }
+  },
+  "identitySaveFailed": "Couldn't save the address: {error}",
+  "@identitySaveFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "database is locked"
+      }
+    }
+  },
+  "identityRemoveFailed": "Couldn't remove the address: {error}",
+  "@identityRemoveFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "database is locked"
+      }
+    }
   }
 }

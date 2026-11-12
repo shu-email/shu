@@ -4989,3 +4989,645 @@ func SignInDonePage() string { return In(i18n.Locale()).SignInDonePage() }
 func (msgs Messages) SignInDonePage() string {
 	return Catalog.Format(msgs.locale, "signInDonePage", nil)
 }
+
+// ShowBcc says "Add Bcc recipients"
+// in the language the app shows.
+//
+// The name of the compose window's Bcc button, which shows the Bcc field.
+func ShowBcc() string { return In(i18n.Locale()).ShowBcc() }
+
+// ShowBcc says "Add Bcc recipients"
+// in the language of msgs.
+//
+// The name of the compose window's Bcc button, which shows the Bcc field.
+func (msgs Messages) ShowBcc() string {
+	return Catalog.Format(msgs.locale, "showBcc", nil)
+}
+
+// QuoteDate says "Date"
+// in the language the app shows.
+//
+// The name of the date in the headers of a quoted or forwarded message.
+func QuoteDate() string { return In(i18n.Locale()).QuoteDate() }
+
+// QuoteDate says "Date"
+// in the language of msgs.
+//
+// The name of the date in the headers of a quoted or forwarded message.
+func (msgs Messages) QuoteDate() string {
+	return Catalog.Format(msgs.locale, "quoteDate", nil)
+}
+
+// QuoteOriginal says "-------- Original Message --------"
+// in the language the app shows.
+//
+// The line above the headers of a message a reply quotes as it was.
+func QuoteOriginal() string { return In(i18n.Locale()).QuoteOriginal() }
+
+// QuoteOriginal says "-------- Original Message --------"
+// in the language of msgs.
+//
+// The line above the headers of a message a reply quotes as it was.
+func (msgs Messages) QuoteOriginal() string {
+	return Catalog.Format(msgs.locale, "quoteOriginal", nil)
+}
+
+// ForwardAttachFailed says "“{name}” was not attached from the original: {error}"
+// in the language the app shows.
+func ForwardAttachFailed(name string, error string) string {
+	return In(i18n.Locale()).ForwardAttachFailed(name, error)
+}
+
+// ForwardAttachFailed says "“{name}” was not attached from the original: {error}"
+// in the language of msgs.
+func (msgs Messages) ForwardAttachFailed(name string, error string) string {
+	return Catalog.Format(msgs.locale, "forwardAttachFailed", map[string]any{"name": name, "error": error})
+}
+
+// ForwardAttachMissing says "“{name}” is no longer in the original message on the server, so it was not attached."
+// in the language the app shows.
+func ForwardAttachMissing(name string) string { return In(i18n.Locale()).ForwardAttachMissing(name) }
+
+// ForwardAttachMissing says "“{name}” is no longer in the original message on the server, so it was not attached."
+// in the language of msgs.
+func (msgs Messages) ForwardAttachMissing(name string) string {
+	return Catalog.Format(msgs.locale, "forwardAttachMissing", map[string]any{"name": name})
+}
+
+// ForwardOriginalMissing says "The original message is no longer on this device or on the server, so its files were not attached."
+// in the language the app shows.
+func ForwardOriginalMissing() string { return In(i18n.Locale()).ForwardOriginalMissing() }
+
+// ForwardOriginalMissing says "The original message is no longer on this device or on the server, so its files were not attached."
+// in the language of msgs.
+func (msgs Messages) ForwardOriginalMissing() string {
+	return Catalog.Format(msgs.locale, "forwardOriginalMissing", nil)
+}
+
+// ForwardAttachmentsFailed says "Could not attach the original's files: {error}"
+// in the language the app shows.
+func ForwardAttachmentsFailed(error string) string {
+	return In(i18n.Locale()).ForwardAttachmentsFailed(error)
+}
+
+// ForwardAttachmentsFailed says "Could not attach the original's files: {error}"
+// in the language of msgs.
+func (msgs Messages) ForwardAttachmentsFailed(error string) string {
+	return Catalog.Format(msgs.locale, "forwardAttachmentsFailed", map[string]any{"error": error})
+}
+
+// SendingIn says "Sending in {seconds} s"
+// in the language the app shows.
+//
+// A message sent with a delay, counting down to when it leaves.
+func SendingIn(seconds int) string { return In(i18n.Locale()).SendingIn(seconds) }
+
+// SendingIn says "Sending in {seconds} s"
+// in the language of msgs.
+//
+// A message sent with a delay, counting down to when it leaves.
+func (msgs Messages) SendingIn(seconds int) string {
+	return Catalog.Format(msgs.locale, "sendingIn", map[string]any{"seconds": seconds})
+}
+
+// UndoSendOf says "Undo sending “{subject}”"
+// in the language the app shows.
+//
+// The name of the Undo button of a message waiting to be sent.
+func UndoSendOf(subject string) string { return In(i18n.Locale()).UndoSendOf(subject) }
+
+// UndoSendOf says "Undo sending “{subject}”"
+// in the language of msgs.
+//
+// The name of the Undo button of a message waiting to be sent.
+func (msgs Messages) UndoSendOf(subject string) string {
+	return Catalog.Format(msgs.locale, "undoSendOf", map[string]any{"subject": subject})
+}
+
+// UndoTooLate says "Too late to undo: the message had already left."
+// in the language the app shows.
+func UndoTooLate() string { return In(i18n.Locale()).UndoTooLate() }
+
+// UndoTooLate says "Too late to undo: the message had already left."
+// in the language of msgs.
+func (msgs Messages) UndoTooLate() string {
+	return Catalog.Format(msgs.locale, "undoTooLate", nil)
+}
+
+// UndoSendFailed says "Could not take the message back: {error}"
+// in the language the app shows.
+func UndoSendFailed(error string) string { return In(i18n.Locale()).UndoSendFailed(error) }
+
+// UndoSendFailed says "Could not take the message back: {error}"
+// in the language of msgs.
+func (msgs Messages) UndoSendFailed(error string) string {
+	return Catalog.Format(msgs.locale, "undoSendFailed", map[string]any{"error": error})
+}
+
+// DismissSendNote says "Dismiss the note about sending"
+// in the language the app shows.
+func DismissSendNote() string { return In(i18n.Locale()).DismissSendNote() }
+
+// DismissSendNote says "Dismiss the note about sending"
+// in the language of msgs.
+func (msgs Messages) DismissSendNote() string {
+	return Catalog.Format(msgs.locale, "dismissSendNote", nil)
+}
+
+// WaitingNotSent says "“{subject}” was not sent. {reason}"
+// in the language the app shows.
+//
+// A message sent with a delay that failed once it was due; the reason says
+// why.
+func WaitingNotSent(subject string, reason string) string {
+	return In(i18n.Locale()).WaitingNotSent(subject, reason)
+}
+
+// WaitingNotSent says "“{subject}” was not sent. {reason}"
+// in the language of msgs.
+//
+// A message sent with a delay that failed once it was due; the reason says
+// why.
+func (msgs Messages) WaitingNotSent(subject string, reason string) string {
+	return Catalog.Format(msgs.locale, "waitingNotSent", map[string]any{"subject": subject, "reason": reason})
+}
+
+// SentAtStart says "{count, plural, one {A message that was waiting to be sent when Shu quit has been sent.} other {# messages that were …"
+// in the language the app shows.
+func SentAtStart(count int) string { return In(i18n.Locale()).SentAtStart(count) }
+
+// SentAtStart says "{count, plural, one {A message that was waiting to be sent when Shu quit has been sent.} other {# messages that were …"
+// in the language of msgs.
+func (msgs Messages) SentAtStart(count int) string {
+	return Catalog.Format(msgs.locale, "sentAtStart", map[string]any{"count": count})
+}
+
+// NotSentAtStart says "{count, plural, one {A message that was waiting to be sent when Shu quit could not be sent. It stays among the unsent…"
+// in the language the app shows.
+func NotSentAtStart(count int) string { return In(i18n.Locale()).NotSentAtStart(count) }
+
+// NotSentAtStart says "{count, plural, one {A message that was waiting to be sent when Shu quit could not be sent. It stays among the unsent…"
+// in the language of msgs.
+func (msgs Messages) NotSentAtStart(count int) string {
+	return Catalog.Format(msgs.locale, "notSentAtStart", map[string]any{"count": count})
+}
+
+// DeliverAtStartFailed says "Could not send the messages that were waiting when Shu quit: {error}"
+// in the language the app shows.
+func DeliverAtStartFailed(error string) string { return In(i18n.Locale()).DeliverAtStartFailed(error) }
+
+// DeliverAtStartFailed says "Could not send the messages that were waiting when Shu quit: {error}"
+// in the language of msgs.
+func (msgs Messages) DeliverAtStartFailed(error string) string {
+	return Catalog.Format(msgs.locale, "deliverAtStartFailed", map[string]any{"error": error})
+}
+
+// ComposeSection says "Writing and sending"
+// in the language the app shows.
+func ComposeSection() string { return In(i18n.Locale()).ComposeSection() }
+
+// ComposeSection says "Writing and sending"
+// in the language of msgs.
+func (msgs Messages) ComposeSection() string {
+	return Catalog.Format(msgs.locale, "composeSection", nil)
+}
+
+// SendDelay says "Time to undo a send"
+// in the language the app shows.
+func SendDelay() string { return In(i18n.Locale()).SendDelay() }
+
+// SendDelay says "Time to undo a send"
+// in the language of msgs.
+func (msgs Messages) SendDelay() string {
+	return Catalog.Format(msgs.locale, "sendDelay", nil)
+}
+
+// SendDelayDetail says "After you press Send, a message waits this long in the mail window, where Undo takes it back, and then leaves. Off se…"
+// in the language the app shows.
+func SendDelayDetail() string { return In(i18n.Locale()).SendDelayDetail() }
+
+// SendDelayDetail says "After you press Send, a message waits this long in the mail window, where Undo takes it back, and then leaves. Off se…"
+// in the language of msgs.
+func (msgs Messages) SendDelayDetail() string {
+	return Catalog.Format(msgs.locale, "sendDelayDetail", nil)
+}
+
+// SendDelayOff says "Off"
+// in the language the app shows.
+func SendDelayOff() string { return In(i18n.Locale()).SendDelayOff() }
+
+// SendDelayOff says "Off"
+// in the language of msgs.
+func (msgs Messages) SendDelayOff() string {
+	return Catalog.Format(msgs.locale, "sendDelayOff", nil)
+}
+
+// SendDelaySeconds says "{seconds} s"
+// in the language the app shows.
+func SendDelaySeconds(seconds int) string { return In(i18n.Locale()).SendDelaySeconds(seconds) }
+
+// SendDelaySeconds says "{seconds} s"
+// in the language of msgs.
+func (msgs Messages) SendDelaySeconds(seconds int) string {
+	return Catalog.Format(msgs.locale, "sendDelaySeconds", map[string]any{"seconds": seconds})
+}
+
+// ReplyDefault says "Reply goes to"
+// in the language the app shows.
+func ReplyDefault() string { return In(i18n.Locale()).ReplyDefault() }
+
+// ReplyDefault says "Reply goes to"
+// in the language of msgs.
+func (msgs Messages) ReplyDefault() string {
+	return Catalog.Format(msgs.locale, "replyDefault", nil)
+}
+
+// ReplyDefaultSender says "The sender"
+// in the language the app shows.
+func ReplyDefaultSender() string { return In(i18n.Locale()).ReplyDefaultSender() }
+
+// ReplyDefaultSender says "The sender"
+// in the language of msgs.
+func (msgs Messages) ReplyDefaultSender() string {
+	return Catalog.Format(msgs.locale, "replyDefaultSender", nil)
+}
+
+// ReplyDefaultAll says "Everyone"
+// in the language the app shows.
+func ReplyDefaultAll() string { return In(i18n.Locale()).ReplyDefaultAll() }
+
+// ReplyDefaultAll says "Everyone"
+// in the language of msgs.
+func (msgs Messages) ReplyDefaultAll() string {
+	return Catalog.Format(msgs.locale, "replyDefaultAll", nil)
+}
+
+// ReplyDefaultDetail says "What the first reply button and R do. The button beside it, and Shift+R, do the other."
+// in the language the app shows.
+func ReplyDefaultDetail() string { return In(i18n.Locale()).ReplyDefaultDetail() }
+
+// ReplyDefaultDetail says "What the first reply button and R do. The button beside it, and Shift+R, do the other."
+// in the language of msgs.
+func (msgs Messages) ReplyDefaultDetail() string {
+	return Catalog.Format(msgs.locale, "replyDefaultDetail", nil)
+}
+
+// QuoteStyle says "Quote the message"
+// in the language the app shows.
+func QuoteStyle() string { return In(i18n.Locale()).QuoteStyle() }
+
+// QuoteStyle says "Quote the message"
+// in the language of msgs.
+func (msgs Messages) QuoteStyle() string {
+	return Catalog.Format(msgs.locale, "quoteStyle", nil)
+}
+
+// QuoteStylePrefix says "With “>”"
+// in the language the app shows.
+func QuoteStylePrefix() string { return In(i18n.Locale()).QuoteStylePrefix() }
+
+// QuoteStylePrefix says "With “>”"
+// in the language of msgs.
+func (msgs Messages) QuoteStylePrefix() string {
+	return Catalog.Format(msgs.locale, "quoteStylePrefix", nil)
+}
+
+// QuoteStyleHeader says "Original message"
+// in the language the app shows.
+func QuoteStyleHeader() string { return In(i18n.Locale()).QuoteStyleHeader() }
+
+// QuoteStyleHeader says "Original message"
+// in the language of msgs.
+func (msgs Messages) QuoteStyleHeader() string {
+	return Catalog.Format(msgs.locale, "quoteStyleHeader", nil)
+}
+
+// QuoteStylePrefixDetail says "Each line of the message starts with “>”, under a line saying who wrote it and when."
+// in the language the app shows.
+func QuoteStylePrefixDetail() string { return In(i18n.Locale()).QuoteStylePrefixDetail() }
+
+// QuoteStylePrefixDetail says "Each line of the message starts with “>”, under a line saying who wrote it and when."
+// in the language of msgs.
+func (msgs Messages) QuoteStylePrefixDetail() string {
+	return Catalog.Format(msgs.locale, "quoteStylePrefixDetail", nil)
+}
+
+// QuoteStyleHeaderDetail says "The message as it was, under a block of its sender, date, subject and recipients."
+// in the language the app shows.
+func QuoteStyleHeaderDetail() string { return In(i18n.Locale()).QuoteStyleHeaderDetail() }
+
+// QuoteStyleHeaderDetail says "The message as it was, under a block of its sender, date, subject and recipients."
+// in the language of msgs.
+func (msgs Messages) QuoteStyleHeaderDetail() string {
+	return Catalog.Format(msgs.locale, "quoteStyleHeaderDetail", nil)
+}
+
+// ReplyPosition says "Write replies"
+// in the language the app shows.
+func ReplyPosition() string { return In(i18n.Locale()).ReplyPosition() }
+
+// ReplyPosition says "Write replies"
+// in the language of msgs.
+func (msgs Messages) ReplyPosition() string {
+	return Catalog.Format(msgs.locale, "replyPosition", nil)
+}
+
+// ReplyAboveQuote says "Above the quote"
+// in the language the app shows.
+func ReplyAboveQuote() string { return In(i18n.Locale()).ReplyAboveQuote() }
+
+// ReplyAboveQuote says "Above the quote"
+// in the language of msgs.
+func (msgs Messages) ReplyAboveQuote() string {
+	return Catalog.Format(msgs.locale, "replyAboveQuote", nil)
+}
+
+// ReplyBelowQuote says "Below the quote"
+// in the language the app shows.
+func ReplyBelowQuote() string { return In(i18n.Locale()).ReplyBelowQuote() }
+
+// ReplyBelowQuote says "Below the quote"
+// in the language of msgs.
+func (msgs Messages) ReplyBelowQuote() string {
+	return Catalog.Format(msgs.locale, "replyBelowQuote", nil)
+}
+
+// ForwardAttachments says "Forward attachments"
+// in the language the app shows.
+func ForwardAttachments() string { return In(i18n.Locale()).ForwardAttachments() }
+
+// ForwardAttachments says "Forward attachments"
+// in the language of msgs.
+func (msgs Messages) ForwardAttachments() string {
+	return Catalog.Format(msgs.locale, "forwardAttachments", nil)
+}
+
+// ForwardAttachmentsDetail says "A forward carries the original message's attachments. A reply never does."
+// in the language the app shows.
+func ForwardAttachmentsDetail() string { return In(i18n.Locale()).ForwardAttachmentsDetail() }
+
+// ForwardAttachmentsDetail says "A forward carries the original message's attachments. A reply never does."
+// in the language of msgs.
+func (msgs Messages) ForwardAttachmentsDetail() string {
+	return Catalog.Format(msgs.locale, "forwardAttachmentsDetail", nil)
+}
+
+// ComposeFormat says "Messages are written and sent as plain text."
+// in the language the app shows.
+func ComposeFormat() string { return In(i18n.Locale()).ComposeFormat() }
+
+// ComposeFormat says "Messages are written and sent as plain text."
+// in the language of msgs.
+func (msgs Messages) ComposeFormat() string {
+	return Catalog.Format(msgs.locale, "composeFormat", nil)
+}
+
+// SignatureSection says "Signature"
+// in the language the app shows.
+func SignatureSection() string { return In(i18n.Locale()).SignatureSection() }
+
+// SignatureSection says "Signature"
+// in the language of msgs.
+func (msgs Messages) SignatureSection() string {
+	return Catalog.Format(msgs.locale, "signatureSection", nil)
+}
+
+// SignatureText says "Signature text"
+// in the language the app shows.
+func SignatureText() string { return In(i18n.Locale()).SignatureText() }
+
+// SignatureText says "Signature text"
+// in the language of msgs.
+func (msgs Messages) SignatureText() string {
+	return Catalog.Format(msgs.locale, "signatureText", nil)
+}
+
+// SignaturePlaceholder says "Your name, and a line or two about you"
+// in the language the app shows.
+func SignaturePlaceholder() string { return In(i18n.Locale()).SignaturePlaceholder() }
+
+// SignaturePlaceholder says "Your name, and a line or two about you"
+// in the language of msgs.
+func (msgs Messages) SignaturePlaceholder() string {
+	return Catalog.Format(msgs.locale, "signaturePlaceholder", nil)
+}
+
+// SignatureDetail says "Added below a line of “-- ”, which mail apps know a signature by."
+// in the language the app shows.
+func SignatureDetail() string { return In(i18n.Locale()).SignatureDetail() }
+
+// SignatureDetail says "Added below a line of “-- ”, which mail apps know a signature by."
+// in the language of msgs.
+func (msgs Messages) SignatureDetail() string {
+	return Catalog.Format(msgs.locale, "signatureDetail", nil)
+}
+
+// SignatureNew says "Add to new messages"
+// in the language the app shows.
+func SignatureNew() string { return In(i18n.Locale()).SignatureNew() }
+
+// SignatureNew says "Add to new messages"
+// in the language of msgs.
+func (msgs Messages) SignatureNew() string {
+	return Catalog.Format(msgs.locale, "signatureNew", nil)
+}
+
+// SignatureReply says "Add to replies"
+// in the language the app shows.
+func SignatureReply() string { return In(i18n.Locale()).SignatureReply() }
+
+// SignatureReply says "Add to replies"
+// in the language of msgs.
+func (msgs Messages) SignatureReply() string {
+	return Catalog.Format(msgs.locale, "signatureReply", nil)
+}
+
+// SignatureForward says "Add to forwards"
+// in the language the app shows.
+func SignatureForward() string { return In(i18n.Locale()).SignatureForward() }
+
+// SignatureForward says "Add to forwards"
+// in the language of msgs.
+func (msgs Messages) SignatureForward() string {
+	return Catalog.Format(msgs.locale, "signatureForward", nil)
+}
+
+// SignatureSaveFailed says "Couldn't save the signature: {error}"
+// in the language the app shows.
+func SignatureSaveFailed(error string) string { return In(i18n.Locale()).SignatureSaveFailed(error) }
+
+// SignatureSaveFailed says "Couldn't save the signature: {error}"
+// in the language of msgs.
+func (msgs Messages) SignatureSaveFailed(error string) string {
+	return Catalog.Format(msgs.locale, "signatureSaveFailed", map[string]any{"error": error})
+}
+
+// IdentitiesSection says "Send from"
+// in the language the app shows.
+func IdentitiesSection() string { return In(i18n.Locale()).IdentitiesSection() }
+
+// IdentitiesSection says "Send from"
+// in the language of msgs.
+func (msgs Messages) IdentitiesSection() string {
+	return Catalog.Format(msgs.locale, "identitiesSection", nil)
+}
+
+// IdentitiesDetail says "Add the other addresses your provider lets this account send from, such as aliases. Shu cannot check them: a server t…"
+// in the language the app shows.
+func IdentitiesDetail() string { return In(i18n.Locale()).IdentitiesDetail() }
+
+// IdentitiesDetail says "Add the other addresses your provider lets this account send from, such as aliases. Shu cannot check them: a server t…"
+// in the language of msgs.
+func (msgs Messages) IdentitiesDetail() string {
+	return Catalog.Format(msgs.locale, "identitiesDetail", nil)
+}
+
+// IdentityOwn says "This account's address"
+// in the language the app shows.
+func IdentityOwn() string { return In(i18n.Locale()).IdentityOwn() }
+
+// IdentityOwn says "This account's address"
+// in the language of msgs.
+func (msgs Messages) IdentityOwn() string {
+	return Catalog.Format(msgs.locale, "identityOwn", nil)
+}
+
+// AddIdentity says "Add an address"
+// in the language the app shows.
+func AddIdentity() string { return In(i18n.Locale()).AddIdentity() }
+
+// AddIdentity says "Add an address"
+// in the language of msgs.
+func (msgs Messages) AddIdentity() string {
+	return Catalog.Format(msgs.locale, "addIdentity", nil)
+}
+
+// IdentityName says "Name"
+// in the language the app shows.
+func IdentityName() string { return In(i18n.Locale()).IdentityName() }
+
+// IdentityName says "Name"
+// in the language of msgs.
+func (msgs Messages) IdentityName() string {
+	return Catalog.Format(msgs.locale, "identityName", nil)
+}
+
+// IdentityNamePlaceholder says "The name recipients see"
+// in the language the app shows.
+func IdentityNamePlaceholder() string { return In(i18n.Locale()).IdentityNamePlaceholder() }
+
+// IdentityNamePlaceholder says "The name recipients see"
+// in the language of msgs.
+func (msgs Messages) IdentityNamePlaceholder() string {
+	return Catalog.Format(msgs.locale, "identityNamePlaceholder", nil)
+}
+
+// IdentityEmail says "Address"
+// in the language the app shows.
+func IdentityEmail() string { return In(i18n.Locale()).IdentityEmail() }
+
+// IdentityEmail says "Address"
+// in the language of msgs.
+func (msgs Messages) IdentityEmail() string {
+	return Catalog.Format(msgs.locale, "identityEmail", nil)
+}
+
+// IdentitySave says "Save address"
+// in the language the app shows.
+func IdentitySave() string { return In(i18n.Locale()).IdentitySave() }
+
+// IdentitySave says "Save address"
+// in the language of msgs.
+func (msgs Messages) IdentitySave() string {
+	return Catalog.Format(msgs.locale, "identitySave", nil)
+}
+
+// IdentityCancel says "Cancel editing the address"
+// in the language the app shows.
+func IdentityCancel() string { return In(i18n.Locale()).IdentityCancel() }
+
+// IdentityCancel says "Cancel editing the address"
+// in the language of msgs.
+func (msgs Messages) IdentityCancel() string {
+	return Catalog.Format(msgs.locale, "identityCancel", nil)
+}
+
+// Edit says "Edit"
+// in the language the app shows.
+func Edit() string { return In(i18n.Locale()).Edit() }
+
+// Edit says "Edit"
+// in the language of msgs.
+func (msgs Messages) Edit() string {
+	return Catalog.Format(msgs.locale, "edit", nil)
+}
+
+// Remove says "Remove"
+// in the language the app shows.
+func Remove() string { return In(i18n.Locale()).Remove() }
+
+// Remove says "Remove"
+// in the language of msgs.
+func (msgs Messages) Remove() string {
+	return Catalog.Format(msgs.locale, "remove", nil)
+}
+
+// EditIdentity says "Edit {address}"
+// in the language the app shows.
+func EditIdentity(address string) string { return In(i18n.Locale()).EditIdentity(address) }
+
+// EditIdentity says "Edit {address}"
+// in the language of msgs.
+func (msgs Messages) EditIdentity(address string) string {
+	return Catalog.Format(msgs.locale, "editIdentity", map[string]any{"address": address})
+}
+
+// RemoveIdentity says "Remove {address}"
+// in the language the app shows.
+func RemoveIdentity(address string) string { return In(i18n.Locale()).RemoveIdentity(address) }
+
+// RemoveIdentity says "Remove {address}"
+// in the language of msgs.
+func (msgs Messages) RemoveIdentity(address string) string {
+	return Catalog.Format(msgs.locale, "removeIdentity", map[string]any{"address": address})
+}
+
+// IdentityNotAddress says "Enter one email address, such as name@example.com."
+// in the language the app shows.
+func IdentityNotAddress() string { return In(i18n.Locale()).IdentityNotAddress() }
+
+// IdentityNotAddress says "Enter one email address, such as name@example.com."
+// in the language of msgs.
+func (msgs Messages) IdentityNotAddress() string {
+	return Catalog.Format(msgs.locale, "identityNotAddress", nil)
+}
+
+// IdentityExists says "This account already sends from {email}."
+// in the language the app shows.
+func IdentityExists(email string) string { return In(i18n.Locale()).IdentityExists(email) }
+
+// IdentityExists says "This account already sends from {email}."
+// in the language of msgs.
+func (msgs Messages) IdentityExists(email string) string {
+	return Catalog.Format(msgs.locale, "identityExists", map[string]any{"email": email})
+}
+
+// IdentitySaveFailed says "Couldn't save the address: {error}"
+// in the language the app shows.
+func IdentitySaveFailed(error string) string { return In(i18n.Locale()).IdentitySaveFailed(error) }
+
+// IdentitySaveFailed says "Couldn't save the address: {error}"
+// in the language of msgs.
+func (msgs Messages) IdentitySaveFailed(error string) string {
+	return Catalog.Format(msgs.locale, "identitySaveFailed", map[string]any{"error": error})
+}
+
+// IdentityRemoveFailed says "Couldn't remove the address: {error}"
+// in the language the app shows.
+func IdentityRemoveFailed(error string) string { return In(i18n.Locale()).IdentityRemoveFailed(error) }
+
+// IdentityRemoveFailed says "Couldn't remove the address: {error}"
+// in the language of msgs.
+func (msgs Messages) IdentityRemoveFailed(error string) string {
+	return Catalog.Format(msgs.locale, "identityRemoveFailed", map[string]any{"error": error})
+}

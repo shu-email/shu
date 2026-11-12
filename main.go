@@ -176,6 +176,32 @@ type app struct {
 	draftErr    string
 	draftErrKey string
 
+	// How messages are written (sending.go, sendfrom.go). composeSet is
+	// the compose settings, as stored and as the settings change them,
+	// composeChoice where their controls stand, and composeSetFailed that
+	// the last save failed. signatures and aliases are each account's
+	// signature and the addresses added to it, by account ID, as last
+	// read or saved: what compose writes with.
+	composeSet       mail.ComposeSettings
+	composeChoice    composeChoices
+	composeSaveMu    sync.Mutex
+	composeSaveSeq   atomic.Uint64
+	composeSetFailed bool
+	signatures       map[string]mail.Signature
+	aliases          map[string][]mail.Identity
+	// waiting are the messages sent with a delay that have not left,
+	// which the mail window counts down with Undo, and sendNote is news
+	// of sending the window did not see happen, a warning or not.
+	waiting      []*waitingSend
+	sendNote     string
+	sendNoteWarn bool
+	// The account editor's signature, saved as it changes, and the form
+	// of an address the account sends from.
+	sigForm    signatureForm
+	sigSaveMu  sync.Mutex
+	sigSaveSeq atomic.Uint64
+	idForm     identityForm
+
 	// Hooks the window sets; tests leave them nil.
 	newWindow func(mygo.WindowOptions) *mygo.Window
 	saveFile  func(parent *mygo.Window, name string) (string, error)
@@ -228,6 +254,10 @@ func newApp(svc mailService) *app {
 		checkChoice:   1,
 		windowChoice:  windowIndex(mail.DefaultSyncWindow),
 		notifyOn:      map[string]*bool{},
+		composeSet:    mail.DefaultComposeSettings(),
+		composeChoice: choicesOf(mail.DefaultComposeSettings()),
+		signatures:    map[string]mail.Signature{},
+		aliases:       map[string][]mail.Identity{},
 	}
 }
 
@@ -338,8 +368,10 @@ func (a *app) start() {
 		defer cancel()
 		accounts, active, err := a.svc.Accounts(ctx)
 		// The settings come with the accounts: the first report of a
-		// watcher, which may hold a night's mail, finds them read.
+		// watcher, which may hold a night's mail, finds them read, and
+		// the first message written its compose settings.
 		set, setErr := a.svc.Settings(ctx)
+		compose, composeErr := a.svc.ComposeSettings(ctx)
 		// An account whose sign-in was revoked or signed out says so from
 		// the start, not after a sync has failed.
 		signedOut := map[string]bool{}
@@ -363,6 +395,9 @@ func (a *app) start() {
 			if setErr == nil {
 				a.setMailSettings(set)
 			}
+			if composeErr == nil {
+				a.setComposeSettings(compose)
+			}
 			a.ready = true
 			if len(accounts) == 0 {
 				a.openAccountForm(nil)
@@ -380,6 +415,7 @@ func (a *app) start() {
 			}
 		})
 	})
+	a.deliverWaiting()
 }
 
 func (a *app) account(id string) *mail.Account {
@@ -1187,7 +1223,9 @@ func (a *app) mailView(c *ui.Context) {
 		panes.OnShortcut(0, ui.KeyU, func() { a.toggleRead() })
 		panes.OnShortcut(0, ui.KeyS, func() { a.toggleStar() })
 		panes.OnShortcut(0, ui.KeyE, func() { a.moveSelected(mail.SpecialArchive) })
-		panes.OnShortcut(0, ui.KeyR, func() { a.reply(false) })
+		// R answers as the settings say, and Shift+R the other way.
+		panes.OnShortcut(0, ui.KeyR, func() { a.reply(a.replyOrder()[0]) })
+		panes.OnShortcut(ui.Shift, ui.KeyR, func() { a.reply(a.replyOrder()[1]) })
 		panes.OnShortcut(0, ui.KeyF, func() { a.forward() })
 		panes.OnShortcut(0, ui.KeyDelete, func() { a.deleteSelected() })
 	})

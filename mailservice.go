@@ -110,6 +110,28 @@ type mailService interface {
 	SetLabel(ctx context.Context, accountID string, msgs []mail.MessageRef, id mail.LabelID, on bool) error
 	DeleteLabel(ctx context.Context, accountID string, id mail.LabelID) error
 
+	// Rules, which sort the mail that arrives, in order, from the cache.
+	// CheckRule says what SaveRule would refuse, as a *mail.RuleError that
+	// names the condition or action at fault; saving touches no mail.
+	// PreviewRule lists the cached messages a rule, saved or not, matches
+	// now, and changes nothing; RunRule runs a saved rule once over what
+	// its preview found, which only the user's action asks for. The log
+	// is read newest first, and its entries, or all of a rule's, undone.
+	// OnRuleActivity's report is called from a goroutine of the engine
+	// after actions were applied in the background.
+	Rules(ctx context.Context) ([]mail.Rule, error)
+	CheckRule(ctx context.Context, r mail.Rule) error
+	SaveRule(ctx context.Context, r mail.Rule) (mail.Rule, error)
+	PauseRule(ctx context.Context, id mail.RuleID, paused bool) (mail.Rule, error)
+	DeleteRule(ctx context.Context, id mail.RuleID) error
+	MoveRule(ctx context.Context, id mail.RuleID, index int) error
+	PreviewRule(ctx context.Context, r mail.Rule, offset, limit int) (mail.RulePreview, error)
+	RunRule(ctx context.Context, id mail.RuleID, targets []mail.RuleTarget) ([]mail.RuleActivity, error)
+	RuleActivity(ctx context.Context, q mail.ActivityQuery) (mail.ActivityPage, error)
+	UndoActivity(ctx context.Context, id mail.ActivityID) error
+	UndoRule(ctx context.Context, id mail.RuleID) (int, error)
+	OnRuleActivity(report func(accountID string))
+
 	// Drafts. SaveDraft never needs the network; SyncDrafts is the step
 	// that does, and may fail and run again.
 	DraftList(ctx context.Context, accountID, query string, limit int) ([]mail.Summary, error)

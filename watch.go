@@ -364,7 +364,7 @@ func (a *app) looksAt(accountID, folder string) bool {
 		return false
 	}
 	shown := a.active == accountID && a.folder == folder || a.isUnified() && a.isInboxOf(accountID, folder)
-	return !a.showSettings && !a.showAccounts && shown && strings.TrimSpace(a.query) == ""
+	return !a.showSettings && !a.showAccounts && !a.rules.open && shown && strings.TrimSpace(a.query) == ""
 }
 
 // notesFor writes the notifications of an account's new messages, newest

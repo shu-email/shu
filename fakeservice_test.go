@@ -207,6 +207,26 @@ type fakeService struct {
 	localLabels    map[string]map[mail.LabelID]bool
 	setLabelErr    error
 	deleteLabelErr error
+
+	// Rules, kept, checked and matched as the engine keeps, checks and
+	// matches them (fakerules_test.go): in their order, with IDs never
+	// given again, and their log, oldest first. rawHeaders are the header
+	// lines the cache keeps of a message, by bodyKey, which a header
+	// condition reads. ruleReport is the window's OnRuleActivity.
+	// ruleErr fails the rules' reads and writes as a store would,
+	// runWaits leaves the actions of a run pending as a server out of
+	// reach does, and undoErr fails the undos. ruleCalls records every
+	// call that writes rules or changes mail through them.
+	rules      []mail.Rule
+	nextRule   mail.RuleID
+	ruleLog    []mail.RuleActivity
+	nextEntry  mail.ActivityID
+	rawHeaders map[string]string
+	ruleReport func(accountID string)
+	ruleErr    error
+	runWaits   error
+	undoErr    error
+	ruleCalls  []string
 }
 
 // fakeScheduled is a message Schedule wrote: its outbox entry, whose
@@ -280,6 +300,8 @@ func newFakeService() *fakeService {
 
 		labels:      map[string][]mail.Label{},
 		localLabels: map[string]map[mail.LabelID]bool{},
+
+		rawHeaders: map[string]string{},
 	}
 }
 

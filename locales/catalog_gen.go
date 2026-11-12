@@ -6637,3 +6637,1995 @@ func FilterLabelValue(value string) string { return In(i18n.Locale()).FilterLabe
 func (msgs Messages) FilterLabelValue(value string) string {
 	return Catalog.Format(msgs.locale, "filterLabelValue", map[string]any{"value": value})
 }
+
+// Rules says "Rules"
+// in the language the app shows.
+func Rules() string { return In(i18n.Locale()).Rules() }
+
+// Rules says "Rules"
+// in the language of msgs.
+func (msgs Messages) Rules() string {
+	return Catalog.Format(msgs.locale, "rules", nil)
+}
+
+// RulesTip says "Rules that sort new mail"
+// in the language the app shows.
+func RulesTip() string { return In(i18n.Locale()).RulesTip() }
+
+// RulesTip says "Rules that sort new mail"
+// in the language of msgs.
+func (msgs Messages) RulesTip() string {
+	return Catalog.Format(msgs.locale, "rulesTip", nil)
+}
+
+// MailRules says "Mail rules"
+// in the language the app shows.
+func MailRules() string { return In(i18n.Locale()).MailRules() }
+
+// MailRules says "Mail rules"
+// in the language of msgs.
+func (msgs Messages) MailRules() string {
+	return Catalog.Format(msgs.locale, "mailRules", nil)
+}
+
+// RulesTab says "Rules"
+// in the language the app shows.
+func RulesTab() string { return In(i18n.Locale()).RulesTab() }
+
+// RulesTab says "Rules"
+// in the language of msgs.
+func (msgs Messages) RulesTab() string {
+	return Catalog.Format(msgs.locale, "rulesTab", nil)
+}
+
+// ActivityTab says "Activity"
+// in the language the app shows.
+func ActivityTab() string { return In(i18n.Locale()).ActivityTab() }
+
+// ActivityTab says "Activity"
+// in the language of msgs.
+func (msgs Messages) ActivityTab() string {
+	return Catalog.Format(msgs.locale, "activityTab", nil)
+}
+
+// RulesIntro says "Rules sort the mail that arrives, from the top down: each new message goes through them in this order. They never sen…"
+// in the language the app shows.
+func RulesIntro() string { return In(i18n.Locale()).RulesIntro() }
+
+// RulesIntro says "Rules sort the mail that arrives, from the top down: each new message goes through them in this order. They never sen…"
+// in the language of msgs.
+func (msgs Messages) RulesIntro() string {
+	return Catalog.Format(msgs.locale, "rulesIntro", nil)
+}
+
+// NewRule says "New rule"
+// in the language the app shows.
+func NewRule() string { return In(i18n.Locale()).NewRule() }
+
+// NewRule says "New rule"
+// in the language of msgs.
+func (msgs Messages) NewRule() string {
+	return Catalog.Format(msgs.locale, "newRule", nil)
+}
+
+// RulesEmpty says "No rules yet. A rule can move newsletters to a folder, label the mail of a sender, or keep a mailing list from notify…"
+// in the language the app shows.
+func RulesEmpty() string { return In(i18n.Locale()).RulesEmpty() }
+
+// RulesEmpty says "No rules yet. A rule can move newsletters to a folder, label the mail of a sender, or keep a mailing list from notify…"
+// in the language of msgs.
+func (msgs Messages) RulesEmpty() string {
+	return Catalog.Format(msgs.locale, "rulesEmpty", nil)
+}
+
+// RulesReadFailed says "Could not read the rules: {error}"
+// in the language the app shows.
+func RulesReadFailed(error string) string { return In(i18n.Locale()).RulesReadFailed(error) }
+
+// RulesReadFailed says "Could not read the rules: {error}"
+// in the language of msgs.
+func (msgs Messages) RulesReadFailed(error string) string {
+	return Catalog.Format(msgs.locale, "rulesReadFailed", map[string]any{"error": error})
+}
+
+// RulePaused says "Paused"
+// in the language the app shows.
+func RulePaused() string { return In(i18n.Locale()).RulePaused() }
+
+// RulePaused says "Paused"
+// in the language of msgs.
+func (msgs Messages) RulePaused() string {
+	return Catalog.Format(msgs.locale, "rulePaused", nil)
+}
+
+// UseRule says "Use the rule “{name}”"
+// in the language the app shows.
+//
+// The switch of a rule's row: on, the rule sorts new mail; off, it is
+// paused.
+func UseRule(name string) string { return In(i18n.Locale()).UseRule(name) }
+
+// UseRule says "Use the rule “{name}”"
+// in the language of msgs.
+//
+// The switch of a rule's row: on, the rule sorts new mail; off, it is
+// paused.
+func (msgs Messages) UseRule(name string) string {
+	return Catalog.Format(msgs.locale, "useRule", map[string]any{"name": name})
+}
+
+// UseRuleTip says "On: the rule sorts new mail. Off: it is paused."
+// in the language the app shows.
+func UseRuleTip() string { return In(i18n.Locale()).UseRuleTip() }
+
+// UseRuleTip says "On: the rule sorts new mail. Off: it is paused."
+// in the language of msgs.
+func (msgs Messages) UseRuleTip() string {
+	return Catalog.Format(msgs.locale, "useRuleTip", nil)
+}
+
+// MoveRuleUp says "Move “{name}” up"
+// in the language the app shows.
+func MoveRuleUp(name string) string { return In(i18n.Locale()).MoveRuleUp(name) }
+
+// MoveRuleUp says "Move “{name}” up"
+// in the language of msgs.
+func (msgs Messages) MoveRuleUp(name string) string {
+	return Catalog.Format(msgs.locale, "moveRuleUp", map[string]any{"name": name})
+}
+
+// MoveRuleDown says "Move “{name}” down"
+// in the language the app shows.
+func MoveRuleDown(name string) string { return In(i18n.Locale()).MoveRuleDown(name) }
+
+// MoveRuleDown says "Move “{name}” down"
+// in the language of msgs.
+func (msgs Messages) MoveRuleDown(name string) string {
+	return Catalog.Format(msgs.locale, "moveRuleDown", map[string]any{"name": name})
+}
+
+// EditRule says "Edit “{name}”"
+// in the language the app shows.
+func EditRule(name string) string { return In(i18n.Locale()).EditRule(name) }
+
+// EditRule says "Edit “{name}”"
+// in the language of msgs.
+func (msgs Messages) EditRule(name string) string {
+	return Catalog.Format(msgs.locale, "editRule", map[string]any{"name": name})
+}
+
+// DeleteRule says "Delete “{name}”"
+// in the language the app shows.
+func DeleteRule(name string) string { return In(i18n.Locale()).DeleteRule(name) }
+
+// DeleteRule says "Delete “{name}”"
+// in the language of msgs.
+func (msgs Messages) DeleteRule(name string) string {
+	return Catalog.Format(msgs.locale, "deleteRule", map[string]any{"name": name})
+}
+
+// DeleteRuleTitle says "Delete the rule “{name}”?"
+// in the language the app shows.
+func DeleteRuleTitle(name string) string { return In(i18n.Locale()).DeleteRuleTitle(name) }
+
+// DeleteRuleTitle says "Delete the rule “{name}”?"
+// in the language of msgs.
+func (msgs Messages) DeleteRuleTitle(name string) string {
+	return Catalog.Format(msgs.locale, "deleteRuleTitle", map[string]any{"name": name})
+}
+
+// DeleteRuleMessage says "It stops sorting new mail. What it already did stays in the activity log, where you can still undo it."
+// in the language the app shows.
+func DeleteRuleMessage() string { return In(i18n.Locale()).DeleteRuleMessage() }
+
+// DeleteRuleMessage says "It stops sorting new mail. What it already did stays in the activity log, where you can still undo it."
+// in the language of msgs.
+func (msgs Messages) DeleteRuleMessage() string {
+	return Catalog.Format(msgs.locale, "deleteRuleMessage", nil)
+}
+
+// DeleteRuleButton says "Delete rule"
+// in the language the app shows.
+func DeleteRuleButton() string { return In(i18n.Locale()).DeleteRuleButton() }
+
+// DeleteRuleButton says "Delete rule"
+// in the language of msgs.
+func (msgs Messages) DeleteRuleButton() string {
+	return Catalog.Format(msgs.locale, "deleteRuleButton", nil)
+}
+
+// RulePauseFailed says "Could not pause or resume “{name}”: {error}"
+// in the language the app shows.
+func RulePauseFailed(name string, error string) string {
+	return In(i18n.Locale()).RulePauseFailed(name, error)
+}
+
+// RulePauseFailed says "Could not pause or resume “{name}”: {error}"
+// in the language of msgs.
+func (msgs Messages) RulePauseFailed(name string, error string) string {
+	return Catalog.Format(msgs.locale, "rulePauseFailed", map[string]any{"name": name, "error": error})
+}
+
+// RuleMoveFailed says "Could not move “{name}”: {error}"
+// in the language the app shows.
+func RuleMoveFailed(name string, error string) string {
+	return In(i18n.Locale()).RuleMoveFailed(name, error)
+}
+
+// RuleMoveFailed says "Could not move “{name}”: {error}"
+// in the language of msgs.
+func (msgs Messages) RuleMoveFailed(name string, error string) string {
+	return Catalog.Format(msgs.locale, "ruleMoveFailed", map[string]any{"name": name, "error": error})
+}
+
+// RuleDeleteFailed says "Could not delete “{name}”: {error}"
+// in the language the app shows.
+func RuleDeleteFailed(name string, error string) string {
+	return In(i18n.Locale()).RuleDeleteFailed(name, error)
+}
+
+// RuleDeleteFailed says "Could not delete “{name}”: {error}"
+// in the language of msgs.
+func (msgs Messages) RuleDeleteFailed(name string, error string) string {
+	return Catalog.Format(msgs.locale, "ruleDeleteFailed", map[string]any{"name": name, "error": error})
+}
+
+// RuleSummary says "{conditions} → {actions}"
+// in the language the app shows.
+//
+// A rule's row: what it looks for, then what it does.
+func RuleSummary(conditions string, actions string) string {
+	return In(i18n.Locale()).RuleSummary(conditions, actions)
+}
+
+// RuleSummary says "{conditions} → {actions}"
+// in the language of msgs.
+//
+// A rule's row: what it looks for, then what it does.
+func (msgs Messages) RuleSummary(conditions string, actions string) string {
+	return Catalog.Format(msgs.locale, "ruleSummary", map[string]any{"conditions": conditions, "actions": actions})
+}
+
+// RuleAnd says " and "
+// in the language the app shows.
+func RuleAnd() string { return In(i18n.Locale()).RuleAnd() }
+
+// RuleAnd says " and "
+// in the language of msgs.
+func (msgs Messages) RuleAnd() string {
+	return Catalog.Format(msgs.locale, "ruleAnd", nil)
+}
+
+// RuleOr says " or "
+// in the language the app shows.
+func RuleOr() string { return In(i18n.Locale()).RuleOr() }
+
+// RuleOr says " or "
+// in the language of msgs.
+func (msgs Messages) RuleOr() string {
+	return Catalog.Format(msgs.locale, "ruleOr", nil)
+}
+
+// RuleStops says "no rules after"
+// in the language the app shows.
+func RuleStops() string { return In(i18n.Locale()).RuleStops() }
+
+// RuleStops says "no rules after"
+// in the language of msgs.
+func (msgs Messages) RuleStops() string {
+	return Catalog.Format(msgs.locale, "ruleStops", nil)
+}
+
+// CondSenderText says "From contains “{value}”"
+// in the language the app shows.
+func CondSenderText(value string) string { return In(i18n.Locale()).CondSenderText(value) }
+
+// CondSenderText says "From contains “{value}”"
+// in the language of msgs.
+func (msgs Messages) CondSenderText(value string) string {
+	return Catalog.Format(msgs.locale, "condSenderText", map[string]any{"value": value})
+}
+
+// CondRecipientsText says "To or Cc contains “{value}”"
+// in the language the app shows.
+func CondRecipientsText(value string) string { return In(i18n.Locale()).CondRecipientsText(value) }
+
+// CondRecipientsText says "To or Cc contains “{value}”"
+// in the language of msgs.
+func (msgs Messages) CondRecipientsText(value string) string {
+	return Catalog.Format(msgs.locale, "condRecipientsText", map[string]any{"value": value})
+}
+
+// CondSubjectText says "Subject contains “{value}”"
+// in the language the app shows.
+func CondSubjectText(value string) string { return In(i18n.Locale()).CondSubjectText(value) }
+
+// CondSubjectText says "Subject contains “{value}”"
+// in the language of msgs.
+func (msgs Messages) CondSubjectText(value string) string {
+	return Catalog.Format(msgs.locale, "condSubjectText", map[string]any{"value": value})
+}
+
+// CondHeaderText says "{header} contains “{value}”"
+// in the language the app shows.
+func CondHeaderText(header string, value string) string {
+	return In(i18n.Locale()).CondHeaderText(header, value)
+}
+
+// CondHeaderText says "{header} contains “{value}”"
+// in the language of msgs.
+func (msgs Messages) CondHeaderText(header string, value string) string {
+	return Catalog.Format(msgs.locale, "condHeaderText", map[string]any{"header": header, "value": value})
+}
+
+// CondAttachmentText says "Has attachments"
+// in the language the app shows.
+func CondAttachmentText() string { return In(i18n.Locale()).CondAttachmentText() }
+
+// CondAttachmentText says "Has attachments"
+// in the language of msgs.
+func (msgs Messages) CondAttachmentText() string {
+	return Catalog.Format(msgs.locale, "condAttachmentText", nil)
+}
+
+// CondAccountText says "In the account {account}"
+// in the language the app shows.
+func CondAccountText(account string) string { return In(i18n.Locale()).CondAccountText(account) }
+
+// CondAccountText says "In the account {account}"
+// in the language of msgs.
+func (msgs Messages) CondAccountText(account string) string {
+	return Catalog.Format(msgs.locale, "condAccountText", map[string]any{"account": account})
+}
+
+// CondFolderText says "In {folder}"
+// in the language the app shows.
+func CondFolderText(folder string) string { return In(i18n.Locale()).CondFolderText(folder) }
+
+// CondFolderText says "In {folder}"
+// in the language of msgs.
+func (msgs Messages) CondFolderText(folder string) string {
+	return Catalog.Format(msgs.locale, "condFolderText", map[string]any{"folder": folder})
+}
+
+// CondLabelText says "Labelled {label}"
+// in the language the app shows.
+func CondLabelText(label string) string { return In(i18n.Locale()).CondLabelText(label) }
+
+// CondLabelText says "Labelled {label}"
+// in the language of msgs.
+func (msgs Messages) CondLabelText(label string) string {
+	return Catalog.Format(msgs.locale, "condLabelText", map[string]any{"label": label})
+}
+
+// ActMoveText says "Move to {folder}"
+// in the language the app shows.
+func ActMoveText(folder string) string { return In(i18n.Locale()).ActMoveText(folder) }
+
+// ActMoveText says "Move to {folder}"
+// in the language of msgs.
+func (msgs Messages) ActMoveText(folder string) string {
+	return Catalog.Format(msgs.locale, "actMoveText", map[string]any{"folder": folder})
+}
+
+// ActAddLabelText says "Add the label {label}"
+// in the language the app shows.
+func ActAddLabelText(label string) string { return In(i18n.Locale()).ActAddLabelText(label) }
+
+// ActAddLabelText says "Add the label {label}"
+// in the language of msgs.
+func (msgs Messages) ActAddLabelText(label string) string {
+	return Catalog.Format(msgs.locale, "actAddLabelText", map[string]any{"label": label})
+}
+
+// ActRemoveLabelText says "Remove the label {label}"
+// in the language the app shows.
+func ActRemoveLabelText(label string) string { return In(i18n.Locale()).ActRemoveLabelText(label) }
+
+// ActRemoveLabelText says "Remove the label {label}"
+// in the language of msgs.
+func (msgs Messages) ActRemoveLabelText(label string) string {
+	return Catalog.Format(msgs.locale, "actRemoveLabelText", map[string]any{"label": label})
+}
+
+// ActStarText says "Star"
+// in the language the app shows.
+func ActStarText() string { return In(i18n.Locale()).ActStarText() }
+
+// ActStarText says "Star"
+// in the language of msgs.
+func (msgs Messages) ActStarText() string {
+	return Catalog.Format(msgs.locale, "actStarText", nil)
+}
+
+// ActMarkReadText says "Mark as read"
+// in the language the app shows.
+func ActMarkReadText() string { return In(i18n.Locale()).ActMarkReadText() }
+
+// ActMarkReadText says "Mark as read"
+// in the language of msgs.
+func (msgs Messages) ActMarkReadText() string {
+	return Catalog.Format(msgs.locale, "actMarkReadText", nil)
+}
+
+// ActMarkUnreadText says "Mark as unread"
+// in the language the app shows.
+func ActMarkUnreadText() string { return In(i18n.Locale()).ActMarkUnreadText() }
+
+// ActMarkUnreadText says "Mark as unread"
+// in the language of msgs.
+func (msgs Messages) ActMarkUnreadText() string {
+	return Catalog.Format(msgs.locale, "actMarkUnreadText", nil)
+}
+
+// ActSkipNotificationText says "Don’t notify"
+// in the language the app shows.
+func ActSkipNotificationText() string { return In(i18n.Locale()).ActSkipNotificationText() }
+
+// ActSkipNotificationText says "Don’t notify"
+// in the language of msgs.
+func (msgs Messages) ActSkipNotificationText() string {
+	return Catalog.Format(msgs.locale, "actSkipNotificationText", nil)
+}
+
+// RuleFolderInAccount says "{folder} ({account})"
+// in the language the app shows.
+//
+// A folder a rule names, with its account, where the app has several.
+func RuleFolderInAccount(folder string, account string) string {
+	return In(i18n.Locale()).RuleFolderInAccount(folder, account)
+}
+
+// RuleFolderInAccount says "{folder} ({account})"
+// in the language of msgs.
+//
+// A folder a rule names, with its account, where the app has several.
+func (msgs Messages) RuleFolderInAccount(folder string, account string) string {
+	return Catalog.Format(msgs.locale, "ruleFolderInAccount", map[string]any{"folder": folder, "account": account})
+}
+
+// LabelGone says "a label deleted since"
+// in the language the app shows.
+func LabelGone() string { return In(i18n.Locale()).LabelGone() }
+
+// LabelGone says "a label deleted since"
+// in the language of msgs.
+func (msgs Messages) LabelGone() string {
+	return Catalog.Format(msgs.locale, "labelGone", nil)
+}
+
+// RuleIsPaused says "The rule is paused."
+// in the language the app shows.
+func RuleIsPaused() string { return In(i18n.Locale()).RuleIsPaused() }
+
+// RuleIsPaused says "The rule is paused."
+// in the language of msgs.
+func (msgs Messages) RuleIsPaused() string {
+	return Catalog.Format(msgs.locale, "ruleIsPaused", nil)
+}
+
+// RuleRunTooLarge says "A rule can be applied to at most {count} messages at a time: narrow it down to apply it."
+// in the language the app shows.
+func RuleRunTooLarge(count int) string { return In(i18n.Locale()).RuleRunTooLarge(count) }
+
+// RuleRunTooLarge says "A rule can be applied to at most {count} messages at a time: narrow it down to apply it."
+// in the language of msgs.
+func (msgs Messages) RuleRunTooLarge(count int) string {
+	return Catalog.Format(msgs.locale, "ruleRunTooLarge", map[string]any{"count": count})
+}
+
+// RuleMessageGone says "The message is no longer where the rule left it, so it was left alone."
+// in the language the app shows.
+func RuleMessageGone() string { return In(i18n.Locale()).RuleMessageGone() }
+
+// RuleMessageGone says "The message is no longer where the rule left it, so it was left alone."
+// in the language of msgs.
+func (msgs Messages) RuleMessageGone() string {
+	return Catalog.Format(msgs.locale, "ruleMessageGone", nil)
+}
+
+// RuleGone says "The rule is no longer there."
+// in the language the app shows.
+func RuleGone() string { return In(i18n.Locale()).RuleGone() }
+
+// RuleGone says "The rule is no longer there."
+// in the language of msgs.
+func (msgs Messages) RuleGone() string {
+	return Catalog.Format(msgs.locale, "ruleGone", nil)
+}
+
+// NewRuleTitle says "New rule"
+// in the language the app shows.
+func NewRuleTitle() string { return In(i18n.Locale()).NewRuleTitle() }
+
+// NewRuleTitle says "New rule"
+// in the language of msgs.
+func (msgs Messages) NewRuleTitle() string {
+	return Catalog.Format(msgs.locale, "newRuleTitle", nil)
+}
+
+// EditRuleTitle says "Edit rule"
+// in the language the app shows.
+func EditRuleTitle() string { return In(i18n.Locale()).EditRuleTitle() }
+
+// EditRuleTitle says "Edit rule"
+// in the language of msgs.
+func (msgs Messages) EditRuleTitle() string {
+	return Catalog.Format(msgs.locale, "editRuleTitle", nil)
+}
+
+// CloseRuleEditor says "Done with the rule"
+// in the language the app shows.
+func CloseRuleEditor() string { return In(i18n.Locale()).CloseRuleEditor() }
+
+// CloseRuleEditor says "Done with the rule"
+// in the language of msgs.
+func (msgs Messages) CloseRuleEditor() string {
+	return Catalog.Format(msgs.locale, "closeRuleEditor", nil)
+}
+
+// CancelRuleEditor says "Cancel the changes to the rule"
+// in the language the app shows.
+func CancelRuleEditor() string { return In(i18n.Locale()).CancelRuleEditor() }
+
+// CancelRuleEditor says "Cancel the changes to the rule"
+// in the language of msgs.
+func (msgs Messages) CancelRuleEditor() string {
+	return Catalog.Format(msgs.locale, "cancelRuleEditor", nil)
+}
+
+// SaveRule says "Save rule"
+// in the language the app shows.
+func SaveRule() string { return In(i18n.Locale()).SaveRule() }
+
+// SaveRule says "Save rule"
+// in the language of msgs.
+func (msgs Messages) SaveRule() string {
+	return Catalog.Format(msgs.locale, "saveRule", nil)
+}
+
+// RuleName says "Name"
+// in the language the app shows.
+func RuleName() string { return In(i18n.Locale()).RuleName() }
+
+// RuleName says "Name"
+// in the language of msgs.
+func (msgs Messages) RuleName() string {
+	return Catalog.Format(msgs.locale, "ruleName", nil)
+}
+
+// RuleNamePlaceholder says "Newsletters"
+// in the language the app shows.
+func RuleNamePlaceholder() string { return In(i18n.Locale()).RuleNamePlaceholder() }
+
+// RuleNamePlaceholder says "Newsletters"
+// in the language of msgs.
+func (msgs Messages) RuleNamePlaceholder() string {
+	return Catalog.Format(msgs.locale, "ruleNamePlaceholder", nil)
+}
+
+// RuleNameInvalid says "Give the rule a name, of at most {count} characters."
+// in the language the app shows.
+func RuleNameInvalid(count int) string { return In(i18n.Locale()).RuleNameInvalid(count) }
+
+// RuleNameInvalid says "Give the rule a name, of at most {count} characters."
+// in the language of msgs.
+func (msgs Messages) RuleNameInvalid(count int) string {
+	return Catalog.Format(msgs.locale, "ruleNameInvalid", map[string]any{"count": count})
+}
+
+// RuleWhen says "When a new message matches"
+// in the language the app shows.
+func RuleWhen() string { return In(i18n.Locale()).RuleWhen() }
+
+// RuleWhen says "When a new message matches"
+// in the language of msgs.
+func (msgs Messages) RuleWhen() string {
+	return Catalog.Format(msgs.locale, "ruleWhen", nil)
+}
+
+// MatchAll says "all of these"
+// in the language the app shows.
+func MatchAll() string { return In(i18n.Locale()).MatchAll() }
+
+// MatchAll says "all of these"
+// in the language of msgs.
+func (msgs Messages) MatchAll() string {
+	return Catalog.Format(msgs.locale, "matchAll", nil)
+}
+
+// MatchAny says "any of these"
+// in the language the app shows.
+func MatchAny() string { return In(i18n.Locale()).MatchAny() }
+
+// MatchAny says "any of these"
+// in the language of msgs.
+func (msgs Messages) MatchAny() string {
+	return Catalog.Format(msgs.locale, "matchAny", nil)
+}
+
+// ConditionOf says "Condition {n}"
+// in the language the app shows.
+//
+// What the picker of a condition's field is named, for assistive
+// technology.
+func ConditionOf(n int) string { return In(i18n.Locale()).ConditionOf(n) }
+
+// ConditionOf says "Condition {n}"
+// in the language of msgs.
+//
+// What the picker of a condition's field is named, for assistive
+// technology.
+func (msgs Messages) ConditionOf(n int) string {
+	return Catalog.Format(msgs.locale, "conditionOf", map[string]any{"n": n})
+}
+
+// HeaderOf says "Header name of condition {n}"
+// in the language the app shows.
+func HeaderOf(n int) string { return In(i18n.Locale()).HeaderOf(n) }
+
+// HeaderOf says "Header name of condition {n}"
+// in the language of msgs.
+func (msgs Messages) HeaderOf(n int) string {
+	return Catalog.Format(msgs.locale, "headerOf", map[string]any{"n": n})
+}
+
+// ValueOf says "Text of condition {n}"
+// in the language the app shows.
+func ValueOf(n int) string { return In(i18n.Locale()).ValueOf(n) }
+
+// ValueOf says "Text of condition {n}"
+// in the language of msgs.
+func (msgs Messages) ValueOf(n int) string {
+	return Catalog.Format(msgs.locale, "valueOf", map[string]any{"n": n})
+}
+
+// AccountOf says "Account of condition {n}"
+// in the language the app shows.
+func AccountOf(n int) string { return In(i18n.Locale()).AccountOf(n) }
+
+// AccountOf says "Account of condition {n}"
+// in the language of msgs.
+func (msgs Messages) AccountOf(n int) string {
+	return Catalog.Format(msgs.locale, "accountOf", map[string]any{"n": n})
+}
+
+// FolderOf says "Folder of condition {n}"
+// in the language the app shows.
+func FolderOf(n int) string { return In(i18n.Locale()).FolderOf(n) }
+
+// FolderOf says "Folder of condition {n}"
+// in the language of msgs.
+func (msgs Messages) FolderOf(n int) string {
+	return Catalog.Format(msgs.locale, "folderOf", map[string]any{"n": n})
+}
+
+// LabelOf says "Label of condition {n}"
+// in the language the app shows.
+func LabelOf(n int) string { return In(i18n.Locale()).LabelOf(n) }
+
+// LabelOf says "Label of condition {n}"
+// in the language of msgs.
+func (msgs Messages) LabelOf(n int) string {
+	return Catalog.Format(msgs.locale, "labelOf", map[string]any{"n": n})
+}
+
+// RemoveCondition says "Remove condition {n}"
+// in the language the app shows.
+func RemoveCondition(n int) string { return In(i18n.Locale()).RemoveCondition(n) }
+
+// RemoveCondition says "Remove condition {n}"
+// in the language of msgs.
+func (msgs Messages) RemoveCondition(n int) string {
+	return Catalog.Format(msgs.locale, "removeCondition", map[string]any{"n": n})
+}
+
+// Contains says "contains"
+// in the language the app shows.
+func Contains() string { return In(i18n.Locale()).Contains() }
+
+// Contains says "contains"
+// in the language of msgs.
+func (msgs Messages) Contains() string {
+	return Catalog.Format(msgs.locale, "contains", nil)
+}
+
+// CondAttachmentDetail says "The message has files attached."
+// in the language the app shows.
+func CondAttachmentDetail() string { return In(i18n.Locale()).CondAttachmentDetail() }
+
+// CondAttachmentDetail says "The message has files attached."
+// in the language of msgs.
+func (msgs Messages) CondAttachmentDetail() string {
+	return Catalog.Format(msgs.locale, "condAttachmentDetail", nil)
+}
+
+// AddCondition says "Add a condition"
+// in the language the app shows.
+func AddCondition() string { return In(i18n.Locale()).AddCondition() }
+
+// AddCondition says "Add a condition"
+// in the language of msgs.
+func (msgs Messages) AddCondition() string {
+	return Catalog.Format(msgs.locale, "addCondition", nil)
+}
+
+// RuleThen says "Then"
+// in the language the app shows.
+func RuleThen() string { return In(i18n.Locale()).RuleThen() }
+
+// RuleThen says "Then"
+// in the language of msgs.
+func (msgs Messages) RuleThen() string {
+	return Catalog.Format(msgs.locale, "ruleThen", nil)
+}
+
+// ActionOf says "Action {n}"
+// in the language the app shows.
+//
+// What the picker of an action's kind is named, for assistive technology.
+func ActionOf(n int) string { return In(i18n.Locale()).ActionOf(n) }
+
+// ActionOf says "Action {n}"
+// in the language of msgs.
+//
+// What the picker of an action's kind is named, for assistive technology.
+func (msgs Messages) ActionOf(n int) string {
+	return Catalog.Format(msgs.locale, "actionOf", map[string]any{"n": n})
+}
+
+// ActionAccountOf says "Account of action {n}"
+// in the language the app shows.
+func ActionAccountOf(n int) string { return In(i18n.Locale()).ActionAccountOf(n) }
+
+// ActionAccountOf says "Account of action {n}"
+// in the language of msgs.
+func (msgs Messages) ActionAccountOf(n int) string {
+	return Catalog.Format(msgs.locale, "actionAccountOf", map[string]any{"n": n})
+}
+
+// ActionFolderOf says "Folder of action {n}"
+// in the language the app shows.
+func ActionFolderOf(n int) string { return In(i18n.Locale()).ActionFolderOf(n) }
+
+// ActionFolderOf says "Folder of action {n}"
+// in the language of msgs.
+func (msgs Messages) ActionFolderOf(n int) string {
+	return Catalog.Format(msgs.locale, "actionFolderOf", map[string]any{"n": n})
+}
+
+// ActionLabelOf says "Label of action {n}"
+// in the language the app shows.
+func ActionLabelOf(n int) string { return In(i18n.Locale()).ActionLabelOf(n) }
+
+// ActionLabelOf says "Label of action {n}"
+// in the language of msgs.
+func (msgs Messages) ActionLabelOf(n int) string {
+	return Catalog.Format(msgs.locale, "actionLabelOf", map[string]any{"n": n})
+}
+
+// RemoveAction says "Remove action {n}"
+// in the language the app shows.
+func RemoveAction(n int) string { return In(i18n.Locale()).RemoveAction(n) }
+
+// RemoveAction says "Remove action {n}"
+// in the language of msgs.
+func (msgs Messages) RemoveAction(n int) string {
+	return Catalog.Format(msgs.locale, "removeAction", map[string]any{"n": n})
+}
+
+// AddAction says "Add an action"
+// in the language the app shows.
+func AddAction() string { return In(i18n.Locale()).AddAction() }
+
+// AddAction says "Add an action"
+// in the language of msgs.
+func (msgs Messages) AddAction() string {
+	return Catalog.Format(msgs.locale, "addAction", nil)
+}
+
+// RuleStop says "Stop: don’t try the rules after this one"
+// in the language the app shows.
+func RuleStop() string { return In(i18n.Locale()).RuleStop() }
+
+// RuleStop says "Stop: don’t try the rules after this one"
+// in the language of msgs.
+func (msgs Messages) RuleStop() string {
+	return Catalog.Format(msgs.locale, "ruleStop", nil)
+}
+
+// RuleStopDetail says "A rule that moves a message always stops."
+// in the language the app shows.
+func RuleStopDetail() string { return In(i18n.Locale()).RuleStopDetail() }
+
+// RuleStopDetail says "A rule that moves a message always stops."
+// in the language of msgs.
+func (msgs Messages) RuleStopDetail() string {
+	return Catalog.Format(msgs.locale, "ruleStopDetail", nil)
+}
+
+// RuleNeverSends says "A rule never sends, forwards or deletes mail."
+// in the language the app shows.
+func RuleNeverSends() string { return In(i18n.Locale()).RuleNeverSends() }
+
+// RuleNeverSends says "A rule never sends, forwards or deletes mail."
+// in the language of msgs.
+func (msgs Messages) RuleNeverSends() string {
+	return Catalog.Format(msgs.locale, "ruleNeverSends", nil)
+}
+
+// RuleTrashWarning says "Moving to the Trash does not delete the message, but it is deleted for good when the Trash is emptied."
+// in the language the app shows.
+func RuleTrashWarning() string { return In(i18n.Locale()).RuleTrashWarning() }
+
+// RuleTrashWarning says "Moving to the Trash does not delete the message, but it is deleted for good when the Trash is emptied."
+// in the language of msgs.
+func (msgs Messages) RuleTrashWarning() string {
+	return Catalog.Format(msgs.locale, "ruleTrashWarning", nil)
+}
+
+// RuleNoLabels says "This account has no labels yet."
+// in the language the app shows.
+func RuleNoLabels() string { return In(i18n.Locale()).RuleNoLabels() }
+
+// RuleNoLabels says "This account has no labels yet."
+// in the language of msgs.
+func (msgs Messages) RuleNoLabels() string {
+	return Catalog.Format(msgs.locale, "ruleNoLabels", nil)
+}
+
+// RuleChooseAccountPlaceholder says "Choose an account"
+// in the language the app shows.
+func RuleChooseAccountPlaceholder() string { return In(i18n.Locale()).RuleChooseAccountPlaceholder() }
+
+// RuleChooseAccountPlaceholder says "Choose an account"
+// in the language of msgs.
+func (msgs Messages) RuleChooseAccountPlaceholder() string {
+	return Catalog.Format(msgs.locale, "ruleChooseAccountPlaceholder", nil)
+}
+
+// RuleChooseFolderPlaceholder says "Choose a folder"
+// in the language the app shows.
+func RuleChooseFolderPlaceholder() string { return In(i18n.Locale()).RuleChooseFolderPlaceholder() }
+
+// RuleChooseFolderPlaceholder says "Choose a folder"
+// in the language of msgs.
+func (msgs Messages) RuleChooseFolderPlaceholder() string {
+	return Catalog.Format(msgs.locale, "ruleChooseFolderPlaceholder", nil)
+}
+
+// RuleChooseLabelPlaceholder says "Choose a label"
+// in the language the app shows.
+func RuleChooseLabelPlaceholder() string { return In(i18n.Locale()).RuleChooseLabelPlaceholder() }
+
+// RuleChooseLabelPlaceholder says "Choose a label"
+// in the language of msgs.
+func (msgs Messages) RuleChooseLabelPlaceholder() string {
+	return Catalog.Format(msgs.locale, "ruleChooseLabelPlaceholder", nil)
+}
+
+// FolderNamed says "{shown} ({name})"
+// in the language the app shows.
+//
+// A folder in a picker, with the server's name after the name the app gives
+// it, where two would read the same.
+func FolderNamed(shown string, name string) string { return In(i18n.Locale()).FolderNamed(shown, name) }
+
+// FolderNamed says "{shown} ({name})"
+// in the language of msgs.
+//
+// A folder in a picker, with the server's name after the name the app gives
+// it, where two would read the same.
+func (msgs Messages) FolderNamed(shown string, name string) string {
+	return Catalog.Format(msgs.locale, "folderNamed", map[string]any{"shown": shown, "name": name})
+}
+
+// RuleFieldSender says "From"
+// in the language the app shows.
+func RuleFieldSender() string { return In(i18n.Locale()).RuleFieldSender() }
+
+// RuleFieldSender says "From"
+// in the language of msgs.
+func (msgs Messages) RuleFieldSender() string {
+	return Catalog.Format(msgs.locale, "ruleFieldSender", nil)
+}
+
+// RuleFieldRecipients says "To or Cc"
+// in the language the app shows.
+func RuleFieldRecipients() string { return In(i18n.Locale()).RuleFieldRecipients() }
+
+// RuleFieldRecipients says "To or Cc"
+// in the language of msgs.
+func (msgs Messages) RuleFieldRecipients() string {
+	return Catalog.Format(msgs.locale, "ruleFieldRecipients", nil)
+}
+
+// RuleFieldSubject says "Subject"
+// in the language the app shows.
+func RuleFieldSubject() string { return In(i18n.Locale()).RuleFieldSubject() }
+
+// RuleFieldSubject says "Subject"
+// in the language of msgs.
+func (msgs Messages) RuleFieldSubject() string {
+	return Catalog.Format(msgs.locale, "ruleFieldSubject", nil)
+}
+
+// RuleFieldHeader says "Header"
+// in the language the app shows.
+func RuleFieldHeader() string { return In(i18n.Locale()).RuleFieldHeader() }
+
+// RuleFieldHeader says "Header"
+// in the language of msgs.
+func (msgs Messages) RuleFieldHeader() string {
+	return Catalog.Format(msgs.locale, "ruleFieldHeader", nil)
+}
+
+// RuleFieldAttachment says "Has attachments"
+// in the language the app shows.
+func RuleFieldAttachment() string { return In(i18n.Locale()).RuleFieldAttachment() }
+
+// RuleFieldAttachment says "Has attachments"
+// in the language of msgs.
+func (msgs Messages) RuleFieldAttachment() string {
+	return Catalog.Format(msgs.locale, "ruleFieldAttachment", nil)
+}
+
+// RuleFieldAccount says "Account"
+// in the language the app shows.
+func RuleFieldAccount() string { return In(i18n.Locale()).RuleFieldAccount() }
+
+// RuleFieldAccount says "Account"
+// in the language of msgs.
+func (msgs Messages) RuleFieldAccount() string {
+	return Catalog.Format(msgs.locale, "ruleFieldAccount", nil)
+}
+
+// RuleFieldFolder says "Folder"
+// in the language the app shows.
+func RuleFieldFolder() string { return In(i18n.Locale()).RuleFieldFolder() }
+
+// RuleFieldFolder says "Folder"
+// in the language of msgs.
+func (msgs Messages) RuleFieldFolder() string {
+	return Catalog.Format(msgs.locale, "ruleFieldFolder", nil)
+}
+
+// RuleFieldLabel says "Label"
+// in the language the app shows.
+func RuleFieldLabel() string { return In(i18n.Locale()).RuleFieldLabel() }
+
+// RuleFieldLabel says "Label"
+// in the language of msgs.
+func (msgs Messages) RuleFieldLabel() string {
+	return Catalog.Format(msgs.locale, "ruleFieldLabel", nil)
+}
+
+// KindMove says "Move to folder"
+// in the language the app shows.
+func KindMove() string { return In(i18n.Locale()).KindMove() }
+
+// KindMove says "Move to folder"
+// in the language of msgs.
+func (msgs Messages) KindMove() string {
+	return Catalog.Format(msgs.locale, "kindMove", nil)
+}
+
+// KindAddLabel says "Add label"
+// in the language the app shows.
+func KindAddLabel() string { return In(i18n.Locale()).KindAddLabel() }
+
+// KindAddLabel says "Add label"
+// in the language of msgs.
+func (msgs Messages) KindAddLabel() string {
+	return Catalog.Format(msgs.locale, "kindAddLabel", nil)
+}
+
+// KindRemoveLabel says "Remove label"
+// in the language the app shows.
+func KindRemoveLabel() string { return In(i18n.Locale()).KindRemoveLabel() }
+
+// KindRemoveLabel says "Remove label"
+// in the language of msgs.
+func (msgs Messages) KindRemoveLabel() string {
+	return Catalog.Format(msgs.locale, "kindRemoveLabel", nil)
+}
+
+// KindStar says "Star"
+// in the language the app shows.
+func KindStar() string { return In(i18n.Locale()).KindStar() }
+
+// KindStar says "Star"
+// in the language of msgs.
+func (msgs Messages) KindStar() string {
+	return Catalog.Format(msgs.locale, "kindStar", nil)
+}
+
+// KindMarkRead says "Mark as read"
+// in the language the app shows.
+func KindMarkRead() string { return In(i18n.Locale()).KindMarkRead() }
+
+// KindMarkRead says "Mark as read"
+// in the language of msgs.
+func (msgs Messages) KindMarkRead() string {
+	return Catalog.Format(msgs.locale, "kindMarkRead", nil)
+}
+
+// KindMarkUnread says "Mark as unread"
+// in the language the app shows.
+func KindMarkUnread() string { return In(i18n.Locale()).KindMarkUnread() }
+
+// KindMarkUnread says "Mark as unread"
+// in the language of msgs.
+func (msgs Messages) KindMarkUnread() string {
+	return Catalog.Format(msgs.locale, "kindMarkUnread", nil)
+}
+
+// KindSkipNotification says "Don’t notify"
+// in the language the app shows.
+func KindSkipNotification() string { return In(i18n.Locale()).KindSkipNotification() }
+
+// KindSkipNotification says "Don’t notify"
+// in the language of msgs.
+func (msgs Messages) KindSkipNotification() string {
+	return Catalog.Format(msgs.locale, "kindSkipNotification", nil)
+}
+
+// SubjectPlaceholder says "Invoice"
+// in the language the app shows.
+func SubjectPlaceholder() string { return In(i18n.Locale()).SubjectPlaceholder() }
+
+// SubjectPlaceholder says "Invoice"
+// in the language of msgs.
+func (msgs Messages) SubjectPlaceholder() string {
+	return Catalog.Format(msgs.locale, "subjectPlaceholder", nil)
+}
+
+// RuleNeedsCondition says "A rule needs a condition."
+// in the language the app shows.
+func RuleNeedsCondition() string { return In(i18n.Locale()).RuleNeedsCondition() }
+
+// RuleNeedsCondition says "A rule needs a condition."
+// in the language of msgs.
+func (msgs Messages) RuleNeedsCondition() string {
+	return Catalog.Format(msgs.locale, "ruleNeedsCondition", nil)
+}
+
+// RuleNeedsAction says "A rule needs an action."
+// in the language the app shows.
+func RuleNeedsAction() string { return In(i18n.Locale()).RuleNeedsAction() }
+
+// RuleNeedsAction says "A rule needs an action."
+// in the language of msgs.
+func (msgs Messages) RuleNeedsAction() string {
+	return Catalog.Format(msgs.locale, "ruleNeedsAction", nil)
+}
+
+// RuleInvalid says "This rule cannot be saved as it is."
+// in the language the app shows.
+func RuleInvalid() string { return In(i18n.Locale()).RuleInvalid() }
+
+// RuleInvalid says "This rule cannot be saved as it is."
+// in the language of msgs.
+func (msgs Messages) RuleInvalid() string {
+	return Catalog.Format(msgs.locale, "ruleInvalid", nil)
+}
+
+// RuleAccountGone says "This account is no longer in Shu."
+// in the language the app shows.
+func RuleAccountGone() string { return In(i18n.Locale()).RuleAccountGone() }
+
+// RuleAccountGone says "This account is no longer in Shu."
+// in the language of msgs.
+func (msgs Messages) RuleAccountGone() string {
+	return Catalog.Format(msgs.locale, "ruleAccountGone", nil)
+}
+
+// RuleOneAccount says "A rule can use the folders and labels of one account, and this one uses {account}’s."
+// in the language the app shows.
+func RuleOneAccount(account string) string { return In(i18n.Locale()).RuleOneAccount(account) }
+
+// RuleOneAccount says "A rule can use the folders and labels of one account, and this one uses {account}’s."
+// in the language of msgs.
+func (msgs Messages) RuleOneAccount(account string) string {
+	return Catalog.Format(msgs.locale, "ruleOneAccount", map[string]any{"account": account})
+}
+
+// RuleFolderGone says "There is no folder “{folder}” in this account any more."
+// in the language the app shows.
+func RuleFolderGone(folder string) string { return In(i18n.Locale()).RuleFolderGone(folder) }
+
+// RuleFolderGone says "There is no folder “{folder}” in this account any more."
+// in the language of msgs.
+func (msgs Messages) RuleFolderGone(folder string) string {
+	return Catalog.Format(msgs.locale, "ruleFolderGone", map[string]any{"folder": folder})
+}
+
+// RuleLabelGone says "The label is no longer one of this account’s."
+// in the language the app shows.
+func RuleLabelGone() string { return In(i18n.Locale()).RuleLabelGone() }
+
+// RuleLabelGone says "The label is no longer one of this account’s."
+// in the language of msgs.
+func (msgs Messages) RuleLabelGone() string {
+	return Catalog.Format(msgs.locale, "ruleLabelGone", nil)
+}
+
+// RuleHeaderMissing says "Type the name of a header, such as List-Id."
+// in the language the app shows.
+func RuleHeaderMissing() string { return In(i18n.Locale()).RuleHeaderMissing() }
+
+// RuleHeaderMissing says "Type the name of a header, such as List-Id."
+// in the language of msgs.
+func (msgs Messages) RuleHeaderMissing() string {
+	return Catalog.Format(msgs.locale, "ruleHeaderMissing", nil)
+}
+
+// RuleHeaderInvalid says "A header’s name has only letters, digits and - _ . in it, such as List-Id."
+// in the language the app shows.
+func RuleHeaderInvalid() string { return In(i18n.Locale()).RuleHeaderInvalid() }
+
+// RuleHeaderInvalid says "A header’s name has only letters, digits and - _ . in it, such as List-Id."
+// in the language of msgs.
+func (msgs Messages) RuleHeaderInvalid() string {
+	return Catalog.Format(msgs.locale, "ruleHeaderInvalid", nil)
+}
+
+// RuleValueMissing says "Type the text to look for."
+// in the language the app shows.
+func RuleValueMissing() string { return In(i18n.Locale()).RuleValueMissing() }
+
+// RuleValueMissing says "Type the text to look for."
+// in the language of msgs.
+func (msgs Messages) RuleValueMissing() string {
+	return Catalog.Format(msgs.locale, "ruleValueMissing", nil)
+}
+
+// RuleValueTooLong says "The text is longer than {count} characters."
+// in the language the app shows.
+func RuleValueTooLong(count int) string { return In(i18n.Locale()).RuleValueTooLong(count) }
+
+// RuleValueTooLong says "The text is longer than {count} characters."
+// in the language of msgs.
+func (msgs Messages) RuleValueTooLong(count int) string {
+	return Catalog.Format(msgs.locale, "ruleValueTooLong", map[string]any{"count": count})
+}
+
+// RuleValueInvalid says "The text has characters a rule cannot look for."
+// in the language the app shows.
+func RuleValueInvalid() string { return In(i18n.Locale()).RuleValueInvalid() }
+
+// RuleValueInvalid says "The text has characters a rule cannot look for."
+// in the language of msgs.
+func (msgs Messages) RuleValueInvalid() string {
+	return Catalog.Format(msgs.locale, "ruleValueInvalid", nil)
+}
+
+// RuleChooseAccount says "Choose an account."
+// in the language the app shows.
+func RuleChooseAccount() string { return In(i18n.Locale()).RuleChooseAccount() }
+
+// RuleChooseAccount says "Choose an account."
+// in the language of msgs.
+func (msgs Messages) RuleChooseAccount() string {
+	return Catalog.Format(msgs.locale, "ruleChooseAccount", nil)
+}
+
+// RuleChooseFolder says "Choose a folder."
+// in the language the app shows.
+func RuleChooseFolder() string { return In(i18n.Locale()).RuleChooseFolder() }
+
+// RuleChooseFolder says "Choose a folder."
+// in the language of msgs.
+func (msgs Messages) RuleChooseFolder() string {
+	return Catalog.Format(msgs.locale, "ruleChooseFolder", nil)
+}
+
+// RuleChooseLabel says "Choose a label."
+// in the language the app shows.
+func RuleChooseLabel() string { return In(i18n.Locale()).RuleChooseLabel() }
+
+// RuleChooseLabel says "Choose a label."
+// in the language of msgs.
+func (msgs Messages) RuleChooseLabel() string {
+	return Catalog.Format(msgs.locale, "ruleChooseLabel", nil)
+}
+
+// RuleConditionInvalid says "This condition is not one a rule can have."
+// in the language the app shows.
+func RuleConditionInvalid() string { return In(i18n.Locale()).RuleConditionInvalid() }
+
+// RuleConditionInvalid says "This condition is not one a rule can have."
+// in the language of msgs.
+func (msgs Messages) RuleConditionInvalid() string {
+	return Catalog.Format(msgs.locale, "ruleConditionInvalid", nil)
+}
+
+// RuleActionNotAllowed says "A rule cannot do this: it never sends, forwards or deletes mail."
+// in the language the app shows.
+func RuleActionNotAllowed() string { return In(i18n.Locale()).RuleActionNotAllowed() }
+
+// RuleActionNotAllowed says "A rule cannot do this: it never sends, forwards or deletes mail."
+// in the language of msgs.
+func (msgs Messages) RuleActionNotAllowed() string {
+	return Catalog.Format(msgs.locale, "ruleActionNotAllowed", nil)
+}
+
+// RuleOneMove says "A rule moves a message to one folder only."
+// in the language the app shows.
+func RuleOneMove() string { return In(i18n.Locale()).RuleOneMove() }
+
+// RuleOneMove says "A rule moves a message to one folder only."
+// in the language of msgs.
+func (msgs Messages) RuleOneMove() string {
+	return Catalog.Format(msgs.locale, "ruleOneMove", nil)
+}
+
+// RuleReadAndUnread says "A rule cannot mark a message both read and unread."
+// in the language the app shows.
+func RuleReadAndUnread() string { return In(i18n.Locale()).RuleReadAndUnread() }
+
+// RuleReadAndUnread says "A rule cannot mark a message both read and unread."
+// in the language of msgs.
+func (msgs Messages) RuleReadAndUnread() string {
+	return Catalog.Format(msgs.locale, "ruleReadAndUnread", nil)
+}
+
+// RuleLabelBothWays says "A rule cannot both add and remove the same label."
+// in the language the app shows.
+func RuleLabelBothWays() string { return In(i18n.Locale()).RuleLabelBothWays() }
+
+// RuleLabelBothWays says "A rule cannot both add and remove the same label."
+// in the language of msgs.
+func (msgs Messages) RuleLabelBothWays() string {
+	return Catalog.Format(msgs.locale, "ruleLabelBothWays", nil)
+}
+
+// RuleActionTwice says "The rule does this already."
+// in the language the app shows.
+func RuleActionTwice() string { return In(i18n.Locale()).RuleActionTwice() }
+
+// RuleActionTwice says "The rule does this already."
+// in the language of msgs.
+func (msgs Messages) RuleActionTwice() string {
+	return Catalog.Format(msgs.locale, "ruleActionTwice", nil)
+}
+
+// RuleActionInvalid says "This action is not one a rule can take."
+// in the language the app shows.
+func RuleActionInvalid() string { return In(i18n.Locale()).RuleActionInvalid() }
+
+// RuleActionInvalid says "This action is not one a rule can take."
+// in the language of msgs.
+func (msgs Messages) RuleActionInvalid() string {
+	return Catalog.Format(msgs.locale, "ruleActionInvalid", nil)
+}
+
+// RuleCheckFailed says "Could not check the rule: {error}"
+// in the language the app shows.
+func RuleCheckFailed(error string) string { return In(i18n.Locale()).RuleCheckFailed(error) }
+
+// RuleCheckFailed says "Could not check the rule: {error}"
+// in the language of msgs.
+func (msgs Messages) RuleCheckFailed(error string) string {
+	return Catalog.Format(msgs.locale, "ruleCheckFailed", map[string]any{"error": error})
+}
+
+// RuleSaveFailed says "Could not save the rule: {error}"
+// in the language the app shows.
+func RuleSaveFailed(error string) string { return In(i18n.Locale()).RuleSaveFailed(error) }
+
+// RuleSaveFailed says "Could not save the rule: {error}"
+// in the language of msgs.
+func (msgs Messages) RuleSaveFailed(error string) string {
+	return Catalog.Format(msgs.locale, "ruleSaveFailed", map[string]any{"error": error})
+}
+
+// RuleSaved says "Saved. The rule sorts the mail that arrives from now on."
+// in the language the app shows.
+func RuleSaved() string { return In(i18n.Locale()).RuleSaved() }
+
+// RuleSaved says "Saved. The rule sorts the mail that arrives from now on."
+// in the language of msgs.
+func (msgs Messages) RuleSaved() string {
+	return Catalog.Format(msgs.locale, "ruleSaved", nil)
+}
+
+// RulePreviewTitle says "Preview"
+// in the language the app shows.
+func RulePreviewTitle() string { return In(i18n.Locale()).RulePreviewTitle() }
+
+// RulePreviewTitle says "Preview"
+// in the language of msgs.
+func (msgs Messages) RulePreviewTitle() string {
+	return Catalog.Format(msgs.locale, "rulePreviewTitle", nil)
+}
+
+// RulePreviewIncomplete says "Fill in a condition to see which messages in your mail it matches."
+// in the language the app shows.
+func RulePreviewIncomplete() string { return In(i18n.Locale()).RulePreviewIncomplete() }
+
+// RulePreviewIncomplete says "Fill in a condition to see which messages in your mail it matches."
+// in the language of msgs.
+func (msgs Messages) RulePreviewIncomplete() string {
+	return Catalog.Format(msgs.locale, "rulePreviewIncomplete", nil)
+}
+
+// RulePreviewBlocked says "Correct what the rule says is wrong to see which messages in your mail it matches."
+// in the language the app shows.
+func RulePreviewBlocked() string { return In(i18n.Locale()).RulePreviewBlocked() }
+
+// RulePreviewBlocked says "Correct what the rule says is wrong to see which messages in your mail it matches."
+// in the language of msgs.
+func (msgs Messages) RulePreviewBlocked() string {
+	return Catalog.Format(msgs.locale, "rulePreviewBlocked", nil)
+}
+
+// RulePreviewCount says "{count, plural, =0 {No message in your mail matches this rule now.} one {# message in your mail matches this rule now…"
+// in the language the app shows.
+func RulePreviewCount(count int) string { return In(i18n.Locale()).RulePreviewCount(count) }
+
+// RulePreviewCount says "{count, plural, =0 {No message in your mail matches this rule now.} one {# message in your mail matches this rule now…"
+// in the language of msgs.
+func (msgs Messages) RulePreviewCount(count int) string {
+	return Catalog.Format(msgs.locale, "rulePreviewCount", map[string]any{"count": count})
+}
+
+// RulePreviewPartial says "Rows still to fill in are left out of the preview."
+// in the language the app shows.
+func RulePreviewPartial() string { return In(i18n.Locale()).RulePreviewPartial() }
+
+// RulePreviewPartial says "Rows still to fill in are left out of the preview."
+// in the language of msgs.
+func (msgs Messages) RulePreviewPartial() string {
+	return Catalog.Format(msgs.locale, "rulePreviewPartial", nil)
+}
+
+// RulePreviewFailed says "Could not read the preview: {error}"
+// in the language the app shows.
+func RulePreviewFailed(error string) string { return In(i18n.Locale()).RulePreviewFailed(error) }
+
+// RulePreviewFailed says "Could not read the preview: {error}"
+// in the language of msgs.
+func (msgs Messages) RulePreviewFailed(error string) string {
+	return Catalog.Format(msgs.locale, "rulePreviewFailed", map[string]any{"error": error})
+}
+
+// RuleNewMailOnly says "Saving changes none of these messages: the rule acts only on mail that arrives from now on."
+// in the language the app shows.
+func RuleNewMailOnly() string { return In(i18n.Locale()).RuleNewMailOnly() }
+
+// RuleNewMailOnly says "Saving changes none of these messages: the rule acts only on mail that arrives from now on."
+// in the language of msgs.
+func (msgs Messages) RuleNewMailOnly() string {
+	return Catalog.Format(msgs.locale, "ruleNewMailOnly", nil)
+}
+
+// RuleSavedNewMailOnly says "The rule left these messages as they are: it acts only on mail that arrives. To change them too, apply it to them now."
+// in the language the app shows.
+func RuleSavedNewMailOnly() string { return In(i18n.Locale()).RuleSavedNewMailOnly() }
+
+// RuleSavedNewMailOnly says "The rule left these messages as they are: it acts only on mail that arrives. To change them too, apply it to them now."
+// in the language of msgs.
+func (msgs Messages) RuleSavedNewMailOnly() string {
+	return Catalog.Format(msgs.locale, "ruleSavedNewMailOnly", nil)
+}
+
+// RulePreviewMessages says "Messages the rule matches"
+// in the language the app shows.
+func RulePreviewMessages() string { return In(i18n.Locale()).RulePreviewMessages() }
+
+// RulePreviewMessages says "Messages the rule matches"
+// in the language of msgs.
+func (msgs Messages) RulePreviewMessages() string {
+	return Catalog.Format(msgs.locale, "rulePreviewMessages", nil)
+}
+
+// PreviewFrom says "{sender} · {folder}"
+// in the language the app shows.
+func PreviewFrom(sender string, folder string) string {
+	return In(i18n.Locale()).PreviewFrom(sender, folder)
+}
+
+// PreviewFrom says "{sender} · {folder}"
+// in the language of msgs.
+func (msgs Messages) PreviewFrom(sender string, folder string) string {
+	return Catalog.Format(msgs.locale, "previewFrom", map[string]any{"sender": sender, "folder": folder})
+}
+
+// PageRange says "{first}–{last} of {total}"
+// in the language the app shows.
+func PageRange(first int, last int, total int) string {
+	return In(i18n.Locale()).PageRange(first, last, total)
+}
+
+// PageRange says "{first}–{last} of {total}"
+// in the language of msgs.
+func (msgs Messages) PageRange(first int, last int, total int) string {
+	return Catalog.Format(msgs.locale, "pageRange", map[string]any{"first": first, "last": last, "total": total})
+}
+
+// PreviousPage says "Previous"
+// in the language the app shows.
+func PreviousPage() string { return In(i18n.Locale()).PreviousPage() }
+
+// PreviousPage says "Previous"
+// in the language of msgs.
+func (msgs Messages) PreviousPage() string {
+	return Catalog.Format(msgs.locale, "previousPage", nil)
+}
+
+// NextPage says "Next"
+// in the language the app shows.
+func NextPage() string { return In(i18n.Locale()).NextPage() }
+
+// NextPage says "Next"
+// in the language of msgs.
+func (msgs Messages) NextPage() string {
+	return Catalog.Format(msgs.locale, "nextPage", nil)
+}
+
+// PreviousPreviewPage says "Previous page of the preview"
+// in the language the app shows.
+func PreviousPreviewPage() string { return In(i18n.Locale()).PreviousPreviewPage() }
+
+// PreviousPreviewPage says "Previous page of the preview"
+// in the language of msgs.
+func (msgs Messages) PreviousPreviewPage() string {
+	return Catalog.Format(msgs.locale, "previousPreviewPage", nil)
+}
+
+// NextPreviewPage says "Next page of the preview"
+// in the language the app shows.
+func NextPreviewPage() string { return In(i18n.Locale()).NextPreviewPage() }
+
+// NextPreviewPage says "Next page of the preview"
+// in the language of msgs.
+func (msgs Messages) NextPreviewPage() string {
+	return Catalog.Format(msgs.locale, "nextPreviewPage", nil)
+}
+
+// ApplyRuleNow says "{count, plural, one {Apply to this message now} other {Apply to these # messages now}}"
+// in the language the app shows.
+func ApplyRuleNow(count int) string { return In(i18n.Locale()).ApplyRuleNow(count) }
+
+// ApplyRuleNow says "{count, plural, one {Apply to this message now} other {Apply to these # messages now}}"
+// in the language of msgs.
+func (msgs Messages) ApplyRuleNow(count int) string {
+	return Catalog.Format(msgs.locale, "applyRuleNow", map[string]any{"count": count})
+}
+
+// ApplyRuleNowDetail says "Takes the rule’s actions on them once. You can undo each change in the activity log."
+// in the language the app shows.
+func ApplyRuleNowDetail() string { return In(i18n.Locale()).ApplyRuleNowDetail() }
+
+// ApplyRuleNowDetail says "Takes the rule’s actions on them once. You can undo each change in the activity log."
+// in the language of msgs.
+func (msgs Messages) ApplyRuleNowDetail() string {
+	return Catalog.Format(msgs.locale, "applyRuleNowDetail", nil)
+}
+
+// RuleApplyPaused says "The rule is paused: turn it on to apply it."
+// in the language the app shows.
+func RuleApplyPaused() string { return In(i18n.Locale()).RuleApplyPaused() }
+
+// RuleApplyPaused says "The rule is paused: turn it on to apply it."
+// in the language of msgs.
+func (msgs Messages) RuleApplyPaused() string {
+	return Catalog.Format(msgs.locale, "ruleApplyPaused", nil)
+}
+
+// ApplyRuleTitle says "{count, plural, one {Apply “{name}” to # message now?} other {Apply “{name}” to # messages now?}}"
+// in the language the app shows.
+func ApplyRuleTitle(name string, count int) string {
+	return In(i18n.Locale()).ApplyRuleTitle(name, count)
+}
+
+// ApplyRuleTitle says "{count, plural, one {Apply “{name}” to # message now?} other {Apply “{name}” to # messages now?}}"
+// in the language of msgs.
+func (msgs Messages) ApplyRuleTitle(name string, count int) string {
+	return Catalog.Format(msgs.locale, "applyRuleTitle", map[string]any{"name": name, "count": count})
+}
+
+// ApplyRuleMessage says "These messages are changed now: {actions}. You can undo each change in the activity log."
+// in the language the app shows.
+func ApplyRuleMessage(actions string) string { return In(i18n.Locale()).ApplyRuleMessage(actions) }
+
+// ApplyRuleMessage says "These messages are changed now: {actions}. You can undo each change in the activity log."
+// in the language of msgs.
+func (msgs Messages) ApplyRuleMessage(actions string) string {
+	return Catalog.Format(msgs.locale, "applyRuleMessage", map[string]any{"actions": actions})
+}
+
+// ApplyRuleButton says "{count, plural, one {Apply to # message} other {Apply to # messages}}"
+// in the language the app shows.
+func ApplyRuleButton(count int) string { return In(i18n.Locale()).ApplyRuleButton(count) }
+
+// ApplyRuleButton says "{count, plural, one {Apply to # message} other {Apply to # messages}}"
+// in the language of msgs.
+func (msgs Messages) ApplyRuleButton(count int) string {
+	return Catalog.Format(msgs.locale, "applyRuleButton", map[string]any{"count": count})
+}
+
+// RuleRunFailed says "Could not apply the rule: {error}"
+// in the language the app shows.
+func RuleRunFailed(error string) string { return In(i18n.Locale()).RuleRunFailed(error) }
+
+// RuleRunFailed says "Could not apply the rule: {error}"
+// in the language of msgs.
+func (msgs Messages) RuleRunFailed(error string) string {
+	return Catalog.Format(msgs.locale, "ruleRunFailed", map[string]any{"error": error})
+}
+
+// RuleRanDone says "{count, plural, =0 {No message was changed.} one {Applied to # message.} other {Applied to # messages.}}"
+// in the language the app shows.
+func RuleRanDone(count int) string { return In(i18n.Locale()).RuleRanDone(count) }
+
+// RuleRanDone says "{count, plural, =0 {No message was changed.} one {Applied to # message.} other {Applied to # messages.}}"
+// in the language of msgs.
+func (msgs Messages) RuleRanDone(count int) string {
+	return Catalog.Format(msgs.locale, "ruleRanDone", map[string]any{"count": count})
+}
+
+// RuleRanWaiting says "{count, plural, one {# waits for the server.} other {# wait for the server.}}"
+// in the language the app shows.
+func RuleRanWaiting(count int) string { return In(i18n.Locale()).RuleRanWaiting(count) }
+
+// RuleRanWaiting says "{count, plural, one {# waits for the server.} other {# wait for the server.}}"
+// in the language of msgs.
+func (msgs Messages) RuleRanWaiting(count int) string {
+	return Catalog.Format(msgs.locale, "ruleRanWaiting", map[string]any{"count": count})
+}
+
+// RuleRanFailed says "{count, plural, one {# could not be changed.} other {# could not be changed.}}"
+// in the language the app shows.
+func RuleRanFailed(count int) string { return In(i18n.Locale()).RuleRanFailed(count) }
+
+// RuleRanFailed says "{count, plural, one {# could not be changed.} other {# could not be changed.}}"
+// in the language of msgs.
+func (msgs Messages) RuleRanFailed(count int) string {
+	return Catalog.Format(msgs.locale, "ruleRanFailed", map[string]any{"count": count})
+}
+
+// ShowRuleActivity says "Show in the activity log"
+// in the language the app shows.
+func ShowRuleActivity() string { return In(i18n.Locale()).ShowRuleActivity() }
+
+// ShowRuleActivity says "Show in the activity log"
+// in the language of msgs.
+func (msgs Messages) ShowRuleActivity() string {
+	return Catalog.Format(msgs.locale, "showRuleActivity", nil)
+}
+
+// RuleLogIntro says "Each time a rule acts on a message, it is listed here, newest first. Undo puts the message back as it was."
+// in the language the app shows.
+func RuleLogIntro() string { return In(i18n.Locale()).RuleLogIntro() }
+
+// RuleLogIntro says "Each time a rule acts on a message, it is listed here, newest first. Undo puts the message back as it was."
+// in the language of msgs.
+func (msgs Messages) RuleLogIntro() string {
+	return Catalog.Format(msgs.locale, "ruleLogIntro", nil)
+}
+
+// LogRuleFilter says "Rule"
+// in the language the app shows.
+func LogRuleFilter() string { return In(i18n.Locale()).LogRuleFilter() }
+
+// LogRuleFilter says "Rule"
+// in the language of msgs.
+func (msgs Messages) LogRuleFilter() string {
+	return Catalog.Format(msgs.locale, "logRuleFilter", nil)
+}
+
+// LogStateFilter says "State"
+// in the language the app shows.
+func LogStateFilter() string { return In(i18n.Locale()).LogStateFilter() }
+
+// LogStateFilter says "State"
+// in the language of msgs.
+func (msgs Messages) LogStateFilter() string {
+	return Catalog.Format(msgs.locale, "logStateFilter", nil)
+}
+
+// AllRules says "All rules"
+// in the language the app shows.
+func AllRules() string { return In(i18n.Locale()).AllRules() }
+
+// AllRules says "All rules"
+// in the language of msgs.
+func (msgs Messages) AllRules() string {
+	return Catalog.Format(msgs.locale, "allRules", nil)
+}
+
+// AnyState says "Any state"
+// in the language the app shows.
+func AnyState() string { return In(i18n.Locale()).AnyState() }
+
+// AnyState says "Any state"
+// in the language of msgs.
+func (msgs Messages) AnyState() string {
+	return Catalog.Format(msgs.locale, "anyState", nil)
+}
+
+// StatePending says "Waiting for the server"
+// in the language the app shows.
+func StatePending() string { return In(i18n.Locale()).StatePending() }
+
+// StatePending says "Waiting for the server"
+// in the language of msgs.
+func (msgs Messages) StatePending() string {
+	return Catalog.Format(msgs.locale, "statePending", nil)
+}
+
+// StateApplied says "Done"
+// in the language the app shows.
+func StateApplied() string { return In(i18n.Locale()).StateApplied() }
+
+// StateApplied says "Done"
+// in the language of msgs.
+func (msgs Messages) StateApplied() string {
+	return Catalog.Format(msgs.locale, "stateApplied", nil)
+}
+
+// StateFailed says "Failed"
+// in the language the app shows.
+func StateFailed() string { return In(i18n.Locale()).StateFailed() }
+
+// StateFailed says "Failed"
+// in the language of msgs.
+func (msgs Messages) StateFailed() string {
+	return Catalog.Format(msgs.locale, "stateFailed", nil)
+}
+
+// StateUndone says "Undone"
+// in the language the app shows.
+func StateUndone() string { return In(i18n.Locale()).StateUndone() }
+
+// StateUndone says "Undone"
+// in the language of msgs.
+func (msgs Messages) StateUndone() string {
+	return Catalog.Format(msgs.locale, "stateUndone", nil)
+}
+
+// RuleDeletedName says "{name} (deleted)"
+// in the language the app shows.
+func RuleDeletedName(name string) string { return In(i18n.Locale()).RuleDeletedName(name) }
+
+// RuleDeletedName says "{name} (deleted)"
+// in the language of msgs.
+func (msgs Messages) RuleDeletedName(name string) string {
+	return Catalog.Format(msgs.locale, "ruleDeletedName", map[string]any{"name": name})
+}
+
+// PreviousLogPage says "Previous page of the activity"
+// in the language the app shows.
+func PreviousLogPage() string { return In(i18n.Locale()).PreviousLogPage() }
+
+// PreviousLogPage says "Previous page of the activity"
+// in the language of msgs.
+func (msgs Messages) PreviousLogPage() string {
+	return Catalog.Format(msgs.locale, "previousLogPage", nil)
+}
+
+// NextLogPage says "Next page of the activity"
+// in the language the app shows.
+func NextLogPage() string { return In(i18n.Locale()).NextLogPage() }
+
+// NextLogPage says "Next page of the activity"
+// in the language of msgs.
+func (msgs Messages) NextLogPage() string {
+	return Catalog.Format(msgs.locale, "nextLogPage", nil)
+}
+
+// PauseRule says "Pause"
+// in the language the app shows.
+func PauseRule() string { return In(i18n.Locale()).PauseRule() }
+
+// PauseRule says "Pause"
+// in the language of msgs.
+func (msgs Messages) PauseRule() string {
+	return Catalog.Format(msgs.locale, "pauseRule", nil)
+}
+
+// ResumeRule says "Resume"
+// in the language the app shows.
+func ResumeRule() string { return In(i18n.Locale()).ResumeRule() }
+
+// ResumeRule says "Resume"
+// in the language of msgs.
+func (msgs Messages) ResumeRule() string {
+	return Catalog.Format(msgs.locale, "resumeRule", nil)
+}
+
+// PauseAndUndoEllipsis says "Pause and undo everything it did…"
+// in the language the app shows.
+func PauseAndUndoEllipsis() string { return In(i18n.Locale()).PauseAndUndoEllipsis() }
+
+// PauseAndUndoEllipsis says "Pause and undo everything it did…"
+// in the language of msgs.
+func (msgs Messages) PauseAndUndoEllipsis() string {
+	return Catalog.Format(msgs.locale, "pauseAndUndoEllipsis", nil)
+}
+
+// UndoAllEllipsis says "Undo everything it did…"
+// in the language the app shows.
+func UndoAllEllipsis() string { return In(i18n.Locale()).UndoAllEllipsis() }
+
+// UndoAllEllipsis says "Undo everything it did…"
+// in the language of msgs.
+func (msgs Messages) UndoAllEllipsis() string {
+	return Catalog.Format(msgs.locale, "undoAllEllipsis", nil)
+}
+
+// RuleLogEmpty says "Nothing yet. When a rule acts on new mail, it shows here."
+// in the language the app shows.
+func RuleLogEmpty() string { return In(i18n.Locale()).RuleLogEmpty() }
+
+// RuleLogEmpty says "Nothing yet. When a rule acts on new mail, it shows here."
+// in the language of msgs.
+func (msgs Messages) RuleLogEmpty() string {
+	return Catalog.Format(msgs.locale, "ruleLogEmpty", nil)
+}
+
+// RuleLogNoMatch says "No activity matches these filters."
+// in the language the app shows.
+func RuleLogNoMatch() string { return In(i18n.Locale()).RuleLogNoMatch() }
+
+// RuleLogNoMatch says "No activity matches these filters."
+// in the language of msgs.
+func (msgs Messages) RuleLogNoMatch() string {
+	return Catalog.Format(msgs.locale, "ruleLogNoMatch", nil)
+}
+
+// RuleLogReadFailed says "Could not read the activity: {error}"
+// in the language the app shows.
+func RuleLogReadFailed(error string) string { return In(i18n.Locale()).RuleLogReadFailed(error) }
+
+// RuleLogReadFailed says "Could not read the activity: {error}"
+// in the language of msgs.
+func (msgs Messages) RuleLogReadFailed(error string) string {
+	return Catalog.Format(msgs.locale, "ruleLogReadFailed", map[string]any{"error": error})
+}
+
+// EntryLine says "{sender} · {rule} · {time}"
+// in the language the app shows.
+//
+// Under an entry's subject in the activity log: who sent the message, the
+// rule, and when it acted.
+func EntryLine(sender string, rule string, time_ string) string {
+	return In(i18n.Locale()).EntryLine(sender, rule, time_)
+}
+
+// EntryLine says "{sender} · {rule} · {time}"
+// in the language of msgs.
+//
+// Under an entry's subject in the activity log: who sent the message, the
+// rule, and when it acted.
+func (msgs Messages) EntryLine(sender string, rule string, time_ string) string {
+	return Catalog.Format(msgs.locale, "entryLine", map[string]any{"sender": sender, "rule": rule, "time": time_})
+}
+
+// EntryManual says "{actions} (applied by you)"
+// in the language the app shows.
+func EntryManual(actions string) string { return In(i18n.Locale()).EntryManual(actions) }
+
+// EntryManual says "{actions} (applied by you)"
+// in the language of msgs.
+func (msgs Messages) EntryManual(actions string) string {
+	return Catalog.Format(msgs.locale, "entryManual", map[string]any{"actions": actions})
+}
+
+// UndoEntry says "Undo what was done to “{subject}”"
+// in the language the app shows.
+func UndoEntry(subject string) string { return In(i18n.Locale()).UndoEntry(subject) }
+
+// UndoEntry says "Undo what was done to “{subject}”"
+// in the language of msgs.
+func (msgs Messages) UndoEntry(subject string) string {
+	return Catalog.Format(msgs.locale, "undoEntry", map[string]any{"subject": subject})
+}
+
+// EntryActions says "More for “{subject}”"
+// in the language the app shows.
+func EntryActions(subject string) string { return In(i18n.Locale()).EntryActions(subject) }
+
+// EntryActions says "More for “{subject}”"
+// in the language of msgs.
+func (msgs Messages) EntryActions(subject string) string {
+	return Catalog.Format(msgs.locale, "entryActions", map[string]any{"subject": subject})
+}
+
+// UndoEntryFailed says "Could not undo “{subject}”: {error}"
+// in the language the app shows.
+func UndoEntryFailed(subject string, error string) string {
+	return In(i18n.Locale()).UndoEntryFailed(subject, error)
+}
+
+// UndoEntryFailed says "Could not undo “{subject}”: {error}"
+// in the language of msgs.
+func (msgs Messages) UndoEntryFailed(subject string, error string) string {
+	return Catalog.Format(msgs.locale, "undoEntryFailed", map[string]any{"subject": subject, "error": error})
+}
+
+// UndoEntryDone says "Put back “{subject}” as it was."
+// in the language the app shows.
+func UndoEntryDone(subject string) string { return In(i18n.Locale()).UndoEntryDone(subject) }
+
+// UndoEntryDone says "Put back “{subject}” as it was."
+// in the language of msgs.
+func (msgs Messages) UndoEntryDone(subject string) string {
+	return Catalog.Format(msgs.locale, "undoEntryDone", map[string]any{"subject": subject})
+}
+
+// PauseRuleNamed says "Pause “{name}”"
+// in the language the app shows.
+func PauseRuleNamed(name string) string { return In(i18n.Locale()).PauseRuleNamed(name) }
+
+// PauseRuleNamed says "Pause “{name}”"
+// in the language of msgs.
+func (msgs Messages) PauseRuleNamed(name string) string {
+	return Catalog.Format(msgs.locale, "pauseRuleNamed", map[string]any{"name": name})
+}
+
+// ResumeRuleNamed says "Resume “{name}”"
+// in the language the app shows.
+func ResumeRuleNamed(name string) string { return In(i18n.Locale()).ResumeRuleNamed(name) }
+
+// ResumeRuleNamed says "Resume “{name}”"
+// in the language of msgs.
+func (msgs Messages) ResumeRuleNamed(name string) string {
+	return Catalog.Format(msgs.locale, "resumeRuleNamed", map[string]any{"name": name})
+}
+
+// PauseAndUndoNamed says "Pause “{name}” and undo everything it did…"
+// in the language the app shows.
+func PauseAndUndoNamed(name string) string { return In(i18n.Locale()).PauseAndUndoNamed(name) }
+
+// PauseAndUndoNamed says "Pause “{name}” and undo everything it did…"
+// in the language of msgs.
+func (msgs Messages) PauseAndUndoNamed(name string) string {
+	return Catalog.Format(msgs.locale, "pauseAndUndoNamed", map[string]any{"name": name})
+}
+
+// UndoAllNamed says "Undo everything “{name}” did…"
+// in the language the app shows.
+func UndoAllNamed(name string) string { return In(i18n.Locale()).UndoAllNamed(name) }
+
+// UndoAllNamed says "Undo everything “{name}” did…"
+// in the language of msgs.
+func (msgs Messages) UndoAllNamed(name string) string {
+	return Catalog.Format(msgs.locale, "undoAllNamed", map[string]any{"name": name})
+}
+
+// ShowRuleOnly says "Show only “{name}”"
+// in the language the app shows.
+func ShowRuleOnly(name string) string { return In(i18n.Locale()).ShowRuleOnly(name) }
+
+// ShowRuleOnly says "Show only “{name}”"
+// in the language of msgs.
+func (msgs Messages) ShowRuleOnly(name string) string {
+	return Catalog.Format(msgs.locale, "showRuleOnly", map[string]any{"name": name})
+}
+
+// RulePausedNote says "“{name}” is paused: it sorts no new mail. What it did stays as it is."
+// in the language the app shows.
+func RulePausedNote(name string) string { return In(i18n.Locale()).RulePausedNote(name) }
+
+// RulePausedNote says "“{name}” is paused: it sorts no new mail. What it did stays as it is."
+// in the language of msgs.
+func (msgs Messages) RulePausedNote(name string) string {
+	return Catalog.Format(msgs.locale, "rulePausedNote", map[string]any{"name": name})
+}
+
+// RuleResumedNote says "“{name}” sorts new mail again."
+// in the language the app shows.
+func RuleResumedNote(name string) string { return In(i18n.Locale()).RuleResumedNote(name) }
+
+// RuleResumedNote says "“{name}” sorts new mail again."
+// in the language of msgs.
+func (msgs Messages) RuleResumedNote(name string) string {
+	return Catalog.Format(msgs.locale, "ruleResumedNote", map[string]any{"name": name})
+}
+
+// PauseUndoTitle says "Pause “{name}” and undo everything it did?"
+// in the language the app shows.
+func PauseUndoTitle(name string) string { return In(i18n.Locale()).PauseUndoTitle(name) }
+
+// PauseUndoTitle says "Pause “{name}” and undo everything it did?"
+// in the language of msgs.
+func (msgs Messages) PauseUndoTitle(name string) string {
+	return Catalog.Format(msgs.locale, "pauseUndoTitle", map[string]any{"name": name})
+}
+
+// UndoAllTitle says "Undo everything “{name}” did?"
+// in the language the app shows.
+func UndoAllTitle(name string) string { return In(i18n.Locale()).UndoAllTitle(name) }
+
+// UndoAllTitle says "Undo everything “{name}” did?"
+// in the language of msgs.
+func (msgs Messages) UndoAllTitle(name string) string {
+	return Catalog.Format(msgs.locale, "undoAllTitle", map[string]any{"name": name})
+}
+
+// PauseUndoMessage says "It stops sorting new mail, and every change it made that is not undone yet is put back: the messages it moved go back…"
+// in the language the app shows.
+func PauseUndoMessage() string { return In(i18n.Locale()).PauseUndoMessage() }
+
+// PauseUndoMessage says "It stops sorting new mail, and every change it made that is not undone yet is put back: the messages it moved go back…"
+// in the language of msgs.
+func (msgs Messages) PauseUndoMessage() string {
+	return Catalog.Format(msgs.locale, "pauseUndoMessage", nil)
+}
+
+// UndoAllMessage says "Every change it made that is not undone yet is put back: the messages it moved go back where they were, and its stars…"
+// in the language the app shows.
+func UndoAllMessage() string { return In(i18n.Locale()).UndoAllMessage() }
+
+// UndoAllMessage says "Every change it made that is not undone yet is put back: the messages it moved go back where they were, and its stars…"
+// in the language of msgs.
+func (msgs Messages) UndoAllMessage() string {
+	return Catalog.Format(msgs.locale, "undoAllMessage", nil)
+}
+
+// PauseUndoButton says "Pause and undo"
+// in the language the app shows.
+func PauseUndoButton() string { return In(i18n.Locale()).PauseUndoButton() }
+
+// PauseUndoButton says "Pause and undo"
+// in the language of msgs.
+func (msgs Messages) PauseUndoButton() string {
+	return Catalog.Format(msgs.locale, "pauseUndoButton", nil)
+}
+
+// UndoAllButton says "Undo everything"
+// in the language the app shows.
+func UndoAllButton() string { return In(i18n.Locale()).UndoAllButton() }
+
+// UndoAllButton says "Undo everything"
+// in the language of msgs.
+func (msgs Messages) UndoAllButton() string {
+	return Catalog.Format(msgs.locale, "undoAllButton", nil)
+}
+
+// PauseUndoDone says "“{name}” is paused, and {count, plural, =0 {it had nothing left to undo} one {# change was undone} other {# chang…"
+// in the language the app shows.
+func PauseUndoDone(name string, count int) string {
+	return In(i18n.Locale()).PauseUndoDone(name, count)
+}
+
+// PauseUndoDone says "“{name}” is paused, and {count, plural, =0 {it had nothing left to undo} one {# change was undone} other {# chang…"
+// in the language of msgs.
+func (msgs Messages) PauseUndoDone(name string, count int) string {
+	return Catalog.Format(msgs.locale, "pauseUndoDone", map[string]any{"name": name, "count": count})
+}
+
+// UndoAllDone says "{count, plural, =0 {“{name}” had nothing left to undo.} one {# change by “{name}” was undone.} other {# chang…"
+// in the language the app shows.
+func UndoAllDone(name string, count int) string { return In(i18n.Locale()).UndoAllDone(name, count) }
+
+// UndoAllDone says "{count, plural, =0 {“{name}” had nothing left to undo.} one {# change by “{name}” was undone.} other {# chang…"
+// in the language of msgs.
+func (msgs Messages) UndoAllDone(name string, count int) string {
+	return Catalog.Format(msgs.locale, "undoAllDone", map[string]any{"name": name, "count": count})
+}
+
+// UndoAllFailed says "{count, plural, =0 {Nothing “{name}” did could be undone: {error}} one {# change by “{name}” was undone, but …"
+// in the language the app shows.
+func UndoAllFailed(name string, count int, error string) string {
+	return In(i18n.Locale()).UndoAllFailed(name, count, error)
+}
+
+// UndoAllFailed says "{count, plural, =0 {Nothing “{name}” did could be undone: {error}} one {# change by “{name}” was undone, but …"
+// in the language of msgs.
+func (msgs Messages) UndoAllFailed(name string, count int, error string) string {
+	return Catalog.Format(msgs.locale, "undoAllFailed", map[string]any{"name": name, "count": count, "error": error})
+}
+
+// MakeRuleEllipsis says "Make a rule from this message…"
+// in the language the app shows.
+func MakeRuleEllipsis() string { return In(i18n.Locale()).MakeRuleEllipsis() }
+
+// MakeRuleEllipsis says "Make a rule from this message…"
+// in the language of msgs.
+func (msgs Messages) MakeRuleEllipsis() string {
+	return Catalog.Format(msgs.locale, "makeRuleEllipsis", nil)
+}

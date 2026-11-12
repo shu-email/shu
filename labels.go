@@ -670,6 +670,7 @@ func (a *app) labelChecklist(c *ui.Context, t *ui.Theme, lt labelTargets) {
 func (a *app) rowMenu(m *ui.Menu) {
 	lt := a.labelTargets()
 	m.Submenu(locales.Labels(), func(m *ui.Menu) { a.labelMenuItems(m, lt) })
+	a.ruleMenuItem(m, lt)
 }
 
 // labelMenuItems are the labels of rows as items of a menu, each checked

@@ -2261,5 +2261,869 @@
         "example": "Receipts"
       }
     }
-  }
+  },
+  "rules": "Rules",
+  "rulesTip": "Rules that sort new mail",
+  "mailRules": "Mail rules",
+  "rulesTab": "Rules",
+  "activityTab": "Activity",
+  "rulesIntro": "Rules sort the mail that arrives, from the top down: each new message goes through them in this order. They never send, forward or delete mail, and leave the mail already here as it is unless you apply a rule to it from its preview.",
+  "newRule": "New rule",
+  "rulesEmpty": "No rules yet. A rule can move newsletters to a folder, label the mail of a sender, or keep a mailing list from notifying you.",
+  "rulesReadFailed": "Could not read the rules: {error}",
+  "@rulesReadFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "database is locked"
+      }
+    }
+  },
+  "rulePaused": "Paused",
+  "useRule": "Use the rule “{name}”",
+  "@useRule": {
+    "description": "The switch of a rule's row: on, the rule sorts new mail; off, it is paused.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      }
+    }
+  },
+  "useRuleTip": "On: the rule sorts new mail. Off: it is paused.",
+  "moveRuleUp": "Move “{name}” up",
+  "@moveRuleUp": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      }
+    }
+  },
+  "moveRuleDown": "Move “{name}” down",
+  "@moveRuleDown": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      }
+    }
+  },
+  "editRule": "Edit “{name}”",
+  "@editRule": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      }
+    }
+  },
+  "deleteRule": "Delete “{name}”",
+  "@deleteRule": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      }
+    }
+  },
+  "deleteRuleTitle": "Delete the rule “{name}”?",
+  "@deleteRuleTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      }
+    }
+  },
+  "deleteRuleMessage": "It stops sorting new mail. What it already did stays in the activity log, where you can still undo it.",
+  "deleteRuleButton": "Delete rule",
+  "rulePauseFailed": "Could not pause or resume “{name}”: {error}",
+  "@rulePauseFailed": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      },
+      "error": {
+        "type": "String",
+        "example": "database is locked"
+      }
+    }
+  },
+  "ruleMoveFailed": "Could not move “{name}”: {error}",
+  "@ruleMoveFailed": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      },
+      "error": {
+        "type": "String",
+        "example": "database is locked"
+      }
+    }
+  },
+  "ruleDeleteFailed": "Could not delete “{name}”: {error}",
+  "@ruleDeleteFailed": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      },
+      "error": {
+        "type": "String",
+        "example": "database is locked"
+      }
+    }
+  },
+  "ruleSummary": "{conditions} → {actions}",
+  "@ruleSummary": {
+    "description": "A rule's row: what it looks for, then what it does.",
+    "placeholders": {
+      "conditions": {
+        "type": "String",
+        "example": "From contains “news@shop.example”"
+      },
+      "actions": {
+        "type": "String",
+        "example": "Move to Newsletters, Mark as read"
+      }
+    }
+  },
+  "ruleAnd": " and ",
+  "ruleOr": " or ",
+  "ruleStops": "no rules after",
+  "condSenderText": "From contains “{value}”",
+  "@condSenderText": {
+    "placeholders": {
+      "value": {
+        "type": "String",
+        "example": "news@shop.example"
+      }
+    }
+  },
+  "condRecipientsText": "To or Cc contains “{value}”",
+  "@condRecipientsText": {
+    "placeholders": {
+      "value": {
+        "type": "String",
+        "example": "team@example.com"
+      }
+    }
+  },
+  "condSubjectText": "Subject contains “{value}”",
+  "@condSubjectText": {
+    "placeholders": {
+      "value": {
+        "type": "String",
+        "example": "Invoice"
+      }
+    }
+  },
+  "condHeaderText": "{header} contains “{value}”",
+  "@condHeaderText": {
+    "placeholders": {
+      "header": {
+        "type": "String",
+        "example": "List-Id"
+      },
+      "value": {
+        "type": "String",
+        "example": "news.shop.example"
+      }
+    }
+  },
+  "condAttachmentText": "Has attachments",
+  "condAccountText": "In the account {account}",
+  "@condAccountText": {
+    "placeholders": {
+      "account": {
+        "type": "String",
+        "example": "Work"
+      }
+    }
+  },
+  "condFolderText": "In {folder}",
+  "@condFolderText": {
+    "placeholders": {
+      "folder": {
+        "type": "String",
+        "example": "Lists"
+      }
+    }
+  },
+  "condLabelText": "Labelled {label}",
+  "@condLabelText": {
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Receipts"
+      }
+    }
+  },
+  "actMoveText": "Move to {folder}",
+  "@actMoveText": {
+    "placeholders": {
+      "folder": {
+        "type": "String",
+        "example": "Newsletters"
+      }
+    }
+  },
+  "actAddLabelText": "Add the label {label}",
+  "@actAddLabelText": {
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Receipts"
+      }
+    }
+  },
+  "actRemoveLabelText": "Remove the label {label}",
+  "@actRemoveLabelText": {
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Receipts"
+      }
+    }
+  },
+  "actStarText": "Star",
+  "actMarkReadText": "Mark as read",
+  "actMarkUnreadText": "Mark as unread",
+  "actSkipNotificationText": "Don’t notify",
+  "ruleFolderInAccount": "{folder} ({account})",
+  "@ruleFolderInAccount": {
+    "description": "A folder a rule names, with its account, where the app has several.",
+    "placeholders": {
+      "folder": {
+        "type": "String",
+        "example": "Newsletters"
+      },
+      "account": {
+        "type": "String",
+        "example": "Work"
+      }
+    }
+  },
+  "labelGone": "a label deleted since",
+  "ruleIsPaused": "The rule is paused.",
+  "ruleRunTooLarge": "A rule can be applied to at most {count} messages at a time: narrow it down to apply it.",
+  "@ruleRunTooLarge": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1000"
+      }
+    }
+  },
+  "ruleMessageGone": "The message is no longer where the rule left it, so it was left alone.",
+  "ruleGone": "The rule is no longer there.",
+  "newRuleTitle": "New rule",
+  "editRuleTitle": "Edit rule",
+  "closeRuleEditor": "Done with the rule",
+  "cancelRuleEditor": "Cancel the changes to the rule",
+  "saveRule": "Save rule",
+  "ruleName": "Name",
+  "ruleNamePlaceholder": "Newsletters",
+  "ruleNameInvalid": "Give the rule a name, of at most {count} characters.",
+  "@ruleNameInvalid": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "64"
+      }
+    }
+  },
+  "ruleWhen": "When a new message matches",
+  "matchAll": "all of these",
+  "matchAny": "any of these",
+  "conditionOf": "Condition {n}",
+  "@conditionOf": {
+    "description": "What the picker of a condition's field is named, for assistive technology.",
+    "placeholders": {
+      "n": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "headerOf": "Header name of condition {n}",
+  "@headerOf": {
+    "placeholders": {
+      "n": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "valueOf": "Text of condition {n}",
+  "@valueOf": {
+    "placeholders": {
+      "n": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "accountOf": "Account of condition {n}",
+  "@accountOf": {
+    "placeholders": {
+      "n": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "folderOf": "Folder of condition {n}",
+  "@folderOf": {
+    "placeholders": {
+      "n": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "labelOf": "Label of condition {n}",
+  "@labelOf": {
+    "placeholders": {
+      "n": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "removeCondition": "Remove condition {n}",
+  "@removeCondition": {
+    "placeholders": {
+      "n": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "contains": "contains",
+  "condAttachmentDetail": "The message has files attached.",
+  "addCondition": "Add a condition",
+  "ruleThen": "Then",
+  "actionOf": "Action {n}",
+  "@actionOf": {
+    "description": "What the picker of an action's kind is named, for assistive technology.",
+    "placeholders": {
+      "n": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "actionAccountOf": "Account of action {n}",
+  "@actionAccountOf": {
+    "placeholders": {
+      "n": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "actionFolderOf": "Folder of action {n}",
+  "@actionFolderOf": {
+    "placeholders": {
+      "n": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "actionLabelOf": "Label of action {n}",
+  "@actionLabelOf": {
+    "placeholders": {
+      "n": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "removeAction": "Remove action {n}",
+  "@removeAction": {
+    "placeholders": {
+      "n": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "addAction": "Add an action",
+  "ruleStop": "Stop: don’t try the rules after this one",
+  "ruleStopDetail": "A rule that moves a message always stops.",
+  "ruleNeverSends": "A rule never sends, forwards or deletes mail.",
+  "ruleTrashWarning": "Moving to the Trash does not delete the message, but it is deleted for good when the Trash is emptied.",
+  "ruleNoLabels": "This account has no labels yet.",
+  "ruleChooseAccountPlaceholder": "Choose an account",
+  "ruleChooseFolderPlaceholder": "Choose a folder",
+  "ruleChooseLabelPlaceholder": "Choose a label",
+  "folderNamed": "{shown} ({name})",
+  "@folderNamed": {
+    "description": "A folder in a picker, with the server's name after the name the app gives it, where two would read the same.",
+    "placeholders": {
+      "shown": {
+        "type": "String",
+        "example": "Archive"
+      },
+      "name": {
+        "type": "String",
+        "example": "Archives"
+      }
+    }
+  },
+  "ruleFieldSender": "From",
+  "ruleFieldRecipients": "To or Cc",
+  "ruleFieldSubject": "Subject",
+  "ruleFieldHeader": "Header",
+  "ruleFieldAttachment": "Has attachments",
+  "ruleFieldAccount": "Account",
+  "ruleFieldFolder": "Folder",
+  "ruleFieldLabel": "Label",
+  "kindMove": "Move to folder",
+  "kindAddLabel": "Add label",
+  "kindRemoveLabel": "Remove label",
+  "kindStar": "Star",
+  "kindMarkRead": "Mark as read",
+  "kindMarkUnread": "Mark as unread",
+  "kindSkipNotification": "Don’t notify",
+  "subjectPlaceholder": "Invoice",
+  "ruleNeedsCondition": "A rule needs a condition.",
+  "ruleNeedsAction": "A rule needs an action.",
+  "ruleInvalid": "This rule cannot be saved as it is.",
+  "ruleAccountGone": "This account is no longer in Shu.",
+  "ruleOneAccount": "A rule can use the folders and labels of one account, and this one uses {account}’s.",
+  "@ruleOneAccount": {
+    "placeholders": {
+      "account": {
+        "type": "String",
+        "example": "Work"
+      }
+    }
+  },
+  "ruleFolderGone": "There is no folder “{folder}” in this account any more.",
+  "@ruleFolderGone": {
+    "placeholders": {
+      "folder": {
+        "type": "String",
+        "example": "Newsletters"
+      }
+    }
+  },
+  "ruleLabelGone": "The label is no longer one of this account’s.",
+  "ruleHeaderMissing": "Type the name of a header, such as List-Id.",
+  "ruleHeaderInvalid": "A header’s name has only letters, digits and - _ . in it, such as List-Id.",
+  "ruleValueMissing": "Type the text to look for.",
+  "ruleValueTooLong": "The text is longer than {count} characters.",
+  "@ruleValueTooLong": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "256"
+      }
+    }
+  },
+  "ruleValueInvalid": "The text has characters a rule cannot look for.",
+  "ruleChooseAccount": "Choose an account.",
+  "ruleChooseFolder": "Choose a folder.",
+  "ruleChooseLabel": "Choose a label.",
+  "ruleConditionInvalid": "This condition is not one a rule can have.",
+  "ruleActionNotAllowed": "A rule cannot do this: it never sends, forwards or deletes mail.",
+  "ruleOneMove": "A rule moves a message to one folder only.",
+  "ruleReadAndUnread": "A rule cannot mark a message both read and unread.",
+  "ruleLabelBothWays": "A rule cannot both add and remove the same label.",
+  "ruleActionTwice": "The rule does this already.",
+  "ruleActionInvalid": "This action is not one a rule can take.",
+  "ruleCheckFailed": "Could not check the rule: {error}",
+  "@ruleCheckFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "database is locked"
+      }
+    }
+  },
+  "ruleSaveFailed": "Could not save the rule: {error}",
+  "@ruleSaveFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "database is locked"
+      }
+    }
+  },
+  "ruleSaved": "Saved. The rule sorts the mail that arrives from now on.",
+  "rulePreviewTitle": "Preview",
+  "rulePreviewIncomplete": "Fill in a condition to see which messages in your mail it matches.",
+  "rulePreviewBlocked": "Correct what the rule says is wrong to see which messages in your mail it matches.",
+  "rulePreviewCount": "{count, plural, =0 {No message in your mail matches this rule now.} one {# message in your mail matches this rule now.} other {# messages in your mail match this rule now.}}",
+  "@rulePreviewCount": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "rulePreviewPartial": "Rows still to fill in are left out of the preview.",
+  "rulePreviewFailed": "Could not read the preview: {error}",
+  "@rulePreviewFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "database is locked"
+      }
+    }
+  },
+  "ruleNewMailOnly": "Saving changes none of these messages: the rule acts only on mail that arrives from now on.",
+  "ruleSavedNewMailOnly": "The rule left these messages as they are: it acts only on mail that arrives. To change them too, apply it to them now.",
+  "rulePreviewMessages": "Messages the rule matches",
+  "previewFrom": "{sender} · {folder}",
+  "@previewFrom": {
+    "placeholders": {
+      "sender": {
+        "type": "String",
+        "example": "Shop News"
+      },
+      "folder": {
+        "type": "String",
+        "example": "Inbox"
+      }
+    }
+  },
+  "pageRange": "{first}–{last} of {total}",
+  "@pageRange": {
+    "placeholders": {
+      "first": {
+        "type": "int",
+        "example": "21"
+      },
+      "last": {
+        "type": "int",
+        "example": "40"
+      },
+      "total": {
+        "type": "int",
+        "example": "57"
+      }
+    }
+  },
+  "previousPage": "Previous",
+  "nextPage": "Next",
+  "previousPreviewPage": "Previous page of the preview",
+  "nextPreviewPage": "Next page of the preview",
+  "applyRuleNow": "{count, plural, one {Apply to this message now} other {Apply to these # messages now}}",
+  "@applyRuleNow": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "applyRuleNowDetail": "Takes the rule’s actions on them once. You can undo each change in the activity log.",
+  "ruleApplyPaused": "The rule is paused: turn it on to apply it.",
+  "applyRuleTitle": "{count, plural, one {Apply “{name}” to # message now?} other {Apply “{name}” to # messages now?}}",
+  "@applyRuleTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      },
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "applyRuleMessage": "These messages are changed now: {actions}. You can undo each change in the activity log.",
+  "@applyRuleMessage": {
+    "placeholders": {
+      "actions": {
+        "type": "String",
+        "example": "Move to Newsletters"
+      }
+    }
+  },
+  "applyRuleButton": "{count, plural, one {Apply to # message} other {Apply to # messages}}",
+  "@applyRuleButton": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "ruleRunFailed": "Could not apply the rule: {error}",
+  "@ruleRunFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "connection refused"
+      }
+    }
+  },
+  "ruleRanDone": "{count, plural, =0 {No message was changed.} one {Applied to # message.} other {Applied to # messages.}}",
+  "@ruleRanDone": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "ruleRanWaiting": "{count, plural, one {# waits for the server.} other {# wait for the server.}}",
+  "@ruleRanWaiting": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "ruleRanFailed": "{count, plural, one {# could not be changed.} other {# could not be changed.}}",
+  "@ruleRanFailed": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "showRuleActivity": "Show in the activity log",
+  "ruleLogIntro": "Each time a rule acts on a message, it is listed here, newest first. Undo puts the message back as it was.",
+  "logRuleFilter": "Rule",
+  "logStateFilter": "State",
+  "allRules": "All rules",
+  "anyState": "Any state",
+  "statePending": "Waiting for the server",
+  "stateApplied": "Done",
+  "stateFailed": "Failed",
+  "stateUndone": "Undone",
+  "ruleDeletedName": "{name} (deleted)",
+  "@ruleDeletedName": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      }
+    }
+  },
+  "previousLogPage": "Previous page of the activity",
+  "nextLogPage": "Next page of the activity",
+  "pauseRule": "Pause",
+  "resumeRule": "Resume",
+  "pauseAndUndoEllipsis": "Pause and undo everything it did…",
+  "undoAllEllipsis": "Undo everything it did…",
+  "ruleLogEmpty": "Nothing yet. When a rule acts on new mail, it shows here.",
+  "ruleLogNoMatch": "No activity matches these filters.",
+  "ruleLogReadFailed": "Could not read the activity: {error}",
+  "@ruleLogReadFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "database is locked"
+      }
+    }
+  },
+  "entryLine": "{sender} · {rule} · {time}",
+  "@entryLine": {
+    "description": "Under an entry's subject in the activity log: who sent the message, the rule, and when it acted.",
+    "placeholders": {
+      "sender": {
+        "type": "String",
+        "example": "Shop News"
+      },
+      "rule": {
+        "type": "String",
+        "example": "Newsletters"
+      },
+      "time": {
+        "type": "String",
+        "example": "10:42"
+      }
+    }
+  },
+  "entryManual": "{actions} (applied by you)",
+  "@entryManual": {
+    "placeholders": {
+      "actions": {
+        "type": "String",
+        "example": "Move to Newsletters"
+      }
+    }
+  },
+  "undoEntry": "Undo what was done to “{subject}”",
+  "@undoEntry": {
+    "placeholders": {
+      "subject": {
+        "type": "String",
+        "example": "Weekly news"
+      }
+    }
+  },
+  "entryActions": "More for “{subject}”",
+  "@entryActions": {
+    "placeholders": {
+      "subject": {
+        "type": "String",
+        "example": "Weekly news"
+      }
+    }
+  },
+  "undoEntryFailed": "Could not undo “{subject}”: {error}",
+  "@undoEntryFailed": {
+    "placeholders": {
+      "subject": {
+        "type": "String",
+        "example": "Weekly news"
+      },
+      "error": {
+        "type": "String",
+        "example": "connection refused"
+      }
+    }
+  },
+  "undoEntryDone": "Put back “{subject}” as it was.",
+  "@undoEntryDone": {
+    "placeholders": {
+      "subject": {
+        "type": "String",
+        "example": "Weekly news"
+      }
+    }
+  },
+  "pauseRuleNamed": "Pause “{name}”",
+  "@pauseRuleNamed": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      }
+    }
+  },
+  "resumeRuleNamed": "Resume “{name}”",
+  "@resumeRuleNamed": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      }
+    }
+  },
+  "pauseAndUndoNamed": "Pause “{name}” and undo everything it did…",
+  "@pauseAndUndoNamed": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      }
+    }
+  },
+  "undoAllNamed": "Undo everything “{name}” did…",
+  "@undoAllNamed": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      }
+    }
+  },
+  "showRuleOnly": "Show only “{name}”",
+  "@showRuleOnly": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      }
+    }
+  },
+  "rulePausedNote": "“{name}” is paused: it sorts no new mail. What it did stays as it is.",
+  "@rulePausedNote": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      }
+    }
+  },
+  "ruleResumedNote": "“{name}” sorts new mail again.",
+  "@ruleResumedNote": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      }
+    }
+  },
+  "pauseUndoTitle": "Pause “{name}” and undo everything it did?",
+  "@pauseUndoTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      }
+    }
+  },
+  "undoAllTitle": "Undo everything “{name}” did?",
+  "@undoAllTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      }
+    }
+  },
+  "pauseUndoMessage": "It stops sorting new mail, and every change it made that is not undone yet is put back: the messages it moved go back where they were, and its stars, read marks and labels are taken back. A message moved since by something else stays where it is.",
+  "undoAllMessage": "Every change it made that is not undone yet is put back: the messages it moved go back where they were, and its stars, read marks and labels are taken back. A message moved since by something else stays where it is.",
+  "pauseUndoButton": "Pause and undo",
+  "undoAllButton": "Undo everything",
+  "pauseUndoDone": "“{name}” is paused, and {count, plural, =0 {it had nothing left to undo} one {# change was undone} other {# changes were undone}}.",
+  "@pauseUndoDone": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      },
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "undoAllDone": "{count, plural, =0 {“{name}” had nothing left to undo.} one {# change by “{name}” was undone.} other {# changes by “{name}” were undone.}}",
+  "@undoAllDone": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      },
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "undoAllFailed": "{count, plural, =0 {Nothing “{name}” did could be undone: {error}} one {# change by “{name}” was undone, but not all: {error}} other {# changes by “{name}” were undone, but not all: {error}}}",
+  "@undoAllFailed": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      },
+      "count": {
+        "type": "int",
+        "example": "2"
+      },
+      "error": {
+        "type": "String",
+        "example": "connection refused"
+      }
+    }
+  },
+  "makeRuleEllipsis": "Make a rule from this message…"
 }

@@ -848,7 +848,7 @@ func TestLabelRowMenu(t *testing.T) {
 	if err := tt.RightClick("Lunch on Friday?"); err != nil {
 		t.Fatal(err)
 	}
-	if got := tt.Menu(); !reflect.DeepEqual(got, []string{locales.Labels()}) {
+	if got := tt.Menu(); !reflect.DeepEqual(got, []string{locales.Labels(), "-", locales.MakeRuleEllipsis()}) {
 		t.Fatalf("menu = %v", got)
 	}
 	if m, _ := a.current(); m == nil || m.Subject != "Lunch on Friday?" {

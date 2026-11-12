@@ -207,6 +207,12 @@ type app struct {
 	// labels are each account's labels and the views that change them
 	// (labels.go).
 	labels labelState
+	// rules is the rules' view, open or not (rules.go); the live checks
+	// of the rule being written take turns under ruleCheckMu, and one a
+	// later check overtook (ruleCheckSeq) does not run.
+	rules        ruleState
+	ruleCheckMu  sync.Mutex
+	ruleCheckSeq atomic.Uint64
 
 	// Hooks the window sets; tests leave them nil.
 	newWindow func(mygo.WindowOptions) *mygo.Window
@@ -362,6 +368,11 @@ func (a *app) start() {
 	}
 	a.started = true
 	g := a.gen
+	// What the rules did in the background shows in the list, the
+	// folders' counts and the log.
+	a.svc.OnRuleActivity(func(accountID string) {
+		a.post(func() { a.ruleActivity(accountID) })
+	})
 	// The files of drafts that were sent or discarded without the time to
 	// collect them, as when the app quit meanwhile, go now. It is best
 	// effort: what stays is collected the next time.
@@ -1206,8 +1217,8 @@ func (a *app) longTime(c *ui.Context, t time.Time) string {
 	return i18n.FormatDate(c.Locale(), t, i18n.DateOptions{Date: i18n.MediumStyle, Time: i18n.ShortStyle})
 }
 
-// view is the window's root: settings, account setup, the address book
-// or the three panes.
+// view is the window's root: settings, account setup, the address book,
+// the rules or the three panes.
 func (a *app) view(c *ui.Context) {
 	switch {
 	case a.showSettings:
@@ -1216,6 +1227,8 @@ func (a *app) view(c *ui.Context) {
 		a.accountsView(c)
 	case a.book.open:
 		a.contactsView(c)
+	case a.rules.open:
+		a.rulesView(c)
 	default:
 		a.mailView(c)
 	}
@@ -1332,6 +1345,8 @@ func (a *app) titleBar(c *ui.Context, t *ui.Theme, bar ui.TitleBar, height float
 			OnClick(func() { a.refresh() })
 		a.iconButton(c, bookUserIcon, locales.Contacts(), locales.Contacts()).
 			OnClick(a.openContacts)
+		a.iconButton(c, listFilterIcon, locales.Rules(), locales.RulesTip()).
+			OnClick(func() { a.openRules(rulesTabList) })
 		a.iconButton(c, settingsIcon, locales.Settings(), locales.Settings()).
 			OnClick(func() { a.openSettings(settingsTabGeneral) })
 		ui.PrimaryButton(c, "").Children(func() {

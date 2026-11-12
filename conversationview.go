@@ -384,6 +384,7 @@ func (a *app) messageMenu(menu *ui.Menu, key string) {
 	}
 	menu.Separator()
 	menu.Submenu(locales.Labels(), func(menu *ui.Menu) { a.labelMenuItems(menu, oneMessage(m)) })
+	a.ruleMenuItem(menu, oneMessage(m))
 }
 
 // messageFields are the raw sender and recipient fields of a message.

@@ -749,6 +749,70 @@ read of the list (`labels.go`).
 - Counts: marking messages read or unread changes their labels' unread counts at
   once, as it does their folders', until the labels are read again.
 
+### Rules (added since)
+
+The engine keeps the rules, sorts the mail that arrives with them and logs what they
+did (`AGENTS.md` says how); the window writes them, orders them and shows the log
+through the `mailService` calls above (`rules.go`, `ruleeditor.go`, `rulelog.go`).
+Nothing in the window can make a rule send, forward or delete mail: the editor offers
+the engine's actions, `mail.ActionKinds`, and no others.
+
+- Where: a Rules button in the mail window's title bar, beside the address book's,
+  opens the rules in place of the three panes (Done or Escape go back). Two tabs: the
+  rules, and their activity. "Make a rule from this message…" in the list's menu of a
+  row (one message, or one conversation's newest) and in a conversation message's
+  own menu opens the editor of a new rule for its mailing list, where the cache keeps
+  its List-Id, else for its sender's address, moving its mail to a folder still to
+  choose; closing that editor goes back to the mail.
+- The list: the rules in their order, the first tried first, each with its name, what
+  it looks for and does in a line (`From contains “news@shop.example” → Move to
+  Newsletters`), "Paused" on a paused one, a switch that pauses it or has it sort mail
+  again (`PauseRule`), buttons that move it up and down, edit it and delete it, each
+  named for the rule. The rows also drag to another place; each move is `MoveRule`,
+  shown at once, and the keyboard stays on the button pressed, or goes to the other
+  once the rule reached an end. Deleting asks first, saying that the rule stops
+  sorting and that its log stays, to be undone.
+- The editor: the name; whether a message meets all or any of the conditions; the
+  condition rows (what each looks at, then the text it looks for, a header's name and
+  text, or an account, its folder or its label from pickers, the account's only where
+  the app has several, the rule's account by default); the action rows (the engine's
+  kinds, then the folder or label, never the Drafts folder); and Stop. A move to the
+  Trash shows a warning that the message is not deleted, but goes for good when the
+  Trash is emptied. Each change is checked by `CheckRule` in a job, the jobs taking
+  turns and one a later change overtook not running, and each `*mail.RuleError` shows
+  below the row, the name, or the conditions or actions it names, in the user's words,
+  the control at fault marked invalid with it as its error. A fault of something still
+  to fill in (an empty name or text, a folder or label not chosen) shows once Save was
+  asked for; any other at once. Saving (`SaveRule`) changes no mail; the editor stays
+  open on the rule saved and says it sorts new mail from then on.
+- The preview, beside the form, reads `PreviewRule` with each check: how many cached
+  messages the rule matches now and a page of them (subject, sender, date, folder),
+  with pages of 20, and, always, that saving changes none of them and the rule acts
+  on new mail only. While rows are still to fill in it previews the complete ones
+  (with a stand-in name, and an action that changes nothing while none is complete)
+  and says so; a fault of the complete rows holds it. Once the rule is saved and
+  unchanged, the preview offers "Apply to these N messages now"; it asks first,
+  naming the rule, the count and the actions, and `RunRule` then takes exactly the
+  messages counted, which the engine checks again. A paused rule, and more than
+  `mail.MaxRuleRun` messages, are not applied, which the offer says. How the run went
+  (applied, waiting for the server, failed) stays, with a way to its entries in the
+  log. This run is the only way the window has a rule act on mail that was there.
+- The activity log: newest first, a page of 50 at a time, each entry with the
+  message's subject, its sender, the rule and when it acted, what it did ("(applied by
+  you)" for a run), and how that stands: done, waiting for the server with the
+  engine's reason, failed with its reason (a message gone in the user's words), or
+  undone. Undo (`UndoActivity`) puts the message back; one no longer where the rule
+  left it is left alone and the log says so. Each entry's menu pauses its rule or has
+  it sort mail again, pauses it and undoes everything it did, and narrows the log to
+  it; "Pause and undo everything it did…" asks first, then calls `PauseRule` and
+  `UndoRule` and says how many changes went back. A rule deleted since only has what it
+  did undone. Filters narrow the log to a rule, where that rule's Pause or Resume and
+  "Pause and undo everything it did…" show too, and to a state.
+- The window registers `OnRuleActivity` as it starts. When the engine reports actions
+  applied in the background, the list of mail is read again where it shows that
+  account's mail, the account's folders are read with their counts, and the log and
+  the preview of the rule being written are read again if they are on screen.
+
 ## Testing discipline
 
 Tests are part of each change, not a later phase:

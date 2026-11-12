@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sort"
 	"strings"
+	"time"
 
 	"shu/mail"
 )
@@ -31,14 +32,42 @@ type fakeService struct {
 	moveBacks  []string
 	flagCalls  []string
 	attachment mail.Attachment
+
+	// Drafts. The fake keeps them as the engine does: saving is local,
+	// and SyncDrafts is the step that reaches the server, or fails to.
+	drafts map[string]mail.Draft
+	// draftBase and draftTick give each save a later time than the last,
+	// without a clock.
+	draftBase time.Time
+	draftTick int
+	draftUID  mail.UID
+	// draftSyncErr is the server being unreachable, draftSaveErr and
+	// discardErr the cache failing, adoptErr a draft that cannot be taken
+	// over.
+	draftSyncErr error
+	draftSaveErr error
+	discardErr   error
+	adoptErr     error
+	// onDraftSync runs as a sync begins: what another mail client did to
+	// the server's drafts meanwhile. replaced marks the drafts it took
+	// over, as the engine remembers them.
+	onDraftSync func()
+	replaced    map[string]bool
+	draftSaves  int
+	draftSyncs  int
+	discarded   []string
 }
 
 func newFakeService() *fakeService {
 	return &fakeService{
-		folders:  map[string][]mail.Folder{},
-		messages: map[string][]mail.Summary{},
-		bodies:   map[string]mail.Message{},
-		password: map[string]string{},
+		folders:   map[string][]mail.Folder{},
+		messages:  map[string][]mail.Summary{},
+		bodies:    map[string]mail.Message{},
+		password:  map[string]string{},
+		drafts:    map[string]mail.Draft{},
+		replaced:  map[string]bool{},
+		draftBase: time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC),
+		draftUID:  500,
 	}
 }
 
@@ -321,6 +350,8 @@ func (f *fakeService) Send(ctx context.Context, accountID string, out mail.Outgo
 		return mail.SendResult{}, f.sendErr
 	}
 	f.sent = append(f.sent, out)
+	// The message is out: its draft goes, here and on the server.
+	f.removeDraft(out.DraftID)
 	return mail.SendResult{Copied: f.sendWarn == nil, Warning: f.sendWarn, Outbox: mail.PendingSend{ID: "out-1"}}, nil
 }
 
@@ -341,6 +372,203 @@ func (f *fakeService) Attachment(ctx context.Context, accountID, folder string, 
 		return mail.Attachment{}, nil, mail.ErrNotFound
 	}
 	return f.attachment, []byte("data"), nil
+}
+
+// serverDrafts is the name of the account's Drafts folder, or "".
+func (f *fakeService) serverDrafts(accountID string) string {
+	for _, folder := range f.folders[accountID] {
+		if folder.SpecialUse == mail.SpecialDrafts {
+			return folder.Name
+		}
+	}
+	return ""
+}
+
+// removeDraft deletes a draft and the server copy it is linked to.
+func (f *fakeService) removeDraft(id string) {
+	d, ok := f.drafts[id]
+	if !ok {
+		return
+	}
+	delete(f.drafts, id)
+	if d.ServerUID == 0 {
+		return
+	}
+	key := listKey(d.AccountID, d.ServerFolder)
+	list := f.messages[key]
+	for i := range list {
+		if list[i].UID == d.ServerUID {
+			f.messages[key] = append(list[:i], list[i+1:]...)
+			return
+		}
+	}
+}
+
+// draftRecipients reads a recipient field as far as it parses.
+func draftRecipients(text string) []mail.Address {
+	var out []mail.Address
+	for _, part := range strings.Split(text, ",") {
+		if list, err := mail.ParseAddressList([]string{part}); err == nil {
+			out = append(out, list...)
+		}
+	}
+	return out
+}
+
+func (f *fakeService) DraftList(ctx context.Context, accountID, query string, limit int) ([]mail.Summary, error) {
+	q := strings.ToLower(strings.TrimSpace(query))
+	var from mail.Address
+	for _, a := range f.accounts {
+		if a.ID == accountID {
+			from = mail.Address{Name: a.Name, Email: a.Email}
+		}
+	}
+	var out []mail.Summary
+	uploaded := map[mail.UID]bool{}
+	for _, d := range f.drafts {
+		if d.AccountID != accountID {
+			continue
+		}
+		uploaded[d.ServerUID] = true
+		if q != "" && !strings.Contains(strings.ToLower(d.Subject+" "+d.To+" "+d.Body), q) {
+			continue
+		}
+		out = append(out, mail.Summary{
+			DraftID: d.ID, MessageID: d.MessageID, From: from,
+			To: draftRecipients(d.To), Cc: draftRecipients(d.Cc),
+			Subject: strings.TrimSpace(d.Subject), Preview: strings.Join(strings.Fields(d.Body), " "),
+			Date: d.UpdatedAt, Seen: true,
+		})
+	}
+	sortSummaries(out)
+	if folder := f.serverDrafts(accountID); folder != "" {
+		var server []mail.Summary
+		for _, m := range f.messages[listKey(accountID, folder)] {
+			if !uploaded[m.UID] && f.matches(accountID, m, q) {
+				server = append(server, m)
+			}
+		}
+		sortSummaries(server)
+		out = append(out, server...)
+	}
+	return out, nil
+}
+
+func (f *fakeService) Draft(ctx context.Context, id string) (mail.Draft, bool, error) {
+	d, ok := f.drafts[id]
+	return d, ok, nil
+}
+
+func (f *fakeService) SaveDraft(ctx context.Context, d mail.Draft) (mail.Draft, error) {
+	f.draftSaves++
+	if f.draftSaveErr != nil {
+		return mail.Draft{}, f.draftSaveErr
+	}
+	if old, ok := f.drafts[d.ID]; ok {
+		if old.To == d.To && old.Cc == d.Cc && old.Bcc == d.Bcc && old.Subject == d.Subject &&
+			old.Body == d.Body && old.InReplyTo == d.InReplyTo {
+			return old, nil
+		}
+		// The content changes; where the copy is, and its revision on
+		// the server, do not.
+		old.To, old.Cc, old.Bcc, old.Subject, old.Body = d.To, d.Cc, d.Bcc, d.Subject, d.Body
+		old.InReplyTo, old.References = d.InReplyTo, d.References
+		old.Revision++
+		d = old
+	} else {
+		d.Revision, d.SyncedRevision = 1, 0
+		d.ServerFolder, d.ServerUID, d.ServerUIDValidity = "", 0, 0
+		d.MessageID = d.ID + "@example.com"
+		// A draft another client took over comes back as one of its own,
+		// another message than the one it was.
+		if d.Conflict = f.replaced[d.ID]; d.Conflict {
+			d.MessageID = d.ID + ".kept@example.com"
+		}
+		delete(f.replaced, d.ID)
+	}
+	f.draftTick++
+	d.UpdatedAt = f.draftBase.Add(time.Duration(f.draftTick) * time.Minute)
+	f.drafts[d.ID] = d
+	return d, nil
+}
+
+func (f *fakeService) SyncDrafts(ctx context.Context, accountID string) (mail.DraftSyncResult, error) {
+	f.draftSyncs++
+	if f.draftSyncErr != nil {
+		return mail.DraftSyncResult{}, f.draftSyncErr
+	}
+	if f.onDraftSync != nil {
+		f.onDraftSync()
+	}
+	folder := f.serverDrafts(accountID)
+	if folder == "" {
+		return mail.DraftSyncResult{}, nil
+	}
+	result := mail.DraftSyncResult{Folder: folder}
+	for id, d := range f.drafts {
+		if d.AccountID != accountID || !d.Dirty() {
+			continue
+		}
+		f.draftUID++
+		d.SyncedRevision = d.Revision
+		d.ServerFolder, d.ServerUID, d.ServerUIDValidity = folder, f.draftUID, 1
+		f.drafts[id] = d
+		result.Uploaded++
+	}
+	return result, nil
+}
+
+func (f *fakeService) DiscardDraft(ctx context.Context, id string) error {
+	f.discarded = append(f.discarded, id)
+	if f.discardErr != nil {
+		return f.discardErr
+	}
+	f.removeDraft(id)
+	return nil
+}
+
+func (f *fakeService) AdoptDraft(ctx context.Context, accountID, folder string, uid mail.UID) (mail.Draft, error) {
+	if f.adoptErr != nil {
+		return mail.Draft{}, f.adoptErr
+	}
+	for _, d := range f.drafts {
+		if d.AccountID == accountID && d.ServerFolder == folder && d.ServerUID == uid {
+			return d, nil
+		}
+	}
+	m, ok := f.find(accountID, folder, uid)
+	if !ok {
+		return mail.Draft{}, mail.ErrNotFound
+	}
+	body := "Body of " + m.Subject
+	if b, ok := f.bodies[bodyKey(accountID, folder, uid)]; ok {
+		body = b.BodyText
+	}
+	f.draftTick++
+	d := mail.Draft{
+		ID: "adopted-" + itoa(uid), AccountID: accountID,
+		To: joinAddresses(m.To), Cc: joinAddresses(m.Cc), Subject: m.Subject, Body: body,
+		MessageID: m.MessageID, UpdatedAt: f.draftBase.Add(time.Duration(f.draftTick) * time.Minute),
+		Revision: 1, SyncedRevision: 1, ServerFolder: folder, ServerUID: uid, ServerUIDValidity: 1,
+	}
+	f.drafts[d.ID] = d
+	return d, nil
+}
+
+func (f *fakeService) DismissDraftConflict(ctx context.Context, id string) error {
+	if d, ok := f.drafts[id]; ok {
+		d.Conflict = false
+		f.drafts[id] = d
+	}
+	return nil
+}
+
+func joinAddresses(list []mail.Address) string {
+	parts := make([]string, 0, len(list))
+	for _, a := range list {
+		parts = append(parts, a.String())
+	}
+	return strings.Join(parts, ", ")
 }
 
 func itoa(uid mail.UID) string {

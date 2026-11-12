@@ -2365,3 +2365,197 @@ func AiDrafted(model string) string { return In(i18n.Locale()).AiDrafted(model) 
 func (msgs Messages) AiDrafted(model string) string {
 	return Catalog.Format(msgs.locale, "aiDrafted", map[string]any{"model": model})
 }
+
+// Bcc says "Bcc"
+// in the language the app shows.
+func Bcc() string { return In(i18n.Locale()).Bcc() }
+
+// Bcc says "Bcc"
+// in the language of msgs.
+func (msgs Messages) Bcc() string {
+	return Catalog.Format(msgs.locale, "bcc", nil)
+}
+
+// NoSubject says "(no subject)"
+// in the language the app shows.
+func NoSubject() string { return In(i18n.Locale()).NoSubject() }
+
+// NoSubject says "(no subject)"
+// in the language of msgs.
+func (msgs Messages) NoSubject() string {
+	return Catalog.Format(msgs.locale, "noSubject", nil)
+}
+
+// NoRecipientsYet says "No recipients"
+// in the language the app shows.
+func NoRecipientsYet() string { return In(i18n.Locale()).NoRecipientsYet() }
+
+// NoRecipientsYet says "No recipients"
+// in the language of msgs.
+func (msgs Messages) NoRecipientsYet() string {
+	return Catalog.Format(msgs.locale, "noRecipientsYet", nil)
+}
+
+// EditDraft says "Edit draft"
+// in the language the app shows.
+func EditDraft() string { return In(i18n.Locale()).EditDraft() }
+
+// EditDraft says "Edit draft"
+// in the language of msgs.
+func (msgs Messages) EditDraft() string {
+	return Catalog.Format(msgs.locale, "editDraft", nil)
+}
+
+// DiscardDraft says "Discard draft"
+// in the language the app shows.
+func DiscardDraft() string { return In(i18n.Locale()).DiscardDraft() }
+
+// DiscardDraft says "Discard draft"
+// in the language of msgs.
+func (msgs Messages) DiscardDraft() string {
+	return Catalog.Format(msgs.locale, "discardDraft", nil)
+}
+
+// DiscardDraftTitle says "{count, plural, one {Discard this draft?} other {Discard # drafts?}}"
+// in the language the app shows.
+//
+// The title of the confirmation before drafts are deleted.
+func DiscardDraftTitle(count int) string { return In(i18n.Locale()).DiscardDraftTitle(count) }
+
+// DiscardDraftTitle says "{count, plural, one {Discard this draft?} other {Discard # drafts?}}"
+// in the language of msgs.
+//
+// The title of the confirmation before drafts are deleted.
+func (msgs Messages) DiscardDraftTitle(count int) string {
+	return Catalog.Format(msgs.locale, "discardDraftTitle", map[string]any{"count": count})
+}
+
+// DiscardDraftConfirm says "It is deleted from this device and from the Drafts folder on the server. You can't undo this."
+// in the language the app shows.
+func DiscardDraftConfirm() string { return In(i18n.Locale()).DiscardDraftConfirm() }
+
+// DiscardDraftConfirm says "It is deleted from this device and from the Drafts folder on the server. You can't undo this."
+// in the language of msgs.
+func (msgs Messages) DiscardDraftConfirm() string {
+	return Catalog.Format(msgs.locale, "discardDraftConfirm", nil)
+}
+
+// DraftNotSent says "A draft on this device. It has not been sent."
+// in the language the app shows.
+func DraftNotSent() string { return In(i18n.Locale()).DraftNotSent() }
+
+// DraftNotSent says "A draft on this device. It has not been sent."
+// in the language of msgs.
+func (msgs Messages) DraftNotSent() string {
+	return Catalog.Format(msgs.locale, "draftNotSent", nil)
+}
+
+// DraftOnServer says "A draft from the server's Drafts folder, written in another mail client."
+// in the language the app shows.
+func DraftOnServer() string { return In(i18n.Locale()).DraftOnServer() }
+
+// DraftOnServer says "A draft from the server's Drafts folder, written in another mail client."
+// in the language of msgs.
+func (msgs Messages) DraftOnServer() string {
+	return Catalog.Format(msgs.locale, "draftOnServer", nil)
+}
+
+// DraftSaved says "Draft saved on this device"
+// in the language the app shows.
+func DraftSaved() string { return In(i18n.Locale()).DraftSaved() }
+
+// DraftSaved says "Draft saved on this device"
+// in the language of msgs.
+func (msgs Messages) DraftSaved() string {
+	return Catalog.Format(msgs.locale, "draftSaved", nil)
+}
+
+// DraftSynced says "Draft saved to the server"
+// in the language the app shows.
+func DraftSynced() string { return In(i18n.Locale()).DraftSynced() }
+
+// DraftSynced says "Draft saved to the server"
+// in the language of msgs.
+func (msgs Messages) DraftSynced() string {
+	return Catalog.Format(msgs.locale, "draftSynced", nil)
+}
+
+// DraftOffline says "Saved on this device · will sync when online"
+// in the language the app shows.
+func DraftOffline() string { return In(i18n.Locale()).DraftOffline() }
+
+// DraftOffline says "Saved on this device · will sync when online"
+// in the language of msgs.
+func (msgs Messages) DraftOffline() string {
+	return Catalog.Format(msgs.locale, "draftOffline", nil)
+}
+
+// DraftLocalOnly says "Saved on this device only · the server has no Drafts folder"
+// in the language the app shows.
+func DraftLocalOnly() string { return In(i18n.Locale()).DraftLocalOnly() }
+
+// DraftLocalOnly says "Saved on this device only · the server has no Drafts folder"
+// in the language of msgs.
+func (msgs Messages) DraftLocalOnly() string {
+	return Catalog.Format(msgs.locale, "draftLocalOnly", nil)
+}
+
+// DraftConflict says "This draft was changed in another mail client. Your version was kept as a separate draft."
+// in the language the app shows.
+func DraftConflict() string { return In(i18n.Locale()).DraftConflict() }
+
+// DraftConflict says "This draft was changed in another mail client. Your version was kept as a separate draft."
+// in the language of msgs.
+func (msgs Messages) DraftConflict() string {
+	return Catalog.Format(msgs.locale, "draftConflict", nil)
+}
+
+// DraftConflictDismiss says "Dismiss conflict notice"
+// in the language the app shows.
+func DraftConflictDismiss() string { return In(i18n.Locale()).DraftConflictDismiss() }
+
+// DraftConflictDismiss says "Dismiss conflict notice"
+// in the language of msgs.
+func (msgs Messages) DraftConflictDismiss() string {
+	return Catalog.Format(msgs.locale, "draftConflictDismiss", nil)
+}
+
+// DraftSaveFailed says "Could not save the draft: {error}"
+// in the language the app shows.
+func DraftSaveFailed(error string) string { return In(i18n.Locale()).DraftSaveFailed(error) }
+
+// DraftSaveFailed says "Could not save the draft: {error}"
+// in the language of msgs.
+func (msgs Messages) DraftSaveFailed(error string) string {
+	return Catalog.Format(msgs.locale, "draftSaveFailed", map[string]any{"error": error})
+}
+
+// DraftOpenFailed says "Could not open the draft: {error}"
+// in the language the app shows.
+func DraftOpenFailed(error string) string { return In(i18n.Locale()).DraftOpenFailed(error) }
+
+// DraftOpenFailed says "Could not open the draft: {error}"
+// in the language of msgs.
+func (msgs Messages) DraftOpenFailed(error string) string {
+	return Catalog.Format(msgs.locale, "draftOpenFailed", map[string]any{"error": error})
+}
+
+// DraftDiscardFailed says "Could not discard the draft: {error}"
+// in the language the app shows.
+func DraftDiscardFailed(error string) string { return In(i18n.Locale()).DraftDiscardFailed(error) }
+
+// DraftDiscardFailed says "Could not discard the draft: {error}"
+// in the language of msgs.
+func (msgs Messages) DraftDiscardFailed(error string) string {
+	return Catalog.Format(msgs.locale, "draftDiscardFailed", map[string]any{"error": error})
+}
+
+// DraftHasAttachments says "This draft has attachments, which Shu cannot edit yet. Open it in the mail client it was written in."
+// in the language the app shows.
+func DraftHasAttachments() string { return In(i18n.Locale()).DraftHasAttachments() }
+
+// DraftHasAttachments says "This draft has attachments, which Shu cannot edit yet. Open it in the mail client it was written in."
+// in the language of msgs.
+func (msgs Messages) DraftHasAttachments() string {
+	return Catalog.Format(msgs.locale, "draftHasAttachments", nil)
+}

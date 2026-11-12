@@ -27,9 +27,16 @@ func (a *app) readingPane(c *ui.Context, t *ui.Theme) {
 			})
 			return
 		}
+		subject := m.Subject
+		if a.folder == draftsFolder {
+			a.draftBanner(c, t, *m)
+			if strings.TrimSpace(subject) == "" {
+				subject = locales.NoSubject()
+			}
+		}
 		ui.Scroll(c.Key(summaryKey(*m))).Grow(1).Children(func() {
 			ui.Column(c).Padding(24, 30, 24, 30).Gap(16).MinWidth(0).Children(func() {
-				ui.Text(c, m.Subject).FontSize(21).Bold().Balance()
+				ui.Text(c, subject).FontSize(21).Bold().Balance()
 				a.senderHeader(c, t, *m)
 				if msg != nil && len(msg.Attachments) > 0 {
 					a.attachments(c, t, *m, msg.Attachments)
@@ -73,13 +80,24 @@ func (a *app) readingToolbar(c *ui.Context, t *ui.Theme) {
 	archive := a.folderBySpecial(mail.SpecialArchive)
 	trash := a.folderBySpecial(mail.SpecialTrash)
 	junk := a.folderBySpecial(mail.SpecialJunk)
+	// A draft of this device is no message of the server: it cannot be
+	// moved, flagged or answered, only edited or discarded. The actions
+	// for mail are off while one is among the chosen rows.
+	drafts := localDrafts(targets)
+	onlyDrafts := has && drafts == len(targets)
+	has = has && drafts == 0
 	ui.Toolbar(c, func() {
 		a.toolButton(c, archiveIcon, locales.ArchiveMessage(), has && archive != "", func() {
 			a.moveSelected(mail.SpecialArchive)
 		})
-		a.toolButton(c, trashIcon, locales.DeleteMessage(), has && trash != "", func() {
-			a.moveSelected(mail.SpecialTrash)
-		})
+		if onlyDrafts {
+			// Deleting a draft is discarding it, which asks first.
+			a.toolButton(c, trashIcon, locales.DiscardDraft(), true, a.discardSelected)
+		} else {
+			a.toolButton(c, trashIcon, locales.DeleteMessage(), has && trash != "", func() {
+				a.moveSelected(mail.SpecialTrash)
+			})
+		}
 		a.toolButton(c, spamIcon, locales.JunkMessage(), has && junk != "", func() {
 			a.moveSelected(mail.SpecialJunk)
 		})
@@ -110,7 +128,7 @@ func (a *app) readingToolbar(c *ui.Context, t *ui.Theme) {
 			// A summary is of the one message open, once its body is here.
 			_, msg := a.current()
 			a.toolDivider(c)
-			a.toolButton(c, sparklesIcon, locales.Summarize(), msg != nil && len(targets) == 1, a.summarize)
+			a.toolButton(c, sparklesIcon, locales.Summarize(), msg != nil && len(targets) == 1 && has, a.summarize)
 		}
 	}).Height(48).Padding(6, 12).Label(locales.MessageActions()).
 		BorderWidth(0, 0, 1, 0).BorderColor(t.Border)
@@ -379,7 +397,7 @@ func (a *app) targets() []mail.Summary {
 // toggleStar stars or unstars the chosen messages, optimistically.
 func (a *app) toggleStar() {
 	targets := a.targets()
-	if len(targets) == 0 {
+	if len(targets) == 0 || localDrafts(targets) > 0 {
 		return
 	}
 	allFlagged := true
@@ -430,7 +448,9 @@ func (a *app) toggleStar() {
 // moveSelected archives, junks or deletes the chosen messages.
 func (a *app) moveSelected(special string) {
 	targets := a.targets()
-	if len(targets) == 0 {
+	// The keys reach here whatever the toolbar offers: a draft of this
+	// device is in no folder of the server to be moved from.
+	if len(targets) == 0 || localDrafts(targets) > 0 {
 		return
 	}
 	dest := a.folderBySpecial(special)
@@ -534,7 +554,7 @@ func (a *app) undoLastMove() {
 // reply opens a reply or reply-all, quoting the body.
 func (a *app) reply(all bool) {
 	m, msg := a.current()
-	if m == nil {
+	if m == nil || m.DraftID != "" {
 		return
 	}
 	summary := *m
@@ -570,7 +590,7 @@ func (a *app) reply(all bool) {
 // forward opens a forwarded message with the original quoted.
 func (a *app) forward() {
 	m, msg := a.current()
-	if m == nil {
+	if m == nil || m.DraftID != "" {
 		return
 	}
 	summary := *m
@@ -702,7 +722,7 @@ func (a *app) stepMessage(delta int) {
 // toggleRead marks the chosen messages read or unread, optimistically.
 func (a *app) toggleRead() {
 	targets := a.targets()
-	if len(targets) == 0 {
+	if len(targets) == 0 || localDrafts(targets) > 0 {
 		return
 	}
 	allSeen := true

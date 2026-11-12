@@ -188,7 +188,8 @@ func (a *app) openAISettings() {
 // summarize summarizes the open message. It is the Summarize button.
 func (a *app) summarize() {
 	m, msg := a.current()
-	if m == nil || msg == nil || a.ai == nil {
+	// A draft is the user's own unsent text, not mail to summarize.
+	if m == nil || msg == nil || a.ai == nil || m.DraftID != "" {
 		return
 	}
 	key := summaryKey(*m)
@@ -396,7 +397,7 @@ func aiReviewModal(c *ui.Context, slot **aiReview) {
 // triageList asks for suggestions on the messages the list shows. It is
 // the Triage button.
 func (a *app) triageList() {
-	if a.ai == nil || len(a.all) == 0 || (a.triage != nil && a.triage.busy) {
+	if a.ai == nil || len(a.all) == 0 || a.folder == draftsFolder || (a.triage != nil && a.triage.busy) {
 		return
 	}
 	items := a.triageItems()
@@ -612,6 +613,9 @@ func (cs *composeState) draftWithAI() {
 						job.busy = false
 						job.model = result.Model
 						cs.insertDraft(result.Text)
+						// The text was not typed, but it is the draft's
+						// now and is saved like any edit.
+						cs.changed()
 					}
 					cs.redraw()
 				})

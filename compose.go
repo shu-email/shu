@@ -4,6 +4,8 @@ import (
 	"context"
 	"runtime"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -14,17 +16,43 @@ import (
 	"shu/mail"
 )
 
+// draftSyncDelay is how long the typing must pause before the draft is
+// uploaded. Saving happens at every change; uploading replaces a message
+// on the server each time, so it waits for a pause.
+const draftSyncDelay = 3 * time.Second
+
 // composeState is one compose window.
 type composeState struct {
 	app *app
+	// accountID is the account the message is written from: the one
+	// active as the window opened, or the draft's. The draft is stored
+	// under it, so switching accounts in the mail window does not move
+	// the message to another one.
+	accountID string
 
 	to      string
 	cc      string
+	bcc     string
 	subject string
 	body    string
+	// showBcc keeps the Bcc field of a draft that came with one, also
+	// while it is being emptied.
+	showBcc bool
 
 	inReplyTo  string
 	references []string
+
+	// The window's draft. draftID is empty until the window holds
+	// something to keep. Every change saves in a job of its own: saveMu
+	// makes the jobs take turns, saveSeq lets only the newest write, and
+	// gone stops them once the draft was sent or discarded, so that a
+	// save still waiting cannot bring it back.
+	draftID   string
+	saveMu    sync.Mutex
+	saveSeq   atomic.Uint64
+	gone      atomic.Bool
+	draft     draftStatus
+	syncTimer *time.Timer
 
 	// source is the message being replied to, which an AI draft reads;
 	// nil for a new message or a forward. guidance is what the user asks
@@ -46,6 +74,26 @@ type composeState struct {
 	cancel context.CancelFunc
 }
 
+// draftStatus is what a compose window knows of where its draft is, for
+// the status line.
+type draftStatus struct {
+	// revision is the last one saved and synced the last one the server
+	// has. The draft is on the server while they are equal. They count
+	// the saves of the message with this Message-ID.
+	revision  int64
+	synced    int64
+	messageID string
+	// offline says the last sync did not reach the server; localOnly that
+	// it did, and found no Drafts folder to upload to.
+	offline   bool
+	localOnly bool
+	// conflict says another mail client changed the draft, and that this
+	// version was kept beside it.
+	conflict bool
+	// err is a save that failed.
+	err string
+}
+
 // openReply opens a reply to a message, which an AI draft may read.
 func (a *app) openReply(m mail.Summary, body string, all bool) {
 	cs := a.openCompose(replyDraft(a, m, body, all, false))
@@ -55,9 +103,10 @@ func (a *app) openReply(m mail.Summary, body string, all bool) {
 	}
 }
 
-// openCompose opens a compose window for a draft, or an empty one.
+// openCompose opens a compose window for a message to write, or an empty
+// one.
 func (a *app) openCompose(out *mail.Outgoing) *composeState {
-	cs := &composeState{app: a}
+	cs := &composeState{app: a, accountID: a.active}
 	if out != nil {
 		cs.to = addressesText(out.To)
 		cs.cc = addressesText(out.Cc)
@@ -66,6 +115,49 @@ func (a *app) openCompose(out *mail.Outgoing) *composeState {
 		cs.inReplyTo = out.InReplyTo
 		cs.references = append([]string(nil), out.References...)
 	}
+	return a.showCompose(cs)
+}
+
+// resumeDraft opens a draft for editing, every field as it was left. A
+// draft already open in a window gets that window, not a second editor.
+func (a *app) resumeDraft(d mail.Draft) *composeState {
+	if cs := a.composeOf(d.ID); cs != nil {
+		cs.focus()
+		return cs
+	}
+	cs := &composeState{
+		app: a, accountID: d.AccountID, draftID: d.ID,
+		to: d.To, cc: d.Cc, bcc: d.Bcc, subject: d.Subject, body: d.Body,
+		showBcc:    d.Bcc != "",
+		inReplyTo:  d.InReplyTo,
+		references: append([]string(nil), d.References...),
+	}
+	cs.noteDraft(d)
+	return a.showCompose(cs)
+}
+
+// focus brings the window to the front.
+func (cs *composeState) focus() {
+	if cs.win != nil {
+		cs.win.Focus()
+	}
+}
+
+// composeOf returns the open window editing a draft, or nil.
+func (a *app) composeOf(draftID string) *composeState {
+	if draftID == "" {
+		return nil
+	}
+	for _, cs := range a.composes {
+		if cs.draftID == draftID && !cs.closed {
+			return cs
+		}
+	}
+	return nil
+}
+
+// showCompose opens the window of a compose state.
+func (a *app) showCompose(cs *composeState) *composeState {
 	cs.ctx, cs.cancel = context.WithCancel(context.Background())
 	a.composes = append(a.composes, cs)
 	if a.newWindow == nil {
@@ -115,13 +207,23 @@ func (cs *composeState) view(c *ui.Context) {
 		OnShortcut(0, ui.KeyEscape, cs.close).Children(func() {
 		cs.row(c, locales.To(), "name@example.com", &cs.to)
 		cs.row(c, locales.Cc(), "", &cs.cc)
+		if cs.showBcc {
+			// Compose has no way to add a Bcc yet, but one that came with
+			// a draft must show: it will be sent to.
+			cs.row(c, locales.Bcc(), "", &cs.bcc)
+		}
 		cs.row(c, locales.Subject(), "", &cs.subject)
 		if cs.source != nil && cs.app.ai != nil {
 			cs.draftRow(c, t)
 		}
 		ui.Divider(c)
-		ui.TextArea(c, &cs.body).Grow(1).MinHeight(220).Label(locales.Body()).
-			Placeholder(locales.ComposeBodyPlaceholder())
+		// The body takes the room there is. Its minimum leaves the notices
+		// and the actions below it on screen at the window's smallest.
+		ui.TextArea(c, &cs.body).Grow(1).MinHeight(120).Label(locales.Body()).
+			Placeholder(locales.ComposeBodyPlaceholder()).OnChange(cs.changed)
+		if cs.draft.conflict {
+			cs.conflictNotice(c, t)
+		}
 		if cs.err != "" {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Icon(c, alertIcon).FontSize(14).TextColor(t.Warning)
@@ -129,16 +231,18 @@ func (cs *composeState) view(c *ui.Context) {
 			})
 		}
 		ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-			ui.Spacer(c)
+			// Closing the window keeps the draft; this is the way to
+			// throw it away.
+			ui.Button(c, locales.DiscardDraft()).Disabled(cs.sending).OnClick(cs.discard)
+			cs.statusLine(c, t)
 			key := "Ctrl+Enter"
 			if runtime.GOOS == "darwin" {
 				key = "⌘↩"
 			}
-			ui.Text(c, locales.SendHint(key)).FontSize(11).TextColor(t.TextMuted)
+			ui.Text(c, locales.SendHint(key)).FontSize(11).TextColor(t.TextMuted).Shrink(0)
 			if cs.note != "" {
 				ui.Text(c, cs.note).FontSize(12).TextColor(t.TextMuted)
 			}
-			ui.Button(c, locales.Cancel()).OnClick(func() { cs.close() })
 			label := locales.Send()
 			if cs.sending {
 				label = locales.Sending()
@@ -155,8 +259,216 @@ func (cs *composeState) view(c *ui.Context) {
 func (cs *composeState) row(c *ui.Context, label, placeholder string, value *string) {
 	t := c.Theme()
 	ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, label).FontSize(12).TextColor(t.TextMuted).Width(52)
-		ui.TextInput(c, value).Grow(1).Label(label).Placeholder(placeholder)
+		// The caption names the input, so a click on it focuses the field.
+		caption := ui.Text(c, label).FontSize(12).TextColor(t.TextMuted).Width(52)
+		ui.TextInput(c, value).Grow(1).LabelledBy(caption).Placeholder(placeholder).OnChange(cs.changed)
+	})
+}
+
+// statusLine says quietly where the draft is: on this device, on the
+// server too, or waiting for a connection.
+func (cs *composeState) statusLine(c *ui.Context, t *ui.Theme) {
+	text, icon, color := cs.draftNote(t)
+	ui.Row(c).Grow(1).MinWidth(0).Gap(6).AlignItems(ui.Center).Children(func() {
+		if text == "" {
+			return
+		}
+		ui.Icon(c, icon).FontSize(12).TextColor(color)
+		// It is no live region: it changes with every pause in the
+		// typing, which a screen reader should not read out each time.
+		ui.Text(c, text).FontSize(11).TextColor(t.TextMuted).SingleLine().Grow(1).MinWidth(0)
+	})
+}
+
+// draftNote is the status line's text, with its icon.
+func (cs *composeState) draftNote(t *ui.Theme) (string, *ui.SVG, ui.Color) {
+	d := cs.draft
+	switch {
+	case d.err != "":
+		return locales.DraftSaveFailed(d.err), alertIcon, t.Warning
+	case cs.draftID == "" || d.revision == 0:
+		return "", nil, t.TextMuted
+	case d.synced >= d.revision:
+		return locales.DraftSynced(), checkIcon, t.Success
+	case d.localOnly:
+		return locales.DraftLocalOnly(), draftIcon, t.TextMuted
+	case d.offline:
+		return locales.DraftOffline(), draftIcon, t.TextMuted
+	}
+	return locales.DraftSaved(), draftIcon, t.TextMuted
+}
+
+// conflictNotice says that another mail client changed the draft, and
+// that nothing was overwritten.
+func (cs *composeState) conflictNotice(c *ui.Context, t *ui.Theme) {
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Padding(8, 10).Radius(8).
+		Background(t.Warning.Alpha(0.12)).Children(func() {
+		ui.Icon(c, alertIcon).FontSize(14).TextColor(t.Warning)
+		// A status, so that a screen reader says it once as it appears.
+		ui.Text(c, locales.DraftConflict()).FontSize(12).Grow(1).MinWidth(0).MaxLines(3).
+			Role(ui.RoleStatus)
+		cs.app.iconButton(c, closeIcon, locales.DraftConflictDismiss(), locales.DraftConflictDismiss()).
+			OnClick(cs.dismissConflict)
+	})
+}
+
+// empty reports a window with nothing written in it.
+func (cs *composeState) empty() bool {
+	for _, field := range []string{cs.to, cs.cc, cs.bcc, cs.subject, cs.body} {
+		if strings.TrimSpace(field) != "" {
+			return false
+		}
+	}
+	return true
+}
+
+// snapshot is the draft as the window holds it now.
+func (cs *composeState) snapshot() mail.Draft {
+	return mail.Draft{
+		ID: cs.draftID, AccountID: cs.accountID,
+		To: cs.to, Cc: cs.cc, Bcc: cs.bcc, Subject: cs.subject, Body: cs.body,
+		InReplyTo:  cs.inReplyTo,
+		References: append([]string(nil), cs.references...),
+	}
+}
+
+// changed saves the draft after an edit and plans its upload. A window
+// that never held anything leaves no draft.
+func (cs *composeState) changed() {
+	if cs.closed || cs.sent || cs.gone.Load() {
+		return
+	}
+	if cs.draftID == "" {
+		if cs.empty() {
+			return
+		}
+		// The ID is made here, not by the first save, so that the saves
+		// queued behind it write the same draft.
+		cs.draftID = mail.NewDraftID()
+	}
+	cs.save(nil)
+	cs.scheduleSync()
+}
+
+// save writes the draft as it is now, without the network. Each change
+// saves in a job of its own, so that typing never waits. The jobs take
+// turns, and one that a later save has overtaken does not write: the
+// last thing typed is the last thing saved. then runs once the save is
+// in.
+func (cs *composeState) save(then func()) {
+	a := cs.app
+	d := cs.snapshot()
+	seq := cs.saveSeq.Add(1)
+	a.run(func() {
+		cs.saveMu.Lock()
+		if cs.saveSeq.Load() != seq || cs.gone.Load() {
+			cs.saveMu.Unlock()
+			return
+		}
+		ctx, cancel := a.ctx()
+		saved, err := a.svc.SaveDraft(ctx, d)
+		cancel()
+		cs.saveMu.Unlock()
+		a.post(func() {
+			if cs.gone.Load() {
+				return
+			}
+			if err != nil {
+				cs.draft.err = err.Error()
+				cs.redraw()
+				return
+			}
+			cs.draft.err = ""
+			cs.noteDraft(saved)
+			a.reloadDrafts(cs.accountID)
+			cs.redraw()
+			if then != nil {
+				then()
+			}
+		})
+	})
+}
+
+// noteDraft takes a draft row's sync state for the status line. Results
+// arrive out of order, and a revision never goes back, except that a
+// draft kept apart from another client's version is a new message, whose
+// count starts again.
+func (cs *composeState) noteDraft(d mail.Draft) {
+	if d.MessageID != cs.draft.messageID {
+		cs.draft.messageID = d.MessageID
+		cs.draft.revision, cs.draft.synced = d.Revision, d.SyncedRevision
+	} else {
+		cs.draft.revision = max(cs.draft.revision, d.Revision)
+		cs.draft.synced = max(cs.draft.synced, d.SyncedRevision)
+	}
+	cs.draft.conflict = d.Conflict
+}
+
+// scheduleSync uploads the draft once the typing has paused.
+func (cs *composeState) scheduleSync() {
+	a := cs.app
+	if cs.syncTimer != nil {
+		cs.syncTimer.Stop()
+		cs.syncTimer = nil
+	}
+	if a.after == nil {
+		return
+	}
+	seq := cs.saveSeq.Load()
+	cs.syncTimer = a.after(draftSyncDelay, func() {
+		a.post(func() {
+			// A timer that fired although a later edit replaced it gives
+			// way to that edit's.
+			if cs.closed || cs.gone.Load() || cs.saveSeq.Load() != seq {
+				return
+			}
+			a.syncDrafts(cs.accountID)
+		})
+	})
+}
+
+// draftSynced updates the window after a sync of its account's drafts.
+func (cs *composeState) draftSynced(result mail.DraftSyncResult, syncErr error) {
+	if cs.draftID == "" || cs.closed || cs.gone.Load() {
+		return
+	}
+	a := cs.app
+	id := cs.draftID
+	a.run(func() {
+		ctx, cancel := a.ctx()
+		defer cancel()
+		d, found, err := a.svc.Draft(ctx, id)
+		a.post(func() {
+			if cs.closed || cs.gone.Load() || cs.draftID != id {
+				return
+			}
+			cs.draft.offline = syncErr != nil
+			cs.draft.localOnly = syncErr == nil && result.Folder == ""
+			switch {
+			case err != nil:
+			case !found:
+				// Another mail client changed or deleted the draft, and
+				// the sync let it go: it had no edits to lose. The window
+				// still shows the text, though, so it is saved again, as
+				// a draft of its own, and uploaded beside the other one.
+				cs.save(func() { a.syncDrafts(cs.accountID) })
+			default:
+				cs.noteDraft(d)
+			}
+			cs.redraw()
+		})
+	})
+}
+
+// dismissConflict closes the conflict notice for good.
+func (cs *composeState) dismissConflict() {
+	cs.draft.conflict = false
+	a := cs.app
+	id := cs.draftID
+	a.run(func() {
+		ctx, cancel := a.ctx()
+		defer cancel()
+		_ = a.svc.DismissDraftConflict(ctx, id)
 	})
 }
 
@@ -180,19 +492,42 @@ func (cs *composeState) send() {
 		cs.err = locales.SendFailed(err.Error())
 		return
 	}
-	draft := mail.Outgoing{
-		To: to, Cc: cc, Subject: strings.TrimSpace(cs.subject), Text: cs.body,
+	bcc, err := parseRecipients(cs.bcc)
+	if err != nil {
+		cs.err = locales.SendFailed(err.Error())
+		return
+	}
+	out := mail.Outgoing{
+		To: to, Cc: cc, Bcc: bcc, Subject: strings.TrimSpace(cs.subject), Text: cs.body,
 		InReplyTo: cs.inReplyTo, References: cs.references,
+		DraftID: cs.draftID,
 	}
 	cs.sending = true
 	cs.err = ""
 	cs.note = ""
-	accountID := cs.app.active
+	accountID := cs.accountID
 	app := cs.app
+	draft := cs.snapshot()
+	// The saves still waiting give way to the one below.
+	seq := cs.saveSeq.Add(1)
 	app.run(func() {
 		ctx, cancel := context.WithTimeout(cs.ctx, 60*time.Second)
 		defer cancel()
-		result, err := app.svc.Send(ctx, accountID, draft)
+		cs.saveMu.Lock()
+		if draft.ID != "" && cs.saveSeq.Load() == seq {
+			// The draft holds what is being sent before it goes, so that
+			// a message the server refuses is still a draft. Closing the
+			// window cancels the send, not this.
+			saveCtx, saveCancel := app.ctx()
+			_, _ = app.svc.SaveDraft(saveCtx, draft)
+			saveCancel()
+		}
+		result, err := app.svc.Send(ctx, accountID, out)
+		if err == nil {
+			// The engine removed the draft with the send.
+			cs.gone.Store(true)
+		}
+		cs.saveMu.Unlock()
 		app.post(func() {
 			cs.sending = false
 			if err != nil {
@@ -223,14 +558,70 @@ func parseRecipients(s string) ([]mail.Address, error) {
 	return mail.ParseAddressList([]string{s})
 }
 
-// close cancels an in-flight send and closes the window.
+// discard throws the draft away after asking, and closes the window.
+func (cs *composeState) discard() {
+	if cs.closed || cs.sending {
+		return
+	}
+	if cs.draftID == "" {
+		// Nothing was written, so there is nothing to ask about.
+		cs.close()
+		return
+	}
+	a := cs.app
+	a.discardDrafts(cs.accountID, []string{cs.draftID}, cs.win, func(err error) {
+		// The window is closed by now; the mail window says what failed.
+		a.err = locales.DraftDiscardFailed(err.Error())
+	})
+}
+
+// close cancels an in-flight send and closes the window. What was
+// written stays as a draft: closing asks nothing.
 func (cs *composeState) close() {
 	if cs.closed {
 		return
 	}
 	cs.closed = true
 	cs.cancel()
+	if cs.syncTimer != nil {
+		cs.syncTimer.Stop()
+		cs.syncTimer = nil
+	}
+	cs.keepDraft()
 	if cs.win != nil {
 		cs.win.Close()
 	}
+}
+
+// keepDraft is the last save of a closing window, and the upload that
+// follows it. A draft emptied again has nothing to keep and goes.
+func (cs *composeState) keepDraft() {
+	if cs.draftID == "" || cs.gone.Load() {
+		return
+	}
+	a := cs.app
+	accountID := cs.accountID
+	draft := cs.snapshot()
+	empty := cs.empty()
+	seq := cs.saveSeq.Add(1)
+	a.run(func() {
+		ctx, cancel := a.ctx()
+		defer cancel()
+		cs.saveMu.Lock()
+		switch {
+		case cs.gone.Load():
+		case empty:
+			cs.gone.Store(true)
+			_ = a.svc.DiscardDraft(ctx, draft.ID)
+		case cs.saveSeq.Load() == seq:
+			_, _ = a.svc.SaveDraft(ctx, draft)
+		}
+		cs.saveMu.Unlock()
+		a.post(func() {
+			a.reloadDrafts(accountID)
+			if !empty {
+				a.syncDrafts(accountID)
+			}
+		})
+	})
 }

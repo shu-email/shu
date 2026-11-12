@@ -506,6 +506,58 @@
       }
     }
   },
+  "bcc": "Bcc",
+  "noSubject": "(no subject)",
+  "noRecipientsYet": "No recipients",
+  "editDraft": "Edit draft",
+  "discardDraft": "Discard draft",
+  "discardDraftTitle": "{count, plural, one {Discard this draft?} other {Discard # drafts?}}",
+  "@discardDraftTitle": {
+    "description": "The title of the confirmation before drafts are deleted.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "discardDraftConfirm": "It is deleted from this device and from the Drafts folder on the server. You can't undo this.",
+  "draftNotSent": "A draft on this device. It has not been sent.",
+  "draftOnServer": "A draft from the server's Drafts folder, written in another mail client.",
+  "draftSaved": "Draft saved on this device",
+  "draftSynced": "Draft saved to the server",
+  "draftOffline": "Saved on this device · will sync when online",
+  "draftLocalOnly": "Saved on this device only · the server has no Drafts folder",
+  "draftConflict": "This draft was changed in another mail client. Your version was kept as a separate draft.",
+  "draftConflictDismiss": "Dismiss conflict notice",
+  "draftSaveFailed": "Could not save the draft: {error}",
+  "@draftSaveFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "disk full"
+      }
+    }
+  },
+  "draftOpenFailed": "Could not open the draft: {error}",
+  "@draftOpenFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "timeout"
+      }
+    }
+  },
+  "draftDiscardFailed": "Could not discard the draft: {error}",
+  "@draftDiscardFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "disk full"
+      }
+    }
+  },
+  "draftHasAttachments": "This draft has attachments, which Shu cannot edit yet. Open it in the mail client it was written in.",
   "@mailboxSummary": {
     "placeholders": {
       "messages": {

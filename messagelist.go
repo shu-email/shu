@@ -52,6 +52,10 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 		a.list.Key = func(i int) any { return summaryKey(a.all[i]) }
 		a.list.Label = func(i int) string {
 			m := a.all[i]
+			if a.folder == draftsFolder {
+				who, title := a.rowHeading(m)
+				return who + " " + title
+			}
 			return m.From.Name + " " + m.Subject
 		}
 		a.list.Selected = &a.selected
@@ -65,6 +69,7 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 				a.bodyErr = ""
 				a.reloadBody()
 			}).
+			OnSubmit(a.openSelected).
 			Rows(a.messageRow)
 		// Put the keyboard in the list once mail loads, so J/K work
 		// without a first click. A search field that took the focus keeps
@@ -106,8 +111,10 @@ func (a *app) listHeader(c *ui.Context, t *ui.Theme) {
 		if chosen > 1 {
 			ui.Button(c, locales.ClearSelection()).OnClick(func() { a.clearSelection() })
 		} else if a.ai != nil {
+			// Drafts are the user's own unsent text: there is nothing in
+			// them to triage, and no reason to send them to a model.
 			ui.Button(c, "").Label(locales.TriageInbox()).Tooltip(locales.TriageInbox()).Padding(4, 6).
-				Disabled(len(a.all) == 0).OnClick(a.triageList).
+				Disabled(len(a.all) == 0 || a.folder == draftsFolder).OnClick(a.triageList).
 				Children(func() { ui.Icon(c, sparklesIcon).FontSize(15) })
 		}
 	})
@@ -117,7 +124,7 @@ func (a *app) listHeader(c *ui.Context, t *ui.Theme) {
 // listSummary is the line under the folder title.
 func (a *app) listSummary() string {
 	query := strings.TrimSpace(a.query)
-	if query != "" || a.folder == "starred" {
+	if query != "" || a.folder == "starred" || a.folder == draftsFolder {
 		return locales.MessageCount(len(a.all))
 	}
 	for _, f := range a.folders {
@@ -263,9 +270,10 @@ func (a *app) messageRow(row ui.ListRow) {
 		starColor = t.AccentText
 	}
 	meta := ""
-	if a.folder == "starred" || strings.TrimSpace(a.query) != "" {
+	if (a.folder == "starred" || strings.TrimSpace(a.query) != "") && m.DraftID == "" {
 		meta = a.folderLabel(m.Folder)
 	}
+	who, title := a.rowHeading(m)
 	ui.Box(c).Padding(9, 14).BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Start).Children(func() {
 			dot := ui.Box(c).Size(7, 7).Radius(3.5).Shrink(0).Margin(6, 0, 0, 0)
@@ -274,7 +282,7 @@ func (a *app) messageRow(row ui.ListRow) {
 			}
 			ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
 				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-					name := ui.Text(c, displayName(m.From)).FontSize(13).SingleLine().Grow(1)
+					name := ui.Text(c, who).FontSize(13).SingleLine().Grow(1)
 					if !m.Seen {
 						name.Bold()
 					}
@@ -290,7 +298,7 @@ func (a *app) messageRow(row ui.ListRow) {
 					}
 					ui.Text(c, a.messageTime(c, m.Date)).FontSize(11).TextColor(muted).Shrink(0)
 				})
-				subject := ui.Text(c, m.Subject).FontSize(13).SingleLine()
+				subject := ui.Text(c, title).FontSize(13).SingleLine()
 				if !m.Seen {
 					subject.Bold()
 				}
@@ -302,6 +310,22 @@ func (a *app) messageRow(row ui.ListRow) {
 			})
 		})
 	})
+}
+
+// rowHeading is the two lines that head a row: who and what. In Drafts
+// every row is from the user, so whom the draft is to tells the rows
+// apart; a draft may have neither that nor a subject yet.
+func (a *app) rowHeading(m mail.Summary) (who, title string) {
+	if a.folder != draftsFolder {
+		return displayName(m.From), m.Subject
+	}
+	if who = recipients(m.To); who == "" {
+		who = locales.NoRecipientsYet()
+	}
+	if title = m.Subject; strings.TrimSpace(title) == "" {
+		title = locales.NoSubject()
+	}
+	return who, title
 }
 
 // displayName is the sender's name, else address.

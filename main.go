@@ -98,6 +98,11 @@ type app struct {
 	review      *aiReview
 
 	composes []*composeState
+	// draftSyncs is the draft sync of each account, by its ID. draftErr
+	// is why the draft with the key draftErrKey could not be opened.
+	draftSyncs  map[string]*draftSync
+	draftErr    string
+	draftErrKey string
 
 	// Hooks the window sets; tests leave them nil.
 	newWindow func(mygo.WindowOptions) *mygo.Window
@@ -105,7 +110,10 @@ type app struct {
 	setLocale func(string)
 	setBadge  func(int)
 	after     func(time.Duration, func()) *time.Timer
-	lang      int
+	// confirmDiscard asks whether to delete that many drafts for good.
+	// It blocks, so jobs call it. While it is nil nothing is discarded.
+	confirmDiscard func(parent *mygo.Window, count int) bool
+	lang           int
 }
 
 // newApp makes the state the tests and main use.
@@ -119,6 +127,7 @@ func newApp(svc mailService) *app {
 		mailboxesOpen: true,
 		bodies:        map[string]mail.FetchResult{},
 		summaries:     map[string]*aiJob{},
+		draftSyncs:    map[string]*draftSync{},
 	}
 }
 
@@ -160,6 +169,14 @@ func (a *app) attach(win *mygo.Window) {
 	a.setLocale = mygo.App.SetLocale
 	a.setBadge = mygo.App.SetBadgeCount
 	a.after = time.AfterFunc
+	a.confirmDiscard = askDiscard
+	// Drafts written offline go up when the network is back, without
+	// waiting for the next edit or sync.
+	mygo.Network.OnChanged(func(status mygo.NetworkStatus) {
+		if status.Online {
+			a.post(a.networkBack)
+		}
+	})
 	win.OnClosed(func() { a.closed = true })
 	mygo.App.OnLocaleChanged(func(string) { win.SetTitle(locales.AppName()) })
 }
@@ -281,6 +298,13 @@ func (a *app) syncAccount(g uint64) {
 			a.loadMessages(g)
 			a.syncFolder(g)
 			a.loadPending(g)
+			// The drafts sync with the account, whatever folder shows:
+			// what was written offline goes up, and what other mail
+			// clients changed comes in. The Drafts folder asks for it
+			// itself, just above.
+			if a.folder != draftsFolder {
+				a.syncDrafts(accountID)
+			}
 		})
 	})
 }
@@ -289,6 +313,10 @@ func (a *app) syncAccount(g uint64) {
 func (a *app) syncFolder(g uint64) {
 	accountID, folder := a.active, a.folder
 	if folder == "" || folder == "starred" {
+		return
+	}
+	if folder == draftsFolder {
+		a.syncDrafts(accountID)
 		return
 	}
 	a.run(func() {
@@ -318,7 +346,11 @@ func (a *app) syncFolder(g uint64) {
 }
 
 // loadMessages reads the current folder and query from the cache.
-func (a *app) loadMessages(g uint64) {
+func (a *app) loadMessages(g uint64) { a.readMessages(g, true) }
+
+// readMessages reads the list, showing progress or, for a read the user
+// did not ask for, none.
+func (a *app) readMessages(g uint64, progress bool) {
 	accountID, folder, query := a.active, a.folder, strings.TrimSpace(a.query)
 	key := a.selectedKey()
 	if folder == "" {
@@ -326,26 +358,50 @@ func (a *app) loadMessages(g uint64) {
 		a.loading = false
 		return
 	}
-	a.loading = true
+	if progress {
+		a.loading = true
+	}
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
-		msgs, err := a.svc.CachedMessages(ctx, accountID, folder, query, 50)
+		var (
+			msgs []mail.Summary
+			err  error
+		)
+		if folder == draftsFolder {
+			msgs, err = a.svc.DraftList(ctx, accountID, query, 50)
+		} else {
+			msgs, err = a.svc.CachedMessages(ctx, accountID, folder, query, 50)
+		}
 		a.post(func() {
 			if a.stale(g) || a.folder != folder || strings.TrimSpace(a.query) != query {
 				return
 			}
-			a.loading = false
+			if progress {
+				a.loading = false
+			} else {
+				// Nobody waited for this read, so the row chosen since
+				// it began is the one to keep.
+				key = a.selectedKey()
+			}
 			if err != nil {
 				a.err = err.Error()
 				return
 			}
+			was := a.selected
 			a.all = msgs
 			a.pruneSelection()
 			a.restoreSelection(key)
 			switch {
-			case a.selected < 0 && len(a.all) > 0 && query == "" && a.sel.Len() == 0:
+			case progress && a.selected < 0 && len(a.all) > 0 && query == "" && a.sel.Len() == 0:
+				// Opening a folder shows its first message. A read made
+				// behind the user's back leaves an empty choice empty.
 				a.chooseRow(0)
+			case !progress && a.selected < 0 && key != "" && len(a.all) > 0 && a.sel.Len() == 0:
+				// The chosen row left the list, as a draft sent or
+				// replaced by another mail client does. The row that
+				// took its place is chosen, as after archiving.
+				a.chooseRow(min(was, len(a.all)-1))
 			case a.selected >= 0 && a.sel.Len() == 0:
 				a.sel.Add(summaryKey(a.all[a.selected]))
 			}
@@ -414,6 +470,10 @@ func (a *app) restoreSelection(key string) {
 }
 
 func summaryKey(m mail.Summary) string {
+	if m.DraftID != "" {
+		// A draft of this device has no folder or UID to tell it by.
+		return "draft/" + m.DraftID
+	}
 	return fmt.Sprintf("%s/%d", m.Folder, m.UID)
 }
 
@@ -435,6 +495,10 @@ func (a *app) loadBody(g uint64) {
 		return
 	}
 	m := a.all[idx]
+	if m.DraftID != "" {
+		a.loadDraftBody(g, m)
+		return
+	}
 	key := summaryKey(m)
 	accountID, folder, uid := a.active, m.Folder, m.UID
 	if result, ok := a.bodies[key]; ok {
@@ -621,12 +685,17 @@ func (a *app) folderEntries() []folderEntry {
 	}
 	add(mail.SpecialInbox, inboxIcon, locales.Inbox())
 	add(mail.SpecialSent, sentIcon, locales.Sent())
-	add(mail.SpecialDrafts, draftIcon, locales.Drafts())
+	// Drafts always shows: it holds the drafts on this device, whether or
+	// not the server has a Drafts folder. The server's folder is listed
+	// inside it, so it gets no entry of its own.
+	entries = append(entries, folderEntry{ID: draftsFolder, Label: locales.Drafts(), Icon: draftIcon})
+	seen[a.folderBySpecial(mail.SpecialDrafts)] = true
 	add(mail.SpecialArchive, archiveIcon, locales.Archive())
 	add(mail.SpecialJunk, spamIcon, locales.Junk())
 	add(mail.SpecialTrash, trashIcon, locales.Trash())
 	for _, f := range a.folders {
-		if seen[f.Name] || f.SpecialUse == mail.SpecialFlagged {
+		// A folder named as an entry above would be chosen with it.
+		if seen[f.Name] || f.SpecialUse == mail.SpecialFlagged || f.Name == draftsFolder {
 			continue
 		}
 		seen[f.Name] = true
@@ -652,7 +721,7 @@ func (a *app) ensureFolder() {
 }
 
 func (a *app) folderExists(id string) bool {
-	if id == "starred" {
+	if id == "starred" || id == draftsFolder {
 		return true
 	}
 	for _, f := range a.folders {
@@ -675,6 +744,9 @@ func (a *app) folderBySpecial(special string) string {
 func (a *app) folderLabel(id string) string {
 	if id == "starred" {
 		return locales.Starred()
+	}
+	if id == draftsFolder {
+		return locales.Drafts()
 	}
 	for _, f := range a.folders {
 		if f.Name != id {
@@ -782,7 +854,7 @@ func (a *app) mailView(c *ui.Context) {
 		panes.OnShortcut(0, ui.KeyE, func() { a.moveSelected(mail.SpecialArchive) })
 		panes.OnShortcut(0, ui.KeyR, func() { a.reply(false) })
 		panes.OnShortcut(0, ui.KeyF, func() { a.forward() })
-		panes.OnShortcut(0, ui.KeyDelete, func() { a.moveSelected(mail.SpecialTrash) })
+		panes.OnShortcut(0, ui.KeyDelete, func() { a.deleteSelected() })
 	})
 	a.accountModal(c)
 	aiReviewModal(c, &a.review)
@@ -867,7 +939,7 @@ func (a *app) sidebar(c *ui.Context, t *ui.Theme) {
 			ui.SidebarSection(c, locales.Mailboxes(), &a.mailboxesOpen, func() {
 				for _, e := range entries {
 					item := ui.SidebarItem(c, e.ID, e.Icon, e.Label)
-					if e.ID != "starred" {
+					if e.ID != "starred" && e.ID != draftsFolder {
 						if n := a.folderUnread(e.ID); n > 0 {
 							item.Children(func() {
 								ui.Badge(c, fmt.Sprint(n)).Background(t.Accent).TextColor(t.AccentText)

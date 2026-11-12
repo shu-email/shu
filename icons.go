@@ -42,6 +42,7 @@ var (
 	flagIcon        = mustIcon("flag")
 	chevronDownIcon = mustIcon("chevron-down")
 	chevronLeftIcon = mustIcon("chevron-left")
+	panelLeftIcon   = mustIcon("panel-left")
 	downloadIcon    = mustIcon("download")
 	settingsIcon    = mustIcon("settings")
 	plusIcon        = mustIcon("plus")

@@ -56,10 +56,8 @@ func (a *app) current() (*mail.Summary, *mail.Message) {
 // readingToolbar draws the message actions. Actions act on the whole
 // selection, and their icons show that selection's state.
 func (a *app) readingToolbar(c *ui.Context, t *ui.Theme) {
-	_, msg := a.current()
 	targets := a.targets()
 	has := len(targets) > 0
-	html := msg != nil && msg.BodyHTML != ""
 	allFlagged, allSeen := has, has
 	for _, m := range targets {
 		if !m.Flagged {
@@ -105,14 +103,6 @@ func (a *app) readingToolbar(c *ui.Context, t *ui.Theme) {
 		a.toolButton(c, replyIcon, locales.Reply(), has, func() { a.reply(false) })
 		a.toolButton(c, replyAllIcon, locales.ReplyAll(), has, func() { a.reply(true) })
 		a.toolButton(c, forwardIcon, locales.Forward(), has, func() { a.forward() })
-		ui.Spacer(c)
-		if html {
-			label := locales.ShowHTML()
-			if a.htmlOn {
-				label = locales.ShowPlain()
-			}
-			ui.Button(c, label).Label(label).OnClick(func() { a.toggleHTML() })
-		}
 	}).Height(48).Padding(6, 12).Label(locales.MessageActions()).
 		BorderWidth(0, 0, 1, 0).BorderColor(t.Border)
 }
@@ -127,7 +117,8 @@ func (a *app) toggleHTML() {
 	}
 }
 
-// senderHeader draws who sent the message, to whom and when.
+// senderHeader draws who sent the message, to whom and when, with a
+// details disclosure for the raw fields.
 func (a *app) senderHeader(c *ui.Context, t *ui.Theme, m mail.Summary) {
 	ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
 		ui.Avatar(c, displayName(m.From), nil)
@@ -138,14 +129,51 @@ func (a *app) senderHeader(c *ui.Context, t *ui.Theme, m mail.Summary) {
 				ui.Text(c, to).FontSize(11).TextColor(t.TextMuted).SingleLine()
 			}
 		})
-		ui.Column(c).Shrink(0).AlignItems(ui.End).Gap(1).Children(func() {
+		ui.Column(c).Shrink(0).AlignItems(ui.End).Gap(2).Children(func() {
 			ui.Text(c, a.longTime(c, m.Date)).FontSize(12).TextColor(t.TextMuted)
-			if len(m.Cc) > 0 {
+			if len(m.Cc) > 0 && !a.details {
 				ui.Text(c, locales.Cc()+" "+recipients(m.Cc)).FontSize(11).TextColor(t.TextMuted).SingleLine()
 			}
+			ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+				if m, ok := a.bodies[summaryKey(m)]; ok && msgHasHTML(m.Message) {
+					label := locales.ShowHTML()
+					if a.htmlOn {
+						label = locales.ShowPlain()
+					}
+					ui.ButtonBase(c).Label(label).OnClick(func() { a.toggleHTML() }).Children(func() {
+						ui.Text(c, label).FontSize(11).TextColor(t.Accent)
+					})
+				}
+				label := locales.Details()
+				if a.details {
+					label = locales.HideDetails()
+				}
+				ui.ButtonBase(c).Label(label).OnClick(func() { a.details = !a.details }).Children(func() {
+					ui.Text(c, label).FontSize(11).TextColor(t.Accent)
+				})
+			})
 		})
 	})
+	if !a.details {
+		return
+	}
+	ui.Column(c).Gap(2).Padding(4, 0, 0, 0).Children(func() {
+		detail := func(name, value string) {
+			if strings.TrimSpace(value) == "" {
+				return
+			}
+			ui.Text(c, name+": "+value).FontSize(11).TextColor(t.TextMuted).Selectable()
+		}
+		detail(locales.From(), m.From.String())
+		detail(locales.To(), addressesText(m.To))
+		detail(locales.Cc(), addressesText(m.Cc))
+		detail(locales.ReplyTo(), addressesText(m.ReplyTo))
+		detail(locales.MessageID(), m.MessageID)
+	})
 }
+
+// msgHasHTML reports whether a loaded message has an HTML body to show.
+func msgHasHTML(m mail.Message) bool { return strings.TrimSpace(m.BodyHTML) != "" }
 
 // recipientLine writes "to me" when the account is the only recipient,
 // else the recipients.
@@ -199,15 +227,20 @@ func (a *app) body(c *ui.Context, t *ui.Theme, m *mail.Summary, msg *mail.Messag
 	case msg == nil:
 		ui.Text(c, locales.Loading()).FontSize(13).TextColor(t.TextMuted)
 	case a.htmlOn && msg.BodyHTML != "":
-		if a.webview != nil {
-			ui.WebView(c, a.webview).Grow(1).MinHeight(240)
-		} else {
-			a.bodyText(c, t, msg.BodyText)
-		}
+		ui.Column(c).Radius(10).Border(1, t.Border).Background(t.Background).Children(func() {
+			if a.webview != nil {
+				ui.WebView(c, a.webview).Height(480)
+			} else {
+				a.bodyText(c, t, msg.BodyText)
+			}
+		})
 	case strings.TrimSpace(msg.BodyText) == "":
 		ui.Text(c, locales.NoBody()).FontSize(13).TextColor(t.TextMuted)
 	default:
-		a.bodyText(c, t, msg.BodyText)
+		ui.Column(c).Padding(18, 20).Radius(10).Border(1, t.Border).
+			Background(t.Background).Children(func() {
+			a.bodyText(c, t, msg.BodyText)
+		})
 	}
 }
 

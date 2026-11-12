@@ -14,7 +14,8 @@ import (
 // virtual message list.
 func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 	ui.Column(c).Width(384).Shrink(0).MinWidth(0).Background(t.Background).Children(func() {
-		ui.Row(c).Height(48).Shrink(0).Padding(0, 14).Gap(8).AlignItems(ui.Center).
+		ui.Column(c).Height(64).Shrink(0).Padding(8, 14, 10, 14).Gap(1).
+			Justify(ui.Center).
 			BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
 			a.listHeader(c, t)
 		})
@@ -57,6 +58,7 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 				if a.sel.Len() == 0 {
 					a.selected = -1
 				}
+				a.details = false
 				a.bodyErr = ""
 				a.reloadBody()
 			}).
@@ -71,8 +73,8 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 	})
 }
 
-// listHeader draws the folder title and the unread badge, or the number
-// of results while searching.
+// listHeader draws the folder title, its counts and the unread badge, or
+// the number of results while searching.
 func (a *app) listHeader(c *ui.Context, t *ui.Theme) {
 	query := strings.TrimSpace(a.query)
 	title := a.folderLabel(a.folder)
@@ -83,22 +85,44 @@ func (a *app) listHeader(c *ui.Context, t *ui.Theme) {
 	case query != "":
 		title = locales.SearchResults()
 	}
-	ui.Text(c, title).FontSize(17).Bold().SingleLine()
-	switch {
-	case chosen > 1:
+	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, title).FontSize(17).Bold().SingleLine()
+		switch {
+		case chosen > 1:
+		case query != "":
+			ui.Badge(c, fmt.Sprint(len(a.all))).Background(t.Surface).TextColor(t.TextMuted)
+		default:
+			if n := a.unread(); n > 0 {
+				ui.Badge(c, fmt.Sprint(n)).Background(t.Accent).TextColor(t.AccentText)
+			}
+		}
 		ui.Spacer(c)
-		ui.Button(c, locales.ClearSelection()).OnClick(func() { a.clearSelection() })
-	case query != "":
-		ui.Badge(c, fmt.Sprint(len(a.all))).Background(t.Surface).TextColor(t.TextMuted)
-	default:
-		if n := a.unread(); n > 0 {
-			ui.Badge(c, fmt.Sprint(n)).Background(t.Accent).TextColor(t.AccentText)
+		if a.loading {
+			ui.Spinner(c).Size(14, 14)
+		}
+		if chosen > 1 {
+			ui.Button(c, locales.ClearSelection()).OnClick(func() { a.clearSelection() })
+		}
+	})
+	ui.Text(c, a.listSummary()).FontSize(11).TextColor(t.TextMuted).SingleLine()
+}
+
+// listSummary is the line under the folder title.
+func (a *app) listSummary() string {
+	query := strings.TrimSpace(a.query)
+	if query != "" || a.folder == "starred" {
+		return locales.MessageCount(len(a.all))
+	}
+	for _, f := range a.folders {
+		if f.Name == a.folder {
+			total := f.Total
+			if total == 0 {
+				total = len(a.all)
+			}
+			return locales.MailboxSummary(total, f.Unread)
 		}
 	}
-	ui.Spacer(c)
-	if a.loading {
-		ui.Spinner(c).Size(14, 14)
-	}
+	return locales.MessageCount(len(a.all))
 }
 
 // unread counts the unseen messages of the list.
@@ -210,7 +234,8 @@ func (a *app) retryPending() {
 	})
 }
 
-// messageRow builds one row of the virtual list.
+// messageRow builds one row of the virtual list. Rows stay dense: a dot,
+// sender and meta, subject, preview.
 func (a *app) messageRow(row ui.ListRow) {
 	c := row.Context
 	t := c.Theme()
@@ -230,13 +255,16 @@ func (a *app) messageRow(row ui.ListRow) {
 		dotColor = t.AccentText
 		starColor = t.AccentText
 	}
-	ui.Box(c).Padding(10, 14).BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
-		ui.Row(c).Gap(9).AlignItems(ui.Start).Children(func() {
+	meta := ""
+	if a.folder == "starred" || strings.TrimSpace(a.query) != "" {
+		meta = a.folderLabel(m.Folder)
+	}
+	ui.Box(c).Padding(9, 14).BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
+		ui.Row(c).Gap(8).AlignItems(ui.Start).Children(func() {
 			dot := ui.Box(c).Size(7, 7).Radius(3.5).Shrink(0).Margin(6, 0, 0, 0)
 			if !m.Seen {
 				dot.Background(dotColor)
 			}
-			ui.Avatar(c, m.From.Name, nil)
 			ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
 				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 					name := ui.Text(c, displayName(m.From)).FontSize(13).SingleLine().Grow(1)
@@ -244,6 +272,9 @@ func (a *app) messageRow(row ui.ListRow) {
 						name.Bold()
 					}
 					name.TextColor(nameColor)
+					if meta != "" {
+						ui.Text(c, meta).FontSize(11).TextColor(muted).Shrink(0).SingleLine()
+					}
 					if m.HasAttachments {
 						ui.Icon(c, paperclipIcon).FontSize(11).TextColor(muted)
 					}

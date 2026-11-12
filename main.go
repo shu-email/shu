@@ -64,13 +64,16 @@ type app struct {
 	undo             *undoMove
 	undoTimer        *time.Timer
 
-	showAccounts bool
-	showSettings bool
-	accountOpen  bool
-	accountForm  accountForm
-	accountBusy  bool
-	accountErr   string
-	accountNote  string
+	showAccounts  bool
+	showSettings  bool
+	accountOpen   bool
+	sidebarOpen   bool
+	mailboxesOpen bool
+	details       bool
+	accountForm   accountForm
+	accountBusy   bool
+	accountErr    string
+	accountNote   string
 
 	htmlOn   bool
 	webview  *mygo.WebView
@@ -91,11 +94,13 @@ type app struct {
 // newApp makes the state the tests and main use.
 func newApp(svc mailService) *app {
 	return &app{
-		svc:       svc,
-		run:       func(f func()) { go f() },
-		selected:  -1,
-		focusList: true,
-		bodies:    map[string]mail.FetchResult{},
+		svc:           svc,
+		run:           func(f func()) { go f() },
+		selected:      -1,
+		focusList:     true,
+		sidebarOpen:   true,
+		mailboxesOpen: true,
+		bodies:        map[string]mail.FetchResult{},
 	}
 }
 
@@ -350,6 +355,7 @@ func (a *app) chooseRow(i int) {
 		return
 	}
 	a.selected = i
+	a.details = false
 	a.sel.Clear()
 	a.sel.Add(summaryKey(a.all[i]))
 }
@@ -358,6 +364,7 @@ func (a *app) chooseRow(i int) {
 func (a *app) clearSelection() {
 	a.sel.Clear()
 	a.selected = -1
+	a.details = false
 	a.reloadBody()
 }
 
@@ -726,8 +733,10 @@ func (a *app) mailView(c *ui.Context) {
 	ui.Column(c).Fill().Background(t.Background).Children(func() {
 		a.titleBar(c, t, bar, top)
 		panes := ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-			a.sidebar(c, t)
-			ui.Box(c).Width(1).Shrink(0).Background(t.Border)
+			if a.sidebarOpen {
+				a.sidebar(c, t)
+				ui.Box(c).Width(1).Shrink(0).Background(t.Border)
+			}
 			a.messageList(c, t)
 			ui.Box(c).Width(1).Shrink(0).Background(t.Border)
 			a.readingPane(c, t)
@@ -752,6 +761,12 @@ func (a *app) titleBar(c *ui.Context, t *ui.Theme, bar ui.TitleBar, height float
 		Padding(0, max(bar.Right, 0)+14, 0, max(bar.Left, 0)+14).
 		BorderWidth(0, 0, 1, 0).BorderColor(t.Border).
 		DragWindow().Children(func() {
+		label := locales.HideSidebar()
+		if !a.sidebarOpen {
+			label = locales.ShowSidebar()
+		}
+		a.iconButton(c, panelLeftIcon, label, label).
+			OnClick(func() { a.sidebarOpen = !a.sidebarOpen })
 		ui.Box(c).Size(26, 26).Radius(7).Center().
 			Gradient(ui.Hex("#5b9cff"), ui.Hex("#2563eb"), 135).Children(func() {
 			ui.Text(c, "S").FontSize(14).Bold().TextColor(ui.RGB(255, 255, 255))
@@ -821,7 +836,7 @@ func (a *app) sidebar(c *ui.Context, t *ui.Theme) {
 
 		entries := a.folderEntries()
 		changed := ui.Sidebar(c, &a.folder, func() {
-			ui.SidebarSection(c, locales.Mailboxes(), nil, func() {
+			ui.SidebarSection(c, locales.Mailboxes(), &a.mailboxesOpen, func() {
 				for _, e := range entries {
 					item := ui.SidebarItem(c, e.ID, e.Icon, e.Label)
 					if e.ID != "starred" {
@@ -837,7 +852,39 @@ func (a *app) sidebar(c *ui.Context, t *ui.Theme) {
 		if changed.Changed() {
 			a.selectFolder()
 		}
+		a.sidebarFooter(c, t)
 	})
+}
+
+// sidebarFooter shows the account's cached totals and whether a sync is
+// running, as mail apps keep their quota at the bottom.
+func (a *app) sidebarFooter(c *ui.Context, t *ui.Theme) {
+	unread, total := a.sidebarTotals()
+	ui.Column(c).Shrink(0).Padding(10, 12, 10, 12).Gap(4).
+		BorderWidth(1, 0, 0, 0).BorderColor(t.Border).Children(func() {
+		if a.loading {
+			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+				ui.Spinner(c).Size(12, 12)
+				ui.Text(c, locales.Syncing()).FontSize(11).TextColor(t.TextMuted)
+			})
+			return
+		}
+		ui.Text(c, locales.SidebarSummary(unread, total)).FontSize(11).TextColor(t.TextMuted)
+	})
+}
+
+// sidebarTotals counts the account's cached folders, without the ones
+// whose mail is already dealt with.
+func (a *app) sidebarTotals() (unread, total int) {
+	for _, f := range a.folders {
+		switch f.SpecialUse {
+		case mail.SpecialJunk, mail.SpecialTrash, mail.SpecialDrafts:
+			continue
+		}
+		unread += f.Unread
+		total += f.Total
+	}
+	return unread, total
 }
 
 // iconButton is an icon-only button named for assistive technology.

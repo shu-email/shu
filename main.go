@@ -767,11 +767,6 @@ func (a *app) titleBar(c *ui.Context, t *ui.Theme, bar ui.TitleBar, height float
 		}
 		a.iconButton(c, panelLeftIcon, label, label).
 			OnClick(func() { a.sidebarOpen = !a.sidebarOpen })
-		ui.Box(c).Size(26, 26).Radius(7).Center().
-			Gradient(ui.Hex("#5b9cff"), ui.Hex("#2563eb"), 135).Children(func() {
-			ui.Text(c, "S").FontSize(14).Bold().TextColor(ui.RGB(255, 255, 255))
-		})
-		ui.Text(c, locales.AppName()).FontSize(15).Bold()
 		ui.Spacer(c)
 		ui.SearchField(c, &a.query).Width(300).
 			Placeholder(locales.SearchFolder(a.folderLabel(a.folder))).

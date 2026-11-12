@@ -27,6 +27,10 @@ func (s *Service) Send(ctx context.Context, accountID string, out Outgoing) (Sen
 	}
 	now := s.now()
 	if out.MessageID == "" {
+		// A draft goes out under the Message-ID its server copies carry.
+		out.MessageID = s.draftMessageID(ctx, accountID, out.DraftID)
+	}
+	if out.MessageID == "" {
 		out.MessageID = newMessageID(a.Email)
 	}
 	msg, raw, err := buildMessage(a, out, now)
@@ -62,11 +66,17 @@ func (s *Service) Send(ctx context.Context, accountID string, out Outgoing) (Sen
 	pending.State = StateSent
 	pending.SentAt = now
 	result := SendResult{Outbox: pending}
+	// The message is out, so its draft is done: it leaves this device
+	// now, and the server when the server can be reached.
+	sentDraft := s.retireDraft(ctx, accountID, out.DraftID)
 	if err := s.appendSent(ctx, a, password, raw); err != nil {
 		result.Warning = err
-		return result, nil
+	} else {
+		result.Copied = true
 	}
-	result.Copied = true
+	if sentDraft {
+		s.flushDraftDeletions(ctx, accountID)
+	}
 	return result, nil
 }
 
@@ -100,15 +110,32 @@ func (s *Service) appendSent(ctx context.Context, a Account, password string, ra
 // buildMessage makes the message and the raw form the outbox keeps and
 // APPEND reuses.
 func buildMessage(a Account, out Outgoing, now time.Time) (*gomail.Msg, []byte, error) {
+	msg, err := newMessage(a, out, now)
+	if err != nil {
+		return nil, nil, err
+	}
+	raw, err := rawMessage(msg)
+	if err != nil {
+		return nil, nil, err
+	}
+	return msg, raw, nil
+}
+
+// newMessage fills a message from what was written. A draft has headers
+// of its own to add before the raw form is made, and may have nobody to
+// go to yet.
+func newMessage(a Account, out Outgoing, now time.Time) (*gomail.Msg, error) {
 	msg := gomail.NewMsg()
 	if a.Name != "" {
 		if err := msg.FromFormat(a.Name, a.Email); err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	} else if err := msg.From(a.Email); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	msg.ToMailAddress(toStdAddresses(out.To)...)
+	if len(out.To) > 0 {
+		msg.ToMailAddress(toStdAddresses(out.To)...)
+	}
 	if len(out.Cc) > 0 {
 		msg.CcMailAddress(toStdAddresses(out.Cc)...)
 	}
@@ -129,11 +156,16 @@ func buildMessage(a Account, out Outgoing, now time.Time) (*gomail.Msg, []byte, 
 		}
 		msg.SetGenHeader(gomail.HeaderReferences, strings.Join(refs, " "))
 	}
+	return msg, nil
+}
+
+// rawMessage writes a message as RFC 822 bytes.
+func rawMessage(msg *gomail.Msg) ([]byte, error) {
 	var buf bytes.Buffer
 	if _, err := msg.WriteTo(&buf); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return msg, buf.Bytes(), nil
+	return buf.Bytes(), nil
 }
 
 func toStdAddresses(list []Address) []*mail.Address {
@@ -219,11 +251,18 @@ func (s *Service) RetryPending(ctx context.Context, id string) (SendResult, erro
 		return SendResult{}, err
 	}
 	result := SendResult{Outbox: pending}
+	// The outbox does not know which draft a message was. The draft is
+	// found by its Message-ID, and goes only if it still says what was
+	// sent: one edited since the failed send keeps the newer text.
+	sentDraft := s.retireSentDraft(ctx, pending.AccountID, pending.Envelope)
 	if err := s.appendSent(ctx, a, password, pending.Raw); err != nil {
 		result.Warning = err
-		return result, nil
+	} else {
+		result.Copied = true
 	}
-	result.Copied = true
+	if sentDraft {
+		s.flushDraftDeletions(ctx, pending.AccountID)
+	}
 	return result, nil
 }
 

@@ -103,6 +103,30 @@ var migrations = [][]string{
 			result TEXT NOT NULL, created_at INTEGER NOT NULL)`,
 		`CREATE INDEX ai_cache_account ON ai_cache (account_id)`,
 	},
+	// v3: the drafts being written. The recipient fields are the text as
+	// typed. revision counts the saves and synced_revision is the one the
+	// server copy holds, at server_folder/server_uid under
+	// server_uidvalidity; pending_delete keeps the row of a draft
+	// discarded or sent until its server copy is removed.
+	{
+		`CREATE TABLE drafts (
+			id TEXT PRIMARY KEY,
+			account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+			to_text TEXT NOT NULL DEFAULT '', cc_text TEXT NOT NULL DEFAULT '',
+			bcc_text TEXT NOT NULL DEFAULT '',
+			subject TEXT NOT NULL DEFAULT '', body TEXT NOT NULL DEFAULT '',
+			in_reply_to TEXT NOT NULL DEFAULT '', references_json TEXT NOT NULL DEFAULT '',
+			message_id TEXT NOT NULL DEFAULT '',
+			updated_at INTEGER NOT NULL,
+			revision INTEGER NOT NULL DEFAULT 1,
+			synced_revision INTEGER NOT NULL DEFAULT 0,
+			server_folder TEXT NOT NULL DEFAULT '',
+			server_uid INTEGER NOT NULL DEFAULT 0,
+			server_uidvalidity INTEGER NOT NULL DEFAULT 0,
+			pending_delete INTEGER NOT NULL DEFAULT 0,
+			conflict INTEGER NOT NULL DEFAULT 0)`,
+		`CREATE INDEX drafts_account ON drafts (account_id, updated_at DESC)`,
+	},
 }
 
 // SchemaVersion is the version Open migrates to.

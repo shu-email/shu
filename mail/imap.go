@@ -475,58 +475,9 @@ func (s *Service) fetchMessage(ctx context.Context, a Account, password, folder 
 	if _, err := c.client.Select(folder, nil).Wait(); err != nil {
 		return FetchResult{}, fmt.Errorf("imap: select %s: %w", folder, err)
 	}
-	var set imap.UIDSet
-	set.AddNum(imap.UID(uid))
-	section := &imap.FetchItemBodySection{Peek: true}
-	cmd := c.client.Fetch(set, &imap.FetchOptions{
-		UID: true, Flags: true, Envelope: true, InternalDate: true, RFC822Size: true,
-		BodySection: []*imap.FetchItemBodySection{section},
-	})
-	var buf *imapclient.FetchMessageBuffer
-	for {
-		data := cmd.Next()
-		if data == nil {
-			break
-		}
-		b, err := data.Collect()
-		if err != nil {
-			cmd.Close()
-			return FetchResult{}, fmt.Errorf("imap: fetch message: %w", err)
-		}
-		if buf == nil || UID(b.UID) == uid {
-			buf = b
-		}
-	}
-	if err := cmd.Close(); err != nil {
-		return FetchResult{}, fmt.Errorf("imap: fetch message: %w", err)
-	}
-	if buf == nil {
-		return FetchResult{}, ErrNotFound
-	}
-	raw := buf.FindBodySection(section)
-	if len(raw) == 0 {
-		// Some servers only answer BODY[] when it was not a .PEEK fetch.
-		plain := &imap.FetchItemBodySection{}
-		cmd := c.client.Fetch(set, &imap.FetchOptions{
-			UID: true, BodySection: []*imap.FetchItemBodySection{plain},
-		})
-		for {
-			data := cmd.Next()
-			if data == nil {
-				break
-			}
-			b, err := data.Collect()
-			if err != nil {
-				break
-			}
-			if UID(b.UID) == uid {
-				raw = b.FindBodySection(plain)
-			}
-		}
-		cmd.Close()
-	}
-	if len(raw) == 0 {
-		return FetchResult{}, errors.New("imap: the server sent no message body")
+	buf, raw, err := fetchRaw(c, uid)
+	if err != nil {
+		return FetchResult{}, err
 	}
 	msg, err := ParseMessage(raw)
 	if err != nil {
@@ -569,6 +520,65 @@ func (s *Service) fetchMessage(ctx context.Context, a Account, password, folder 
 		}
 	}
 	return result, nil
+}
+
+// fetchRaw reads one message of the selected folder whole, with its
+// flags and envelope.
+func fetchRaw(c *imapSession, uid UID) (*imapclient.FetchMessageBuffer, []byte, error) {
+	var set imap.UIDSet
+	set.AddNum(imap.UID(uid))
+	section := &imap.FetchItemBodySection{Peek: true}
+	cmd := c.client.Fetch(set, &imap.FetchOptions{
+		UID: true, Flags: true, Envelope: true, InternalDate: true, RFC822Size: true,
+		BodySection: []*imap.FetchItemBodySection{section},
+	})
+	var buf *imapclient.FetchMessageBuffer
+	for {
+		data := cmd.Next()
+		if data == nil {
+			break
+		}
+		b, err := data.Collect()
+		if err != nil {
+			cmd.Close()
+			return nil, nil, fmt.Errorf("imap: fetch message: %w", err)
+		}
+		if buf == nil || UID(b.UID) == uid {
+			buf = b
+		}
+	}
+	if err := cmd.Close(); err != nil {
+		return nil, nil, fmt.Errorf("imap: fetch message: %w", err)
+	}
+	if buf == nil {
+		return nil, nil, ErrNotFound
+	}
+	raw := buf.FindBodySection(section)
+	if len(raw) == 0 {
+		// Some servers only answer BODY[] when it was not a .PEEK fetch.
+		plain := &imap.FetchItemBodySection{}
+		cmd := c.client.Fetch(set, &imap.FetchOptions{
+			UID: true, BodySection: []*imap.FetchItemBodySection{plain},
+		})
+		for {
+			data := cmd.Next()
+			if data == nil {
+				break
+			}
+			b, err := data.Collect()
+			if err != nil {
+				break
+			}
+			if UID(b.UID) == uid {
+				raw = b.FindBodySection(plain)
+			}
+		}
+		cmd.Close()
+	}
+	if len(raw) == 0 {
+		return nil, nil, errors.New("imap: the server sent no message body")
+	}
+	return buf, raw, nil
 }
 
 func strips(s string) string { return strings.TrimSpace(s) }

@@ -3,6 +3,7 @@ package mail
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 )
 
@@ -15,14 +16,28 @@ type memStore struct {
 	folders  map[string][]Folder
 	messages map[string]map[UID]Message
 	outbox   map[string]PendingSend
+	drafts   map[string]Draft
+	// draftOrder is when each draft was created, which breaks a tie
+	// between two edited in the same second as SQLite's rowid does.
+	draftOrder map[string]int
+	// failDraftSync makes SetDraftSync fail, as a full disk would.
+	failDraftSync error
+	// afterDrafts runs once, right after the next Drafts call returned
+	// its rows: the moment a sync has read the drafts and something else
+	// changes them. afterDraft does the same for the next Draft call,
+	// which is an upload reading the text it is about to send.
+	afterDrafts func()
+	afterDraft  func()
 }
 
 func newMemStore() *memStore {
 	return &memStore{
-		accounts: map[string]Account{},
-		folders:  map[string][]Folder{},
-		messages: map[string]map[UID]Message{},
-		outbox:   map[string]PendingSend{},
+		accounts:   map[string]Account{},
+		folders:    map[string][]Folder{},
+		messages:   map[string]map[UID]Message{},
+		outbox:     map[string]PendingSend{},
+		drafts:     map[string]Draft{},
+		draftOrder: map[string]int{},
 	}
 }
 
@@ -65,6 +80,11 @@ func (s *memStore) DeleteAccount(ctx context.Context, id string) error {
 	for k, p := range s.outbox {
 		if p.AccountID == id {
 			delete(s.outbox, k)
+		}
+	}
+	for k, d := range s.drafts {
+		if d.AccountID == id {
+			delete(s.drafts, k)
 		}
 	}
 	if s.active == id {
@@ -115,8 +135,12 @@ func (s *memStore) ListMessages(ctx context.Context, accountID, folder, query st
 	defer s.mu.Unlock()
 	var out []Summary
 	for _, m := range s.messages[msgKey(accountID, folder)] {
-		out = append(out, m.Summary)
+		// A row says which folder it is in, as the SQLite store's do.
+		summary := m.Summary
+		summary.Folder = folder
+		out = append(out, summary)
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].UID > out[j].UID })
 	return out, nil
 }
 
@@ -178,7 +202,11 @@ func (s *memStore) ApplySync(ctx context.Context, accountID string, b SyncBatch)
 	found := false
 	for i := range s.folders[accountID] {
 		if s.folders[accountID][i].Name == b.Folder.Name {
-			s.folders[accountID][i] = b.Folder
+			// The cursor and counts change; what LIST said of the folder,
+			// its special use above all, stays, as in the SQLite store.
+			f := &s.folders[accountID][i]
+			f.UIDValidity, f.LastUID = b.Folder.UIDValidity, b.Folder.LastUID
+			f.Unread, f.Total, f.SyncedAt = b.Folder.Unread, b.Folder.Total, b.Folder.SyncedAt
 			found = true
 		}
 	}
@@ -281,6 +309,89 @@ func (s *memStore) SetOutboxState(ctx context.Context, id, state, lastError stri
 	p.State = state
 	p.LastError = lastError
 	s.outbox[id] = p
+	return nil
+}
+
+func (s *memStore) Drafts(ctx context.Context, accountID string) ([]Draft, error) {
+	s.mu.Lock()
+	var out []Draft
+	for _, d := range s.drafts {
+		if d.AccountID == accountID {
+			out = append(out, d)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].UpdatedAt.Equal(out[j].UpdatedAt) {
+			return out[i].UpdatedAt.After(out[j].UpdatedAt)
+		}
+		return s.draftOrder[out[i].ID] > s.draftOrder[out[j].ID]
+	})
+	after := s.afterDrafts
+	s.afterDrafts = nil
+	s.mu.Unlock()
+	if after != nil {
+		after()
+	}
+	return out, nil
+}
+
+func (s *memStore) Draft(ctx context.Context, id string) (Draft, bool, error) {
+	s.mu.Lock()
+	d, ok := s.drafts[id]
+	after := s.afterDraft
+	s.afterDraft = nil
+	s.mu.Unlock()
+	if after != nil {
+		after()
+	}
+	return d, ok, nil
+}
+
+func (s *memStore) SaveDraft(ctx context.Context, d Draft) (Draft, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.accounts[d.AccountID]; !ok {
+		return Draft{}, fmt.Errorf("draft %s: no account %q", d.ID, d.AccountID)
+	}
+	d.References = append([]string(nil), d.References...)
+	old, ok := s.drafts[d.ID]
+	if !ok {
+		d.Revision = 1
+		s.draftOrder[d.ID] = len(s.draftOrder) + 1
+		s.drafts[d.ID] = d
+		return d, nil
+	}
+	old.To, old.Cc, old.Bcc = d.To, d.Cc, d.Bcc
+	old.Subject, old.Body = d.Subject, d.Body
+	old.InReplyTo, old.References = d.InReplyTo, d.References
+	old.UpdatedAt = d.UpdatedAt
+	old.Revision++
+	s.drafts[d.ID] = old
+	return old, nil
+}
+
+func (s *memStore) SetDraftSync(ctx context.Context, d Draft) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.failDraftSync != nil {
+		return s.failDraftSync
+	}
+	old, ok := s.drafts[d.ID]
+	if !ok {
+		return ErrNotFound
+	}
+	old.MessageID = d.MessageID
+	old.SyncedRevision = d.SyncedRevision
+	old.ServerFolder, old.ServerUID, old.ServerUIDValidity = d.ServerFolder, d.ServerUID, d.ServerUIDValidity
+	old.PendingDelete, old.Conflict = d.PendingDelete, d.Conflict
+	s.drafts[d.ID] = old
+	return nil
+}
+
+func (s *memStore) DeleteDraft(ctx context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.drafts, id)
 	return nil
 }
 

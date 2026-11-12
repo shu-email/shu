@@ -356,7 +356,6 @@ func TestWatchSeesEveryMessageOfABurst(t *testing.T) {
 // NOOP before it idles, so it does not depend on the server here.
 func TestWatchAsksBeforeIdling(t *testing.T) {
 	f := startFakeIMAP(t, allCaps())
-	f.holdsBack.Store(true)
 	f.create(t, "INBOX")
 	f.append(t, "INBOX", readFixture(t, "plain.eml"))
 	r := newWatchRig(t, f, "secret", false)
@@ -384,6 +383,11 @@ func TestWatchAsksBeforeIdling(t *testing.T) {
 	case <-time.After(watchGuard):
 		t.Fatal("the pushed message brought no check")
 	}
+	// From here the server holds back what happens until the next
+	// command. It is turned on only now: an IDLE is only listened to some
+	// time after the server accepts it, and a message that came in that
+	// time would be held back too, which is no question this test asks.
+	f.holdsBack.Store(true)
 	// This one arrives while the watcher is neither idling nor checking.
 	// The server says nothing of it until asked.
 	deliver(t, f, "INBOX", readFixture(t, "alternative.eml"))

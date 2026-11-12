@@ -450,7 +450,10 @@ func TestRefreshFollowsConversationsMoving(t *testing.T) {
 	}
 
 	// The conversation of a row in view, past the first page, merges into
-	// the one of row 10, and is the one chosen.
+	// the one of row 10, and is the one chosen. The row is scrolled to,
+	// as which rows a window holds depends on the fonts of the platform.
+	a.list.ScrollTo(a.rowWithKey("thread/a1/160"), ui.Center)
+	tt.Frame()
 	click(t, tt, "Message 160")
 	if a.selectedKey() != "thread/a1/160" {
 		t.Fatalf("chosen %q", a.selectedKey())

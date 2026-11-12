@@ -42,6 +42,18 @@ Windows and Linux. It is written in Go with
   uploads, removes and reconciles with what other clients did; it can
   fail and run again. Views save on every change and ask for a sync; they
   never decide what the server holds.
+- The files attached to a draft are the user's data, not cache. The
+  engine copies each one at once into `draft-files/` in the user-data
+  directory, one file per content hash, and the database keeps only
+  their names, types, sizes and hashes. Only `Service.AttachFile` and
+  `Service.RemoveAttachment` change a draft's attachments; `SaveDraft`
+  leaves them alone. A stored file goes when no draft and no unsent
+  outbox entry names it. `Service.SyncDraftEdits`, the sync views ask for
+  on a pause in the typing, leaves a draft with large attachments for
+  `SyncDrafts`.
+- The outbox keeps a message without attachments as its bytes. For one
+  with attachments it keeps the envelope and the references to the
+  stored files, and builds the message again for each try.
 - `ai/` is the AI layer: provider settings, the excerpt that decides what
   part of a message may leave the device, the features (summary, triage,
   draft reply) and `Service.send`, the single egress point every model
@@ -53,8 +65,9 @@ Windows and Linux. It is written in Go with
   user-visible string comes from there, in en and zh-Hans together.
 - Passwords live only in `mygo.Secrets`; the database keeps accounts,
   folders, message headers and bodies, attachment metadata, the outbox
-  and the drafts. Attachment bytes go to the cache directory, keyed by
-  content hash, never into SQLite.
+  and the drafts. Attachment bytes never go into SQLite: those of
+  received mail go to the cache directory, those of drafts to the
+  user-data directory, both keyed by content hash.
 
 ## Before changing MyGo UI
 

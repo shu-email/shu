@@ -108,6 +108,10 @@ type Message struct {
 
 // Attachment is one part of a message. Data is only in memory; the cache
 // keeps the bytes on disk and CachePath points at them.
+//
+// On a draft, or on a message to send, it is a file the user attached:
+// its bytes are in the draft file store under ContentHash, and Part,
+// CachePath and Data are unused.
 type Attachment struct {
 	Part        string `json:"part"`
 	Filename    string `json:"filename,omitempty"`
@@ -156,6 +160,10 @@ type Outgoing struct {
 	InReplyTo  string    `json:"inReplyTo,omitempty"`
 	References []string  `json:"references,omitempty"`
 	MessageID  string    `json:"messageID,omitempty"`
+	// Attachments are files of the draft file store, in the order they
+	// go into the message. The outbox keeps these few fields of each, and
+	// never the bytes.
+	Attachments []Attachment `json:"attachments,omitempty"`
 	// DraftID names the draft the message was written as. Send removes
 	// that draft once the server took the message. It is no part of the
 	// envelope, so the outbox does not keep it.
@@ -183,13 +191,22 @@ const (
 	StateSending = "sending"
 	StateSent    = "sent"
 	StateFailed  = "failed"
-	// StateUnknown is a "sending" row found again after a crash: the
-	// server may or may not have the message, so it is never resent
-	// automatically.
+	// StateUnknown is a send that stopped once the message had begun to
+	// leave, without the server's answer: one cancelled or cut off on the
+	// way, or a "sending" row found again after a crash. The server may
+	// or may not have the message, so it is never resent automatically.
 	StateUnknown = "unknown"
+	// StateCancelled is a send that will not be tried again: one the
+	// user stopped before any of the message left, whose draft is still
+	// there, or an earlier try of a message that has since been
+	// delivered. It is not offered again and holds on to no files.
+	StateCancelled = "cancelled"
 )
 
-// PendingSend is an outbox entry.
+// PendingSend is an outbox entry. Raw is the message as it was built,
+// except for a message with attachments: that one is built again from its
+// envelope and the attached files when it is sent, so that their bytes
+// stay out of the database.
 type PendingSend struct {
 	ID        string    `json:"id"`
 	AccountID string    `json:"accountID"`

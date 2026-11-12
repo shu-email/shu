@@ -119,6 +119,7 @@ func draftService(t *testing.T, caps imap.CapSet, mailboxes ...string) (*Service
 	f := startFakeIMAP(t, caps)
 	f.create(t, mailboxes...)
 	svc, store, a := newIMAPService(t, f, "secret")
+	svc.SetDataDir(t.TempDir())
 	if _, err := svc.SyncAccount(context.Background(), a.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -1111,12 +1112,21 @@ func TestDraftUploadKeepsUnicode(t *testing.T) {
 	}
 }
 
-// A draft with attachments is not taken over: an edit would replace it
-// with a message without them.
-func TestAdoptDraftRefusesAttachments(t *testing.T) {
+// A draft that has a part this app cannot keep is not taken over: an edit
+// would replace it with a message without that part. One whose
+// attachments it can keep is taken over with them (see attach_test.go).
+func TestAdoptDraftRefusesWhatItCannotKeep(t *testing.T) {
 	ctx := context.Background()
 	svc, store, f, a := draftService(t, allCaps(), "INBOX", "Drafts")
-	f.append(t, "Drafts", readFixture(t, "attachment.eml"))
+	// A part with no name and of no type the parser lists: it would be
+	// dropped, silently, by the first edit.
+	f.append(t, "Drafts", []byte("From: Ann <ann@example.com>\r\nTo: bob@example.com\r\n"+
+		"Subject: Voice note\r\nMessage-ID: <voice-1@example.com>\r\n"+
+		"Date: Tue, 03 Jan 2023 10:20:00 +0000\r\n"+
+		"Content-Type: multipart/mixed; boundary=\"mix\"\r\n\r\n"+
+		"--mix\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nListen to this.\r\n"+
+		"--mix\r\nContent-Type: audio/basic\r\nContent-Transfer-Encoding: base64\r\n\r\nAAECAwQ=\r\n"+
+		"--mix--\r\n"))
 	if err := svc.SyncFolder(ctx, a.ID, "Drafts", 50); err != nil {
 		t.Fatal(err)
 	}
@@ -1135,6 +1145,15 @@ func TestAdoptDraftRefusesAttachments(t *testing.T) {
 	}
 	if _, err := svc.AdoptDraft(ctx, a.ID, "Drafts", 99); !errors.Is(err, ErrNotFound) {
 		t.Errorf("adoption of a missing message = %v", err)
+	}
+	// The parser tells what it left out, and how much it may keep is the
+	// caller's to say: past the cap an attachment is left out too.
+	raw := readFixture(t, "attachment.eml")
+	if m, dropped, err := parseMessage(raw, MaxAttachmentBytes); err != nil || dropped != 0 || len(m.Attachments) != 1 {
+		t.Errorf("within the cap: %d attachments, %d dropped, %v", len(m.Attachments), dropped, err)
+	}
+	if m, dropped, err := parseMessage(raw, 4); err != nil || dropped != 1 || len(m.Attachments) != 0 {
+		t.Errorf("past the cap: %d attachments, %d dropped, %v", len(m.Attachments), dropped, err)
 	}
 }
 

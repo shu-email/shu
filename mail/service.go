@@ -21,25 +21,36 @@ type Service struct {
 	store     Store
 	secrets   SecretStore
 	cacheDir  string
+	dataDir   string
 	tlsConfig *tls.Config
 	clock     func() time.Time
 
 	// Drafts are saved while a sync uploads them. draftMu makes each
 	// read-then-write of a draft row one step, draftSync lets one job at
 	// a time change the server's Drafts folder, and draftsReplaced
-	// remembers the drafts another mail client replaced (see draft.go).
+	// remembers the drafts another mail client replaced, with the files
+	// they had (see draft.go).
 	draftMu        sync.Mutex
 	draftSync      chan struct{}
-	draftsReplaced map[string]bool
+	draftsReplaced map[string][]Attachment
+
+	// fileMu makes a file of the draft file store and the row naming it
+	// one step for the sweep that removes unnamed files. incoming is the
+	// files still being copied in, which the sweep leaves alone. Where
+	// both are needed, fileMu is taken before draftMu.
+	fileMu   sync.Mutex
+	incoming map[string]bool
 }
 
 // NewService wires the cache, the keychain and the attachment cache
-// directory.
+// directory. SetDataDir gives it the directory the attachments of drafts
+// are kept in, which is no cache.
 func NewService(store Store, secrets SecretStore, cacheDir string) *Service {
 	return &Service{
 		store: store, secrets: secrets, cacheDir: cacheDir, clock: time.Now,
 		draftSync:      make(chan struct{}, 1),
-		draftsReplaced: map[string]bool{},
+		draftsReplaced: map[string][]Attachment{},
+		incoming:       map[string]bool{},
 	}
 }
 

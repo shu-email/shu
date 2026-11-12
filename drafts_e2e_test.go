@@ -98,6 +98,14 @@ func (s promptSession) Idle(w *imapserver.UpdateWriter, stop <-chan struct{}) er
 
 func startLocalIMAP(t *testing.T, mailboxes ...string) *localIMAP {
 	t.Helper()
+	return startLocalIMAPWith(t, nil, mailboxes...)
+}
+
+// startLocalIMAPWith is startLocalIMAP for a server that, with xoauth
+// set, signs in by XOAUTH2 with the access tokens xoauth holds valid,
+// and takes no password (see oauth_e2e_test.go).
+func startLocalIMAPWith(t *testing.T, xoauth func(user, token string) bool, mailboxes ...string) *localIMAP {
+	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -112,7 +120,11 @@ func startLocalIMAP(t *testing.T, mailboxes ...string) *localIMAP {
 	}
 	server := imapserver.New(&imapserver.Options{
 		NewSession: func(*imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
-			return promptSession{mem.NewSession().(imapserver.SessionIMAP4rev2)}, &imapserver.GreetingData{}, nil
+			session := promptSession{mem.NewSession().(imapserver.SessionIMAP4rev2)}
+			if xoauth != nil {
+				return xoauthSession{session, xoauth}, &imapserver.GreetingData{}, nil
+			}
+			return session, &imapserver.GreetingData{}, nil
 		},
 		Caps: imap.CapSet{
 			imap.CapIMAP4rev1: {}, imap.CapMove: {}, imap.CapUIDPlus: {},

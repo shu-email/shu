@@ -4455,3 +4455,537 @@ func WhereInboxesOf(accounts string) string { return In(i18n.Locale()).WhereInbo
 func (msgs Messages) WhereInboxesOf(accounts string) string {
 	return Catalog.Format(msgs.locale, "whereInboxesOf", map[string]any{"accounts": accounts})
 }
+
+// ProviderGoogle says "Google"
+// in the language the app shows.
+//
+// The name of the provider an account signs in with, as written in
+// sentences of other messages.
+func ProviderGoogle() string { return In(i18n.Locale()).ProviderGoogle() }
+
+// ProviderGoogle says "Google"
+// in the language of msgs.
+//
+// The name of the provider an account signs in with, as written in
+// sentences of other messages.
+func (msgs Messages) ProviderGoogle() string {
+	return Catalog.Format(msgs.locale, "providerGoogle", nil)
+}
+
+// ProviderMicrosoft says "Microsoft"
+// in the language the app shows.
+//
+// The name of the provider an account signs in with, as written in
+// sentences of other messages.
+func ProviderMicrosoft() string { return In(i18n.Locale()).ProviderMicrosoft() }
+
+// ProviderMicrosoft says "Microsoft"
+// in the language of msgs.
+//
+// The name of the provider an account signs in with, as written in
+// sentences of other messages.
+func (msgs Messages) ProviderMicrosoft() string {
+	return Catalog.Format(msgs.locale, "providerMicrosoft", nil)
+}
+
+// OauthTitle says "Sign in with your email provider"
+// in the language the app shows.
+func OauthTitle() string { return In(i18n.Locale()).OauthTitle() }
+
+// OauthTitle says "Sign in with your email provider"
+// in the language of msgs.
+func (msgs Messages) OauthTitle() string {
+	return Catalog.Format(msgs.locale, "oauthTitle", nil)
+}
+
+// OauthIntro says "Shu opens your browser for you to sign in there. You don't type a password or any server settings here."
+// in the language the app shows.
+func OauthIntro() string { return In(i18n.Locale()).OauthIntro() }
+
+// OauthIntro says "Shu opens your browser for you to sign in there. You don't type a password or any server settings here."
+// in the language of msgs.
+func (msgs Messages) OauthIntro() string {
+	return Catalog.Format(msgs.locale, "oauthIntro", nil)
+}
+
+// OauthName says "Display name (optional)"
+// in the language the app shows.
+func OauthName() string { return In(i18n.Locale()).OauthName() }
+
+// OauthName says "Display name (optional)"
+// in the language of msgs.
+func (msgs Messages) OauthName() string {
+	return Catalog.Format(msgs.locale, "oauthName", nil)
+}
+
+// OauthNamePlaceholder says "Shown on the mail you send"
+// in the language the app shows.
+func OauthNamePlaceholder() string { return In(i18n.Locale()).OauthNamePlaceholder() }
+
+// OauthNamePlaceholder says "Shown on the mail you send"
+// in the language of msgs.
+func (msgs Messages) OauthNamePlaceholder() string {
+	return Catalog.Format(msgs.locale, "oauthNamePlaceholder", nil)
+}
+
+// SignInWithGoogle says "Sign in with Google"
+// in the language the app shows.
+func SignInWithGoogle() string { return In(i18n.Locale()).SignInWithGoogle() }
+
+// SignInWithGoogle says "Sign in with Google"
+// in the language of msgs.
+func (msgs Messages) SignInWithGoogle() string {
+	return Catalog.Format(msgs.locale, "signInWithGoogle", nil)
+}
+
+// SignInWithMicrosoft says "Sign in with Microsoft"
+// in the language the app shows.
+func SignInWithMicrosoft() string { return In(i18n.Locale()).SignInWithMicrosoft() }
+
+// SignInWithMicrosoft says "Sign in with Microsoft"
+// in the language of msgs.
+func (msgs Messages) SignInWithMicrosoft() string {
+	return Catalog.Format(msgs.locale, "signInWithMicrosoft", nil)
+}
+
+// ManualSetup says "Or set up manually with a password"
+// in the language the app shows.
+//
+// The heading of the account form with servers and a password, below the
+// buttons that sign in with Google or Microsoft.
+func ManualSetup() string { return In(i18n.Locale()).ManualSetup() }
+
+// ManualSetup says "Or set up manually with a password"
+// in the language of msgs.
+//
+// The heading of the account form with servers and a password, below the
+// buttons that sign in with Google or Microsoft.
+func (msgs Messages) ManualSetup() string {
+	return Catalog.Format(msgs.locale, "manualSetup", nil)
+}
+
+// SignInWaiting says "Continue in your browser"
+// in the language the app shows.
+func SignInWaiting() string { return In(i18n.Locale()).SignInWaiting() }
+
+// SignInWaiting says "Continue in your browser"
+// in the language of msgs.
+func (msgs Messages) SignInWaiting() string {
+	return Catalog.Format(msgs.locale, "signInWaiting", nil)
+}
+
+// SignInWaitingDetail says "Sign in to {provider} on the page Shu opened. Shu goes on by itself once you're done."
+// in the language the app shows.
+func SignInWaitingDetail(provider string) string {
+	return In(i18n.Locale()).SignInWaitingDetail(provider)
+}
+
+// SignInWaitingDetail says "Sign in to {provider} on the page Shu opened. Shu goes on by itself once you're done."
+// in the language of msgs.
+func (msgs Messages) SignInWaitingDetail(provider string) string {
+	return Catalog.Format(msgs.locale, "signInWaitingDetail", map[string]any{"provider": provider})
+}
+
+// SignInWaitingAs says "Sign in to {provider} as {email} on the page Shu opened. Shu goes on by itself once you're done."
+// in the language the app shows.
+func SignInWaitingAs(provider string, email string) string {
+	return In(i18n.Locale()).SignInWaitingAs(provider, email)
+}
+
+// SignInWaitingAs says "Sign in to {provider} as {email} on the page Shu opened. Shu goes on by itself once you're done."
+// in the language of msgs.
+func (msgs Messages) SignInWaitingAs(provider string, email string) string {
+	return Catalog.Format(msgs.locale, "signInWaitingAs", map[string]any{"provider": provider, "email": email})
+}
+
+// OpenSignInPage says "Open the page again"
+// in the language the app shows.
+//
+// Opens the provider's sign-in page in the browser once more, for a tab
+// that was closed.
+func OpenSignInPage() string { return In(i18n.Locale()).OpenSignInPage() }
+
+// OpenSignInPage says "Open the page again"
+// in the language of msgs.
+//
+// Opens the provider's sign-in page in the browser once more, for a tab
+// that was closed.
+func (msgs Messages) OpenSignInPage() string {
+	return Catalog.Format(msgs.locale, "openSignInPage", nil)
+}
+
+// CancelSignIn says "Cancel sign-in"
+// in the language the app shows.
+func CancelSignIn() string { return In(i18n.Locale()).CancelSignIn() }
+
+// CancelSignIn says "Cancel sign-in"
+// in the language of msgs.
+func (msgs Messages) CancelSignIn() string {
+	return Catalog.Format(msgs.locale, "cancelSignIn", nil)
+}
+
+// SignInBrowserFailed says "Shu couldn't open your browser. Check that a default browser is set, then open the page again."
+// in the language the app shows.
+func SignInBrowserFailed() string { return In(i18n.Locale()).SignInBrowserFailed() }
+
+// SignInBrowserFailed says "Shu couldn't open your browser. Check that a default browser is set, then open the page again."
+// in the language of msgs.
+func (msgs Messages) SignInBrowserFailed() string {
+	return Catalog.Format(msgs.locale, "signInBrowserFailed", nil)
+}
+
+// SignInDenied says "You didn't allow Shu to use your mail at {provider}. To use this account in Shu, sign in again and allow access."
+// in the language the app shows.
+func SignInDenied(provider string) string { return In(i18n.Locale()).SignInDenied(provider) }
+
+// SignInDenied says "You didn't allow Shu to use your mail at {provider}. To use this account in Shu, sign in again and allow access."
+// in the language of msgs.
+func (msgs Messages) SignInDenied(provider string) string {
+	return Catalog.Format(msgs.locale, "signInDenied", map[string]any{"provider": provider})
+}
+
+// SignInTimedOut says "The sign-in wasn't finished within 5 minutes, so Shu stopped waiting. Try again when you're ready."
+// in the language the app shows.
+func SignInTimedOut() string { return In(i18n.Locale()).SignInTimedOut() }
+
+// SignInTimedOut says "The sign-in wasn't finished within 5 minutes, so Shu stopped waiting. Try again when you're ready."
+// in the language of msgs.
+func (msgs Messages) SignInTimedOut() string {
+	return Catalog.Format(msgs.locale, "signInTimedOut", nil)
+}
+
+// SignInProviderError says "{provider} couldn't complete the sign-in. Try again in a moment."
+// in the language the app shows.
+func SignInProviderError(provider string) string {
+	return In(i18n.Locale()).SignInProviderError(provider)
+}
+
+// SignInProviderError says "{provider} couldn't complete the sign-in. Try again in a moment."
+// in the language of msgs.
+func (msgs Messages) SignInProviderError(provider string) string {
+	return Catalog.Format(msgs.locale, "signInProviderError", map[string]any{"provider": provider})
+}
+
+// SignInNetwork says "Shu couldn't reach {provider}. Check your internet connection and try again."
+// in the language the app shows.
+func SignInNetwork(provider string) string { return In(i18n.Locale()).SignInNetwork(provider) }
+
+// SignInNetwork says "Shu couldn't reach {provider}. Check your internet connection and try again."
+// in the language of msgs.
+func (msgs Messages) SignInNetwork(provider string) string {
+	return Catalog.Format(msgs.locale, "signInNetwork", map[string]any{"provider": provider})
+}
+
+// SignInFailed says "The sign-in didn't work. Try again."
+// in the language the app shows.
+func SignInFailed() string { return In(i18n.Locale()).SignInFailed() }
+
+// SignInFailed says "The sign-in didn't work. Try again."
+// in the language of msgs.
+func (msgs Messages) SignInFailed() string {
+	return Catalog.Format(msgs.locale, "signInFailed", nil)
+}
+
+// SignInWrongAddress says "You signed in as another account. Sign in again as {email}, this account's address."
+// in the language the app shows.
+func SignInWrongAddress(email string) string { return In(i18n.Locale()).SignInWrongAddress(email) }
+
+// SignInWrongAddress says "You signed in as another account. Sign in again as {email}, this account's address."
+// in the language of msgs.
+func (msgs Messages) SignInWrongAddress(email string) string {
+	return Catalog.Format(msgs.locale, "signInWrongAddress", map[string]any{"email": email})
+}
+
+// SignInNotConfigured says "This version of Shu can't sign in with {provider}."
+// in the language the app shows.
+func SignInNotConfigured(provider string) string {
+	return In(i18n.Locale()).SignInNotConfigured(provider)
+}
+
+// SignInNotConfigured says "This version of Shu can't sign in with {provider}."
+// in the language of msgs.
+func (msgs Messages) SignInNotConfigured(provider string) string {
+	return Catalog.Format(msgs.locale, "signInNotConfigured", map[string]any{"provider": provider})
+}
+
+// SignInDetail says "Details: {detail}"
+// in the language the app shows.
+//
+// After a failed sign-in: what the provider or the error said, in its own
+// words.
+func SignInDetail(detail string) string { return In(i18n.Locale()).SignInDetail(detail) }
+
+// SignInDetail says "Details: {detail}"
+// in the language of msgs.
+//
+// After a failed sign-in: what the provider or the error said, in its own
+// words.
+func (msgs Messages) SignInDetail(detail string) string {
+	return Catalog.Format(msgs.locale, "signInDetail", map[string]any{"detail": detail})
+}
+
+// SignInNeeded says "{account} needs you to sign in again"
+// in the language the app shows.
+func SignInNeeded(account string) string { return In(i18n.Locale()).SignInNeeded(account) }
+
+// SignInNeeded says "{account} needs you to sign in again"
+// in the language of msgs.
+func (msgs Messages) SignInNeeded(account string) string {
+	return Catalog.Format(msgs.locale, "signInNeeded", map[string]any{"account": account})
+}
+
+// SignInNeededDetail says "The mail on this device stays readable. New mail, sending and downloads wait until you sign in."
+// in the language the app shows.
+func SignInNeededDetail() string { return In(i18n.Locale()).SignInNeededDetail() }
+
+// SignInNeededDetail says "The mail on this device stays readable. New mail, sending and downloads wait until you sign in."
+// in the language of msgs.
+func (msgs Messages) SignInNeededDetail() string {
+	return Catalog.Format(msgs.locale, "signInNeededDetail", nil)
+}
+
+// SignInAgain says "Sign in again"
+// in the language the app shows.
+func SignInAgain() string { return In(i18n.Locale()).SignInAgain() }
+
+// SignInAgain says "Sign in again"
+// in the language of msgs.
+func (msgs Messages) SignInAgain() string {
+	return Catalog.Format(msgs.locale, "signInAgain", nil)
+}
+
+// SignInAgainTo says "Sign in again to {account}"
+// in the language the app shows.
+//
+// The name assistive technology reads of a Sign in again button, which says
+// the account.
+func SignInAgainTo(account string) string { return In(i18n.Locale()).SignInAgainTo(account) }
+
+// SignInAgainTo says "Sign in again to {account}"
+// in the language of msgs.
+//
+// The name assistive technology reads of a Sign in again button, which says
+// the account.
+func (msgs Messages) SignInAgainTo(account string) string {
+	return Catalog.Format(msgs.locale, "signInAgainTo", map[string]any{"account": account})
+}
+
+// SignedInAgain says "Signed in again."
+// in the language the app shows.
+func SignedInAgain() string { return In(i18n.Locale()).SignedInAgain() }
+
+// SignedInAgain says "Signed in again."
+// in the language of msgs.
+func (msgs Messages) SignedInAgain() string {
+	return Catalog.Format(msgs.locale, "signedInAgain", nil)
+}
+
+// WatchSignIn says "Sign in again to check for mail."
+// in the language the app shows.
+func WatchSignIn() string { return In(i18n.Locale()).WatchSignIn() }
+
+// WatchSignIn says "Sign in again to check for mail."
+// in the language of msgs.
+func (msgs Messages) WatchSignIn() string {
+	return Catalog.Format(msgs.locale, "watchSignIn", nil)
+}
+
+// MenuNeedsSignIn says "Needs you to sign in again"
+// in the language the app shows.
+//
+// Under an account's name in the account menu.
+func MenuNeedsSignIn() string { return In(i18n.Locale()).MenuNeedsSignIn() }
+
+// MenuNeedsSignIn says "Needs you to sign in again"
+// in the language of msgs.
+//
+// Under an account's name in the account menu.
+func (msgs Messages) MenuNeedsSignIn() string {
+	return Catalog.Format(msgs.locale, "menuNeedsSignIn", nil)
+}
+
+// BodyNeedsSignIn says "This message isn't on this device yet. Sign in again to download it."
+// in the language the app shows.
+func BodyNeedsSignIn() string { return In(i18n.Locale()).BodyNeedsSignIn() }
+
+// BodyNeedsSignIn says "This message isn't on this device yet. Sign in again to download it."
+// in the language of msgs.
+func (msgs Messages) BodyNeedsSignIn() string {
+	return Catalog.Format(msgs.locale, "bodyNeedsSignIn", nil)
+}
+
+// OlderNeedsSignIn says "Sign in again to fetch older messages from the server."
+// in the language the app shows.
+func OlderNeedsSignIn() string { return In(i18n.Locale()).OlderNeedsSignIn() }
+
+// OlderNeedsSignIn says "Sign in again to fetch older messages from the server."
+// in the language of msgs.
+func (msgs Messages) OlderNeedsSignIn() string {
+	return Catalog.Format(msgs.locale, "olderNeedsSignIn", nil)
+}
+
+// ActionNeedsSignIn says "Not done: the account needs you to sign in again."
+// in the language the app shows.
+func ActionNeedsSignIn() string { return In(i18n.Locale()).ActionNeedsSignIn() }
+
+// ActionNeedsSignIn says "Not done: the account needs you to sign in again."
+// in the language of msgs.
+func (msgs Messages) ActionNeedsSignIn() string {
+	return Catalog.Format(msgs.locale, "actionNeedsSignIn", nil)
+}
+
+// SendNeedsSignIn says "Not sent: {account} needs you to sign in again. The message stays here and in Drafts; send it once you've signed in."
+// in the language the app shows.
+func SendNeedsSignIn(account string) string { return In(i18n.Locale()).SendNeedsSignIn(account) }
+
+// SendNeedsSignIn says "Not sent: {account} needs you to sign in again. The message stays here and in Drafts; send it once you've signed in."
+// in the language of msgs.
+func (msgs Messages) SendNeedsSignIn(account string) string {
+	return Catalog.Format(msgs.locale, "sendNeedsSignIn", map[string]any{"account": account})
+}
+
+// SignedInSendNow says "Signed in again. You can send the message now."
+// in the language the app shows.
+func SignedInSendNow() string { return In(i18n.Locale()).SignedInSendNow() }
+
+// SignedInSendNow says "Signed in again. You can send the message now."
+// in the language of msgs.
+func (msgs Messages) SignedInSendNow() string {
+	return Catalog.Format(msgs.locale, "signedInSendNow", nil)
+}
+
+// DraftWaitsSignIn says "Saved on this device · syncs once you sign in again"
+// in the language the app shows.
+func DraftWaitsSignIn() string { return In(i18n.Locale()).DraftWaitsSignIn() }
+
+// DraftWaitsSignIn says "Saved on this device · syncs once you sign in again"
+// in the language of msgs.
+func (msgs Messages) DraftWaitsSignIn() string {
+	return Catalog.Format(msgs.locale, "draftWaitsSignIn", nil)
+}
+
+// OauthSignsInWith says "Signs in with {provider}"
+// in the language the app shows.
+func OauthSignsInWith(provider string) string { return In(i18n.Locale()).OauthSignsInWith(provider) }
+
+// OauthSignsInWith says "Signs in with {provider}"
+// in the language of msgs.
+func (msgs Messages) OauthSignsInWith(provider string) string {
+	return Catalog.Format(msgs.locale, "oauthSignsInWith", map[string]any{"provider": provider})
+}
+
+// OauthAccountDetail says "Shu signs this account in through {provider} in your browser. Its sign-in is kept in this computer's keychain; no pas…"
+// in the language the app shows.
+func OauthAccountDetail(provider string) string {
+	return In(i18n.Locale()).OauthAccountDetail(provider)
+}
+
+// OauthAccountDetail says "Shu signs this account in through {provider} in your browser. Its sign-in is kept in this computer's keychain; no pas…"
+// in the language of msgs.
+func (msgs Messages) OauthAccountDetail(provider string) string {
+	return Catalog.Format(msgs.locale, "oauthAccountDetail", map[string]any{"provider": provider})
+}
+
+// SignInSection says "Sign-in"
+// in the language the app shows.
+func SignInSection() string { return In(i18n.Locale()).SignInSection() }
+
+// SignInSection says "Sign-in"
+// in the language of msgs.
+func (msgs Messages) SignInSection() string {
+	return Catalog.Format(msgs.locale, "signInSection", nil)
+}
+
+// SignedInAs says "Signed in as {email}."
+// in the language the app shows.
+func SignedInAs(email string) string { return In(i18n.Locale()).SignedInAs(email) }
+
+// SignedInAs says "Signed in as {email}."
+// in the language of msgs.
+func (msgs Messages) SignedInAs(email string) string {
+	return Catalog.Format(msgs.locale, "signedInAs", map[string]any{"email": email})
+}
+
+// AccountNeedsSignIn says "This account needs you to sign in again. Its mail on this device stays readable."
+// in the language the app shows.
+func AccountNeedsSignIn() string { return In(i18n.Locale()).AccountNeedsSignIn() }
+
+// AccountNeedsSignIn says "This account needs you to sign in again. Its mail on this device stays readable."
+// in the language of msgs.
+func (msgs Messages) AccountNeedsSignIn() string {
+	return Catalog.Format(msgs.locale, "accountNeedsSignIn", nil)
+}
+
+// SignOut says "Sign out…"
+// in the language the app shows.
+func SignOut() string { return In(i18n.Locale()).SignOut() }
+
+// SignOut says "Sign out…"
+// in the language of msgs.
+func (msgs Messages) SignOut() string {
+	return Catalog.Format(msgs.locale, "signOut", nil)
+}
+
+// SignOutTitle says "Sign out of {account}?"
+// in the language the app shows.
+func SignOutTitle(account string) string { return In(i18n.Locale()).SignOutTitle(account) }
+
+// SignOutTitle says "Sign out of {account}?"
+// in the language of msgs.
+func (msgs Messages) SignOutTitle(account string) string {
+	return Catalog.Format(msgs.locale, "signOutTitle", map[string]any{"account": account})
+}
+
+// SignOutConfirm says "Shu removes this account's sign-in, its tokens, from this computer's keychain. The mail on this device and the accoun…"
+// in the language the app shows.
+func SignOutConfirm() string { return In(i18n.Locale()).SignOutConfirm() }
+
+// SignOutConfirm says "Shu removes this account's sign-in, its tokens, from this computer's keychain. The mail on this device and the accoun…"
+// in the language of msgs.
+func (msgs Messages) SignOutConfirm() string {
+	return Catalog.Format(msgs.locale, "signOutConfirm", nil)
+}
+
+// SignOutButton says "Sign out"
+// in the language the app shows.
+func SignOutButton() string { return In(i18n.Locale()).SignOutButton() }
+
+// SignOutButton says "Sign out"
+// in the language of msgs.
+func (msgs Messages) SignOutButton() string {
+	return Catalog.Format(msgs.locale, "signOutButton", nil)
+}
+
+// SignedOut says "Signed out. The sign-in was removed from this computer's keychain."
+// in the language the app shows.
+func SignedOut() string { return In(i18n.Locale()).SignedOut() }
+
+// SignedOut says "Signed out. The sign-in was removed from this computer's keychain."
+// in the language of msgs.
+func (msgs Messages) SignedOut() string {
+	return Catalog.Format(msgs.locale, "signedOut", nil)
+}
+
+// SignOutFailed says "Could not sign out: {error}"
+// in the language the app shows.
+func SignOutFailed(error string) string { return In(i18n.Locale()).SignOutFailed(error) }
+
+// SignOutFailed says "Could not sign out: {error}"
+// in the language of msgs.
+func (msgs Messages) SignOutFailed(error string) string {
+	return Catalog.Format(msgs.locale, "signOutFailed", map[string]any{"error": error})
+}
+
+// SignInDonePage says "You're signed in. You can close this page and return to Shu."
+// in the language the app shows.
+//
+// The page the browser shows once the sign-in at the provider is done.
+func SignInDonePage() string { return In(i18n.Locale()).SignInDonePage() }
+
+// SignInDonePage says "You're signed in. You can close this page and return to Shu."
+// in the language of msgs.
+//
+// The page the browser shows once the sign-in at the provider is done.
+func (msgs Messages) SignInDonePage() string {
+	return Catalog.Format(msgs.locale, "signInDonePage", nil)
+}

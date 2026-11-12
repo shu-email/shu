@@ -106,6 +106,17 @@ type app struct {
 	accountErr    string
 	accountNote   string
 
+	// Signing in with Google or Microsoft (signin.go). signIn is the
+	// sign-in under way, nil when none, signInErr how the last one failed,
+	// and signInName the name an account added so is to go by. needSignIn
+	// is the accounts that have to sign in again before they reach their
+	// servers, and signOutOpen the question before an account signs out.
+	signIn      *signInFlow
+	signInErr   *signInFailure
+	signInName  string
+	needSignIn  map[string]bool
+	signOutOpen bool
+
 	htmlOn   bool
 	webview  *mygo.WebView
 	htmlKey  string
@@ -185,7 +196,11 @@ type app struct {
 	// showWindow brings it to the front.
 	focused    func() bool
 	showWindow func()
-	lang       int
+	// openBrowser opens a page in the system browser, as a sign-in does.
+	// It may wait for the system, so jobs call it. While it is nil
+	// nothing opens.
+	openBrowser func(url string) error
+	lang        int
 }
 
 // newApp makes the state the tests and main use.
@@ -204,6 +219,7 @@ func newApp(svc mailService) *app {
 		watches:       true,
 		watched:       map[string]mail.Account{},
 		watch:         map[string]mail.WatchStatus{},
+		needSignIn:    map[string]bool{},
 		inboxes:       map[string]int{},
 		otherFolders:  map[string][]mail.Folder{},
 		announced:     map[string]noteMark{},
@@ -274,6 +290,7 @@ func (a *app) attach(win *mygo.Window) {
 		win.Focus()
 		mygo.App.Focus()
 	}
+	a.openBrowser = mygo.Shell.OpenExternal
 	// Drafts written offline go up when the network is back, without
 	// waiting for the next edit or sync. The watchers stop trying while
 	// there is no network, and try at once when there is one again.
@@ -293,7 +310,11 @@ func (a *app) attach(win *mygo.Window) {
 	// mail that came while the app was in the back is wanted now.
 	mygo.Power.OnResume(func() { a.post(a.nudge) })
 	mygo.App.OnDidBecomeActive(func() { a.post(a.nudge) })
-	win.OnClosed(func() { a.closed = true })
+	win.OnClosed(func() {
+		// A sign-in waiting for the browser has nowhere left to end.
+		a.cancelSignIn()
+		a.closed = true
+	})
 	mygo.App.OnLocaleChanged(func(string) { win.SetTitle(locales.AppName()) })
 }
 
@@ -319,11 +340,23 @@ func (a *app) start() {
 		// The settings come with the accounts: the first report of a
 		// watcher, which may hold a night's mail, finds them read.
 		set, setErr := a.svc.Settings(ctx)
+		// An account whose sign-in was revoked or signed out says so from
+		// the start, not after a sync has failed.
+		signedOut := map[string]bool{}
+		for _, acc := range accounts {
+			if acc.OAuth == "" {
+				continue
+			}
+			if need, err := a.svc.NeedsSignIn(ctx, acc.ID); err == nil && need {
+				signedOut[acc.ID] = true
+			}
+		}
 		a.post(func() {
 			if a.stale(g) {
 				return
 			}
 			a.accounts = accounts
+			a.needSignIn = signedOut
 			if err != nil {
 				a.err = err.Error()
 			}
@@ -423,9 +456,13 @@ func (a *app) syncAccount(g uint64) {
 			if a.stale(g) {
 				return
 			}
-			if err != nil {
+			switch {
+			case a.signInRequired(accountID, err):
+				// Its banner says so, and offers the sign-in.
+				a.err = ""
+			case err != nil:
 				a.err = locales.SyncFailed(err.Error())
-			} else {
+			default:
 				a.err = ""
 				if folders != nil {
 					a.setFolders(folders)
@@ -476,9 +513,12 @@ func (a *app) syncFolder(g uint64) {
 			if a.stale(g) || a.folder != folder {
 				return
 			}
-			if err != nil {
+			switch {
+			case a.signInRequired(accountID, err):
+				a.err = ""
+			case err != nil:
 				a.err = locales.SyncFailed(err.Error())
-			} else {
+			default:
 				a.err = ""
 				if folders != nil {
 					a.setFolders(folders)
@@ -785,7 +825,7 @@ func (a *app) loadBody(g uint64) {
 			}
 			a.bodyLocked = false
 			if err != nil {
-				a.bodyErr = locales.BodyFailed(err.Error())
+				a.bodyErr = a.bodyError(accountID, err)
 				return
 			}
 			if !result.Message.Seen {
@@ -1124,6 +1164,11 @@ func (a *app) mailView(c *ui.Context) {
 	c.OnShortcut(ui.Cmd, ui.KeyK, func() { a.searchField.Focus(c) })
 	c.OnShortcut(ui.Cmd, ui.KeyN, func() { a.openCompose(nil) })
 	c.OnShortcut(ui.Cmd, ui.KeyR, func() { a.refresh() })
+	if s := a.signIn; s != nil && s.account != "" && a.onScreen(s.account) {
+		// Escape stops the sign-in its banner waits for, as its Cancel
+		// does.
+		c.OnShortcut(0, ui.KeyEscape, a.cancelSignIn)
+	}
 	ui.Column(c).Fill().Background(t.Background).Children(func() {
 		a.titleBar(c, t, bar, top)
 		panes := ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
@@ -1206,9 +1251,14 @@ func (a *app) sidebar(c *ui.Context, t *ui.Theme) {
 					label := acc.Label()
 					item := m.Item(label + " · " + acc.Email).ID(acc.ID).Radio(acc.ID == a.active)
 					// The sidebar shows the active account's unread mail;
-					// the other accounts' is said here.
+					// the other accounts' is said here, and so is that one
+					// has to sign in again, which its banner says when it
+					// is on screen.
 					if n := a.inboxes[acc.ID]; n > 0 && acc.ID != a.active {
 						item.Trailing(fmt.Sprint(n))
+					}
+					if a.needSignIn[acc.ID] && acc.ID != a.active {
+						item.Subtitle(locales.MenuNeedsSignIn())
 					}
 					if item.Chosen() {
 						a.aim = nil

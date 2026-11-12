@@ -121,6 +121,27 @@ type fakeService struct {
 	// message or sends, each with the account it reached:
 	// "a2 SetFlag INBOX/1 \Flagged true".
 	acts []string
+
+	// Signing in with a provider. oauth is the providers the build has a
+	// client for. A sign-in opens the page and then runs onSignIn, the
+	// user in the browser, where a test looks at the window, cancels, or
+	// ends the sign-in with what it returns. signInAs is the address the
+	// browser signs in as, "" for the account's own or newAddress for a
+	// new one, whose inbox holds newInbox. needSignIn is the accounts
+	// that have to sign in again: whatever of theirs reaches a server
+	// fails as the engine's does. signIns, signOuts and signInChecks
+	// record the calls, and prompts what each sign-in was given.
+	oauth        map[string]bool
+	onSignIn     func(ctx context.Context) error
+	signInAs     string
+	newAddress   string
+	newInbox     []mail.Summary
+	needSignIn   map[string]bool
+	signOutErr   error
+	signIns      []string
+	signOuts     []string
+	signInChecks []string
+	prompts      []mail.OAuthPrompt
 }
 
 // act records a call with its account.
@@ -162,6 +183,10 @@ func newFakeService() *fakeService {
 		ownThreads: map[string]mail.ThreadID{},
 		cursors:    map[mail.Cursor]mail.Summary{},
 		older:      map[string][]mail.Summary{},
+
+		oauth:      map[string]bool{},
+		newAddress: "ann@gmail.com",
+		needSignIn: map[string]bool{},
 	}
 }
 
@@ -219,6 +244,16 @@ func (f *fakeService) AddAccount(ctx context.Context, a mail.Account, password s
 func (f *fakeService) UpdateAccount(ctx context.Context, a mail.Account, password string) error {
 	for i := range f.accounts {
 		if f.accounts[i].ID == a.ID {
+			// As the engine: of an account that signs in with OAuth only
+			// the name changes, and it takes no password. Here the window
+			// asking for more is an error.
+			if stored := f.accounts[i]; stored.OAuth != "" {
+				renamed := stored
+				renamed.Name = a.Name
+				if password != "" || a != renamed {
+					return fmt.Errorf("fake: %+v asks more of an OAuth account than a new name", a)
+				}
+			}
 			f.accounts[i] = a
 			if password != "" {
 				f.password[a.ID] = password
@@ -452,12 +487,15 @@ func (f *fakeService) find(accountID, folder string, uid mail.UID) (mail.Summary
 }
 
 func (f *fakeService) SyncAccount(ctx context.Context, accountID string) ([]mail.Folder, error) {
+	if err := f.signedOut(accountID); err != nil {
+		return nil, err
+	}
 	return append([]mail.Folder(nil), f.folders[accountID]...), nil
 }
 
 func (f *fakeService) SyncFolder(ctx context.Context, accountID, folder string, limit int) error {
 	f.syncCalls = append(f.syncCalls, fmt.Sprintf("%s/%s/%d", accountID, folder, limit))
-	return nil
+	return f.signedOut(accountID)
 }
 
 // FolderCache counts a folder's messages in the cache against those of
@@ -484,6 +522,9 @@ func (f *fakeService) FetchOlder(ctx context.Context, accountID, folder string, 
 	if f.onOlder != nil {
 		f.onOlder()
 	}
+	if err := f.signedOut(accountID); err != nil {
+		return mail.OlderResult{}, err
+	}
 	if f.olderErr != nil {
 		return mail.OlderResult{}, f.olderErr
 	}
@@ -503,6 +544,9 @@ func (f *fakeService) FetchOlder(ctx context.Context, accountID, folder string, 
 
 func (f *fakeService) FetchMessage(ctx context.Context, accountID, folder string, uid mail.UID, markSeen bool) (mail.FetchResult, error) {
 	f.act(accountID, "FetchMessage %s/%d %v", folder, uid, markSeen)
+	if err := f.signedOut(accountID); err != nil {
+		return mail.FetchResult{}, err
+	}
 	s, ok := f.find(accountID, folder, uid)
 	if !ok {
 		return mail.FetchResult{}, mail.ErrNotFound
@@ -553,6 +597,9 @@ func (f *fakeService) recount(accountID, folder string) {
 func (f *fakeService) SetFlag(ctx context.Context, accountID, folder string, uid mail.UID, flag mail.Flag, on bool) error {
 	f.flagCalls = append(f.flagCalls, string(flag))
 	f.act(accountID, "SetFlag %s/%d %s %v", folder, uid, flag, on)
+	if err := f.signedOut(accountID); err != nil {
+		return err
+	}
 	if f.flagErr != nil {
 		return f.flagErr
 	}
@@ -590,6 +637,9 @@ func (f *fakeService) hasFolder(accountID, name string) error {
 func (f *fakeService) Move(ctx context.Context, accountID, folder string, uid mail.UID, dest string) (mail.MoveResult, error) {
 	f.moved = append(f.moved, folder+"->"+dest)
 	f.act(accountID, "Move %s/%d->%s", folder, uid, dest)
+	if err := f.signedOut(accountID); err != nil {
+		return mail.MoveResult{}, err
+	}
 	if f.moveErr != nil {
 		return mail.MoveResult{}, f.moveErr
 	}
@@ -641,6 +691,9 @@ func (f *fakeService) MoveBack(ctx context.Context, accountID, from, to string, 
 
 func (f *fakeService) Send(ctx context.Context, accountID string, out mail.Outgoing) (mail.SendResult, error) {
 	f.act(accountID, "Send %s", out.Subject)
+	if err := f.signedOut(accountID); err != nil {
+		return mail.SendResult{}, err
+	}
 	if f.sendErr != nil {
 		return mail.SendResult{}, f.sendErr
 	}
@@ -656,6 +709,11 @@ func (f *fakeService) Send(ctx context.Context, accountID string, out mail.Outgo
 }
 
 func (f *fakeService) RetryPending(ctx context.Context, id string) (mail.SendResult, error) {
+	for _, p := range f.pending {
+		if err := f.signedOut(p.AccountID); p.ID == id && err != nil {
+			return mail.SendResult{}, err
+		}
+	}
 	if f.retryErr != nil {
 		return mail.SendResult{}, f.retryErr
 	}
@@ -668,6 +726,9 @@ func (f *fakeService) PendingSends(ctx context.Context, accountID string) ([]mai
 }
 
 func (f *fakeService) Attachment(ctx context.Context, accountID, folder string, uid mail.UID, part string) (mail.Attachment, []byte, error) {
+	if err := f.signedOut(accountID); err != nil {
+		return mail.Attachment{}, nil, err
+	}
 	if f.attachment.Part == "" {
 		return mail.Attachment{}, nil, mail.ErrNotFound
 	}
@@ -808,6 +869,9 @@ func (f *fakeService) SyncDraftEdits(ctx context.Context, accountID string) (mai
 
 func (f *fakeService) syncDrafts(accountID string, heavy bool) (mail.DraftSyncResult, error) {
 	f.draftSyncs++
+	if err := f.signedOut(accountID); err != nil {
+		return mail.DraftSyncResult{}, err
+	}
 	if f.draftSyncErr != nil {
 		return mail.DraftSyncResult{}, f.draftSyncErr
 	}
@@ -1212,6 +1276,9 @@ func (f *fakeService) SetFlags(ctx context.Context, accountID string, msgs []mai
 	}
 	f.bulkFlags = append(f.bulkFlags, call)
 	f.act(accountID, "SetFlags %s %s %v", strings.Join(call.refs, ","), flag, on)
+	if err := f.signedOut(accountID); err != nil {
+		return err
+	}
 	if f.flagErr != nil {
 		return f.flagErr
 	}
@@ -1261,6 +1328,9 @@ func (f *fakeService) MoveMessages(ctx context.Context, accountID string, msgs [
 		f.movedRefs = append(f.movedRefs, r.Folder+"/"+itoa(r.UID)+"->"+dest)
 		f.act(accountID, "MoveMessages %s/%d->%s", r.Folder, r.UID, dest)
 	}
+	if err := f.signedOut(accountID); err != nil {
+		return nil, err
+	}
 	if f.moveErr != nil {
 		return nil, f.moveErr
 	}
@@ -1292,4 +1362,100 @@ func (f *fakeService) MoveBackMessages(ctx context.Context, accountID string, mo
 		return errFake
 	}
 	return nil
+}
+
+// signedOut is what an operation of an account that has to sign in again
+// fails with before it reaches a server: the engine's error after the
+// provider refused to renew the account's sign-in.
+func (f *fakeService) signedOut(accountID string) error {
+	if !f.needSignIn[accountID] {
+		return nil
+	}
+	return fmt.Errorf("%w (%w)", mail.ErrSignInRequired,
+		&mail.OAuthError{Code: "invalid_grant", Description: "Token has been expired or revoked."})
+}
+
+func (f *fakeService) OAuthConfigured(provider string) bool { return f.oauth[provider] }
+
+// signInPage is the provider's page a fake sign-in opens.
+func signInPage(provider string) string {
+	return "https://accounts.example/" + provider + "/authorize?client_id=shu&state=fake-state"
+}
+
+// browse is a sign-in's time in the browser: the page opens, and the
+// user does what onSignIn says, which decides how it ends, even after a
+// cancel, as a sign-in done just as it was cancelled; or signs in at once.
+func (f *fakeService) browse(ctx context.Context, provider string, prompt mail.OAuthPrompt) error {
+	if !f.oauth[provider] {
+		return mail.ErrOAuthNotConfigured
+	}
+	f.prompts = append(f.prompts, prompt)
+	prompt.Open(signInPage(provider))
+	if f.onSignIn != nil {
+		return f.onSignIn(ctx)
+	}
+	return ctx.Err()
+}
+
+func (f *fakeService) AddOAuthAccount(ctx context.Context, provider, name string, prompt mail.OAuthPrompt) (mail.Account, error) {
+	f.signIns = append(f.signIns, "add "+provider)
+	if err := f.browse(ctx, provider, prompt); err != nil {
+		return mail.Account{}, err
+	}
+	address := f.newAddress
+	if f.signInAs != "" {
+		address = f.signInAs
+	}
+	preset := map[string]string{mail.OAuthGoogle: "gmail", mail.OAuthMicrosoft: "outlook"}[provider]
+	servers, _ := mail.ProviderByID(preset)
+	a := mail.Account{
+		ID: fmt.Sprintf("%s-%d", provider, len(f.accounts)+1), Name: strings.TrimSpace(name),
+		Email: address, Username: address, IMAP: servers.IMAP, SMTP: servers.SMTP, OAuth: provider,
+	}
+	if a.Name == "" {
+		a.Name = address
+	}
+	f.addAccount(a, "", []mail.Folder{
+		{Name: "INBOX", SpecialUse: mail.SpecialInbox, Total: len(f.newInbox)},
+		{Name: "Sent", SpecialUse: mail.SpecialSent},
+	}, f.newInbox)
+	return a, nil
+}
+
+func (f *fakeService) SignInAgain(ctx context.Context, accountID string, prompt mail.OAuthPrompt) error {
+	f.signIns = append(f.signIns, "again "+accountID)
+	var acc mail.Account
+	for _, a := range f.accounts {
+		if a.ID == accountID {
+			acc = a
+		}
+	}
+	switch {
+	case acc.ID == "":
+		return mail.ErrNotFound
+	case acc.OAuth == "":
+		return errors.New("fake: the account signs in with a password")
+	}
+	if err := f.browse(ctx, acc.OAuth, prompt); err != nil {
+		return err
+	}
+	if f.signInAs != "" && !strings.EqualFold(f.signInAs, acc.Email) {
+		return fmt.Errorf("%w: signed in as %s, for the account %s", mail.ErrAddressMismatch, f.signInAs, acc.Email)
+	}
+	delete(f.needSignIn, accountID)
+	return nil
+}
+
+func (f *fakeService) SignOut(ctx context.Context, accountID string) error {
+	f.signOuts = append(f.signOuts, accountID)
+	if f.signOutErr != nil {
+		return f.signOutErr
+	}
+	f.needSignIn[accountID] = true
+	return nil
+}
+
+func (f *fakeService) NeedsSignIn(ctx context.Context, accountID string) (bool, error) {
+	f.signInChecks = append(f.signInChecks, accountID)
+	return f.needSignIn[accountID], nil
 }

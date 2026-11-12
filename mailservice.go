@@ -16,6 +16,16 @@ type mailService interface {
 	SetActive(ctx context.Context, id string) error
 	TestConnection(ctx context.Context, a mail.Account, password string) error
 
+	// Signing in with Google or Microsoft. OAuthConfigured says whether
+	// this build can, at once. A sign-in lasts as long as the user takes
+	// in the browser and ends with ctx, so jobs call AddOAuthAccount and
+	// SignInAgain; NeedsSignIn reads the keychain only.
+	OAuthConfigured(provider string) bool
+	AddOAuthAccount(ctx context.Context, provider, name string, prompt mail.OAuthPrompt) (mail.Account, error)
+	SignInAgain(ctx context.Context, accountID string, prompt mail.OAuthPrompt) error
+	SignOut(ctx context.Context, accountID string) error
+	NeedsSignIn(ctx context.Context, accountID string) (bool, error)
+
 	CachedFolders(ctx context.Context, accountID string) ([]mail.Folder, error)
 	CachedMessage(ctx context.Context, accountID, folder string, uid mail.UID) (mail.FetchResult, bool, error)
 	// The list reads the cache a page at a time, newest first, each page

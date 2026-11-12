@@ -481,7 +481,7 @@ func (a *app) loadBodies(g uint64, cv *convView, load, unread []mail.Summary) {
 					return
 				}
 				if err != nil {
-					cv.bodyErr[key] = locales.BodyFailed(err.Error())
+					cv.bodyErr[key] = a.bodyError(m.Account, err)
 					return
 				}
 				if marked[key] {
@@ -702,7 +702,7 @@ func (a *app) toggleThreadStar() {
 			case err != nil:
 				// The cache changed only where the server did: read
 				// again, it shows what is so.
-				a.err = err.Error()
+				a.err = failureText(err)
 				a.readMessages(g, false)
 			case folder == "starred" && !on:
 				a.loadMessages(g)
@@ -767,7 +767,7 @@ func (a *app) toggleThreadRead() {
 				return
 			}
 			if err != nil {
-				a.err = err.Error()
+				a.err = failureText(err)
 				a.readMessages(g, false)
 				return
 			}
@@ -853,7 +853,7 @@ func (a *app) moveThreads(special string) {
 			}
 			a.movedOut(members, moved)
 			if err != nil {
-				a.err = err.Error()
+				a.err = failureText(err)
 			}
 			// What moved before a failure can be taken back as well.
 			if canUndo(moved) {
@@ -948,7 +948,7 @@ func (a *app) undoThreadMove(u *undoMove) {
 			}
 			switch {
 			case err != nil:
-				a.err = err.Error()
+				a.err = failureText(err)
 			case syncErr != nil:
 				a.err = locales.SyncFailed(syncErr.Error())
 			}
@@ -988,7 +988,7 @@ func (a *app) flagMessage(m mail.Summary, flag mail.Flag, on bool) {
 			}
 			switch {
 			case err != nil:
-				a.err = err.Error()
+				a.err = failureText(err)
 				a.readMessages(g, false)
 			case folder == "starred" && flag == mail.FlagFlagged && !on:
 				a.readMessages(g, false)
@@ -1039,7 +1039,7 @@ func (a *app) moveMessage(m mail.Summary, special string) {
 				return
 			}
 			if err != nil {
-				a.err = err.Error()
+				a.err = failureText(err)
 			} else if canUndo(moved) {
 				a.setUndo(&undoMove{label: label, moved: moved})
 			}

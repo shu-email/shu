@@ -91,6 +91,9 @@ type composeState struct {
 	err     string
 	note    string
 	closed  bool
+	// needsSignIn says the last send failed because the account has to
+	// sign in again, which the window then offers.
+	needsSignIn bool
 	// A send under way: how much of the message has gone, of how much,
 	// and the way to stop it.
 	sendSent   int64
@@ -112,9 +115,11 @@ type draftStatus struct {
 	revision  int64
 	synced    int64
 	messageID string
-	// offline says the last sync did not reach the server; localOnly that
+	// offline says the last sync did not reach the server, and signIn
+	// that it was because the account has to sign in again; localOnly that
 	// it did, and found no Drafts folder to upload to.
 	offline   bool
+	signIn    bool
 	localOnly bool
 	// conflict says another mail client changed the draft, and that this
 	// version was kept beside it.
@@ -289,6 +294,11 @@ func (cs *composeState) view(c *ui.Context) {
 				ui.Text(c, cs.err).FontSize(12).TextColor(t.Text).MaxLines(4).Grow(1).MinWidth(0).
 					Role(ui.RoleStatus)
 			})
+			if acc := cs.app.account(cs.accountID); acc != nil && cs.needsSignIn {
+				ui.Column(c).Shrink(0).Padding(0, 0, 0, 22).Children(func() {
+					cs.app.signInControls(c, t, *acc)
+				})
+			}
 		}
 		ui.Row(c).Shrink(0).Gap(10).AlignItems(ui.Center).Children(func() {
 			attach := cs.app.iconButton(c, paperclipIcon, locales.AttachFiles(), locales.AttachFilesTip(attachKey())).
@@ -504,6 +514,8 @@ func (cs *composeState) draftNote(t *ui.Theme) (string, *ui.SVG, ui.Color) {
 		return locales.DraftSynced(), checkIcon, t.Success
 	case d.localOnly:
 		return locales.DraftLocalOnly(), draftIcon, t.TextMuted
+	case d.signIn:
+		return locales.DraftWaitsSignIn(), draftIcon, t.TextMuted
 	case d.offline:
 		return locales.DraftOffline(), draftIcon, t.TextMuted
 	case cs.attachmentBytes() > mail.DraftAutoUploadLimit:
@@ -870,6 +882,7 @@ func (cs *composeState) draftSynced(result mail.DraftSyncResult, syncErr error) 
 				return
 			}
 			cs.draft.offline = syncErr != nil
+			cs.draft.signIn = errors.Is(syncErr, mail.ErrSignInRequired)
 			cs.draft.localOnly = syncErr == nil && result.Folder == ""
 			switch {
 			case err != nil:
@@ -939,6 +952,7 @@ func (cs *composeState) send() {
 	cs.sending = true
 	cs.err = ""
 	cs.note = ""
+	cs.needsSignIn = false
 	cs.sendSent, cs.sendTotal, cs.cancelling = 0, 0, false
 	accountID := cs.accountID
 	app := cs.app
@@ -982,7 +996,13 @@ func (cs *composeState) send() {
 			if err != nil {
 				// Whatever stopped it, the window stays as it was, with
 				// the draft and its attachments, to send again or not.
-				cs.err = sendErrorText(err)
+				if app.signInRequired(accountID, err) {
+					// Nothing went out. The window offers the sign-in, and
+					// the message waits for the user to send it again.
+					cs.err, cs.needsSignIn = locales.SendNeedsSignIn(app.accountLabel(accountID)), true
+				} else {
+					cs.err = sendErrorText(err)
+				}
 				app.loadPending(app.gen)
 				// The failure belongs to this window, which the mail
 				// window's update does not redraw.

@@ -220,8 +220,7 @@ func (s *Service) RemoveAttachment(ctx context.Context, id string, att Attachmen
 // hashing it on the way, and describes it. room is the most bytes it may
 // have. The file is never held in memory whole.
 func (s *Service) copyIn(ctx context.Context, path string, room int64) (Attachment, string, error) {
-	dir := s.draftFilesDir()
-	if dir == "" {
+	if s.draftFilesDir() == "" {
 		return Attachment{}, "", errors.New("mail: there is no directory for the attachments of drafts")
 	}
 	info, err := os.Stat(path)
@@ -243,21 +242,53 @@ func (s *Service) copyIn(ctx context.Context, path string, room int64) (Attachme
 		return Attachment{}, "", err
 	}
 	defer src.Close()
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	// The size was checked above, but a file may grow while it is read.
+	c, err := s.copyStream(ctx, src, room)
+	if err != nil {
 		return Attachment{}, "", err
+	}
+	name := cleanFilename(filepath.Base(path))
+	return Attachment{
+		Filename:    name,
+		ContentType: detectContentType(name, c.head),
+		Size:        c.size,
+		ContentHash: c.hash,
+	}, c.path, nil
+}
+
+// copied is bytes copied into the draft file store under a temporary
+// name: where they are, their content hash and size, and the first of
+// them, which tell their type.
+type copied struct {
+	path string
+	hash string
+	size int64
+	head []byte
+}
+
+// copyStream streams bytes into the draft file store under a temporary
+// name, which the sweep leaves alone, hashing them on the way. room is
+// the most there may be. They are never held in memory whole.
+func (s *Service) copyStream(ctx context.Context, src io.Reader, room int64) (copied, error) {
+	dir := s.draftFilesDir()
+	if dir == "" {
+		return copied{}, errors.New("mail: there is no directory for the attachments of drafts")
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return copied{}, err
 	}
 	tmp, err := os.CreateTemp(dir, incomingPrefix+"*")
 	if err != nil {
-		return Attachment{}, "", err
+		return copied{}, err
 	}
 	incoming := tmp.Name()
 	s.fileMu.Lock()
 	s.incoming[filepath.Base(incoming)] = true
 	s.fileMu.Unlock()
-	fail := func(err error) (Attachment, string, error) {
+	fail := func(err error) (copied, error) {
 		tmp.Close()
 		s.dropIncoming(incoming)
-		return Attachment{}, "", err
+		return copied{}, err
 	}
 	var (
 		hash = sha256.New()
@@ -271,8 +302,6 @@ func (s *Service) copyIn(ctx context.Context, path string, room int64) (Attachme
 		}
 		n, readErr := src.Read(buf)
 		if n > 0 {
-			// The size was checked above, but a file may grow while it
-			// is read.
 			if size += int64(n); size > room {
 				return fail(ErrAttachTooLarge)
 			}
@@ -299,13 +328,7 @@ func (s *Service) copyIn(ctx context.Context, path string, room int64) (Attachme
 	if err := tmp.Close(); err != nil {
 		return fail(err)
 	}
-	name := cleanFilename(filepath.Base(path))
-	return Attachment{
-		Filename:    name,
-		ContentType: detectContentType(name, head),
-		Size:        size,
-		ContentHash: hex.EncodeToString(hash.Sum(nil)),
-	}, incoming, nil
+	return copied{path: incoming, hash: hex.EncodeToString(hash.Sum(nil)), size: size, head: head}, nil
 }
 
 // keepIncoming gives a copied file its place under its content hash. The

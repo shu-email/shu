@@ -74,13 +74,18 @@ func TestMigrationsFromEmpty(t *testing.T) {
 		"threads", "threads_account", "thread_refs", "thread_refs_thread", "messages_thread",
 		"messages_thread_insert", "messages_thread_update",
 		"messages_date", "messages_flagged",
+		"identities", "identities_email",
 	} {
 		if !have[name] {
 			t.Errorf("missing schema object %q", name)
 		}
 	}
-	if !hasColumn(t, s, "accounts", "oauth") {
-		t.Error("accounts has no oauth column")
+	for _, column := range [][2]string{
+		{"accounts", "oauth"}, {"drafts", "identity"}, {"outbox", "due_at"}, {"outbox", "draft_id"},
+	} {
+		if !hasColumn(t, s, column[0], column[1]) {
+			t.Errorf("%s has no %s column", column[0], column[1])
+		}
 	}
 	// Reopening runs no migration and keeps the data.
 	addAccount(t, s, "a1")

@@ -9,6 +9,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/emersion/go-sasl"
@@ -23,6 +24,10 @@ type fakeSMTP struct {
 	mu       sync.Mutex
 	messages []string
 	rcpts    []string
+	// froms is the sender of each message's envelope (MAIL FROM), and
+	// sessions counts the connections the server took.
+	froms    []string
+	sessions atomic.Int32
 	user     string
 	pass     string
 	// refuse is the server's answer to a message it has read whole, as a
@@ -35,6 +40,7 @@ type fakeSMTP struct {
 type smtpBackend struct{ f *fakeSMTP }
 
 func (b smtpBackend) NewSession(*smtp.Conn) (smtp.Session, error) {
+	b.f.sessions.Add(1)
 	return &smtpSession{f: b.f}, nil
 }
 
@@ -62,6 +68,9 @@ func (s *smtpSession) Mail(from string, opts *smtp.MailOptions) error {
 	if !s.auth {
 		return smtp.ErrAuthRequired
 	}
+	s.f.mu.Lock()
+	s.f.froms = append(s.f.froms, from)
+	s.f.mu.Unlock()
 	return nil
 }
 
@@ -146,6 +155,13 @@ func (f *fakeSMTP) received() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]string(nil), f.messages...)
+}
+
+// senders is the envelope's sender of each message, as MAIL FROM gave it.
+func (f *fakeSMTP) senders() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.froms...)
 }
 
 // combinedAccount returns an account whose IMAP points at the fake IMAP

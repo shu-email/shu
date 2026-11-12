@@ -43,6 +43,13 @@ type Service struct {
 	fileMu   sync.Mutex
 	incoming map[string]bool
 
+	// The messages waiting out their send delay that this run looks
+	// after (see schedule.go): those it scheduled and those it took over
+	// from an earlier run, each with the channel Unsend closes to end the
+	// wait for it. sendMu guards the map.
+	sendMu sync.Mutex
+	waits  map[string]chan struct{}
+
 	// The watchers, one per account watched (see watch.go). watchLife
 	// makes each start and stop of one a single step; watchMu guards the
 	// map and what the watchers share: the interval between checks and
@@ -55,8 +62,9 @@ type Service struct {
 	watchers     map[string]*watcher
 	interval     time.Duration
 	offline      bool
-	// newTimer arms the timers the watchers wait on. Tests replace it,
-	// with the clock, so that no watcher waits in real time.
+	// newTimer arms the timers the watchers and the messages waiting out
+	// their send delay wait on. Tests replace it, with the clock, so that
+	// nothing waits in real time.
 	newTimer func(time.Duration) (<-chan time.Time, func())
 	// watchNoIdle has the watchers treat every server as one that cannot
 	// push. It is for tests: the fake server always offers IDLE.
@@ -81,6 +89,7 @@ func NewService(store Store, secrets SecretStore, cacheDir string) *Service {
 		draftSync:      make(chan struct{}, 1),
 		draftsReplaced: map[string][]Attachment{},
 		incoming:       map[string]bool{},
+		waits:          map[string]chan struct{}{},
 		watchers:       map[string]*watcher{},
 		newTimer:       realTimer,
 		oauthProviders: defaultOAuthProviders(),

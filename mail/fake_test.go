@@ -3,6 +3,7 @@ package mail
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -19,6 +20,8 @@ type memStore struct {
 	messages map[string]map[UID]Message
 	outbox   map[string]PendingSend
 	drafts   map[string]Draft
+	// identities is the identities added, in the order they were.
+	identities []Identity
 	// draftOrder is when each draft was created, which breaks a tie
 	// between two edited in the same second as SQLite's rowid does.
 	draftOrder map[string]int
@@ -108,6 +111,8 @@ func (s *memStore) DeleteAccount(ctx context.Context, id string) error {
 		}
 	}
 	delete(s.kv, MutedKey(id))
+	delete(s.kv, SignatureKey(id))
+	s.identities = slices.DeleteFunc(s.identities, func(i Identity) bool { return i.AccountID == id })
 	for k, p := range s.outbox {
 		if p.AccountID == id {
 			delete(s.outbox, k)
@@ -148,6 +153,50 @@ func (s *memStore) SetSetting(ctx context.Context, key, value string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.kv[key] = value
+	return nil
+}
+
+func (s *memStore) Identities(ctx context.Context, accountID string) ([]Identity, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []Identity
+	for _, id := range s.identities {
+		if id.AccountID == accountID {
+			out = append(out, id)
+		}
+	}
+	return out, nil
+}
+
+func (s *memStore) SaveIdentity(ctx context.Context, id Identity) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.accounts[id.AccountID]; !ok {
+		return fmt.Errorf("identity %s: no account %q", id.ID, id.AccountID)
+	}
+	for i, have := range s.identities {
+		if have.ID == id.ID {
+			s.identities[i].Name, s.identities[i].Email = id.Name, id.Email
+			return nil
+		}
+	}
+	s.identities = append(s.identities, id)
+	return nil
+}
+
+// DeleteIdentity has the drafts written from the identity go from their
+// account's own address, an edit, as the SQLite store does.
+func (s *memStore) DeleteIdentity(ctx context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for key, d := range s.drafts {
+		if d.Identity == id {
+			d.Identity = ""
+			d.Revision++
+			s.drafts[key] = d
+		}
+	}
+	s.identities = slices.DeleteFunc(s.identities, func(i Identity) bool { return i.ID == id })
 	return nil
 }
 
@@ -636,7 +685,6 @@ func (s *memStore) GetMessage(ctx context.Context, accountID, folder string, uid
 	if !ok {
 		return Message{}, false, nil
 	}
-	m.BodyCached = true
 	m.Account = accountID
 	return m, true, nil
 }
@@ -835,6 +883,34 @@ func (s *memStore) SetOutboxState(ctx context.Context, id, state, lastError stri
 	return nil
 }
 
+func (s *memStore) ClaimOutbox(ctx context.Context, id, from, to string) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.outbox[id]
+	if !ok || p.State != from {
+		return false, nil
+	}
+	p.State = to
+	s.outbox[id] = p
+	return true, nil
+}
+
+func (s *memStore) ScheduledSends(ctx context.Context) ([]PendingSend, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []PendingSend
+	for _, p := range s.outbox {
+		if p.State == StateScheduled {
+			out = append(out, p)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].DueAt.Before(out[j].DueAt) })
+	return out, nil
+}
+
 func (s *memStore) Drafts(ctx context.Context, accountID string) ([]Draft, error) {
 	s.mu.Lock()
 	var out []Draft
@@ -887,7 +963,7 @@ func (s *memStore) SaveDraft(ctx context.Context, d Draft) (Draft, error) {
 	}
 	// The attachments of a stored draft are not a save's to change.
 	old.To, old.Cc, old.Bcc = d.To, d.Cc, d.Bcc
-	old.Subject, old.Body = d.Subject, d.Body
+	old.Subject, old.Body, old.Identity = d.Subject, d.Body, d.Identity
 	old.InReplyTo, old.References = d.InReplyTo, d.References
 	old.UpdatedAt = d.UpdatedAt
 	old.Revision++

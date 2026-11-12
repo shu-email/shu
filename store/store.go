@@ -270,6 +270,26 @@ var migrations = [][]string{
 	{
 		`ALTER TABLE accounts ADD COLUMN oauth TEXT NOT NULL DEFAULT ''`,
 	},
+	// v10: identities and the send delay. An account sends from its own
+	// address, which is the account's, and from the identities added
+	// here, in the order of position; an address is one identity of an
+	// account at most, whatever its case, and the rows go with the
+	// account. A draft names the identity it is written from, '' for the
+	// account's own. An outbox entry sent with a delay has the time it is
+	// due and the draft it was written as, which stays a draft until it
+	// leaves; the entries there were go at once and have none.
+	{
+		`CREATE TABLE identities (
+			id TEXT PRIMARY KEY,
+			account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+			position INTEGER NOT NULL,
+			name TEXT NOT NULL DEFAULT '',
+			email TEXT NOT NULL)`,
+		`CREATE UNIQUE INDEX identities_email ON identities (account_id, email COLLATE NOCASE)`,
+		`ALTER TABLE drafts ADD COLUMN identity TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE outbox ADD COLUMN due_at INTEGER`,
+		`ALTER TABLE outbox ADD COLUMN draft_id TEXT NOT NULL DEFAULT ''`,
+	},
 }
 
 // backfills compute, from the rows of the version before, statements a

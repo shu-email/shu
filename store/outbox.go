@@ -21,17 +21,20 @@ func (s *Store) EnqueueOutbox(ctx context.Context, p mail.PendingSend) error {
 		p.State = mail.StatePending
 	}
 	_, err = s.exec(ctx, `INSERT INTO outbox
-		(id, account_id, raw, envelope_json, state, attempts, last_error, created_at, sent_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		(id, account_id, raw, envelope_json, state, attempts, last_error, created_at, sent_at, due_at, draft_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		p.ID, p.AccountID, string(p.Raw), string(envelope), p.State, p.Attempts,
-		p.LastError, p.CreatedAt.Unix(), unixPtr(p.SentAt))
+		p.LastError, p.CreatedAt.Unix(), unixPtr(p.SentAt), unixPtr(p.DueAt), p.DraftID)
 	return err
 }
 
+// outboxColumns are the outbox fields every query reads.
+const outboxColumns = `id, account_id, raw, envelope_json, state, attempts,
+	COALESCE(last_error, ''), created_at, sent_at, due_at, draft_id`
+
 // Outbox reads one entry with its raw message.
 func (s *Store) Outbox(ctx context.Context, id string) (mail.PendingSend, error) {
-	rows, err := s.query(ctx, `SELECT id, account_id, raw, envelope_json, state, attempts,
-		COALESCE(last_error, ''), created_at, sent_at FROM outbox WHERE id = ?`, id)
+	rows, err := s.query(ctx, `SELECT `+outboxColumns+` FROM outbox WHERE id = ?`, id)
 	if err != nil {
 		return mail.PendingSend{}, err
 	}
@@ -51,6 +54,8 @@ func outboxRow(r []any) (mail.PendingSend, error) {
 		LastError: text(r[6]),
 		CreatedAt: unix(r[7]),
 		SentAt:    unix(r[8]),
+		DueAt:     unix(r[9]),
+		DraftID:   text(r[10]),
 	}
 	if err := json.Unmarshal([]byte(text(r[3])), &p.Envelope); err != nil {
 		return p, fmt.Errorf("store: outbox envelope %s: %w", p.ID, err)
@@ -58,15 +63,9 @@ func outboxRow(r []any) (mail.PendingSend, error) {
 	return p, nil
 }
 
-// PendingSends lists an account's unsent entries, oldest first. Rows
-// left "sending" by a crash are reported as unknown. A send the user
-// cancelled before any of it left is not among them: there is nothing of
-// it to deliver or to ask about.
-func (s *Store) PendingSends(ctx context.Context, accountID string) ([]mail.PendingSend, error) {
-	rows, err := s.query(ctx, `SELECT id, account_id, raw, envelope_json, state, attempts,
-		COALESCE(last_error, ''), created_at, sent_at
-		FROM outbox WHERE account_id = ? AND state NOT IN (?, ?) ORDER BY created_at`,
-		accountID, mail.StateSent, mail.StateCancelled)
+// outboxRows reads the entries of a query.
+func (s *Store) outboxRows(ctx context.Context, query string, args ...any) ([]mail.PendingSend, error) {
+	rows, err := s.query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -76,12 +75,36 @@ func (s *Store) PendingSends(ctx context.Context, accountID string) ([]mail.Pend
 		if err != nil {
 			return nil, err
 		}
-		if p.State == mail.StateSending {
-			p.State = mail.StateUnknown
-		}
 		out = append(out, p)
 	}
 	return out, nil
+}
+
+// PendingSends lists an account's unsent entries, oldest first. Rows
+// left "sending" by a crash are reported as unknown. A send the user
+// cancelled before any of it left is not among them: there is nothing of
+// it to deliver or to ask about. Nor is one waiting out its send delay,
+// which leaves on its own and must not be sent again before.
+func (s *Store) PendingSends(ctx context.Context, accountID string) ([]mail.PendingSend, error) {
+	out, err := s.outboxRows(ctx, `SELECT `+outboxColumns+`
+		FROM outbox WHERE account_id = ? AND state NOT IN (?, ?, ?) ORDER BY created_at`,
+		accountID, mail.StateSent, mail.StateCancelled, mail.StateScheduled)
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		if out[i].State == mail.StateSending {
+			out[i].State = mail.StateUnknown
+		}
+	}
+	return out, nil
+}
+
+// ScheduledSends lists the entries waiting out their send delay, of every
+// account, the soonest due first.
+func (s *Store) ScheduledSends(ctx context.Context) ([]mail.PendingSend, error) {
+	return s.outboxRows(ctx, `SELECT `+outboxColumns+`
+		FROM outbox WHERE state = ? ORDER BY due_at, created_at, rowid`, mail.StateScheduled)
 }
 
 // SetOutboxState records a state transition.
@@ -94,4 +117,15 @@ func (s *Store) SetOutboxState(ctx context.Context, id, state, lastError string)
 		_, err = s.exec(ctx, `UPDATE outbox SET state = ?, last_error = ? WHERE id = ?`, state, lastError, id)
 	}
 	return err
+}
+
+// ClaimOutbox moves an entry from one state to another if it is in the
+// first, and reports whether it was. It is one statement, so of callers
+// that claim an entry from the same state one alone gets true.
+func (s *Store) ClaimOutbox(ctx context.Context, id, from, to string) (bool, error) {
+	res, err := s.exec(ctx, `UPDATE outbox SET state = ? WHERE id = ? AND state = ?`, to, id, from)
+	if err != nil {
+		return false, err
+	}
+	return res.Changes == 1, nil
 }

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/emersion/go-imap/v2"
 	gomail "github.com/wneessen/go-mail"
 	"github.com/wneessen/go-mail/smtp"
 )
@@ -86,22 +87,16 @@ func SendProgress(ctx context.Context) func(sent, total int64) {
 // appends a copy to Sent. The outbox makes a crash recoverable and keeps
 // the client from sending the same message twice on its own. Cancelling
 // ctx stops a send under way; the error then tells whether anything left
-// (ErrDeliveryUnknown) or not.
+// (ErrDeliveryUnknown) or not. It sends at once: Schedule is the send
+// with a delay.
 func (s *Service) Send(ctx context.Context, accountID string, out Outgoing) (SendResult, error) {
 	a, password, err := s.account(ctx, accountID)
 	if err != nil {
 		return SendResult{}, err
 	}
-	if len(out.To) == 0 {
-		return SendResult{}, errors.New("mail: the message has no recipients")
-	}
 	now := s.now()
-	if out.MessageID == "" {
-		// A draft goes out under the Message-ID its server copies carry.
-		out.MessageID = s.draftMessageID(ctx, accountID, out.DraftID)
-	}
-	if out.MessageID == "" {
-		out.MessageID = newMessageID(a.Email)
+	if out, err = s.prepare(ctx, a, out); err != nil {
+		return SendResult{}, err
 	}
 	msg, raw, err := s.buildMessage(a, out, now)
 	if err != nil {
@@ -129,28 +124,52 @@ func (s *Service) Send(ctx context.Context, accountID string, out Outgoing) (Sen
 	// cancelled since does not undo that.
 	sentDraft := s.retireDraft(context.WithoutCancel(ctx), accountID, out.DraftID)
 	superseded := s.supersede(context.WithoutCancel(ctx), accountID, out.MessageID, pending.ID)
-	s.afterDelivery(ctx, a, password, raw, sentDraft || superseded || len(out.Attachments) > 0, &result)
+	s.afterDelivery(ctx, a, password, raw, out.Bcc, sentDraft || superseded || len(out.Attachments) > 0, &result)
 	if sentDraft {
 		s.flushDraftDeletions(ctx, accountID)
 	}
 	return result, nil
 }
 
+// prepare readies a message to be built: it has someone to go to, the
+// Message-ID of the draft it was written as or a new one, and the address
+// of the identity it goes from.
+func (s *Service) prepare(ctx context.Context, a Account, out Outgoing) (Outgoing, error) {
+	if len(out.To) == 0 {
+		return out, errors.New("mail: the message has no recipients")
+	}
+	from, err := s.identity(ctx, a, out.Identity)
+	if err != nil {
+		return out, err
+	}
+	out.Identity, out.From = from.ID, from.Address()
+	if out.MessageID == "" {
+		// A draft goes out under the Message-ID its server copies carry.
+		out.MessageID = s.draftMessageID(ctx, a.ID, out.DraftID)
+	}
+	if out.MessageID == "" {
+		// Under the domain the message is from, which an alias may not
+		// share with the account.
+		out.MessageID = newMessageID(from.Email)
+	}
+	return out, nil
+}
+
 // supersede closes the outbox entries of the earlier tries of a message
 // that is now delivered: the same draft, sent before and refused or cut
-// off, under the same Message-ID. Sending one of those again would
-// deliver the message twice, in a form the user has since changed, and
-// until it is closed it holds on to the files that form had attached.
-// It reports whether there was one.
+// off, or still waiting out its delay, under the same Message-ID. Sending
+// one of those again would deliver the message twice, in a form the user
+// has since changed, and until it is closed it holds on to the files that
+// form had attached. It reports whether there was one.
 func (s *Service) supersede(ctx context.Context, accountID, messageID, delivered string) bool {
 	if messageID == "" {
 		return false
 	}
+	closed := s.cancelScheduled(ctx, accountID, messageID, delivered)
 	pending, err := s.store.PendingSends(ctx, accountID)
 	if err != nil {
-		return false
+		return closed
 	}
-	closed := false
 	for _, p := range pending {
 		if p.ID == delivered || p.Envelope.MessageID != messageID {
 			continue
@@ -184,11 +203,17 @@ func (s *Service) enqueue(ctx context.Context, pending *PendingSend) error {
 // deliver sends a message whose outbox row is written, and records in
 // the row how it ended.
 func (s *Service) deliver(ctx context.Context, a Account, password, id string, msg *gomail.Msg, raw []byte) error {
-	// A send that was cancelled still has an outcome to record.
-	record := context.WithoutCancel(ctx)
-	if err := s.store.SetOutboxState(record, id, StateSending, ""); err != nil {
+	if err := s.store.SetOutboxState(context.WithoutCancel(ctx), id, StateSending, ""); err != nil {
 		return err
 	}
+	return s.deliverClaimed(ctx, a, password, id, msg, raw)
+}
+
+// deliverClaimed sends a message whose outbox row is in the sending
+// state, and records in the row how it ended.
+func (s *Service) deliverClaimed(ctx context.Context, a Account, password, id string, msg *gomail.Msg, raw []byte) error {
+	// A send that was cancelled still has an outcome to record.
+	record := context.WithoutCancel(ctx)
 	left, err := s.transmit(ctx, a, password, msg, raw)
 	switch {
 	case err == nil:
@@ -212,6 +237,14 @@ func (s *Service) deliver(ctx context.Context, a Account, password, id string, m
 // part of the message went out and the server did not answer to it: it
 // may or may not have been delivered.
 func (s *Service) transmit(ctx context.Context, a Account, password string, msg *gomail.Msg, raw []byte) (left bool, err error) {
+	// The envelope's sender (MAIL FROM) is the From's address: the
+	// identity's, an alias's too, as Thunderbird sends. Its domain is the
+	// one checks of the sender's domain (SPF, DMARC) look at against the
+	// From, a bounce goes to the address the recipient saw, and a server
+	// that does not let the account use the alias refuses it here, before
+	// any of the message leaves, rather than pass it on under an address
+	// the recipient never saw. The recipients are To, Cc and Bcc alike:
+	// Bcc is in the envelope only, never in the message.
 	from, err := msg.GetSender(false)
 	if err != nil {
 		return false, fmt.Errorf("smtp: %w", err)
@@ -316,8 +349,8 @@ func refused(ctx context.Context, err error) error {
 // afterDelivery saves the sent copy in the server's Sent folder and, where
 // the message carried files or was a draft, removes the files nothing
 // names any more.
-func (s *Service) afterDelivery(ctx context.Context, a Account, password string, raw []byte, sweep bool, result *SendResult) {
-	if err := s.appendSent(ctx, a, password, raw); err != nil {
+func (s *Service) afterDelivery(ctx context.Context, a Account, password string, raw []byte, bcc []Address, sweep bool, result *SendResult) {
+	if err := s.appendSent(ctx, a, password, raw, bcc); err != nil {
 		result.Warning = err
 	} else {
 		result.Copied = true
@@ -328,7 +361,7 @@ func (s *Service) afterDelivery(ctx context.Context, a Account, password string,
 }
 
 // appendSent saves the sent copy in the server's Sent folder.
-func (s *Service) appendSent(ctx context.Context, a Account, password string, raw []byte) error {
+func (s *Service) appendSent(ctx context.Context, a Account, password string, raw []byte, bcc []Address) error {
 	c, err := s.dialIMAP(ctx, a, password)
 	if err != nil {
 		return err
@@ -348,10 +381,65 @@ func (s *Service) appendSent(ctx context.Context, a Account, password string, ra
 	if sent == "" {
 		return errors.New("the server has no Sent folder")
 	}
-	if err := appendTo(c, sent, raw, s.now()); err != nil {
+	if err := appendSentCopy(c, sent, sentCopy(raw, bcc), s.now()); err != nil {
 		return fmt.Errorf("append to %s: %w", sent, err)
 	}
 	return nil
+}
+
+// sentCopy is a message as the Sent folder keeps it: the bytes sent and,
+// where it had blind copies, a Bcc header naming them at the end of its
+// header. The recipients never saw it; this copy, the user's own, is the
+// one place that says whom the message went to. It comes in parts, so
+// that a large message is not copied whole to make room for one line.
+func sentCopy(raw []byte, bcc []Address) [][]byte {
+	value := headerAddresses(bcc)
+	if value == "" {
+		return [][]byte{raw}
+	}
+	header := []byte("Bcc: " + value + "\r\n")
+	end := bytes.Index(raw, []byte("\r\n\r\n"))
+	if end < 0 {
+		return [][]byte{header, raw}
+	}
+	return [][]byte{raw[:end+2], header, raw[end+2:]}
+}
+
+// appendSentCopy saves a message, which comes in parts, in a folder,
+// read.
+func appendSentCopy(c *imapSession, folder string, parts [][]byte, now time.Time) error {
+	var size int64
+	for _, part := range parts {
+		size += int64(len(part))
+	}
+	cmd := c.client.Append(folder, size, &imap.AppendOptions{Flags: []imap.Flag{imap.FlagSeen}, Time: now})
+	for _, part := range parts {
+		if _, err := cmd.Write(part); err != nil {
+			cmd.Close()
+			return err
+		}
+	}
+	if err := cmd.Close(); err != nil {
+		return err
+	}
+	_, err := cmd.Wait()
+	return err
+}
+
+// headerAddresses writes addresses for a header go-mail does not write,
+// each on a line of its own: folding a long list is done here. An address
+// that does not read back as itself is left out, as it could carry a line
+// break into the header.
+func headerAddresses(list []Address) string {
+	parts := make([]string, 0, len(list))
+	for _, addr := range toStdAddresses(list) {
+		written := addr.String()
+		if parsed, err := mail.ParseAddress(written); err != nil || parsed.Address != addr.Address {
+			continue
+		}
+		parts = append(parts, written)
+	}
+	return strings.Join(parts, ",\r\n ")
 }
 
 // buildMessage makes the message and its raw form, which is what is sent
@@ -375,14 +463,19 @@ func (s *Service) buildMessage(a Account, out Outgoing, now time.Time) (*gomail.
 
 // newMessage fills a message from what was written. A draft has headers
 // of its own to add before the raw form is made, and may have nobody to
-// go to yet.
+// go to yet. It goes from out.From, or from the account's own address
+// where that is not set, as in an outbox entry from before identities.
 func (s *Service) newMessage(a Account, out Outgoing, now time.Time) (*gomail.Msg, error) {
 	msg := gomail.NewMsg()
-	if a.Name != "" {
-		if err := msg.FromFormat(a.Name, a.Email); err != nil {
+	from := out.From
+	if from.Email == "" {
+		from = Address{Name: a.Name, Email: a.Email}
+	}
+	if from.Name != "" {
+		if err := msg.FromFormat(from.Name, from.Email); err != nil {
 			return nil, err
 		}
-	} else if err := msg.From(a.Email); err != nil {
+	} else if err := msg.From(from.Email); err != nil {
 		return nil, err
 	}
 	if len(out.To) > 0 {
@@ -535,8 +628,12 @@ func (s *Service) RetryPending(ctx context.Context, id string) (SendResult, erro
 	if err != nil {
 		return SendResult{}, err
 	}
-	if pending.State == StateSent {
+	switch pending.State {
+	case StateSent:
 		return SendResult{Outbox: pending, Copied: true}, nil
+	case StateScheduled:
+		// It leaves when it is due, and until then can be taken back.
+		return SendResult{}, errors.New("mail: the message is waiting out its send delay")
 	}
 	a, password, err := s.account(ctx, pending.AccountID)
 	if err != nil {
@@ -564,7 +661,7 @@ func (s *Service) RetryPending(ctx context.Context, id string) (SendResult, erro
 	if len(sent) == 0 {
 		sent = raw
 	}
-	s.afterDelivery(ctx, a, password, sent, sentDraft || len(pending.Envelope.Attachments) > 0, &result)
+	s.afterDelivery(ctx, a, password, sent, pending.Envelope.Bcc, sentDraft || len(pending.Envelope.Attachments) > 0, &result)
 	if sentDraft {
 		s.flushDraftDeletions(ctx, pending.AccountID)
 	}

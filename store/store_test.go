@@ -75,6 +75,7 @@ func TestMigrationsFromEmpty(t *testing.T) {
 		"messages_thread_insert", "messages_thread_update",
 		"messages_date", "messages_flagged",
 		"identities", "identities_email",
+		"contacts", "contacts_rank", "contact_terms", "contact_terms_key", "contact_messages",
 	} {
 		if !have[name] {
 			t.Errorf("missing schema object %q", name)

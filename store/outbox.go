@@ -107,16 +107,15 @@ func (s *Store) ScheduledSends(ctx context.Context) ([]mail.PendingSend, error) 
 		FROM outbox WHERE state = ? ORDER BY due_at, created_at, rowid`, mail.StateScheduled)
 }
 
-// SetOutboxState records a state transition.
+// SetOutboxState records a state transition. Recording a message as sent
+// counts its recipients in the address book, in the same transaction.
 func (s *Store) SetOutboxState(ctx context.Context, id, state, lastError string) error {
-	var err error
-	switch state {
-	case mail.StateSent:
-		_, err = s.exec(ctx, `UPDATE outbox SET state = ?, last_error = NULL, sent_at = unixepoch(), attempts = attempts + 1 WHERE id = ?`, state, id)
-	default:
-		_, err = s.exec(ctx, `UPDATE outbox SET state = ?, last_error = ? WHERE id = ?`, state, lastError, id)
+	if state != mail.StateSent {
+		_, err := s.exec(ctx, `UPDATE outbox SET state = ?, last_error = ? WHERE id = ?`, state, lastError, id)
+		return err
 	}
-	return err
+	sent := stmt(`UPDATE outbox SET state = ?, last_error = NULL, sent_at = unixepoch(), attempts = attempts + 1 WHERE id = ?`, state, id)
+	return s.writeCounting(ctx, []stmtType{sent}, func() ([]stmtType, error) { return s.countSent(ctx, id) })
 }
 
 // ClaimOutbox moves an entry from one state to another if it is in the

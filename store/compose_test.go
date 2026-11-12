@@ -242,7 +242,7 @@ func TestMigrationAddsIdentitiesToAnOlderDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if got := countRows(t, s, "PRAGMA user_version"); got != int64(SchemaVersion) || SchemaVersion != 10 {
+	if got := countRows(t, s, "PRAGMA user_version"); got != int64(SchemaVersion) || SchemaVersion < 10 {
 		t.Fatalf("user_version = %d, schema v%d", got, SchemaVersion)
 	}
 	d, ok, err := s.Draft(ctx, "d1")

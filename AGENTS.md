@@ -144,6 +144,26 @@ Windows and Linux. It is written in Go with
   top for as many rows as it shows, and calls `FetchOlder` only when the
   user asks. Its keys of rows, bodies and summaries include the account,
   and an action takes the account from the row it acts on.
+- The address book is the cache's own too, and never leaves the device.
+  `store/` keeps a contact per address, whatever its case, across the
+  accounts (`contacts`), by the rules of `mail.ContactState`. It counts,
+  in the transaction of the write and each message once (by Message-ID,
+  `contact_messages`), the sender of every message it caches outside Junk
+  and Drafts or, for a message from one of the user's own addresses (an
+  account's or an identity's), its recipients; and the recipients, Bcc
+  too, of each message the outbox records as sent. The user's own
+  addresses are no contacts, and a sender that takes no replies makes
+  none. A contact ranks by the messages that made it one, each weighing
+  half as much a month older: favorites first, then those the user wrote
+  to or added, then those that only wrote to the user. The user's edits
+  (`Service.AddContact`, `RenameContact`, `FavoriteContact`,
+  `DeleteContact`) are rows as well: a name the user gave is never
+  changed by mail, and a deleted contact keeps its address alone, so that
+  the mail it sends does not bring it back; a message the user writes to
+  it does. `Service.Suggest` reads the book by the prefix of a word typed
+  (`contact_terms`), and `Service.CheckRecipients` reads a recipient field
+  as a send takes it and tells a broken address from a bare name, with
+  the contacts that name may mean. `ai/` has no way to the book.
 - `ai/` is the AI layer: provider settings, the excerpt that decides what
   part of a message may leave the device, the features (summary of a
   message or a conversation, triage, draft reply) and `Service.send`, the

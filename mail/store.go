@@ -128,6 +128,24 @@ type Store interface {
 	// use, over all accounts: those of the drafts neither discarded nor
 	// sent, and those of the outbox entries still to deliver.
 	DraftFileRefs(ctx context.Context) ([]string, error)
+
+	// The address book, one contact per address whatever its case, across
+	// the accounts. The store keeps it as it writes mail, by the rules of
+	// ContactState: of each message ApplySync, ApplyOlder and SaveMessage
+	// cache outside the Junk and Drafts folders, MessageContacts, and when
+	// SetOutboxState records an entry as sent, SentContacts of its
+	// envelope at the time it was due, each in the transaction of that
+	// write, and each message once, by ContactMessageKey. Contacts reads
+	// it (see ContactQuery). AddContact adds an address under the user's
+	// name for it, ErrContactExists when it is in the book, ErrContactOwn
+	// when it is the user's; RenameContact, FavoriteContact and
+	// DeleteContact change a contact of the book, ErrNotFound when the
+	// address is not in it. The edits return the contact as they left it.
+	Contacts(ctx context.Context, q ContactQuery) ([]Contact, error)
+	AddContact(ctx context.Context, name, email string) (Contact, error)
+	RenameContact(ctx context.Context, email, name string) (Contact, error)
+	FavoriteContact(ctx context.Context, email string, on bool) (Contact, error)
+	DeleteContact(ctx context.Context, email string, at time.Time) error
 }
 
 // SecretStore keeps account passwords. production uses mygo.Secrets, tests

@@ -67,6 +67,141 @@ func OAuthScenario(t *testing.T, store Store) []string {
 	return r.oauth.secrets()
 }
 
+// ContactsScenario keeps the address book on store from mail on fake
+// servers, as the app does: the inbox brings senders, the junk folder and
+// a sender that takes no replies none, and a message the user sends its
+// recipients, the blind copy too, whose copy in Sent counts nothing
+// again. Two letters of a name offer the person the user wrote to, then
+// a frequent sender, then a one-off one; a recipient field says which of
+// its entries are broken, unknown, ambiguous or one contact's; and an
+// edit or a deletion shows at once, a deleted contact coming back when
+// the user writes to it and not when it writes. It is for the tests on
+// the in-memory and the SQLite stores (contacts_sqlite_test.go).
+func ContactsScenario(t *testing.T, store Store) {
+	t.Helper()
+	ctx := context.Background()
+	imapServer := startFakeIMAP(t, allCaps())
+	imapServer.create(t, "INBOX", "Sent", "Junk")
+	smtpServer := startFakeSMTP(t)
+	now := time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC)
+	svc := NewService(store, newMemSecrets(), "")
+	svc.SetTLSConfig(insecureTLS())
+	svc.SetClock(func() time.Time { return now })
+	a := combinedAccount(t, imapServer, smtpServer)
+	if err := svc.AddAccount(ctx, a, "secret"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SyncAccount(ctx, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	letter := func(folder, from, subject string, days int) {
+		t.Helper()
+		imapServer.append(t, folder, []byte("From: "+from+"\r\nTo: Ann <ann@example.com>\r\nSubject: "+subject+
+			"\r\nDate: "+now.AddDate(0, 0, -days).Format(time.RFC1123Z)+
+			"\r\nMessage-ID: <"+strings.ReplaceAll(strings.ToLower(subject), " ", ".")+"@example.org>\r\n\r\nHello.\r\n"))
+	}
+	sync := func(folders ...string) {
+		t.Helper()
+		for _, folder := range folders {
+			if err := svc.SyncFolder(ctx, a.ID, folder, 50); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	send := func(out Outgoing) {
+		t.Helper()
+		if _, err := svc.Send(ctx, a.ID, out); err != nil {
+			t.Fatal(err)
+		}
+	}
+	suggest := func(typed string) []Contact {
+		t.Helper()
+		got, err := svc.Suggest(ctx, typed, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	emails := func(list []Contact) []string {
+		out := []string{}
+		for _, c := range list {
+			out = append(out, c.Email)
+		}
+		return out
+	}
+	letter("INBOX", "Alice Smith <alice@example.org>", "Lunch", 2)
+	letter("INBOX", "Joan Frequent <joan@example.org>", "Report one", 1)
+	letter("INBOX", "Joan Frequent <joan@example.org>", "Report two", 2)
+	letter("INBOX", "Joan Frequent <joan@example.org>", "Report three", 3)
+	letter("INBOX", "Jody Oneoff <jody@example.org>", "Hello there", 40)
+	letter("INBOX", "Shop <no-reply@shop.example>", "Sale", 1)
+	letter("Junk", "Joe Prize <joe@spam.example>", "You won", 1)
+	sync("INBOX", "Junk")
+	send(Outgoing{
+		To: []Address{{Name: "John Written", Email: "john@example.org"}}, Cc: []Address{{Name: "Alice S.", Email: "alice@example.org"}},
+		Bcc: []Address{{Name: "Erin", Email: "erin@example.org"}}, Subject: "Plans", Text: "Thursday?",
+	})
+	sync("Sent")
+	if copies := imapServer.messages(t, "Sent"); len(copies) != 1 {
+		t.Fatalf("the Sent folder holds %d messages", len(copies))
+	}
+
+	if got := emails(suggest("jo")); !slices.Equal(got, []string{"john@example.org", "joan@example.org", "jody@example.org"}) {
+		t.Errorf("jo offers %v", got)
+	}
+	if got := suggest("al"); len(got) != 1 || got[0].Name != "Alice S." || got[0].Sent != 1 || got[0].Received != 1 ||
+		got[0].Address().String() != "Alice S. <alice@example.org>" {
+		t.Errorf("al offers %+v", got)
+	}
+	if got := suggest("JOHN"); len(got) != 1 || got[0].Sent != 1 || !got[0].LastSent.Equal(now) {
+		t.Errorf("john = %+v", got)
+	}
+	if got := emails(suggest("er")); !slices.Equal(got, []string{"erin@example.org"}) {
+		t.Errorf("er offers %v", got)
+	}
+	for _, typed := range []string{"shop", "no-reply", "joe", "prize", "ann"} {
+		if got := suggest(typed); len(got) != 0 {
+			t.Errorf("%s offers %+v", typed, got)
+		}
+	}
+	check, err := svc.CheckRecipients(ctx, "Jo, Joan, john@example.org, Zed, bob@")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var kinds []RecipientKind
+	for _, p := range check.Problems {
+		kinds = append(kinds, p.Kind)
+	}
+	if check.OK() || !slices.Equal(kinds, []RecipientKind{RecipientAmbiguous, RecipientMatch, RecipientUnknown, RecipientInvalid}) ||
+		len(check.Problems[0].Matches) != 3 || check.Problems[1].Matches[0].Email != "joan@example.org" ||
+		len(check.Addresses) != 1 || check.Addresses[0].Email != "john@example.org" {
+		t.Errorf("check = %+v", check)
+	}
+
+	// Edits show at once.
+	if _, err := svc.RenameContact(ctx, "Joan@example.org", "Joanie Report"); err != nil {
+		t.Fatal(err)
+	}
+	if got := emails(suggest("joanie")); !slices.Equal(got, []string{"joan@example.org"}) || len(suggest("frequent")) != 0 {
+		t.Errorf("after a rename joanie offers %v", got)
+	}
+	if err := svc.DeleteContact(ctx, "jody@example.org"); err != nil {
+		t.Fatal(err)
+	}
+	if got := emails(suggest("jo")); !slices.Equal(got, []string{"john@example.org", "joan@example.org"}) {
+		t.Errorf("after a deletion jo offers %v", got)
+	}
+	letter("INBOX", "Jody Oneoff <jody@example.org>", "Hello again", 0)
+	sync("INBOX")
+	if got := suggest("jody"); len(got) != 0 {
+		t.Errorf("mail from a deleted contact brought it back: %+v", got)
+	}
+	send(Outgoing{To: []Address{{Name: "Jody", Email: "jody@example.org"}}, Subject: "Back", Text: "Hi"})
+	if got := suggest("jody"); len(got) != 1 || got[0].Sent != 1 || got[0].Received != 0 {
+		t.Errorf("written to again, jody = %+v", got)
+	}
+}
+
 // ScheduleScenario sends with a delay on store, as the app does on its
 // database: a draft from an alias, with a blind copy and a file, is
 // scheduled and taken back, then scheduled again and sent as its delay

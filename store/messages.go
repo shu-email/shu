@@ -231,7 +231,14 @@ func (s *Store) SaveMessage(ctx context.Context, accountID, folder string, m mai
 				a.Part, a.Filename, a.ContentType, a.Size, a.ContentHash, a.CachePath, folderID, int64(m.UID)))
 		}
 	}
-	return s.transaction(ctx, append(stmts, plan.after()...))
+	stmts = append(stmts, plan.after()...)
+	if id != 0 {
+		// The body of a row written before, which counted its message.
+		return s.transaction(ctx, stmts)
+	}
+	return s.writeCounting(ctx, stmts, func() ([]stmtType, error) {
+		return s.countFolder(ctx, folderID, []mail.Message{m})
+	})
 }
 
 // ApplySync writes one folder sync batch and advances its cursor, all or
@@ -317,7 +324,9 @@ func (s *Store) ApplySync(ctx context.Context, accountID string, b mail.SyncBatc
 			WHERE id = ?`,
 		int64(b.Folder.UIDValidity), int64(b.Folder.LastUID), b.Folder.Unread, b.Folder.Total,
 		unixPtr(b.Folder.SyncedAt), boolInt(b.Folder.Complete), folderID))
-	return s.transaction(ctx, append(stmts, plan.after()...))
+	return s.writeCounting(ctx, append(stmts, plan.after()...), func() ([]stmtType, error) {
+		return s.countFolder(ctx, folderID, b.Messages)
+	})
 }
 
 // upsertHeader writes the header a fetch read of a message, in its
@@ -392,7 +401,9 @@ func (s *Store) ApplyOlder(ctx context.Context, accountID string, b mail.OlderBa
 		stmts = append(stmts, upsertHeader(folderID, m, plan.find(threads[i])))
 	}
 	stmts = append(stmts, stmt(`UPDATE folders SET complete = ? WHERE id = ?`, boolInt(b.Complete), folderID))
-	return s.transaction(ctx, append(stmts, plan.after()...))
+	return s.writeCounting(ctx, append(stmts, plan.after()...), func() ([]stmtType, error) {
+		return s.countFolder(ctx, folderID, b.Messages)
+	})
 }
 
 // SetFlag updates a flag and, for \Seen, adjusts the folder's unread

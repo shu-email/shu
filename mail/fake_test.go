@@ -47,6 +47,11 @@ type memStore struct {
 	// of older mail has read what the cache holds, before it writes.
 	olderWrites int
 	afterUIDs   func()
+	// contacts is the address book by contact key, and counted the keys
+	// of the messages counted in it, kept by the rules the SQLite store
+	// keeps them by.
+	contacts map[string]*ContactState
+	counted  map[string]bool
 }
 
 // memMark is a folder's watermark.
@@ -66,6 +71,8 @@ func newMemStore() *memStore {
 		drafts:     map[string]Draft{},
 		draftOrder: map[string]int{},
 		tombs:      map[string]bool{},
+		contacts:   map[string]*ContactState{},
+		counted:    map[string]bool{},
 	}
 }
 
@@ -673,6 +680,7 @@ func (s *memStore) ApplyOlder(ctx context.Context, accountID string, b OlderBatc
 		}
 		f.Complete = b.Complete
 		s.olderWrites++
+		s.countFolderLocked(accountID, b.Folder, b.Messages)
 		return nil
 	}
 	return ErrNotFound
@@ -697,7 +705,8 @@ func (s *memStore) SaveMessage(ctx context.Context, accountID, folder string, m 
 		s.messages[key] = map[UID]Message{}
 	}
 	m.BodyCached = true
-	if old, ok := s.messages[key][m.UID]; ok && m.Seen && !old.Seen {
+	old, ok := s.messages[key][m.UID]
+	if ok && m.Seen && !old.Seen {
 		for i := range s.folders[accountID] {
 			if s.folders[accountID][i].Name == folder {
 				s.folders[accountID][i].Unread = max(0, s.folders[accountID][i].Unread-1)
@@ -705,6 +714,9 @@ func (s *memStore) SaveMessage(ctx context.Context, accountID, folder string, m 
 		}
 	}
 	s.messages[key][m.UID] = m
+	if !ok {
+		s.countFolderLocked(accountID, folder, []Message{m})
+	}
 	return nil
 }
 
@@ -771,6 +783,7 @@ func (s *memStore) ApplySync(ctx context.Context, accountID string, b SyncBatch)
 	if !found {
 		s.folders[accountID] = append(s.folders[accountID], b.Folder)
 	}
+	s.countFolderLocked(accountID, b.Folder.Name, b.Messages)
 	return nil
 }
 
@@ -876,6 +889,14 @@ func (s *memStore) SetOutboxState(ctx context.Context, id, state, lastError stri
 	p, ok := s.outbox[id]
 	if !ok {
 		return ErrNotFound
+	}
+	if state == StateSent && p.State != StateSent {
+		at := p.CreatedAt
+		if p.DueAt.After(at) {
+			at = p.DueAt
+		}
+		s.countLocked(ContactMessageKey(p.Envelope.MessageID, p.Envelope.From.Email, at, p.Envelope.Subject),
+			SentContacts(p.Envelope, at, s.ownLocked()))
 	}
 	p.State = state
 	p.LastError = lastError
@@ -1034,6 +1055,151 @@ func (s *memStore) DeleteDraft(ctx context.Context, id string) error {
 	defer s.mu.Unlock()
 	delete(s.drafts, id)
 	return nil
+}
+
+// ownLocked reports whether an address is one of the user's, as the
+// SQLite store reads them: the accounts' and their identities'.
+func (s *memStore) ownLocked() func(string) bool {
+	own := map[string]bool{}
+	for _, a := range s.accounts {
+		own[ContactKey(a.Email)] = true
+	}
+	for _, id := range s.identities {
+		own[ContactKey(id.Email)] = true
+	}
+	return func(email string) bool { return own[ContactKey(email)] }
+}
+
+// countLocked counts a message in the address book, once ever.
+func (s *memStore) countLocked(key string, events []ContactEvent) {
+	if len(events) == 0 || s.counted[key] {
+		return
+	}
+	s.counted[key] = true
+	for _, e := range events {
+		c := s.contacts[ContactKey(e.Email)]
+		if c == nil {
+			c = &ContactState{}
+		}
+		if c.Apply(e) {
+			s.contacts[ContactKey(e.Email)] = c
+		}
+	}
+}
+
+// countFolderLocked counts the messages written into a folder, as the
+// SQLite store does: none of the Junk and Drafts folders.
+func (s *memStore) countFolderLocked(accountID, folder string, msgs []Message) {
+	for _, f := range s.folders[accountID] {
+		if f.Name == folder && (f.SpecialUse == SpecialJunk || f.SpecialUse == SpecialDrafts) {
+			return
+		}
+	}
+	own := s.ownLocked()
+	for _, m := range msgs {
+		s.countLocked(ContactMessageKey(m.MessageID, m.From.Email, m.Date, m.Subject), MessageContacts(m, own, time.Now()))
+	}
+}
+
+// memRanksBefore orders the address book as the SQLite store does.
+func memRanksBefore(ka string, a *ContactState, kb string, b *ContactState) bool {
+	tier := func(c *ContactState) bool { return c.Sent > 0 || c.Added }
+	score := func(c *ContactState) float64 {
+		if tier(c) {
+			return c.SentScore
+		}
+		return c.ReceivedScore
+	}
+	switch {
+	case a.Favorite != b.Favorite:
+		return a.Favorite
+	case tier(a) != tier(b):
+		return tier(a)
+	case score(a) != score(b):
+		return score(a) > score(b)
+	case a.ReceivedScore != b.ReceivedScore:
+		return a.ReceivedScore > b.ReceivedScore
+	}
+	return ka < kb
+}
+
+func (s *memStore) Contacts(ctx context.Context, q ContactQuery) ([]Contact, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	own := s.ownLocked()
+	excluded := map[string]bool{}
+	for _, email := range q.Exclude {
+		excluded[ContactKey(email)] = true
+	}
+	var keys []string
+	for key, c := range s.contacts {
+		if c.Deleted || own(c.Email) || excluded[key] {
+			continue
+		}
+		terms := ContactTerms(c.Name, c.Email)
+		found := true
+		for _, w := range q.Words {
+			found = found && slices.ContainsFunc(terms, func(t string) bool { return strings.HasPrefix(t, w) })
+		}
+		if found {
+			keys = append(keys, key)
+		}
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return memRanksBefore(keys[i], s.contacts[keys[i]], keys[j], s.contacts[keys[j]])
+	})
+	keys = keys[min(max(q.Offset, 0), len(keys)):]
+	if q.Limit > 0 && len(keys) > q.Limit {
+		keys = keys[:q.Limit]
+	}
+	out := []Contact{}
+	for _, key := range keys {
+		out = append(out, s.contacts[key].Contact())
+	}
+	return out, nil
+}
+
+func (s *memStore) AddContact(ctx context.Context, name, email string) (Contact, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.ownLocked()(email) {
+		return Contact{}, ErrContactOwn
+	}
+	c := s.contacts[ContactKey(email)]
+	if c != nil && !c.Deleted {
+		return Contact{}, ErrContactExists
+	}
+	if c == nil {
+		c = &ContactState{}
+		s.contacts[ContactKey(email)] = c
+	}
+	c.Add(name, email)
+	return c.Contact(), nil
+}
+
+// editContact changes a contact of the book: one there and not deleted.
+func (s *memStore) editContact(email string, edit func(*ContactState)) (Contact, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c := s.contacts[ContactKey(email)]
+	if c == nil || c.Deleted {
+		return Contact{}, ErrNotFound
+	}
+	edit(c)
+	return c.Contact(), nil
+}
+
+func (s *memStore) RenameContact(ctx context.Context, email, name string) (Contact, error) {
+	return s.editContact(email, func(c *ContactState) { c.Rename(name) })
+}
+
+func (s *memStore) FavoriteContact(ctx context.Context, email string, on bool) (Contact, error) {
+	return s.editContact(email, func(c *ContactState) { c.Favorite = on })
+}
+
+func (s *memStore) DeleteContact(ctx context.Context, email string, at time.Time) error {
+	_, err := s.editContact(email, func(c *ContactState) { c.Forget(at) })
+	return err
 }
 
 // memSecrets is an in-memory keychain.

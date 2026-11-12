@@ -25,6 +25,13 @@ type Store struct {
 	// window syncs and body fetches write at once, and two that read
 	// the same keys must not each make a conversation of them.
 	threadMu sync.Mutex
+	// contactMu makes each write of the address book one step with the
+	// reads it is worked out from (see contacts.go). Where both are held,
+	// threadMu is taken first.
+	contactMu sync.Mutex
+	// now is the clock a message's date counts no later than in the
+	// address book. Tests replace it.
+	now func() time.Time
 }
 
 // stmtType is one statement of a transaction.
@@ -290,13 +297,53 @@ var migrations = [][]string{
 		`ALTER TABLE outbox ADD COLUMN due_at INTEGER`,
 		`ALTER TABLE outbox ADD COLUMN draft_id TEXT NOT NULL DEFAULT ''`,
 	},
+	// v11: the address book (see mail.ContactState). A contact is an
+	// address, one whatever its case, key being it in lower case, across
+	// the accounts: the name kept for it and where that came from, whether
+	// the user made it a favorite, added it or deleted it, and the
+	// messages the user wrote to it and those it wrote, how many, the
+	// newest date, and their weights added up, which rank it. A deleted
+	// contact keeps its row, with its address alone, so that its mail
+	// does not bring it back. contacts_rank is the order of the book.
+	// contact_terms holds the terms each live contact is found by, read by
+	// prefix, and contact_messages the key of every message counted, so
+	// that none counts twice. backfillContacts makes the book of the mail
+	// cached and sent before.
+	{
+		`CREATE TABLE contacts (
+			key TEXT PRIMARY KEY,
+			address TEXT NOT NULL,
+			name TEXT NOT NULL DEFAULT '',
+			name_from INTEGER NOT NULL DEFAULT 0,
+			name_at INTEGER NOT NULL DEFAULT 0,
+			favorite INTEGER NOT NULL DEFAULT 0,
+			added INTEGER NOT NULL DEFAULT 0,
+			deleted INTEGER NOT NULL DEFAULT 0,
+			forgot_at INTEGER NOT NULL DEFAULT 0,
+			sent INTEGER NOT NULL DEFAULT 0,
+			sent_at INTEGER NOT NULL DEFAULT 0,
+			sent_score REAL NOT NULL DEFAULT 0,
+			received INTEGER NOT NULL DEFAULT 0,
+			received_at INTEGER NOT NULL DEFAULT 0,
+			received_score REAL NOT NULL DEFAULT 0) WITHOUT ROWID`,
+		`CREATE INDEX contacts_rank ON contacts (favorite DESC, (sent > 0 OR added) DESC,
+			(CASE WHEN sent > 0 OR added THEN sent_score ELSE received_score END) DESC,
+			received_score DESC, key) WHERE deleted = 0`,
+		`CREATE TABLE contact_terms (
+			term TEXT NOT NULL,
+			key TEXT NOT NULL,
+			PRIMARY KEY (term, key)) WITHOUT ROWID`,
+		`CREATE INDEX contact_terms_key ON contact_terms (key, term)`,
+		`CREATE TABLE contact_messages (key TEXT PRIMARY KEY) WITHOUT ROWID`,
+	},
 }
 
 // backfills compute, from the rows of the version before, statements a
 // migration runs in its transaction after its own, keyed by the version
 // it migrates to.
 var backfills = map[int]func(context.Context, *Store) ([]sqlite.Statement, error){
-	6: backfillThreads,
+	6:  backfillThreads,
+	11: backfillContacts,
 }
 
 // SchemaVersion is the version Open migrates to.
@@ -316,7 +363,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Store{db: db}
+	s := &Store{db: db, now: time.Now}
 	if err := s.init(ctx); err != nil {
 		db.Close()
 		return nil, err
@@ -446,6 +493,17 @@ func blob(v any) []byte {
 // truth reads a boolean column.
 func truth(v any) bool { return number(v) != 0 }
 
+// realNumber reads a floating-point column.
+func realNumber(v any) float64 {
+	switch x := v.(type) {
+	case float64:
+		return x
+	case int64:
+		return float64(x)
+	}
+	return 0
+}
+
 // unix reads a timestamp column, zero when null.
 func unix(v any) time.Time {
 	n := number(v)
@@ -453,6 +511,14 @@ func unix(v any) time.Time {
 		return time.Time{}
 	}
 	return time.Unix(n, 0)
+}
+
+// unixUTC is unix in UTC.
+func unixUTC(v any) time.Time {
+	if t := unix(v); !t.IsZero() {
+		return t.UTC()
+	}
+	return time.Time{}
 }
 
 // unixPtr writes a timestamp column, nil for the zero time.

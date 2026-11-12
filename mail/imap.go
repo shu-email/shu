@@ -572,12 +572,7 @@ func (s *Service) syncSelected(ctx context.Context, c *imapSession, accountID, f
 		},
 		Reset: reset,
 	}
-	if status.NumMessages != nil {
-		batch.Folder.Total = int(*status.NumMessages)
-	}
-	if status.NumUnseen != nil {
-		batch.Folder.Unread = int(*status.NumUnseen)
-	}
+	setCounts(&batch.Folder, status)
 	total := uint32(batch.Folder.Total)
 
 	var set imap.NumSet
@@ -619,6 +614,19 @@ func (s *Service) syncSelected(ctx context.Context, c *imapSession, accountID, f
 			}
 		}
 	}
+	if len(batch.Messages) > 0 {
+		// Mail that reached the folder after the STATUS above was fetched
+		// with the rest, and the counts it gave leave that out: the batch
+		// would write an unread message its folder does not count, and a
+		// watcher announce it beside that count. They are read again now
+		// that the new mail is in.
+		status, err := c.client.Status(folder, &imap.StatusOptions{NumMessages: true, NumUnseen: true}).Wait()
+		if err != nil {
+			return 0, fmt.Errorf("imap: status %s: %w", folder, err)
+		}
+		setCounts(&batch.Folder, status)
+		total = uint32(batch.Folder.Total)
+	}
 	if !reset && hasCached {
 		if batch.Folder.LastUID < cached.LastUID {
 			batch.Folder.LastUID = cached.LastUID
@@ -643,6 +651,16 @@ func (s *Service) syncSelected(ctx context.Context, c *imapSession, accountID, f
 		addPreviews(c, set, batch.Messages)
 	}
 	return len(batch.Messages), s.store.ApplySync(ctx, accountID, batch)
+}
+
+// setCounts takes a folder's counts from what a STATUS said of it.
+func setCounts(f *Folder, status *imap.StatusData) {
+	if status.NumMessages != nil {
+		f.Total = int(*status.NumMessages)
+	}
+	if status.NumUnseen != nil {
+		f.Unread = int(*status.NumUnseen)
+	}
 }
 
 // addPreviews fetches the start of the body of each message of set and

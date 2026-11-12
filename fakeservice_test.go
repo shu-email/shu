@@ -75,6 +75,15 @@ type fakeService struct {
 	onSend      func(ctx context.Context, out mail.Outgoing) error
 	attachCalls []string
 	sweeps      int
+
+	// Watching. watching is each watched account's report, which a test
+	// calls as the engine's watcher would; watchLog is every call that
+	// starts, stops or wakes a watcher, in order.
+	watching    map[string]func(mail.WatchEvent)
+	watchLog    []string
+	settings    mail.Settings
+	settingsErr error
+	saved       []mail.Settings
 }
 
 func newFakeService() *fakeService {
@@ -87,6 +96,8 @@ func newFakeService() *fakeService {
 		replaced:  map[string]bool{},
 		draftBase: time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC),
 		draftUID:  500,
+		watching:  map[string]func(mail.WatchEvent){},
+		settings:  mail.DefaultSettings(),
 	}
 }
 
@@ -731,3 +742,41 @@ func itoa(uid mail.UID) string {
 var _ mailService = (*fakeService)(nil)
 
 var errFake = errors.New("fake error")
+
+func (f *fakeService) Watch(accountID string, report func(mail.WatchEvent)) {
+	f.watchLog = append(f.watchLog, "watch "+accountID)
+	f.watching[accountID] = report
+}
+
+func (f *fakeService) Unwatch(accountID string) {
+	f.watchLog = append(f.watchLog, "unwatch "+accountID)
+	delete(f.watching, accountID)
+}
+
+func (f *fakeService) Nudge() { f.watchLog = append(f.watchLog, "nudge") }
+
+func (f *fakeService) SetOnline(online bool) {
+	if online {
+		f.watchLog = append(f.watchLog, "online")
+	} else {
+		f.watchLog = append(f.watchLog, "offline")
+	}
+}
+
+func (f *fakeService) Settings(ctx context.Context) (mail.Settings, error) {
+	set := f.settings
+	set.Muted = map[string]bool{}
+	for id, muted := range f.settings.Muted {
+		set.Muted[id] = muted
+	}
+	return set, nil
+}
+
+func (f *fakeService) SaveSettings(ctx context.Context, s mail.Settings) error {
+	if f.settingsErr != nil {
+		return f.settingsErr
+	}
+	f.settings = s
+	f.saved = append(f.saved, s)
+	return nil
+}

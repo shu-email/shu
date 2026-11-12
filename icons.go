@@ -53,4 +53,5 @@ var (
 	mailOpenIcon    = mustIcon("mail-open")
 	sparklesIcon    = mustIcon("sparkles")
 	copyIcon        = mustIcon("copy")
+	offlineIcon     = mustIcon("wifi-off")
 )

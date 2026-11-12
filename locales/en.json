@@ -775,5 +775,52 @@
         "example": "42"
       }
     }
-  }
+  },
+  "newMailCount": "{count, plural, one {# new message} other {# new messages}}",
+  "@newMailCount": {
+    "description": "The text of a notification that says how many messages arrived, under the account's name.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "watchUpToDate": "Up to date",
+  "watchCheckedAt": "Up to date · checked {time}",
+  "@watchCheckedAt": {
+    "description": "The sidebar footer: mail was last checked at this time, written as the message list writes times.",
+    "placeholders": {
+      "time": {
+        "type": "String",
+        "example": "9:41 AM"
+      }
+    }
+  },
+  "watchConnecting": "Checking for mail…",
+  "watchRetryNetwork": "Can't reach the mail server. Trying again soon.",
+  "watchRetryAuth": "The mail server refused the sign-in. Trying again later.",
+  "watchRetryOther": "Couldn't check for mail. Trying again soon.",
+  "watchOffline": "Offline. Mail is checked once you're back online.",
+  "checkMail": "Checking for mail",
+  "checkEvery": "Check for new mail every",
+  "checkMinutes": "{count} min",
+  "@checkMinutes": {
+    "description": "A choice of how often mail is checked, in minutes.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "5"
+      }
+    }
+  },
+  "checkEveryDetail": "Mail servers that can push deliver new mail right away. Folders and unread counts, and servers that can't push, are checked this often.",
+  "notifications": "Notifications",
+  "notifyNewMail": "Notify me about new mail",
+  "notifyNewMailDetail": "Shown as system notifications, which follow Do Not Disturb and Focus.",
+  "notifyDetails": "Show sender and subject",
+  "notifyDetailsDetail": "When off, a notification only says which account got how many new messages.",
+  "notifyAccounts": "Notify for these accounts",
+  "notifyDenied": "Notifications are turned off for Shu in the system's settings.",
+  "settingsSaveFailed": "Couldn't save the settings."
 }

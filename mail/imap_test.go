@@ -277,8 +277,12 @@ func TestSetFlagAndMove(t *testing.T) {
 	if !m.Flagged {
 		t.Error("flag was not cached")
 	}
-	if err := svc.Move(ctx, a.ID, "INBOX", uid, "Archive"); err != nil {
+	moved, err := svc.Move(ctx, a.ID, "INBOX", uid, "Archive")
+	if err != nil {
 		t.Fatal(err)
+	}
+	if moved.Folder != "Archive" || moved.DestUID == 0 {
+		t.Errorf("move result = %+v", moved)
 	}
 	if msgs, _ := svc.CachedMessages(ctx, a.ID, "INBOX", "", 50); len(msgs) != 0 {
 		t.Errorf("moved message remains: %+v", msgs)
@@ -289,6 +293,16 @@ func TestSetFlagAndMove(t *testing.T) {
 	}
 	if msgs, _ := svc.CachedMessages(ctx, a.ID, "Archive", "", 50); len(msgs) != 1 {
 		t.Errorf("archive = %+v", msgs)
+	}
+	// Undo takes the destination UID and brings the message back.
+	if err := svc.MoveBack(ctx, a.ID, "Archive", "INBOX", moved.DestUID); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SyncFolder(ctx, a.ID, "INBOX", 50); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := svc.CachedMessages(ctx, a.ID, "INBOX", "", 50); len(got) != 1 {
+		t.Errorf("inbox after undo = %+v", got)
 	}
 }
 
@@ -307,7 +321,7 @@ func TestMoveFallsBackWithoutMOVE(t *testing.T) {
 		t.Fatal(err)
 	}
 	msgs, _ := svc.CachedMessages(ctx, a.ID, "INBOX", "", 50)
-	if err := svc.Move(ctx, a.ID, "INBOX", msgs[0].UID, "Trash"); err != nil {
+	if _, err := svc.Move(ctx, a.ID, "INBOX", msgs[0].UID, "Trash"); err != nil {
 		t.Fatal(err)
 	}
 	if err := svc.SyncFolder(ctx, a.ID, "Trash", 50); err != nil {

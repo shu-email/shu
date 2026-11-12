@@ -549,37 +549,55 @@ func setFlags(c *imapSession, folder string, uid UID, flag Flag, on bool) error 
 
 // moveOnServer moves one message, preferring MOVE and falling back to
 // COPY plus delete and expunge.
-func (s *Service) moveOnServer(ctx context.Context, a Account, password, folder string, uid UID, dest string) error {
+func (s *Service) moveOnServer(ctx context.Context, a Account, password, folder string, uid UID, dest string) (MoveResult, error) {
+	result := MoveResult{Folder: dest}
 	c, err := s.dialIMAP(ctx, a, password)
 	if err != nil {
-		return err
+		return result, err
 	}
 	defer c.close()
 	if _, err := c.client.Select(folder, nil).Wait(); err != nil {
-		return fmt.Errorf("imap: select %s: %w", folder, err)
+		return result, fmt.Errorf("imap: select %s: %w", folder, err)
 	}
 	var set imap.UIDSet
 	set.AddNum(imap.UID(uid))
 	if c.capHas(imap.CapMove) {
-		if _, err := c.client.Move(set, dest).Wait(); err != nil {
-			return fmt.Errorf("imap: move: %w", err)
+		data, err := c.client.Move(set, dest).Wait()
+		if err != nil {
+			return result, fmt.Errorf("imap: move: %w", err)
 		}
-		return nil
+		result.DestUID = firstUID(data.DestUIDs)
+		return result, nil
 	}
-	if _, err := c.client.Copy(set, dest).Wait(); err != nil {
-		return fmt.Errorf("imap: copy: %w", err)
+	data, err := c.client.Copy(set, dest).Wait()
+	if err != nil {
+		return result, fmt.Errorf("imap: copy: %w", err)
 	}
+	result.DestUID = firstUID(data.DestUIDs)
 	cmd := c.client.Store(set, &imap.StoreFlags{Op: imap.StoreFlagsAdd, Silent: true, Flags: []imap.Flag{imap.FlagDeleted}}, nil)
 	if err := cmd.Close(); err != nil {
-		return fmt.Errorf("imap: mark deleted: %w", err)
+		return result, fmt.Errorf("imap: mark deleted: %w", err)
 	}
 	if c.capHas(imap.CapUIDPlus) {
 		if err := c.client.UIDExpunge(set).Close(); err != nil {
-			return fmt.Errorf("imap: expunge: %w", err)
+			return result, fmt.Errorf("imap: expunge: %w", err)
 		}
-		return nil
+		return result, nil
 	}
-	return c.client.Expunge().Close()
+	return result, c.client.Expunge().Close()
+}
+
+// firstUID reads the one UID a COPY or MOVE response reported.
+func firstUID(set imap.NumSet) UID {
+	uids, ok := set.(imap.UIDSet)
+	if !ok {
+		return 0
+	}
+	nums, ok := uids.Nums()
+	if !ok || len(nums) == 0 {
+		return 0
+	}
+	return UID(nums[0])
 }
 
 // appendTo appends a raw message to a folder.

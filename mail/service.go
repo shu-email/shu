@@ -274,22 +274,37 @@ func (s *Service) SetFlag(ctx context.Context, accountID, folder string, uid UID
 
 // Move archives, junks or deletes a message: the cache row is a tombstone
 // until the server confirms the move.
-func (s *Service) Move(ctx context.Context, accountID, folder string, uid UID, dest string) error {
+func (s *Service) Move(ctx context.Context, accountID, folder string, uid UID, dest string) (MoveResult, error) {
 	if dest == "" {
-		return errors.New("mail: the destination folder is empty")
+		return MoveResult{}, errors.New("mail: the destination folder is empty")
+	}
+	a, password, err := s.account(ctx, accountID)
+	if err != nil {
+		return MoveResult{}, err
+	}
+	if err := s.store.MarkDeleted(ctx, accountID, folder, uid, true); err != nil {
+		return MoveResult{}, err
+	}
+	result, err := s.moveOnServer(ctx, a, password, folder, uid, dest)
+	if err != nil {
+		_ = s.store.MarkDeleted(ctx, accountID, folder, uid, false)
+		return MoveResult{}, err
+	}
+	return result, s.store.DeleteMessage(ctx, accountID, folder, uid)
+}
+
+// MoveBack undoes a move when the server reported the destination UID.
+// The caller syncs the source folder to restore its cache row.
+func (s *Service) MoveBack(ctx context.Context, accountID, from, to string, uid UID) error {
+	if uid == 0 {
+		return errors.New("mail: the moved message has no destination UID")
 	}
 	a, password, err := s.account(ctx, accountID)
 	if err != nil {
 		return err
 	}
-	if err := s.store.MarkDeleted(ctx, accountID, folder, uid, true); err != nil {
-		return err
-	}
-	if err := s.moveOnServer(ctx, a, password, folder, uid, dest); err != nil {
-		_ = s.store.MarkDeleted(ctx, accountID, folder, uid, false)
-		return err
-	}
-	return s.store.DeleteMessage(ctx, accountID, folder, uid)
+	_, err = s.moveOnServer(ctx, a, password, from, uid, to)
+	return err
 }
 
 // Attachment returns an attachment's bytes, from the disk cache or by

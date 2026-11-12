@@ -124,5 +124,8 @@
   "markRead": "标记为已读",
   "markUnread": "标记为未读",
   "composeBodyPlaceholder": "写点什么…",
-  "shortcutsHint": "J / K 移动 · E 归档 · S 星标 · U 未读 · R 回复"
+  "shortcutsHint": "J / K 移动 · E 归档 · S 星标 · U 未读 · R 回复",
+  "undo": "撤销",
+  "selectedCount": "{count, plural, other {已选择 # 封邮件}}",
+  "clearSelection": "清除选择"
 }

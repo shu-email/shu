@@ -18,6 +18,9 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 			BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
 			a.listHeader(c, t)
 		})
+		if a.undo != nil {
+			a.undoBanner(c, t)
+		}
 		if a.err != "" {
 			a.errorBanner(c, t)
 		}
@@ -41,6 +44,7 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 			return m.From.Name + " " + m.Subject
 		}
 		a.list.Selected = &a.selected
+		a.list.Selection = &a.sel
 		ui.List(c, &a.list, len(a.all)).Grow(1).
 			OnChange(func() {
 				a.bodyErr = ""
@@ -62,14 +66,24 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 func (a *app) listHeader(c *ui.Context, t *ui.Theme) {
 	query := strings.TrimSpace(a.query)
 	title := a.folderLabel(a.folder)
-	if query != "" {
+	chosen := a.sel.Len()
+	switch {
+	case chosen > 1:
+		title = locales.SelectedCount(chosen)
+	case query != "":
 		title = locales.SearchResults()
 	}
 	ui.Text(c, title).FontSize(17).Bold().SingleLine()
-	if query != "" {
+	switch {
+	case chosen > 1:
+		ui.Spacer(c)
+		ui.Button(c, locales.ClearSelection()).OnClick(func() { a.sel.Clear() })
+	case query != "":
 		ui.Badge(c, fmt.Sprint(len(a.all))).Background(t.Surface).TextColor(t.TextMuted)
-	} else if n := a.unread(); n > 0 {
-		ui.Badge(c, fmt.Sprint(n)).Background(t.Accent).TextColor(t.AccentText)
+	default:
+		if n := a.unread(); n > 0 {
+			ui.Badge(c, fmt.Sprint(n)).Background(t.Accent).TextColor(t.AccentText)
+		}
 	}
 	ui.Spacer(c)
 	if a.loading {
@@ -102,6 +116,19 @@ func (a *app) emptyState() string {
 	default:
 		return locales.EmptyFolder()
 	}
+}
+
+// undoBanner offers to take back the last archive, junk or delete.
+func (a *app) undoBanner(c *ui.Context, t *ui.Theme) {
+	ui.Row(c).Shrink(0).Gap(8).AlignItems(ui.Center).Padding(8, 14).
+		Background(t.Success.Alpha(0.10)).Children(func() {
+		ui.Icon(c, checkIcon).FontSize(14).TextColor(t.Success)
+		ui.Text(c, a.undo.label).FontSize(12).Bold().Grow(1)
+		ui.Button(c, locales.Undo()).Label(locales.Undo()).
+			OnClick(func() { a.undoLastMove() })
+		a.iconButton(c, closeIcon, locales.Dismiss(), locales.Dismiss()).
+			OnClick(func() { a.undo = nil })
+	})
 }
 
 // errorBanner shows the last failure with a retry action.

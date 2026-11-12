@@ -227,5 +227,16 @@
   "markRead": "Mark read",
   "markUnread": "Mark unread",
   "composeBodyPlaceholder": "Write a message…",
-  "shortcutsHint": "J / K move · E archive · S star · U unread · R reply"
+  "shortcutsHint": "J / K move · E archive · S star · U unread · R reply",
+  "undo": "Undo",
+  "selectedCount": "{count, plural, one {# message selected} other {# messages selected}}",
+  "clearSelection": "Clear selection",
+  "@selectedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  }
 }

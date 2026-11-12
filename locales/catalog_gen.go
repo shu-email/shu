@@ -1375,3 +1375,87 @@ func SearchClear() string { return In(i18n.Locale()).SearchClear() }
 func (msgs Messages) SearchClear() string {
 	return Catalog.Format(msgs.locale, "searchClear", nil)
 }
+
+// HideSidebar says "Hide sidebar"
+// in the language the app shows.
+func HideSidebar() string { return In(i18n.Locale()).HideSidebar() }
+
+// HideSidebar says "Hide sidebar"
+// in the language of msgs.
+func (msgs Messages) HideSidebar() string {
+	return Catalog.Format(msgs.locale, "hideSidebar", nil)
+}
+
+// ShowSidebar says "Show sidebar"
+// in the language the app shows.
+func ShowSidebar() string { return In(i18n.Locale()).ShowSidebar() }
+
+// ShowSidebar says "Show sidebar"
+// in the language of msgs.
+func (msgs Messages) ShowSidebar() string {
+	return Catalog.Format(msgs.locale, "showSidebar", nil)
+}
+
+// MailboxSummary says "{messages} messages · {unread} unread"
+// in the language the app shows.
+func MailboxSummary(messages int, unread int) string {
+	return In(i18n.Locale()).MailboxSummary(messages, unread)
+}
+
+// MailboxSummary says "{messages} messages · {unread} unread"
+// in the language of msgs.
+func (msgs Messages) MailboxSummary(messages int, unread int) string {
+	return Catalog.Format(msgs.locale, "mailboxSummary", map[string]any{"messages": messages, "unread": unread})
+}
+
+// SidebarSummary says "{unread} unread · {total} messages"
+// in the language the app shows.
+func SidebarSummary(unread int, total int) string {
+	return In(i18n.Locale()).SidebarSummary(unread, total)
+}
+
+// SidebarSummary says "{unread} unread · {total} messages"
+// in the language of msgs.
+func (msgs Messages) SidebarSummary(unread int, total int) string {
+	return Catalog.Format(msgs.locale, "sidebarSummary", map[string]any{"unread": unread, "total": total})
+}
+
+// Details says "Details"
+// in the language the app shows.
+func Details() string { return In(i18n.Locale()).Details() }
+
+// Details says "Details"
+// in the language of msgs.
+func (msgs Messages) Details() string {
+	return Catalog.Format(msgs.locale, "details", nil)
+}
+
+// HideDetails says "Hide details"
+// in the language the app shows.
+func HideDetails() string { return In(i18n.Locale()).HideDetails() }
+
+// HideDetails says "Hide details"
+// in the language of msgs.
+func (msgs Messages) HideDetails() string {
+	return Catalog.Format(msgs.locale, "hideDetails", nil)
+}
+
+// ReplyTo says "Reply-To"
+// in the language the app shows.
+func ReplyTo() string { return In(i18n.Locale()).ReplyTo() }
+
+// ReplyTo says "Reply-To"
+// in the language of msgs.
+func (msgs Messages) ReplyTo() string {
+	return Catalog.Format(msgs.locale, "replyTo", nil)
+}
+
+// MessageID says "Message-ID"
+// in the language the app shows.
+func MessageID() string { return In(i18n.Locale()).MessageID() }
+
+// MessageID says "Message-ID"
+// in the language of msgs.
+func (msgs Messages) MessageID() string {
+	return Catalog.Format(msgs.locale, "messageID", nil)
+}

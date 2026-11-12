@@ -251,5 +251,37 @@
         "example": "⌘↩"
       }
     }
+  },
+  "hideSidebar": "Hide sidebar",
+  "showSidebar": "Show sidebar",
+  "mailboxSummary": "{messages} messages · {unread} unread",
+  "sidebarSummary": "{unread} unread · {total} messages",
+  "details": "Details",
+  "hideDetails": "Hide details",
+  "replyTo": "Reply-To",
+  "messageID": "Message-ID",
+  "@mailboxSummary": {
+    "placeholders": {
+      "messages": {
+        "type": "int",
+        "example": "342"
+      },
+      "unread": {
+        "type": "int",
+        "example": "256"
+      }
+    }
+  },
+  "@sidebarSummary": {
+    "placeholders": {
+      "unread": {
+        "type": "int",
+        "example": "3"
+      },
+      "total": {
+        "type": "int",
+        "example": "42"
+      }
+    }
   }
 }

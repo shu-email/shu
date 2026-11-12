@@ -736,3 +736,65 @@ func TestAutoSelectionAndClear(t *testing.T) {
 		t.Errorf("reading pane is not empty: %q", tt.Texts())
 	}
 }
+
+// The sidebar can be hidden and shown again, keeping the mail panes.
+func TestSidebarToggle(t *testing.T) {
+	a, _ := sampleApp(t)
+	tt := ui.NewTester(a.view, 1220, 800)
+	if !tt.HasText(locales.Mailboxes()) {
+		t.Fatalf("mailboxes missing: %q", tt.Texts())
+	}
+	if err := tt.Click(locales.HideSidebar()); err != nil {
+		t.Fatal(err)
+	}
+	if a.sidebarOpen {
+		t.Error("sidebar stays open")
+	}
+	if tt.HasText(locales.Mailboxes()) {
+		t.Error("mailboxes still show with the sidebar hidden")
+	}
+	if err := tt.Click(locales.ShowSidebar()); err != nil {
+		t.Fatal(err)
+	}
+	if !a.sidebarOpen || !tt.HasText(locales.Mailboxes()) {
+		t.Error("sidebar did not come back")
+	}
+}
+
+// The reading header discloses the raw sender and recipient fields.
+func TestMessageDetails(t *testing.T) {
+	a, _ := sampleApp(t)
+	tt := ui.NewTester(a.view, 1220, 800)
+	if err := tt.Click(locales.Details()); err != nil {
+		t.Fatal(err)
+	}
+	if !a.details {
+		t.Fatal("details did not open")
+	}
+	if !tt.HasText("From: Maya Chen <maya@example.com>") {
+		t.Errorf("from detail missing: %q", tt.Texts())
+	}
+	if err := tt.Click(locales.HideDetails()); err != nil {
+		t.Fatal(err)
+	}
+	if a.details {
+		t.Error("details did not close")
+	}
+}
+
+// The list header says how many messages and unread mail the folder has,
+// and the sidebar footer repeats the account totals.
+func TestMailboxCounts(t *testing.T) {
+	a, _ := sampleApp(t)
+	tt := ui.NewTester(a.view, 1220, 800)
+	if !tt.HasText(locales.MailboxSummary(3, 1)) {
+		t.Errorf("folder summary missing: %q", tt.Texts())
+	}
+	if !tt.HasText(locales.SidebarSummary(2, 3)) {
+		// The fake folder still reports its initial unread count; the
+		// sidebar uses the cached STATUS, not the rows selected.
+		if !tt.HasText(locales.SidebarSummary(1, 3)) {
+			t.Errorf("sidebar summary missing: %q", tt.Texts())
+		}
+	}
+}

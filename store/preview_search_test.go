@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo/plugins/sqlite"
 
+	"shu/internal/sqlitetest"
 	"shu/mail"
 )
 
@@ -63,9 +64,7 @@ func TestSearchFindsMailByItsPreview(t *testing.T) {
 // A cache made before previews were indexed has its index rebuilt by the
 // upgrade, so the rows already there are found by their previews too.
 func TestMigrationIndexesPreviewsOfAnOlderDatabase(t *testing.T) {
-	if err := sqlite.Load(); err != nil {
-		t.Skipf("sqlite native module is not ready (%v); run go tool mygo generate", err)
-	}
+	sqlitetest.Require(t)
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "shu.db")
 	db, err := sqlite.Open(ctx, path, sqlite.OpenOptions{})

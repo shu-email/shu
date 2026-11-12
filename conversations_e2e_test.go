@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/plugins/sqlite"
 	"github.com/egoist/mygo/ui"
 	"github.com/emersion/go-imap/v2"
 
+	"shu/internal/sqlitetest"
 	"shu/locales"
 	"shu/mail"
 	"shu/store"
@@ -49,9 +49,7 @@ func (s *localIMAP) flagsOf(t *testing.T, mailbox string) map[string]bool {
 // row that opens on all three; archiving it moves exactly its two inbox
 // messages, and Undo brings them back.
 func TestConversationsEndToEnd(t *testing.T) {
-	if err := sqlite.Load(); err != nil {
-		t.Skipf("sqlite native module is not ready (%v); run go tool mygo generate", err)
-	}
+	sqlitetest.Require(t)
 	ctx := context.Background()
 	imapServer := startLocalIMAP(t, "INBOX", "Sent", "Archive", "Trash")
 	for _, put := range [][2]string{{"INBOX", "gmail-1.eml"}, {"Sent", "gmail-2.eml"}, {"INBOX", "gmail-3.eml"}} {

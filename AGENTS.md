@@ -169,7 +169,12 @@ go tool mygo dev          # run the app with the pinned toolchain
 go tool mygo vet .        # check stored elements and goroutine captures
 CGO_ENABLED=0 go test ./... # run the tests
 go tool mygo build        # build a release app
+GOFLAGS=-tags=e2e MYGO_AUTOMATION="$SOCK" go tool mygo dev -background
+                          # run it for go tool mygo-automation to drive
 ```
+
+To check a UI change in the running app, follow
+`.agents/skills/shu-desktop-check/SKILL.md`.
 
 Run `gofmt` on files you change, `go tool mygo vet .` and the tests before
 committing. The test suite must pass without a display, network access or a

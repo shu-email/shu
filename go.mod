@@ -2,7 +2,10 @@ module shu
 
 go 1.27.4
 
-tool github.com/egoist/mygo/cmd/mygo
+tool (
+	github.com/egoist/mygo/cmd/mygo
+	github.com/egoist/mygo/plugins/automation/cmd/mygo-automation
+)
 
 require (
 	github.com/egoist/mygo v0.9.0

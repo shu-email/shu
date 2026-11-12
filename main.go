@@ -1208,13 +1208,24 @@ func (a *app) mailView(c *ui.Context) {
 	ui.Column(c).Fill().Background(t.Background).Children(func() {
 		a.titleBar(c, t, bar, top)
 		panes := ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
+			// The panes are keyed, so that they keep their identity, and
+			// their transitions, as the sidebar comes and goes before them.
 			if a.sidebarOpen {
-				a.sidebar(c, t)
-				ui.Box(c).Width(1).Shrink(0).Background(t.Border)
+				ui.Row(c.Key("sidebar")).Shrink(0).AlignItems(ui.Stretch).ClipX().
+					Transition(sidebarMotion).Children(func() {
+					a.sidebar(c, t)
+					ui.Box(c).Width(1).Shrink(0).Background(t.Border)
+				})
 			}
-			a.messageList(c, t)
-			ui.Box(c).Width(1).Shrink(0).Background(t.Border)
-			a.readingPane(c, t)
+			ui.Row(c.Key("list-pane")).Shrink(0).AlignItems(ui.Stretch).
+				Transition(paneMotion).Children(func() {
+				a.messageList(c, t)
+				ui.Box(c).Width(1).Shrink(0).Background(t.Border)
+			})
+			ui.Row(c.Key("reading-pane")).Grow(1).MinWidth(0).AlignItems(ui.Stretch).
+				Transition(paneMotion).Children(func() {
+				a.readingPane(c, t)
+			})
 		})
 		// Unmodified shortcuts live in the three panes' focus subtree, so
 		// typing in the search field is never taken for a command.

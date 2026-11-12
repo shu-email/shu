@@ -450,7 +450,8 @@ func (a *app) searchBar(c *ui.Context, t *ui.Theme) {
 			a.scopeSeg = i
 		}
 	}
-	ui.Column(c).Shrink(0).Padding(8, 14).Gap(8).BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
+	ui.Column(c.Key("search-bar")).Shrink(0).Padding(8, 14).Gap(8).BorderWidth(0, 0, 1, 0).BorderColor(t.Border).
+		Transition(bannerMotion).Children(func() {
 		ui.Segmented(c, &a.scopeSeg, labels...).FillEqually().Label(locales.SearchScope()).
 			OnChange(func() {
 				if a.scopeSeg >= 0 && a.scopeSeg < len(choices) {

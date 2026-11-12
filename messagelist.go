@@ -43,7 +43,7 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 			a.pendingBanner(c, t)
 		}
 		if msg := a.emptyState(); msg != "" {
-			ui.Column(c).Grow(1).Center().Gap(8).Padding(24, 20).Children(func() {
+			ui.Column(c.Key("empty")).Grow(1).Center().Gap(8).Padding(24, 20).Children(func() {
 				if a.loading {
 					ui.Spinner(c).Size(18, 18)
 				} else {
@@ -106,7 +106,7 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 		a.list.Header = func(i int) bool { return i >= n }
 		a.list.Selected = &a.selected
 		a.list.Selection = &a.sel
-		ui.List(c, &a.list, rows).Grow(1).
+		ui.List(c.Key("messages"), &a.list, rows).Grow(1).Transition(listMotion).
 			OnChange(func() {
 				if a.sel.Len() == 0 {
 					a.selected = -1
@@ -284,8 +284,8 @@ func (a *app) emptyState() string {
 
 // undoBanner offers to take back the last archive, junk or delete.
 func (a *app) undoBanner(c *ui.Context, t *ui.Theme) {
-	ui.Row(c).Shrink(0).Gap(8).AlignItems(ui.Center).Padding(8, 14).
-		Background(t.Success.Alpha(0.10)).Children(func() {
+	ui.Row(c.Key("banner/undo")).Shrink(0).Gap(8).AlignItems(ui.Center).Padding(8, 14).
+		Background(t.Success.Alpha(0.10)).Transition(bannerMotion).Children(func() {
 		ui.Icon(c, checkIcon).FontSize(14).TextColor(t.Success)
 		ui.Text(c, a.undo.label).FontSize(12).Bold().Grow(1)
 		ui.Button(c, locales.Undo()).Label(locales.Undo()).
@@ -297,8 +297,8 @@ func (a *app) undoBanner(c *ui.Context, t *ui.Theme) {
 
 // errorBanner shows the last failure with a retry action.
 func (a *app) errorBanner(c *ui.Context, t *ui.Theme) {
-	ui.Row(c).Shrink(0).Gap(8).AlignItems(ui.Center).Padding(8, 14).
-		Background(t.Warning.Alpha(0.12)).Children(func() {
+	ui.Row(c.Key("banner/error")).Shrink(0).Gap(8).AlignItems(ui.Center).Padding(8, 14).
+		Background(t.Warning.Alpha(0.12)).Transition(bannerMotion).Children(func() {
 		ui.Icon(c, alertIcon).FontSize(14).TextColor(t.Warning)
 		ui.Text(c, a.err).FontSize(12).TextColor(t.Text).Grow(1).MaxLines(2)
 		if ui.Button(c, locales.Retry()).OnClick(func() {
@@ -322,8 +322,8 @@ func (a *app) pendingBanner(c *ui.Context, t *ui.Theme) {
 	if unknown {
 		message = locales.DeliveryUnknown(len(a.pending))
 	}
-	ui.Column(c).Shrink(0).Gap(6).Padding(8, 14).
-		Background(t.Warning.Alpha(0.10)).Children(func() {
+	ui.Column(c.Key("banner/pending")).Shrink(0).Gap(6).Padding(8, 14).
+		Background(t.Warning.Alpha(0.10)).Transition(bannerMotion).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Icon(c, alertIcon).FontSize(14).TextColor(t.Warning)
 			ui.Text(c, message).FontSize(12).Bold().Grow(1)

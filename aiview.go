@@ -651,7 +651,8 @@ func groupLabel(g ai.Group) string {
 // list header.
 func (a *app) triageBanner(c *ui.Context, t *ui.Theme) {
 	s := a.triage
-	ui.Column(c).Shrink(0).Gap(6).Padding(8, 14).Background(t.Accent.Alpha(0.07)).Children(func() {
+	ui.Column(c.Key("banner/triage")).Shrink(0).Gap(6).Padding(8, 14).Background(t.Accent.Alpha(0.07)).
+		Transition(bannerMotion).Children(func() {
 		switch {
 		case s.busy:
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {

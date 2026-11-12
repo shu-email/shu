@@ -17,6 +17,9 @@ import (
 
 func TestMain(m *testing.M) {
 	i18n.SetLocaleFunc(func() string { return "en" })
+	// Most tests click what has just appeared; those of motion turn it
+	// back on (withMotion).
+	restoreMotion = stillMotion()
 	m.Run()
 }
 

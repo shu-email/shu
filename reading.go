@@ -39,7 +39,7 @@ func (a *app) readingPane(c *ui.Context, t *ui.Theme) {
 				subject = locales.NoSubject()
 			}
 		}
-		ui.Scroll(c.Key(summaryKey(*m))).Grow(1).Children(func() {
+		ui.Scroll(c.Key(summaryKey(*m))).Grow(1).Transition(readingMotion).Children(func() {
 			ui.Column(c).Padding(24, 30, 24, 30).Gap(16).MinWidth(0).Children(func() {
 				ui.Column(c).Gap(4).MinWidth(0).Children(func() {
 					ui.Text(c, subject).FontSize(21).Bold().Balance()
@@ -131,7 +131,7 @@ func (a *app) readingToolbar(c *ui.Context, t *ui.Theme) {
 			starButton = starButton.OnClick(func() { a.toggleStar() })
 		}
 		starButton.Children(func() {
-			ui.Icon(c, star).FontSize(16).TextColor(starColor)
+			ui.Icon(c, star).FontSize(16).TextColor(starColor).ContentTransition(swapIcon)
 		})
 		readLabel, readIcon := locales.MarkRead(), mailOpenIcon
 		if allSeen {

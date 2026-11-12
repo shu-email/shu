@@ -75,7 +75,7 @@ func (a *app) threadToolbar(c *ui.Context, t *ui.Theme) {
 		if has {
 			starButton = starButton.OnClick(a.toggleThreadStar)
 		}
-		starButton.Children(func() { ui.Icon(c, star).FontSize(16).TextColor(starColor) })
+		starButton.Children(func() { ui.Icon(c, star).FontSize(16).TextColor(starColor).ContentTransition(swapIcon) })
 		readLabel, readIcon := locales.MarkConversationsRead(n), mailOpenIcon
 		if allSeen {
 			readLabel, readIcon = locales.MarkConversationsUnread(n), mailIcon
@@ -142,7 +142,7 @@ func (a *app) conversationPane(c *ui.Context, t *ui.Theme) {
 		subject = locales.NoSubject()
 	}
 	key := threadKey(cv.account, cv.thread)
-	ui.Scroll(c.Key(key)).Grow(1).Children(func() {
+	ui.Scroll(c.Key(key)).Grow(1).Transition(readingMotion).Children(func() {
 		ui.Column(c).Padding(20, 20, 24, 20).Gap(10).MinWidth(0).Children(func() {
 			ui.Text(c, subject).FontSize(21).Bold().Balance()
 			ui.Text(c, a.scopeLine(cv)).FontSize(12).TextColor(t.TextMuted)

@@ -31,4 +31,14 @@ type mailService interface {
 	RetryPending(ctx context.Context, id string) (mail.SendResult, error)
 	PendingSends(ctx context.Context, accountID string) ([]mail.PendingSend, error)
 	Attachment(ctx context.Context, accountID, folder string, uid mail.UID, part string) (mail.Attachment, []byte, error)
+
+	// Drafts. SaveDraft never needs the network; SyncDrafts is the step
+	// that does, and may fail and run again.
+	DraftList(ctx context.Context, accountID, query string, limit int) ([]mail.Summary, error)
+	Draft(ctx context.Context, id string) (mail.Draft, bool, error)
+	SaveDraft(ctx context.Context, d mail.Draft) (mail.Draft, error)
+	SyncDrafts(ctx context.Context, accountID string) (mail.DraftSyncResult, error)
+	DiscardDraft(ctx context.Context, id string) error
+	AdoptDraft(ctx context.Context, accountID, folder string, uid mail.UID) (mail.Draft, error)
+	DismissDraftConflict(ctx context.Context, id string) error
 }

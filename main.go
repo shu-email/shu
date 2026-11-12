@@ -97,6 +97,38 @@ type app struct {
 	triage      *triageState
 	review      *aiReview
 
+	// Receiving mail in the background. watches is whether the accounts
+	// are watched at all; watched is each watched account as it was when
+	// its watcher was asked for, and watch what that watcher last said.
+	// watchOps are the calls that start and stop watchers, in order.
+	watches   bool
+	watched   map[string]mail.Account
+	watch     map[string]mail.WatchStatus
+	watchMu   sync.Mutex
+	watchOps  []func()
+	watchTurn sync.Mutex
+	// inboxes is the inbox's unread count of each account, by its ID, and
+	// foldersOf the account whose folders a.folders are: after a switch
+	// they are the last account's until the cache is read.
+	inboxes   map[string]int
+	foldersOf string
+	// announced is, by account and folder, the newest message already
+	// dealt with as new mail. aim is what a clicked notification asked
+	// to see; clicked is the ID of one clicked before the accounts were
+	// read, which is when ready is set.
+	announced map[string]noteMark
+	aim       *noteAim
+	ready     bool
+	clicked   string
+	// The settings of receiving mail, and the controls bound to them.
+	mailSet       mail.Settings
+	checkChoice   int
+	notifyOn      map[string]*bool
+	mailSaveMu    sync.Mutex
+	mailSaveSeq   atomic.Uint64
+	mailSetFailed bool
+	noteDenied    bool
+
 	composes []*composeState
 	// draftSyncs is the draft sync of each account, by its ID. draftErr
 	// is why the draft with the key draftErrKey could not be opened.
@@ -117,7 +149,14 @@ type app struct {
 	// confirmDiscard asks whether to delete that many drafts for good.
 	// It blocks, so jobs call it. While it is nil nothing is discarded.
 	confirmDiscard func(parent *mygo.Window, count int) bool
-	lang           int
+	// notify shows a system notification. It may block, so jobs call it.
+	// While it is nil nothing is notified; the counts still follow.
+	notify func(note) error
+	// focused reports whether the main window has the focus, and
+	// showWindow brings it to the front.
+	focused    func() bool
+	showWindow func()
+	lang       int
 }
 
 // newApp makes the state the tests and main use.
@@ -132,14 +171,24 @@ func newApp(svc mailService) *app {
 		bodies:        map[string]mail.FetchResult{},
 		summaries:     map[string]*aiJob{},
 		draftSyncs:    map[string]*draftSync{},
+		watches:       true,
+		watched:       map[string]mail.Account{},
+		watch:         map[string]mail.WatchStatus{},
+		inboxes:       map[string]int{},
+		announced:     map[string]noteMark{},
+		mailSet:       mail.DefaultSettings(),
+		checkChoice:   1,
+		notifyOn:      map[string]*bool{},
 	}
 }
 
 // newTestApp runs every job and update inline, so tests never sleep or
-// race.
+// race. It watches no account: a watcher reports from a goroutine of its
+// own, which the tests that are about it ask for.
 func newTestApp(svc mailService) *app {
 	a := newApp(svc)
 	a.run = func(f func()) { f() }
+	a.watches = false
 	return a
 }
 
@@ -179,13 +228,38 @@ func (a *app) attach(win *mygo.Window) {
 	a.setBadge = mygo.App.SetBadgeCount
 	a.after = time.AfterFunc
 	a.confirmDiscard = askDiscard
-	// Drafts written offline go up when the network is back, without
-	// waiting for the next edit or sync.
-	mygo.Network.OnChanged(func(status mygo.NetworkStatus) {
-		if status.Online {
-			a.post(a.networkBack)
+	if mygo.NotificationsSupported() {
+		a.notify = func(n note) error {
+			return mygo.NewNotification(mygo.NotificationOptions{
+				ID: n.ID, Title: n.Title, Subtitle: n.Subtitle, Body: n.Body, Group: n.Group,
+			}).Show()
 		}
+	}
+	a.focused = win.IsFocused
+	a.showWindow = func() {
+		win.Show()
+		win.Focus()
+		mygo.App.Focus()
+	}
+	// Drafts written offline go up when the network is back, without
+	// waiting for the next edit or sync. The watchers stop trying while
+	// there is no network, and try at once when there is one again.
+	mygo.Network.OnChanged(func(status mygo.NetworkStatus) {
+		a.post(func() {
+			a.setOnline(status.Online)
+			if status.Online {
+				a.networkBack()
+			}
+		})
 	})
+	a.run(func() {
+		status := mygo.Network.Status()
+		a.post(func() { a.setOnline(status.Online) })
+	})
+	// A connection that was idle while the computer slept is dead, and
+	// mail that came while the app was in the back is wanted now.
+	mygo.Power.OnResume(func() { a.post(a.nudge) })
+	mygo.App.OnDidBecomeActive(func() { a.post(a.nudge) })
 	win.OnClosed(func() { a.closed = true })
 	mygo.App.OnLocaleChanged(func(string) { win.SetTitle(locales.AppName()) })
 }
@@ -209,6 +283,9 @@ func (a *app) start() {
 		ctx, cancel := a.ctx()
 		defer cancel()
 		accounts, active, err := a.svc.Accounts(ctx)
+		// The settings come with the accounts: the first report of a
+		// watcher, which may hold a night's mail, finds them read.
+		set, setErr := a.svc.Settings(ctx)
 		a.post(func() {
 			if a.stale(g) {
 				return
@@ -217,6 +294,10 @@ func (a *app) start() {
 			if err != nil {
 				a.err = err.Error()
 			}
+			if setErr == nil {
+				a.setMailSettings(set)
+			}
+			a.ready = true
 			if len(accounts) == 0 {
 				a.openAccountForm(nil)
 				return
@@ -225,7 +306,12 @@ func (a *app) start() {
 			if a.account(a.active) == nil {
 				a.active = accounts[0].ID
 			}
+			a.accountsChanged()
 			a.beginAccount()
+			if id := a.clicked; id != "" {
+				a.clicked = ""
+				a.openNotification(id)
+			}
 		})
 	})
 }
@@ -281,8 +367,9 @@ func (a *app) loadCache(g uint64) {
 				return
 			}
 			if err == nil {
-				a.folders = folders
+				a.setFolders(folders)
 				a.ensureFolder()
+				a.aimFolder()
 				a.updateBadge()
 			}
 			a.loadMessages(g)
@@ -307,7 +394,7 @@ func (a *app) syncAccount(g uint64) {
 			} else {
 				a.err = ""
 				if folders != nil {
-					a.folders = folders
+					a.setFolders(folders)
 				}
 				a.ensureFolder()
 				a.updateBadge()
@@ -353,9 +440,14 @@ func (a *app) syncFolder(g uint64) {
 			} else {
 				a.err = ""
 				if folders != nil {
-					a.folders = folders
+					a.setFolders(folders)
 				}
 				a.updateBadge()
+			}
+			if a.aim != nil {
+				// The read that follows is the last chance of the
+				// message a notification asked for.
+				a.aim.last = true
 			}
 			a.loadMessages(g)
 		})
@@ -367,7 +459,12 @@ func (a *app) loadMessages(g uint64) { a.readMessages(g, true) }
 
 // readMessages reads the list, showing progress or, for a read the user
 // did not ask for, none.
-func (a *app) readMessages(g uint64, progress bool) {
+func (a *app) readMessages(g uint64, progress bool) { a.readList(g, progress, true) }
+
+// readList is readMessages. Unless neighbour is set, a chosen row that
+// left the list leaves nothing chosen: new mail pushing it out must not
+// open, and so mark read, the message beside it.
+func (a *app) readList(g uint64, progress, neighbour bool) {
 	accountID, folder, query := a.active, a.folder, strings.TrimSpace(a.query)
 	key := a.selectedKey()
 	if folder == "" {
@@ -409,11 +506,17 @@ func (a *app) readMessages(g uint64, progress bool) {
 			a.all = msgs
 			a.pruneSelection()
 			a.restoreSelection(key)
+			if i := a.aimRow(); i >= 0 {
+				a.chooseRow(i)
+			}
 			switch {
-			case progress && a.selected < 0 && len(a.all) > 0 && query == "" && a.sel.Len() == 0:
+			case progress && a.selected < 0 && len(a.all) > 0 && query == "" && a.sel.Len() == 0 && a.aim == nil:
 				// Opening a folder shows its first message. A read made
-				// behind the user's back leaves an empty choice empty.
+				// behind the user's back leaves an empty choice empty,
+				// and so does one that waits for the message a
+				// notification asked for.
 				a.chooseRow(0)
+			case !neighbour && a.selected < 0:
 			case !progress && a.selected < 0 && key != "" && len(a.all) > 0 && a.sel.Len() == 0:
 				// The chosen row left the list, as a draft sent or
 				// replaced by another mail client does. The row that
@@ -585,17 +688,19 @@ func (a *app) applySeen(key string) {
 	a.updateBadge()
 }
 
-// updateBadge puts the active account's inbox unread count on the Dock.
+// updateBadge puts the unread count of every account's inbox on the
+// Dock. The active account's is the one its folders show, which follows
+// what the user reads before the server does.
 func (a *app) updateBadge() {
+	if a.active != "" && a.foldersOf == a.active {
+		a.inboxes[a.active] = inboxUnread(a.folders)
+	}
 	if a.setBadge == nil {
 		return
 	}
 	n := 0
-	for _, f := range a.folders {
-		if f.SpecialUse == mail.SpecialInbox {
-			n = f.Unread
-			break
-		}
+	for _, acc := range a.accounts {
+		n += a.inboxes[acc.ID]
 	}
 	a.setBadge(n)
 }
@@ -673,10 +778,12 @@ func (a *app) switchAccount(id string) {
 	})
 }
 
-// refresh is the Sync button.
+// refresh is the Sync button. It syncs the account on screen whatever
+// state its watcher is in, and has every watcher check now.
 func (a *app) refresh() {
 	a.gen++
 	a.syncAccount(a.gen)
+	a.nudge()
 }
 
 // folderEntry is one row of the sidebar.
@@ -930,7 +1037,14 @@ func (a *app) sidebar(c *ui.Context, t *ui.Theme) {
 			ui.PopoverMenuButton(c, "", func(m *ui.Menu) {
 				for _, acc := range a.accounts {
 					label := acc.Label()
-					if m.Item(label + " · " + acc.Email).Radio(acc.ID == a.active).Chosen() {
+					item := m.Item(label + " · " + acc.Email).ID(acc.ID).Radio(acc.ID == a.active)
+					// The sidebar shows the active account's unread mail;
+					// the other accounts' is said here.
+					if n := a.inboxes[acc.ID]; n > 0 && acc.ID != a.active {
+						item.Trailing(fmt.Sprint(n))
+					}
+					if item.Chosen() {
+						a.aim = nil
 						a.switchAccount(acc.ID)
 					}
 				}
@@ -967,6 +1081,7 @@ func (a *app) sidebar(c *ui.Context, t *ui.Theme) {
 			})
 		}).Grow(1).Label(locales.Mailboxes())
 		if changed.Changed() {
+			a.aim = nil
 			a.selectFolder()
 		}
 		a.sidebarFooter(c, t)
@@ -974,7 +1089,8 @@ func (a *app) sidebar(c *ui.Context, t *ui.Theme) {
 }
 
 // sidebarFooter shows the account's cached totals and whether a sync is
-// running, as mail apps keep their quota at the bottom.
+// running, as mail apps keep their quota at the bottom, and under them
+// how receiving mail in the background is going.
 func (a *app) sidebarFooter(c *ui.Context, t *ui.Theme) {
 	unread, total := a.sidebarTotals()
 	ui.Column(c).Shrink(0).Padding(10, 12, 10, 12).Gap(4).
@@ -984,9 +1100,10 @@ func (a *app) sidebarFooter(c *ui.Context, t *ui.Theme) {
 				ui.Spinner(c).Size(12, 12)
 				ui.Text(c, locales.Syncing()).FontSize(11).TextColor(t.TextMuted)
 			})
-			return
+		} else {
+			ui.Text(c, locales.SidebarSummary(unread, total)).FontSize(11).TextColor(t.TextMuted)
 		}
-		ui.Text(c, locales.SidebarSummary(unread, total)).FontSize(11).TextColor(t.TextMuted)
+		a.watchLine(c, t)
 	})
 }
 
@@ -1039,7 +1156,44 @@ func (keychain) Get(key string) ([]byte, error) {
 }
 func (keychain) Delete(key string) error { return mygo.Secrets.Delete(key) }
 
+// noteClicks holds the notification clicks that come before the window
+// can take them: the click that launched the app arrives as it starts.
+type noteClicks struct {
+	mu      sync.Mutex
+	waiting []string
+	open    func(id string)
+}
+
+// add takes a click, for the window if it is there and for later if not.
+func (q *noteClicks) add(id string) {
+	q.mu.Lock()
+	open := q.open
+	if open == nil {
+		q.waiting = append(q.waiting, id)
+	}
+	q.mu.Unlock()
+	if open != nil {
+		open(id)
+	}
+}
+
+// deliver hands the clicks so far to open, and every later one as it
+// comes.
+func (q *noteClicks) deliver(open func(id string)) {
+	q.mu.Lock()
+	waiting := q.waiting
+	q.waiting, q.open = nil, open
+	q.mu.Unlock()
+	for _, id := range waiting {
+		open(id)
+	}
+}
+
 func main() {
+	// Registered before Run, as the click on a notification that launched
+	// the app is delivered while it starts.
+	var clicks noteClicks
+	mygo.App.OnNotificationClick(clicks.add)
 	mygo.App.WhenReady(func() {
 		dataDir, err := mygo.App.Path(mygo.PathUserData)
 		if err != nil {
@@ -1083,7 +1237,14 @@ func main() {
 		case chosen == "zh-Hans":
 			a.lang = 2
 		}
-		mygo.App.OnQuit(func() { db.Close() })
+		mygo.App.OnQuit(func() {
+			// The watchers end before the database they write to closes.
+			svc.StopWatching()
+			db.Close()
+		})
+		clicks.deliver(func(id string) {
+			a.post(func() { a.openNotification(id) })
+		})
 		a.start()
 	})
 	if err := mygo.App.Run(); err != nil {

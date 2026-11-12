@@ -383,6 +383,9 @@ func (a *app) afterAccountSaved(id string) {
 			a.showAccounts = false
 			a.accountOpen = false
 			a.active = id
+			// The saved account is watched anew, with what was saved.
+			a.rewatch(id)
+			a.accountsChanged()
 			a.beginAccount()
 			a.run(func() {
 				ctx, cancel := a.ctx()
@@ -427,6 +430,7 @@ func (a *app) deleteAccount() {
 				a.accounts = accounts
 				a.showAccounts = false
 				a.accountOpen = false
+				a.accountsChanged()
 				if len(accounts) == 0 {
 					a.openAccountForm(nil)
 					return

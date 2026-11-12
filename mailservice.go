@@ -50,4 +50,14 @@ type mailService interface {
 	DiscardDraft(ctx context.Context, id string) error
 	AdoptDraft(ctx context.Context, accountID, folder string, uid mail.UID) (mail.Draft, error)
 	DismissDraftConflict(ctx context.Context, id string) error
+
+	// Watching for new mail. Watch and Unwatch return when the account's
+	// earlier watcher has ended, so jobs call them; report is called
+	// from the watcher's goroutine. Nudge and SetOnline return at once.
+	Watch(accountID string, report func(mail.WatchEvent))
+	Unwatch(accountID string)
+	Nudge()
+	SetOnline(online bool)
+	Settings(ctx context.Context) (mail.Settings, error)
+	SaveSettings(ctx context.Context, s mail.Settings) error
 }

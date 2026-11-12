@@ -73,6 +73,29 @@ type serverLog struct{ t *testing.T }
 func (l serverLog) Printf(format string, args ...any) { l.t.Logf("server: "+format, args...) }
 func (l serverLog) Println(args ...any)               { l.t.Log(args...) }
 
+// promptSession is the in-memory server's session with an Idle that holds
+// nothing back. The server's own reports only what happens once an IDLE
+// has begun: a change made between the client's last command and its IDLE
+// waits for the client's next command. Servers in use do not do that
+// (they sync as an IDLE begins), and a test of pushed mail would pass or
+// fail by which side won that race. This one looks at short intervals.
+type promptSession struct{ imapserver.SessionIMAP4rev2 }
+
+func (s promptSession) Idle(w *imapserver.UpdateWriter, stop <-chan struct{}) error {
+	tick := time.NewTicker(time.Millisecond)
+	defer tick.Stop()
+	for {
+		if err := s.SessionIMAP4rev2.Poll(w, true); err != nil {
+			return err
+		}
+		select {
+		case <-stop:
+			return nil
+		case <-tick.C:
+		}
+	}
+}
+
 func startLocalIMAP(t *testing.T, mailboxes ...string) *localIMAP {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -89,7 +112,7 @@ func startLocalIMAP(t *testing.T, mailboxes ...string) *localIMAP {
 	}
 	server := imapserver.New(&imapserver.Options{
 		NewSession: func(*imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
-			return mem.NewSession(), &imapserver.GreetingData{}, nil
+			return promptSession{mem.NewSession().(imapserver.SessionIMAP4rev2)}, &imapserver.GreetingData{}, nil
 		},
 		Caps: imap.CapSet{
 			imap.CapIMAP4rev1: {}, imap.CapMove: {}, imap.CapUIDPlus: {},
@@ -116,6 +139,15 @@ type serverDraft struct {
 // connect logs in as another mail client would.
 func (s *localIMAP) connect(t *testing.T, mailbox string) *imapclient.Client {
 	t.Helper()
+	c, _ := s.open(t, mailbox)
+	return c
+}
+
+// open is connect, with what the SELECT said of the mailbox. The client's
+// Mailbox() is no substitute: the library lets the SELECT's Wait return
+// before it records the selected mailbox there.
+func (s *localIMAP) open(t *testing.T, mailbox string) (*imapclient.Client, *imap.SelectData) {
+	t.Helper()
 	c, err := imapclient.DialStartTLS(s.addr, &imapclient.Options{
 		TLSConfig: &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12}, // #nosec G402 -- a local test server
 	})
@@ -125,18 +157,19 @@ func (s *localIMAP) connect(t *testing.T, mailbox string) *imapclient.Client {
 	if err := c.Login("ann", "secret").Wait(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Select(mailbox, nil).Wait(); err != nil {
+	selected, err := c.Select(mailbox, nil).Wait()
+	if err != nil {
 		t.Fatal(err)
 	}
-	return c
+	return c, selected
 }
 
 // messages reads a mailbox as another mail client sees it.
 func (s *localIMAP) messages(t *testing.T, mailbox string) []serverDraft {
 	t.Helper()
-	c := s.connect(t, mailbox)
+	c, selected := s.open(t, mailbox)
 	defer c.Close()
-	if c.Mailbox().NumMessages == 0 {
+	if selected.NumMessages == 0 {
 		return nil
 	}
 	var set imap.SeqSet

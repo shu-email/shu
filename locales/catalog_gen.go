@@ -2891,3 +2891,219 @@ func SendAttachmentMissing() string { return In(i18n.Locale()).SendAttachmentMis
 func (msgs Messages) SendAttachmentMissing() string {
 	return Catalog.Format(msgs.locale, "sendAttachmentMissing", nil)
 }
+
+// NewMailCount says "{count, plural, one {# new message} other {# new messages}}"
+// in the language the app shows.
+//
+// The text of a notification that says how many messages arrived, under the
+// account's name.
+func NewMailCount(count int) string { return In(i18n.Locale()).NewMailCount(count) }
+
+// NewMailCount says "{count, plural, one {# new message} other {# new messages}}"
+// in the language of msgs.
+//
+// The text of a notification that says how many messages arrived, under the
+// account's name.
+func (msgs Messages) NewMailCount(count int) string {
+	return Catalog.Format(msgs.locale, "newMailCount", map[string]any{"count": count})
+}
+
+// WatchUpToDate says "Up to date"
+// in the language the app shows.
+func WatchUpToDate() string { return In(i18n.Locale()).WatchUpToDate() }
+
+// WatchUpToDate says "Up to date"
+// in the language of msgs.
+func (msgs Messages) WatchUpToDate() string {
+	return Catalog.Format(msgs.locale, "watchUpToDate", nil)
+}
+
+// WatchCheckedAt says "Up to date · checked {time}"
+// in the language the app shows.
+//
+// The sidebar footer: mail was last checked at this time, written as the
+// message list writes times.
+func WatchCheckedAt(time_ string) string { return In(i18n.Locale()).WatchCheckedAt(time_) }
+
+// WatchCheckedAt says "Up to date · checked {time}"
+// in the language of msgs.
+//
+// The sidebar footer: mail was last checked at this time, written as the
+// message list writes times.
+func (msgs Messages) WatchCheckedAt(time_ string) string {
+	return Catalog.Format(msgs.locale, "watchCheckedAt", map[string]any{"time": time_})
+}
+
+// WatchConnecting says "Checking for mail…"
+// in the language the app shows.
+func WatchConnecting() string { return In(i18n.Locale()).WatchConnecting() }
+
+// WatchConnecting says "Checking for mail…"
+// in the language of msgs.
+func (msgs Messages) WatchConnecting() string {
+	return Catalog.Format(msgs.locale, "watchConnecting", nil)
+}
+
+// WatchRetryNetwork says "Can't reach the mail server. Trying again soon."
+// in the language the app shows.
+func WatchRetryNetwork() string { return In(i18n.Locale()).WatchRetryNetwork() }
+
+// WatchRetryNetwork says "Can't reach the mail server. Trying again soon."
+// in the language of msgs.
+func (msgs Messages) WatchRetryNetwork() string {
+	return Catalog.Format(msgs.locale, "watchRetryNetwork", nil)
+}
+
+// WatchRetryAuth says "The mail server refused the sign-in. Trying again later."
+// in the language the app shows.
+func WatchRetryAuth() string { return In(i18n.Locale()).WatchRetryAuth() }
+
+// WatchRetryAuth says "The mail server refused the sign-in. Trying again later."
+// in the language of msgs.
+func (msgs Messages) WatchRetryAuth() string {
+	return Catalog.Format(msgs.locale, "watchRetryAuth", nil)
+}
+
+// WatchRetryOther says "Couldn't check for mail. Trying again soon."
+// in the language the app shows.
+func WatchRetryOther() string { return In(i18n.Locale()).WatchRetryOther() }
+
+// WatchRetryOther says "Couldn't check for mail. Trying again soon."
+// in the language of msgs.
+func (msgs Messages) WatchRetryOther() string {
+	return Catalog.Format(msgs.locale, "watchRetryOther", nil)
+}
+
+// WatchOffline says "Offline. Mail is checked once you're back online."
+// in the language the app shows.
+func WatchOffline() string { return In(i18n.Locale()).WatchOffline() }
+
+// WatchOffline says "Offline. Mail is checked once you're back online."
+// in the language of msgs.
+func (msgs Messages) WatchOffline() string {
+	return Catalog.Format(msgs.locale, "watchOffline", nil)
+}
+
+// CheckMail says "Checking for mail"
+// in the language the app shows.
+func CheckMail() string { return In(i18n.Locale()).CheckMail() }
+
+// CheckMail says "Checking for mail"
+// in the language of msgs.
+func (msgs Messages) CheckMail() string {
+	return Catalog.Format(msgs.locale, "checkMail", nil)
+}
+
+// CheckEvery says "Check for new mail every"
+// in the language the app shows.
+func CheckEvery() string { return In(i18n.Locale()).CheckEvery() }
+
+// CheckEvery says "Check for new mail every"
+// in the language of msgs.
+func (msgs Messages) CheckEvery() string {
+	return Catalog.Format(msgs.locale, "checkEvery", nil)
+}
+
+// CheckMinutes says "{count} min"
+// in the language the app shows.
+//
+// A choice of how often mail is checked, in minutes.
+func CheckMinutes(count int) string { return In(i18n.Locale()).CheckMinutes(count) }
+
+// CheckMinutes says "{count} min"
+// in the language of msgs.
+//
+// A choice of how often mail is checked, in minutes.
+func (msgs Messages) CheckMinutes(count int) string {
+	return Catalog.Format(msgs.locale, "checkMinutes", map[string]any{"count": count})
+}
+
+// CheckEveryDetail says "Mail servers that can push deliver new mail right away. Folders and unread counts, and servers that can't push, are c…"
+// in the language the app shows.
+func CheckEveryDetail() string { return In(i18n.Locale()).CheckEveryDetail() }
+
+// CheckEveryDetail says "Mail servers that can push deliver new mail right away. Folders and unread counts, and servers that can't push, are c…"
+// in the language of msgs.
+func (msgs Messages) CheckEveryDetail() string {
+	return Catalog.Format(msgs.locale, "checkEveryDetail", nil)
+}
+
+// Notifications says "Notifications"
+// in the language the app shows.
+func Notifications() string { return In(i18n.Locale()).Notifications() }
+
+// Notifications says "Notifications"
+// in the language of msgs.
+func (msgs Messages) Notifications() string {
+	return Catalog.Format(msgs.locale, "notifications", nil)
+}
+
+// NotifyNewMail says "Notify me about new mail"
+// in the language the app shows.
+func NotifyNewMail() string { return In(i18n.Locale()).NotifyNewMail() }
+
+// NotifyNewMail says "Notify me about new mail"
+// in the language of msgs.
+func (msgs Messages) NotifyNewMail() string {
+	return Catalog.Format(msgs.locale, "notifyNewMail", nil)
+}
+
+// NotifyNewMailDetail says "Shown as system notifications, which follow Do Not Disturb and Focus."
+// in the language the app shows.
+func NotifyNewMailDetail() string { return In(i18n.Locale()).NotifyNewMailDetail() }
+
+// NotifyNewMailDetail says "Shown as system notifications, which follow Do Not Disturb and Focus."
+// in the language of msgs.
+func (msgs Messages) NotifyNewMailDetail() string {
+	return Catalog.Format(msgs.locale, "notifyNewMailDetail", nil)
+}
+
+// NotifyDetails says "Show sender and subject"
+// in the language the app shows.
+func NotifyDetails() string { return In(i18n.Locale()).NotifyDetails() }
+
+// NotifyDetails says "Show sender and subject"
+// in the language of msgs.
+func (msgs Messages) NotifyDetails() string {
+	return Catalog.Format(msgs.locale, "notifyDetails", nil)
+}
+
+// NotifyDetailsDetail says "When off, a notification only says which account got how many new messages."
+// in the language the app shows.
+func NotifyDetailsDetail() string { return In(i18n.Locale()).NotifyDetailsDetail() }
+
+// NotifyDetailsDetail says "When off, a notification only says which account got how many new messages."
+// in the language of msgs.
+func (msgs Messages) NotifyDetailsDetail() string {
+	return Catalog.Format(msgs.locale, "notifyDetailsDetail", nil)
+}
+
+// NotifyAccounts says "Notify for these accounts"
+// in the language the app shows.
+func NotifyAccounts() string { return In(i18n.Locale()).NotifyAccounts() }
+
+// NotifyAccounts says "Notify for these accounts"
+// in the language of msgs.
+func (msgs Messages) NotifyAccounts() string {
+	return Catalog.Format(msgs.locale, "notifyAccounts", nil)
+}
+
+// NotifyDenied says "Notifications are turned off for Shu in the system's settings."
+// in the language the app shows.
+func NotifyDenied() string { return In(i18n.Locale()).NotifyDenied() }
+
+// NotifyDenied says "Notifications are turned off for Shu in the system's settings."
+// in the language of msgs.
+func (msgs Messages) NotifyDenied() string {
+	return Catalog.Format(msgs.locale, "notifyDenied", nil)
+}
+
+// SettingsSaveFailed says "Couldn't save the settings."
+// in the language the app shows.
+func SettingsSaveFailed() string { return In(i18n.Locale()).SettingsSaveFailed() }
+
+// SettingsSaveFailed says "Couldn't save the settings."
+// in the language of msgs.
+func (msgs Messages) SettingsSaveFailed() string {
+	return Catalog.Format(msgs.locale, "settingsSaveFailed", nil)
+}

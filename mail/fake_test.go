@@ -25,6 +25,10 @@ type memStore struct {
 	// failFileRefs the listing of the attachment files in use.
 	failDraftSync error
 	failFileRefs  error
+	// kv is the settings, and marks the watermark of each folder watched:
+	// the highest UID announced, under its UIDVALIDITY.
+	kv    map[string]string
+	marks map[string]memMark
 	// afterDrafts runs once, right after the next Drafts call returned
 	// its rows: the moment a sync has read the drafts and something else
 	// changes them. afterDraft does the same for the next Draft call,
@@ -33,8 +37,16 @@ type memStore struct {
 	afterDraft  func()
 }
 
+// memMark is a folder's watermark.
+type memMark struct {
+	validity uint32
+	uid      UID
+}
+
 func newMemStore() *memStore {
 	return &memStore{
+		kv:         map[string]string{},
+		marks:      map[string]memMark{},
 		accounts:   map[string]Account{},
 		folders:    map[string][]Folder{},
 		messages:   map[string]map[UID]Message{},
@@ -80,6 +92,12 @@ func (s *memStore) DeleteAccount(ctx context.Context, id string) error {
 			delete(s.messages, k)
 		}
 	}
+	for k := range s.marks {
+		if len(k) > len(id) && k[:len(id)+1] == id+"/" {
+			delete(s.marks, k)
+		}
+	}
+	delete(s.kv, MutedKey(id))
 	for k, p := range s.outbox {
 		if p.AccountID == id {
 			delete(s.outbox, k)
@@ -107,6 +125,60 @@ func (s *memStore) SetActiveAccount(ctx context.Context, id string) error {
 	defer s.mu.Unlock()
 	s.active = id
 	return nil
+}
+
+func (s *memStore) Setting(ctx context.Context, key string) (string, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	value, ok := s.kv[key]
+	return value, ok, nil
+}
+
+func (s *memStore) SetSetting(ctx context.Context, key, value string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.kv[key] = value
+	return nil
+}
+
+// TakeNew does what the SQLite store's does: the unread messages above
+// the watermark, once, and none for a folder first seen or reset.
+func (s *memStore) TakeNew(ctx context.Context, accountID, folder string) ([]Summary, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var f *Folder
+	for i := range s.folders[accountID] {
+		if s.folders[accountID][i].Name == folder {
+			f = &s.folders[accountID][i]
+		}
+	}
+	if f == nil {
+		return nil, ErrNotFound
+	}
+	if f.UIDValidity == 0 {
+		return nil, nil
+	}
+	key := msgKey(accountID, folder)
+	highest := f.LastUID
+	for uid := range s.messages[key] {
+		highest = max(highest, uid)
+	}
+	mark, ok := s.marks[key]
+	if !ok || mark.validity != f.UIDValidity {
+		s.marks[key] = memMark{validity: f.UIDValidity, uid: highest}
+		return nil, nil
+	}
+	var out []Summary
+	for uid, m := range s.messages[key] {
+		if uid > mark.uid && !m.Seen {
+			summary := m.Summary
+			summary.Folder = folder
+			out = append(out, summary)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].UID > out[j].UID })
+	s.marks[key] = memMark{validity: f.UIDValidity, uid: max(highest, mark.uid)}
+	return out, nil
 }
 
 func (s *memStore) Folders(ctx context.Context, accountID string) ([]Folder, error) {

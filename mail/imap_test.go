@@ -11,6 +11,8 @@ import (
 	"crypto/x509/pkix"
 	"math/big"
 	"net"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -29,6 +31,80 @@ type fakeIMAP struct {
 	user     *imapmemserver.User
 	server   *imapserver.Server
 	listener net.Listener
+
+	// What it takes to serve the same mailboxes again after stop.
+	mem  *imapmemserver.Server
+	caps imap.CapSet
+	cert tls.Certificate
+
+	// open counts the connections being served, and ended is signalled
+	// as one ends. selects records each SELECT and EXAMINE, with whether
+	// it opened the mailbox read-only.
+	open    atomic.Int32
+	ended   chan struct{}
+	mu      sync.Mutex
+	selects []fakeSelect
+	log     *testLogger
+	// holdsBack has an idling session behave as the in-memory server
+	// does by itself: see fakeSession.Idle.
+	holdsBack atomic.Bool
+}
+
+// fakeSelect is one SELECT or EXAMINE the fake server received.
+type fakeSelect struct {
+	mailbox  string
+	readOnly bool
+}
+
+// fakeSession is a connection's session, which tells the fake server
+// what the tests want to know of it.
+type fakeSession struct {
+	// The in-memory server's session, with the MOVE and NAMESPACE it
+	// implements beyond the plain interface.
+	imapserver.SessionIMAP4rev2
+	f *fakeIMAP
+}
+
+func (s *fakeSession) Select(mailbox string, options *imap.SelectOptions) (*imap.SelectData, error) {
+	s.f.mu.Lock()
+	s.f.selects = append(s.f.selects, fakeSelect{mailbox, options != nil && options.ReadOnly})
+	s.f.mu.Unlock()
+	return s.SessionIMAP4rev2.Select(mailbox, options)
+}
+
+// Idle reports the selected mailbox's changes while the client idles. The
+// in-memory server's own Idle reports only what happens once it has
+// begun: a change made between the client's last command and its IDLE is
+// held back until the client's next command. Servers in use do not do
+// that (they sync as an IDLE begins), and the tests of pushed mail would
+// pass or fail by which side won that race. So this one looks at short
+// intervals instead, and holds nothing back.
+func (s *fakeSession) Idle(w *imapserver.UpdateWriter, stop <-chan struct{}) error {
+	if s.f.holdsBack.Load() {
+		return s.SessionIMAP4rev2.Idle(w, stop)
+	}
+	tick := time.NewTicker(time.Millisecond)
+	defer tick.Stop()
+	for {
+		if err := s.SessionIMAP4rev2.Poll(w, true); err != nil {
+			return err
+		}
+		select {
+		case <-stop:
+			return nil
+		case <-tick.C:
+		}
+	}
+}
+
+func (s *fakeSession) Close() error {
+	err := s.SessionIMAP4rev2.Close()
+	s.f.open.Add(-1)
+	select {
+	case s.f.ended <- struct{}{}:
+	default:
+	}
+	return err
 }
 
 func startFakeIMAP(t *testing.T, caps imap.CapSet) *fakeIMAP {
@@ -44,26 +120,72 @@ func startFakeIMAP(t *testing.T, caps imap.CapSet) *fakeIMAP {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := imapserver.New(&imapserver.Options{
-		NewSession: func(*imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
-			return mem.NewSession(), &imapserver.GreetingData{}, nil
-		},
-		Caps:      caps,
-		TLSConfig: &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12},
-		Logger:    testLogger{t},
-	})
-	go func() { _ = server.Serve(ln) }()
+	f := &fakeIMAP{
+		addr: ln.Addr().String(), user: user, mem: mem, caps: caps, cert: cert,
+		ended: make(chan struct{}, 64),
+		log:   &testLogger{t: t},
+	}
+	f.serve(ln)
 	t.Cleanup(func() {
-		server.Close()
-		ln.Close()
+		f.stop()
+		f.log.close()
 	})
-	return &fakeIMAP{addr: ln.Addr().String(), user: user, server: server, listener: ln}
+	return f
 }
 
-type testLogger struct{ t *testing.T }
+// serve answers connections on ln with the fake's mailboxes.
+func (f *fakeIMAP) serve(ln net.Listener) {
+	server := imapserver.New(&imapserver.Options{
+		NewSession: func(*imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
+			f.open.Add(1)
+			session := f.mem.NewSession().(imapserver.SessionIMAP4rev2)
+			return &fakeSession{SessionIMAP4rev2: session, f: f}, &imapserver.GreetingData{}, nil
+		},
+		Caps:      f.caps,
+		TLSConfig: &tls.Config{Certificates: []tls.Certificate{f.cert}, MinVersion: tls.VersionTLS12},
+		Logger:    f.log,
+	})
+	go func() { _ = server.Serve(ln) }()
+	f.server, f.listener = server, ln
+}
 
-func (l testLogger) Printf(format string, args ...any) {
-	l.t.Logf("imapserver: "+format, args...)
+// stop takes the server away: it hangs up on every connection and
+// refuses new ones. The mailboxes stay for restart.
+func (f *fakeIMAP) stop() {
+	f.server.Close()
+	f.listener.Close()
+}
+
+// restart brings a stopped server back at the same address.
+func (f *fakeIMAP) restart(t *testing.T) {
+	t.Helper()
+	ln, err := net.Listen("tcp", f.addr)
+	if err != nil {
+		t.Fatalf("restart the fake server: %v", err)
+	}
+	f.serve(ln)
+}
+
+// testLogger writes the server's log to the test's while the test runs.
+// A connection the server hung up on may log after that, from its own
+// goroutine, when the test's log is no longer there to write to.
+type testLogger struct {
+	mu sync.Mutex
+	t  *testing.T
+}
+
+func (l *testLogger) Printf(format string, args ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.t != nil {
+		l.t.Logf("imapserver: "+format, args...)
+	}
+}
+
+func (l *testLogger) close() {
+	l.mu.Lock()
+	l.t = nil
+	l.mu.Unlock()
 }
 
 func (f *fakeIMAP) hostPort(t *testing.T) (string, int) {

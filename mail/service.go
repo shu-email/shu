@@ -40,6 +40,25 @@ type Service struct {
 	// both are needed, fileMu is taken before draftMu.
 	fileMu   sync.Mutex
 	incoming map[string]bool
+
+	// The watchers, one per account watched (see watch.go). watchLife
+	// makes each start and stop of one a single step; watchMu guards the
+	// map and what the watchers share: the interval between checks and
+	// whether the computer is offline. watchOver is set when the app
+	// quits, after which none starts.
+	watchLife    sync.Mutex
+	watchOver    bool
+	intervalRead bool
+	watchMu      sync.Mutex
+	watchers     map[string]*watcher
+	interval     time.Duration
+	offline      bool
+	// newTimer arms the timers the watchers wait on. Tests replace it,
+	// with the clock, so that no watcher waits in real time.
+	newTimer func(time.Duration) (<-chan time.Time, func())
+	// watchNoIdle has the watchers treat every server as one that cannot
+	// push. It is for tests: the fake server always offers IDLE.
+	watchNoIdle bool
 }
 
 // NewService wires the cache, the keychain and the attachment cache
@@ -51,6 +70,8 @@ func NewService(store Store, secrets SecretStore, cacheDir string) *Service {
 		draftSync:      make(chan struct{}, 1),
 		draftsReplaced: map[string][]Attachment{},
 		incoming:       map[string]bool{},
+		watchers:       map[string]*watcher{},
+		newTimer:       realTimer,
 	}
 }
 
@@ -132,6 +153,9 @@ func (s *Service) UpdateAccount(ctx context.Context, a Account, password string)
 
 // RemoveAccount deletes an account's rows and its keychain entry.
 func (s *Service) RemoveAccount(ctx context.Context, id string) error {
+	// Its watcher ends first: a check that ran on would write the mail
+	// of an account that is no longer there.
+	s.Unwatch(id)
 	if err := s.store.DeleteAccount(ctx, id); err != nil {
 		return err
 	}

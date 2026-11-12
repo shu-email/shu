@@ -21,6 +21,10 @@ type Store interface {
 	DeleteAccount(ctx context.Context, id string) error
 	ActiveAccount(ctx context.Context) (string, error)
 	SetActiveAccount(ctx context.Context, id string) error
+	// Setting and SetSetting keep small values that are no secrets. The
+	// one under MutedKey goes when its account is deleted.
+	Setting(ctx context.Context, key string) (string, bool, error)
+	SetSetting(ctx context.Context, key, value string) error
 
 	// Folders.
 	Folders(ctx context.Context, accountID string) ([]Folder, error)
@@ -36,6 +40,14 @@ type Store interface {
 	MarkDeleted(ctx context.Context, accountID, folder string, uid UID, deleted bool) error
 	DeleteMessage(ctx context.Context, accountID, folder string, uid UID) error
 	SetAttachmentCache(ctx context.Context, accountID, folder string, uid UID, part, hash, path string) error
+	// TakeNew returns the unread messages of a folder above its
+	// watermark, newest first, and raises the watermark over them in the
+	// same step: a message is returned once, ever. The watermark is the
+	// highest UID announced, under the UIDVALIDITY it belongs to; a
+	// folder that has none yet, or whose UIDVALIDITY changed, gets it set
+	// to the highest UID cached and returns nothing. ErrNotFound when the
+	// folder is not known.
+	TakeNew(ctx context.Context, accountID, folder string) ([]Summary, error)
 
 	// Outbox.
 	EnqueueOutbox(ctx context.Context, p PendingSend) error

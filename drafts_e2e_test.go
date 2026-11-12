@@ -190,6 +190,14 @@ type localSMTP struct {
 	addr string
 	mu   sync.Mutex
 	got  []string
+	// refuse is the server's answer to a message it does not take.
+	refuse error
+}
+
+func (s *localSMTP) setRefuse(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.refuse = err
 }
 
 func (s *localSMTP) NewSession(*smtp.Conn) (smtp.Session, error) { return &smtpSession{server: s}, nil }
@@ -232,8 +240,11 @@ func (s *smtpSession) Data(r io.Reader) error {
 		return err
 	}
 	s.server.mu.Lock()
+	defer s.server.mu.Unlock()
+	if s.server.refuse != nil {
+		return s.server.refuse
+	}
 	s.server.got = append(s.server.got, string(b))
-	s.server.mu.Unlock()
 	return nil
 }
 

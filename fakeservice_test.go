@@ -2,7 +2,12 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"io"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -56,6 +61,20 @@ type fakeService struct {
 	draftSaves  int
 	draftSyncs  int
 	discarded   []string
+	// draftFullSyncs counts, of the syncs, those that take the drafts
+	// with large attachments too.
+	draftFullSyncs int
+
+	// Attachments. attachErr and removeErr are the engine refusing;
+	// onAttach runs as a file is about to be copied in, and onSend while
+	// a message is on its way, where a test reports progress, looks at
+	// the window, or has the send fail.
+	attachErr   error
+	removeErr   error
+	onAttach    func(path string)
+	onSend      func(ctx context.Context, out mail.Outgoing) error
+	attachCalls []string
+	sweeps      int
 }
 
 func newFakeService() *fakeService {
@@ -349,6 +368,11 @@ func (f *fakeService) Send(ctx context.Context, accountID string, out mail.Outgo
 	if f.sendErr != nil {
 		return mail.SendResult{}, f.sendErr
 	}
+	if f.onSend != nil {
+		if err := f.onSend(ctx, out); err != nil {
+			return mail.SendResult{}, err
+		}
+	}
 	f.sent = append(f.sent, out)
 	// The message is out: its draft goes, here and on the server.
 	f.removeDraft(out.DraftID)
@@ -437,7 +461,7 @@ func (f *fakeService) DraftList(ctx context.Context, accountID, query string, li
 			DraftID: d.ID, MessageID: d.MessageID, From: from,
 			To: draftRecipients(d.To), Cc: draftRecipients(d.Cc),
 			Subject: strings.TrimSpace(d.Subject), Preview: strings.Join(strings.Fields(d.Body), " "),
-			Date: d.UpdatedAt, Seen: true,
+			Date: d.UpdatedAt, Seen: true, HasAttachments: len(d.Attachments) > 0,
 		})
 	}
 	sortSummaries(out)
@@ -478,6 +502,8 @@ func (f *fakeService) SaveDraft(ctx context.Context, d mail.Draft) (mail.Draft, 
 	} else {
 		d.Revision, d.SyncedRevision = 1, 0
 		d.ServerFolder, d.ServerUID, d.ServerUIDValidity = "", 0, 0
+		// A save never attaches anything.
+		d.Attachments = nil
 		d.MessageID = d.ID + "@example.com"
 		// A draft another client took over comes back as one of its own,
 		// another message than the one it was.
@@ -493,6 +519,17 @@ func (f *fakeService) SaveDraft(ctx context.Context, d mail.Draft) (mail.Draft, 
 }
 
 func (f *fakeService) SyncDrafts(ctx context.Context, accountID string) (mail.DraftSyncResult, error) {
+	f.draftFullSyncs++
+	return f.syncDrafts(accountID, true)
+}
+
+// SyncDraftEdits leaves the drafts with large attachments where they
+// are, as the engine's does.
+func (f *fakeService) SyncDraftEdits(ctx context.Context, accountID string) (mail.DraftSyncResult, error) {
+	return f.syncDrafts(accountID, false)
+}
+
+func (f *fakeService) syncDrafts(accountID string, heavy bool) (mail.DraftSyncResult, error) {
 	f.draftSyncs++
 	if f.draftSyncErr != nil {
 		return mail.DraftSyncResult{}, f.draftSyncErr
@@ -509,6 +546,10 @@ func (f *fakeService) SyncDrafts(ctx context.Context, accountID string) (mail.Dr
 		if d.AccountID != accountID || !d.Dirty() {
 			continue
 		}
+		if !heavy && d.AttachmentBytes() > mail.DraftAutoUploadLimit {
+			result.Deferred++
+			continue
+		}
 		f.draftUID++
 		d.SyncedRevision = d.Revision
 		d.ServerFolder, d.ServerUID, d.ServerUIDValidity = folder, f.draftUID, 1
@@ -516,6 +557,108 @@ func (f *fakeService) SyncDrafts(ctx context.Context, accountID string) (mail.Dr
 		result.Uploaded++
 	}
 	return result, nil
+}
+
+// fakeContentType is a file's type by its name, enough for the tests'
+// files.
+func fakeContentType(name string) string {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".pdf":
+		return "application/pdf"
+	case ".png":
+		return "image/png"
+	case ".txt":
+		return "text/plain"
+	case ".zip":
+		return "application/zip"
+	}
+	return "application/octet-stream"
+}
+
+// AttachFile reads the file as the engine does, without keeping its
+// bytes: the fake's drafts name their files and no more.
+func (f *fakeService) AttachFile(ctx context.Context, d mail.Draft, path string) (mail.Draft, mail.Attachment, error) {
+	f.attachCalls = append(f.attachCalls, path)
+	if f.onAttach != nil {
+		f.onAttach(path)
+	}
+	if f.attachErr != nil {
+		return mail.Draft{}, mail.Attachment{}, f.attachErr
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return mail.Draft{}, mail.Attachment{}, err
+	}
+	if info.IsDir() {
+		return mail.Draft{}, mail.Attachment{}, mail.ErrAttachDirectory
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return mail.Draft{}, mail.Attachment{}, err
+	}
+	defer file.Close()
+	hash := sha256.New()
+	size, err := io.Copy(hash, file)
+	if err != nil {
+		return mail.Draft{}, mail.Attachment{}, err
+	}
+	att := mail.Attachment{
+		Filename: filepath.Base(path), ContentType: fakeContentType(path), Size: size,
+		ContentHash: hex.EncodeToString(hash.Sum(nil)),
+	}
+	cur, ok := f.drafts[d.ID]
+	if !ok {
+		// As the engine does: the draft is made as the window has it.
+		if cur, err = f.SaveDraft(ctx, d); err != nil {
+			return mail.Draft{}, mail.Attachment{}, err
+		}
+	}
+	for _, have := range cur.Attachments {
+		if have.ContentHash == att.ContentHash && have.Filename == att.Filename {
+			return cur, have, nil
+		}
+	}
+	if cur.AttachmentBytes()+att.Size > mail.MaxAttachmentBytes {
+		return mail.Draft{}, mail.Attachment{}, mail.ErrAttachTooLarge
+	}
+	cur.Attachments = append(append([]mail.Attachment(nil), cur.Attachments...), att)
+	return f.touchDraft(cur), att, nil
+}
+
+func (f *fakeService) RemoveAttachment(ctx context.Context, id string, att mail.Attachment) (mail.Draft, error) {
+	if f.removeErr != nil {
+		return mail.Draft{}, f.removeErr
+	}
+	cur, ok := f.drafts[id]
+	if !ok {
+		return mail.Draft{}, mail.ErrNotFound
+	}
+	var kept []mail.Attachment
+	for _, have := range cur.Attachments {
+		if have.ContentHash != att.ContentHash || have.Filename != att.Filename {
+			kept = append(kept, have)
+		}
+	}
+	if len(kept) == len(cur.Attachments) {
+		return cur, nil
+	}
+	cur.Attachments = kept
+	return f.touchDraft(cur), nil
+}
+
+// touchDraft stores a draft whose attachments changed: an edit like any
+// other.
+func (f *fakeService) touchDraft(d mail.Draft) mail.Draft {
+	d.Revision++
+	f.draftTick++
+	d.UpdatedAt = f.draftBase.Add(time.Duration(f.draftTick) * time.Minute)
+	f.drafts[d.ID] = d
+	return d
+}
+
+func (f *fakeService) SweepDraftFiles(ctx context.Context) error {
+	f.sweeps++
+	return nil
 }
 
 func (f *fakeService) DiscardDraft(ctx context.Context, id string) error {

@@ -107,6 +107,10 @@ type app struct {
 	// Hooks the window sets; tests leave them nil.
 	newWindow func(mygo.WindowOptions) *mygo.Window
 	saveFile  func(parent *mygo.Window, name string) (string, error)
+	// pickFiles asks which files to attach. It blocks, so jobs call it.
+	// While it is nil the attach button opens nothing; dropping files
+	// still attaches them.
+	pickFiles func(parent *mygo.Window) ([]string, error)
 	setLocale func(string)
 	setBadge  func(int)
 	after     func(time.Duration, func()) *time.Timer
@@ -166,6 +170,11 @@ func (a *app) attach(win *mygo.Window) {
 	a.saveFile = func(parent *mygo.Window, name string) (string, error) {
 		return mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: parent, DefaultPath: name})
 	}
+	a.pickFiles = func(parent *mygo.Window) ([]string, error) {
+		return mygo.Dialog.Open(mygo.OpenDialogOptions{
+			Parent: parent, Title: locales.AttachFiles(), ButtonLabel: locales.Attach(), Multiple: true,
+		})
+	}
 	a.setLocale = mygo.App.SetLocale
 	a.setBadge = mygo.App.SetBadgeCount
 	a.after = time.AfterFunc
@@ -188,6 +197,14 @@ func (a *app) start() {
 	}
 	a.started = true
 	g := a.gen
+	// The files of drafts that were sent or discarded without the time to
+	// collect them, as when the app quit meanwhile, go now. It is best
+	// effort: what stays is collected the next time.
+	a.run(func() {
+		ctx, cancel := a.ctx()
+		defer cancel()
+		_ = a.svc.SweepDraftFiles(ctx)
+	})
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
@@ -1041,7 +1058,11 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		a := newApp(mail.NewService(db, keychain{}, cacheDir))
+		svc := mail.NewService(db, keychain{}, cacheDir)
+		// What a draft has attached is the user's data, not a cache that
+		// the system may clear: it is kept beside the database.
+		svc.SetDataDir(dataDir)
+		a := newApp(svc)
 		a.ai = ai.NewService(db, aiKeychain{})
 		win := mygo.NewWindow(mygo.WindowOptions{
 			Title:           locales.AppName(),

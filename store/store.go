@@ -92,6 +92,17 @@ var migrations = [][]string{
 			VALUES (new.id, new.subject, new.from_name, new.from_email, new.body_text);
 		END`,
 	},
+	// v2: the cache of AI answers. The key is a hash of the request that
+	// produced the answer; the row goes when its account does. API keys
+	// are not here or anywhere in the database: they stay in the keychain.
+	{
+		`CREATE TABLE ai_cache (
+			key TEXT PRIMARY KEY,
+			account_id TEXT REFERENCES accounts(id) ON DELETE CASCADE,
+			feature TEXT NOT NULL, provider TEXT NOT NULL, model TEXT NOT NULL,
+			result TEXT NOT NULL, created_at INTEGER NOT NULL)`,
+		`CREATE INDEX ai_cache_account ON ai_cache (account_id)`,
+	},
 }
 
 // SchemaVersion is the version Open migrates to.

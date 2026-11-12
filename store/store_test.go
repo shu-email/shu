@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo/plugins/sqlite"
 
+	"shu/ai"
 	"shu/mail"
 )
 
@@ -66,6 +67,7 @@ func TestMigrationsFromEmpty(t *testing.T) {
 		"accounts", "kv", "folders", "messages", "attachments", "outbox",
 		"messages_fts", "messages_list", "messages_message_id", "folders_account",
 		"messages_ai", "messages_ad", "messages_au", "outbox_account",
+		"ai_cache", "ai_cache_account",
 	} {
 		if !have[name] {
 			t.Errorf("missing schema object %q", name)
@@ -480,5 +482,80 @@ func TestSaveAccountUpdates(t *testing.T) {
 	}
 	if accounts, _ := s.Accounts(ctx); len(accounts) != 1 {
 		t.Errorf("accounts = %+v", accounts)
+	}
+}
+
+// Settings round-trip through the kv table and replace their old value.
+func TestSettings(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	if _, ok, err := s.Setting(ctx, "ai.config"); err != nil || ok {
+		t.Fatalf("missing setting = %v, %v", ok, err)
+	}
+	if err := s.SetSetting(ctx, "ai.config", `{"enabled":true}`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetSetting(ctx, "ai.config", `{"enabled":false}`); err != nil {
+		t.Fatal(err)
+	}
+	got, ok, err := s.Setting(ctx, "ai.config")
+	if err != nil || !ok || got != `{"enabled":false}` {
+		t.Errorf("setting = %q, %v, %v", got, ok, err)
+	}
+	// The active account shares the table and is not disturbed.
+	addAccount(t, s, "a1")
+	if err := s.SetActiveAccount(ctx, "a1"); err != nil {
+		t.Fatal(err)
+	}
+	if id, _ := s.ActiveAccount(ctx); id != "a1" {
+		t.Errorf("active = %q", id)
+	}
+}
+
+// Cached AI answers are read back by key and leave with their account.
+func TestAICache(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	addAccount(t, s, "a1")
+	at := time.Unix(1_700_000_000, 0)
+	entry := ai.CacheEntry{
+		Key: "k1", Scope: "a1", Feature: ai.FeatureSummary, Provider: ai.ProviderOpenAI,
+		Model: "gpt-4o-mini", Text: "- A summary", CreatedAt: at,
+	}
+	if _, ok, err := s.AICached(ctx, "k1"); err != nil || ok {
+		t.Fatalf("empty cache = %v, %v", ok, err)
+	}
+	if err := s.SaveAICache(ctx, entry); err != nil {
+		t.Fatal(err)
+	}
+	got, ok, err := s.AICached(ctx, "k1")
+	if err != nil || !ok {
+		t.Fatal(ok, err)
+	}
+	if got.Text != entry.Text || got.Model != entry.Model || got.Provider != entry.Provider ||
+		got.Feature != entry.Feature || got.Scope != "a1" || !got.CreatedAt.Equal(at) {
+		t.Errorf("entry = %+v", got)
+	}
+	// Saving the same key again replaces the answer.
+	entry.Text = "- Another"
+	if err := s.SaveAICache(ctx, entry); err != nil {
+		t.Fatal(err)
+	}
+	if got, _, _ := s.AICached(ctx, "k1"); got.Text != "- Another" {
+		t.Errorf("replaced entry = %+v", got)
+	}
+	// A scope that is no account is stored without one.
+	if err := s.SaveAICache(ctx, ai.CacheEntry{Key: "k2", Scope: "gone", Feature: ai.FeatureSummary, Text: "x", CreatedAt: at}); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok, _ := s.AICached(ctx, "k2"); !ok || got.Scope != "" {
+		t.Errorf("unscoped entry = %+v, %v", got, ok)
+	}
+	// Deleting the account removes the answers made from its mail.
+	if err := s.DeleteAccount(ctx, "a1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, _ := s.AICached(ctx, "k1"); ok {
+		t.Error("a cached answer outlived its account")
 	}
 }

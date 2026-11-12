@@ -65,6 +65,9 @@ type fakeIMAP struct {
 	// does. stores records each STORE, in the mailbox it changed.
 	keywords map[string]fakeKeywords
 	stores   []fakeStore
+	// headerFetches records the header fields each FETCH of some asked
+	// for (see rules_imap_test.go).
+	headerFetches [][]string
 }
 
 // afterStatus has do run once the next STATUS is answered.

@@ -65,6 +65,15 @@ type memStore struct {
 	keptLabels  map[string]map[LabelID]bool
 	labelsGone  map[string]time.Time
 	beforeApply func()
+	// rules are the rules in their order, the last ID given rulesNext;
+	// ruleLog is the rules' log, oldest first, the last ID given logNext;
+	// expected the notes of messages moving into a folder, oldest first
+	// (see fake_rules_test.go).
+	rules     []Rule
+	rulesNext RuleID
+	ruleLog   []RuleActivity
+	logNext   ActivityID
+	expected  []memExpected
 }
 
 // memMark is a folder's watermark.
@@ -160,6 +169,9 @@ func (s *memStore) DeleteAccount(ctx context.Context, id string) error {
 			delete(s.drafts, k)
 		}
 	}
+	s.rules = slices.DeleteFunc(s.rules, func(r Rule) bool { return r.Account() == id })
+	s.ruleLog = slices.DeleteFunc(s.ruleLog, func(e RuleActivity) bool { return e.Account == id })
+	s.expected = slices.DeleteFunc(s.expected, func(x memExpected) bool { return x.account == id })
 	if s.active == id {
 		s.active = ""
 	}
@@ -811,6 +823,9 @@ func (s *memStore) ApplySync(ctx context.Context, accountID string, b SyncBatch)
 		if old, ok := s.messages[key][m.UID]; ok {
 			refs, index := old.References, old.ThreadIndex
 			old.Summary = m.Summary
+			if old.RawHeaders == "" {
+				old.RawHeaders = m.RawHeaders
+			}
 			// A header the sync did not get keeps what the cache had.
 			if len(old.References) == 0 {
 				old.References = refs

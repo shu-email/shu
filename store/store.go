@@ -380,6 +380,56 @@ var migrations = [][]string{
 			PRIMARY KEY (label_id, msg_key)) WITHOUT ROWID`,
 		`CREATE INDEX local_labels_key ON local_labels (msg_key, label_id)`,
 	},
+	// v13: rules and their log (see mail.Rule, mail.RuleActivity). A rule
+	// is in the order of position, its conditions and actions as JSON; its
+	// IDs are never given again, and it goes with the account it names,
+	// when it names one. rule_log is the rules' matches, each with the
+	// message where the rule found it, by its key too (msg_key), what the
+	// rule was to do and what it changed, as JSON; an entry goes with its
+	// account and outlives its rule, to be undone. expected_arrivals are
+	// the messages, by their keys, this app is moving into a folder, which
+	// are no mail that arrived there; they go with the folder.
+	{
+		`CREATE TABLE rules (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			account_id TEXT REFERENCES accounts(id) ON DELETE CASCADE,
+			position INTEGER NOT NULL,
+			name TEXT NOT NULL,
+			paused INTEGER NOT NULL DEFAULT 0,
+			match_mode TEXT NOT NULL,
+			stop INTEGER NOT NULL DEFAULT 0,
+			conditions TEXT NOT NULL,
+			actions TEXT NOT NULL)`,
+		`CREATE INDEX rules_account ON rules (account_id)`,
+		`CREATE TABLE rule_log (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			at INTEGER NOT NULL,
+			rule_id INTEGER NOT NULL,
+			rule_name TEXT NOT NULL,
+			manual INTEGER NOT NULL DEFAULT 0,
+			account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+			folder TEXT NOT NULL,
+			uidvalidity INTEGER NOT NULL,
+			uid INTEGER NOT NULL,
+			message_id TEXT NOT NULL DEFAULT '',
+			msg_key TEXT NOT NULL DEFAULT '',
+			subject TEXT NOT NULL DEFAULT '',
+			from_name TEXT NOT NULL DEFAULT '',
+			from_email TEXT NOT NULL DEFAULT '',
+			actions TEXT NOT NULL,
+			changes TEXT NOT NULL DEFAULT '{}',
+			quiet INTEGER NOT NULL DEFAULT 0,
+			state TEXT NOT NULL,
+			error TEXT NOT NULL DEFAULT '')`,
+		`CREATE INDEX rule_log_rule ON rule_log (rule_id, id)`,
+		`CREATE INDEX rule_log_account ON rule_log (account_id, state, id)`,
+		`CREATE INDEX rule_log_message ON rule_log (account_id, folder, uid)`,
+		`CREATE TABLE expected_arrivals (
+			id INTEGER PRIMARY KEY,
+			folder_id INTEGER NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+			msg_key TEXT NOT NULL)`,
+		`CREATE INDEX expected_arrivals_key ON expected_arrivals (folder_id, msg_key)`,
+	},
 }
 
 // backfills compute, from the rows of the version before, statements a

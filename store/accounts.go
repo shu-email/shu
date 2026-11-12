@@ -65,9 +65,9 @@ func (s *Store) SaveAccount(ctx context.Context, a mail.Account) error {
 
 // DeleteAccount removes an account and, by cascade, its folders, messages,
 // watermarks, outbox, drafts and the rows of their attachments, its
-// identities, and its labels with those of its messages. The settings
-// kept for the account go with it: whether it notifies, and its
-// signature.
+// identities, its labels with those of its messages, the rules that name
+// it and the entries of the rules' log of its mail. The settings kept for
+// the account go with it: whether it notifies, and its signature.
 func (s *Store) DeleteAccount(ctx context.Context, id string) error {
 	return s.transaction(ctx, []stmtType{
 		stmt(`DELETE FROM accounts WHERE id = ?`, id),

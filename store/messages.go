@@ -371,15 +371,16 @@ func (s *Store) ApplySync(ctx context.Context, accountID string, b mail.SyncBatc
 }
 
 // upsertHeader writes the header a fetch read of a message, in its
-// conversation. A header the fetch did not get keeps what the cache had
-// of it.
+// conversation, with the header lines the rules read (RawHeaders), when
+// the fetch got them. A header the fetch did not get keeps what the cache
+// had of it, as do header lines the cache had.
 func upsertHeader(folderID int64, m mail.Message, thread int64) stmtType {
 	return stmt(`INSERT INTO messages (
 			folder_id, server_uid, message_id, in_reply_to, references_json,
 			from_name, from_email, to_json, cc_json, reply_to_json, recipients,
 			subject, preview, date, size, seen, flagged, has_attachments,
-			thread_index, thread_id, msg_key, deleted)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+			thread_index, thread_id, msg_key, raw_headers, deleted)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), 0)
 		ON CONFLICT (folder_id, server_uid) DO UPDATE SET
 			message_id=excluded.message_id, in_reply_to=excluded.in_reply_to,
 			references_json=COALESCE(NULLIF(excluded.references_json, ''), messages.references_json),
@@ -390,11 +391,12 @@ func upsertHeader(folderID int64, m mail.Message, thread int64) stmtType {
 			size=excluded.size, seen=excluded.seen, flagged=excluded.flagged,
 			has_attachments=excluded.has_attachments,
 			thread_index=COALESCE(NULLIF(excluded.thread_index, ''), messages.thread_index),
-			thread_id=excluded.thread_id, msg_key=excluded.msg_key, deleted=0`,
+			thread_id=excluded.thread_id, msg_key=excluded.msg_key,
+			raw_headers=COALESCE(messages.raw_headers, excluded.raw_headers), deleted=0`,
 		folderID, int64(m.UID), m.MessageID, m.InReplyTo, encodeJSON(m.References),
 		m.From.Name, m.From.Email, encodeJSON(m.To), encodeJSON(m.Cc), encodeJSON(m.ReplyTo), recipientsText(m.To, m.Cc),
 		m.Subject, m.Preview, dateColumn(m.Date), m.Size, boolInt(m.Seen), boolInt(m.Flagged),
-		boolInt(m.HasAttachments), m.ThreadIndex, thread, mail.LabelKey(m.Summary))
+		boolInt(m.HasAttachments), m.ThreadIndex, thread, mail.LabelKey(m.Summary), m.RawHeaders)
 }
 
 // ApplyOlder writes messages of a folder that a sync left out, older ones

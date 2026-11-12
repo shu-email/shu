@@ -548,13 +548,18 @@ func (s *Service) syncFolder(ctx context.Context, a Account, password, folder st
 // messages when it has none cached or they were reset, the flags and
 // threading headers of the newest refresh, and of the messages that
 // arrived since the last sync the newest keep. What keep leaves out is a
-// gap FetchOlder fills.
-type syncSpan struct{ first, refresh, keep int }
+// gap FetchOlder fills. sorts has the rules sort what arrived (see
+// arrivals.go).
+type syncSpan struct {
+	first, refresh, keep int
+	sorts                bool
+}
 
 // windowSpan is the span of a sync that caches and refreshes the newest
-// window messages and keeps up to defaultSyncCap that arrived.
+// window messages and keeps up to defaultSyncCap that arrived, which the
+// rules sort.
 func windowSpan(window int) syncSpan {
-	return syncSpan{first: window, refresh: window, keep: max(window, defaultSyncCap)}
+	return syncSpan{first: window, refresh: window, keep: max(window, defaultSyncCap), sorts: true}
 }
 
 // syncSelected syncs the folder a connection has selected, under the
@@ -663,7 +668,10 @@ func (s *Service) syncSelected(ctx context.Context, c *imapSession, accountID, f
 	if total > 0 {
 		addPreviews(c, set, batch.Messages)
 	}
-	return len(batch.Messages), s.store.ApplySync(ctx, accountID, batch)
+	if span.sorts && !reset && hasCached && !cached.SyncedAt.IsZero() && len(batch.Messages) > 0 {
+		s.addRuleHeaders(ctx, c, accountID, cached, batch.Messages)
+	}
+	return len(batch.Messages), s.writeSync(ctx, accountID, batch, span.sorts)
 }
 
 // setCounts takes a folder's counts from what a STATUS said of it.
@@ -718,6 +726,7 @@ func (s *Service) fetchMessage(ctx context.Context, a Account, password, folder 
 		return FetchResult{}, fmt.Errorf("mime: %w", err)
 	}
 	msg.UID = uid
+	msg.RawHeaders = s.withRuleHeaders(ctx, a.ID, msg.RawHeaders, raw)
 	seen, flagged, keywords := readFlags(buf.Flags)
 	msg.Seen = msg.Seen || seen
 	msg.Flagged = msg.Flagged || flagged
@@ -897,15 +906,18 @@ func (s *Service) moveOnServer(ctx context.Context, a Account, password, folder 
 	for _, uid := range uids {
 		set.AddNum(imap.UID(uid))
 	}
+	forget := s.expectArrivals(ctx, c, a.ID, uids, dest)
 	if c.capHas(imap.CapMove) {
 		data, err := c.client.Move(set, dest).Wait()
 		if err != nil {
+			forget()
 			return nil, fmt.Errorf("imap: move: %w", err)
 		}
 		return movedTo(folder, dest, uids, data.SourceUIDs, data.DestUIDs), nil
 	}
 	data, err := c.client.Copy(set, dest).Wait()
 	if err != nil {
+		forget()
 		return nil, fmt.Errorf("imap: copy: %w", err)
 	}
 	results := movedTo(folder, dest, uids, data.SourceUIDs, data.DestUIDs)

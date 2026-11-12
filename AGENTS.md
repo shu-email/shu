@@ -69,7 +69,9 @@ Windows and Linux. It is written in Go with
   `mail.Service` (`Watch`, `Unwatch`, `Nudge`, `SetOnline`). A watcher
   keeps its own connection to the inbox, opened read-only, idles where
   the server can push and polls otherwise, backs off when it fails, and
-  never changes a flag or moves a message. It reports data
+  never changes a flag or moves a message; what the rules do to the mail
+  a check brought is the service's, on connections of its own (see the
+  rules below). It reports data
   (`mail.WatchEvent`: state, folder counts, the messages to announce);
   the window decides what to notify, draws the state and sets the badge.
   A message is handed out for announcing at most once: `Store.TakeNew`
@@ -195,6 +197,37 @@ Windows and Linux. It is written in Go with
   folder but Junk, Trash and Drafts, with its unread count in
   `Label.Unread`; a conversation's row carries the labels of its messages
   in the list's scope, and `label:` searches by name.
+- Rules sort the mail that arrives (`mail/rules.go`, `mail/arrivals.go`,
+  `mail/ruleapply.go`, `mail/ruleundo.go`, `store/rules.go`). A rule is
+  in an order, enabled or paused, with conditions all or any of which a
+  message meets (sender, recipients, subject and a named header contain a
+  text in any case; attachments; account, folder, label) and actions of a
+  closed set, `mail.ActionKinds`: move to a folder of the message's
+  account, add or remove a label, star, mark read or unread, skip the
+  notification. No rule can send, forward or delete; `Service.CheckRule`
+  refuses any other kind, and what it refuses comes as a `*RuleError` that
+  names the condition or action. A rule names one account at most and goes
+  with it. Mail that arrives is what an incremental sync fetched above a
+  folder's cursor, in a folder synced before under the same UIDVALIDITY:
+  never a first sync, `FetchOlder` or a sync after a reset, and never a
+  message this app moved there itself, which `Store.ExpectArrivals` notes
+  by its key before the move, so that an undo is not undone. The rules
+  watch each account's inbox and the folders their conditions name, never
+  Drafts. A sync writes its batch and sorts what arrived in one step under
+  `Service.arrivalMu`, from the cache alone, having fetched only the
+  headers enabled rules read (kept in `raw_headers`); the watcher takes
+  the mail to announce under the same lock and leaves out what a rule
+  moves, marks read or keeps quiet. Every match is an entry of the log
+  (`mail.RuleActivity`), pending until a goroutine of the service applies
+  its actions with `SetLabel`, `SetFlags` and `MoveMessages` and records
+  what they changed; a server out of reach leaves it pending for a later
+  sync, so that nothing delays the mail. `UndoActivity` and `UndoRule` put
+  back what entries changed, moving back only a message whose envelope
+  makes the entry's key; `PauseRule` disables a rule and drops what it
+  had pending that had not begun. `PreviewRule` lists the cached matches
+  of a rule, saved or not, and changes nothing; `RunRule` runs a saved
+  rule once over exactly those, logged as any match. The log keeps the
+  newest `mail.MaxRuleActivity` entries and every pending one.
 - `ai/` is the AI layer: provider settings, the excerpt that decides what
   part of a message may leave the device, the features (summary of a
   message or a conversation, triage, draft reply) and `Service.send`, the

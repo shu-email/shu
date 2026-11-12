@@ -182,7 +182,43 @@ type Store interface {
 	RenameContact(ctx context.Context, email, name string) (Contact, error)
 	FavoriteContact(ctx context.Context, email string, on bool) (Contact, error)
 	DeleteContact(ctx context.Context, email string, at time.Time) error
+
+	// Rules (see Rule), in their order. SaveRule writes a rule as given: a
+	// new one (ID 0) after the others, with an ID never given before, or
+	// the rule of its ID, ErrNotFound when there is none. A rule goes with
+	// the account it names (Rule.Account). MoveRule puts a rule at a place
+	// of the order, one past the end being the end; DeleteRule removes one.
+	// Both are ErrNotFound for a rule there is not.
+	Rules(ctx context.Context) ([]Rule, error)
+	SaveRule(ctx context.Context, r Rule) (Rule, error)
+	MoveRule(ctx context.Context, id RuleID, index int) error
+	DeleteRule(ctx context.Context, id RuleID) error
+	// The rules' log (see RuleActivity), whose entries go with their
+	// account and outlive their rule. AddRuleActivity writes entries,
+	// each after those there are, and returns them with their IDs; the
+	// log then keeps the newest MaxRuleActivity entries, and every pending
+	// one besides. RuleActivity reads entries newest first, with how many
+	// the query finds. UpdateRuleActivity writes the state, changes and
+	// error of entries there are, and skips those gone.
+	AddRuleActivity(ctx context.Context, entries []RuleActivity) ([]RuleActivity, error)
+	RuleActivity(ctx context.Context, q ActivityQuery) (ActivityPage, error)
+	UpdateRuleActivity(ctx context.Context, entries []RuleActivity) error
+	// MessageHeaders reads cached messages of a folder without their
+	// bodies, each with its labels and RawHeaders: those of uids, or every
+	// one when uids is nil, tombstones left out.
+	MessageHeaders(ctx context.Context, accountID, folder string, uids []UID) ([]Message, error)
+	// ExpectArrivals notes messages, by their keys (LabelKey), that this
+	// app is moving into a folder, and TakeArrivals takes back the notes
+	// of those of keys and returns the keys it had. Notes go with their
+	// folder, and the newest MaxExpectedArrivals are kept.
+	ExpectArrivals(ctx context.Context, accountID, folder string, keys []string) error
+	TakeArrivals(ctx context.Context, accountID, folder string, keys []string) ([]string, error)
 }
+
+// MaxExpectedArrivals is how many notes of messages moving into a folder
+// the store keeps (see ExpectArrivals): the oldest of more were moves
+// into folders that are not synced, or that failed.
+const MaxExpectedArrivals = 1000
 
 // SecretStore keeps account passwords. production uses mygo.Secrets, tests
 // an in-memory map.

@@ -229,8 +229,9 @@ func (s *Service) stopWatcher(accountID string) {
 	}
 }
 
-// StopWatching ends every watcher, for good: the app is quitting. It
-// returns when their goroutines have ended.
+// StopWatching ends every watcher, for good: the app is quitting. The
+// rules' actions applied in the background stop too. It returns when
+// their goroutines have ended.
 func (s *Service) StopWatching() {
 	s.watchLife.Lock()
 	defer s.watchLife.Unlock()
@@ -245,6 +246,7 @@ func (s *Service) StopWatching() {
 	for _, w := range all {
 		<-w.done
 	}
+	s.stopRules()
 }
 
 // Nudge has every watcher check now instead of waiting: the app came to
@@ -538,12 +540,12 @@ func (w *watcher) checkOn(ctx context.Context, c *watchConn, full bool) error {
 	if c.folder != "" {
 		// What the server signalled until now, this sync covers.
 		taken(c.changed)
-		span := syncSpan{first: w.svc.firstSyncWindow(ctx), refresh: watchWindow, keep: defaultSyncCap}
+		span := syncSpan{first: w.svc.firstSyncWindow(ctx), refresh: watchWindow, keep: defaultSyncCap, sorts: true}
 		if _, err := w.svc.syncSelected(ctx, c.imapSession, w.accountID, c.folder, c.uidValidity, nil, span); err != nil {
 			return err
 		}
 		var err error
-		if fresh, err = store.TakeNew(ctx, w.accountID, c.folder); err != nil {
+		if fresh, err = w.svc.takeNew(ctx, w.accountID, c.folder); err != nil {
 			return err
 		}
 	}

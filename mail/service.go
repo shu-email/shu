@@ -78,13 +78,34 @@ type Service struct {
 	httpClient     *http.Client
 	tokenMu        sync.Mutex
 	tokens         map[string]*oauthToken
+
+	// Rules (rules.go, arrivals.go, ruleapply.go, ruleundo.go).
+	// arrivalMu makes the write of a sync's mail and the sorting of what
+	// arrived one step, which the watcher's taking of the mail to announce
+	// waits for. movedIn is the messages a sync found that this app moved
+	// into an inbox, which are no news, by account and folder. ruleMu
+	// guards the rest: the lock of each account's rule actions, the
+	// goroutine that applies them in the background, one per account at
+	// most, with whether it is asked for another round, ruleIdle
+	// signalled as one ends, the context that ends them all as the app
+	// quits, and the window's hook.
+	arrivalMu   sync.Mutex
+	movedIn     map[string]map[UID]bool
+	ruleMu      sync.Mutex
+	ruleLocks   map[string]*sync.Mutex
+	ruleRunning map[string]bool
+	ruleAgain   map[string]bool
+	ruleIdle    *sync.Cond
+	ruleCtx     context.Context
+	ruleStop    context.CancelFunc
+	ruleReport  func(accountID string)
 }
 
 // NewService wires the cache, the keychain and the attachment cache
 // directory. SetDataDir gives it the directory the attachments of drafts
 // are kept in, which is no cache.
 func NewService(store Store, secrets SecretStore, cacheDir string) *Service {
-	return &Service{
+	s := &Service{
 		store: store, secrets: secrets, cacheDir: cacheDir, clock: time.Now,
 		draftSync:      make(chan struct{}, 1),
 		draftsReplaced: map[string][]Attachment{},
@@ -95,7 +116,14 @@ func NewService(store Store, secrets SecretStore, cacheDir string) *Service {
 		oauthProviders: defaultOAuthProviders(),
 		httpClient:     newOAuthClient(),
 		tokens:         map[string]*oauthToken{},
+		movedIn:        map[string]map[UID]bool{},
+		ruleLocks:      map[string]*sync.Mutex{},
+		ruleRunning:    map[string]bool{},
+		ruleAgain:      map[string]bool{},
 	}
+	s.ruleIdle = sync.NewCond(&s.ruleMu)
+	s.ruleCtx, s.ruleStop = context.WithCancel(context.Background())
+	return s
 }
 
 // SetTLSConfig replaces the TLS configuration, for tests that trust a

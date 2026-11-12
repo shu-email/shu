@@ -392,6 +392,20 @@ CreateLabel(ctx, accountID, name string, color LabelColor) (Label, error) // Err
 UpdateLabel(ctx, accountID string, id LabelID, name string, color LabelColor) (Label, error) // the keyword stays
 SetLabel(ctx, accountID string, msgs []MessageRef, id LabelID, on bool) error // cache first, one STORE per folder
 DeleteLabel(ctx, accountID string, id LabelID) error // off every message on the server, then gone; ErrLabelPartlyRemoved
+
+// Rules, added since: they sort the mail that arrives (see AGENTS.md)
+Rules(ctx) ([]Rule, error)                                            // in order, the first tried first
+CheckRule(ctx, r Rule) error                                          // *RuleError: ErrRuleName, ErrRuleEmpty, ErrRuleCondition, ErrRuleAction, ErrRuleAccount, ErrRuleFolder, ErrRuleLabel
+SaveRule(ctx, r Rule) (Rule, error)                                   // ID 0 adds it after the others; touches no mail
+PauseRule(ctx, id RuleID, paused bool) (Rule, error)                  // disable; drops what it had pending and had not begun
+DeleteRule(ctx, id RuleID) error                                      // its log stays, to be undone
+MoveRule(ctx, id RuleID, index int) error
+PreviewRule(ctx, r Rule, offset, limit int) (RulePreview, error)      // the cached matches now, newest first; changes nothing
+RunRule(ctx, id RuleID, targets []RuleTarget) ([]RuleActivity, error) // once, over a preview's targets; ErrRulePaused, ErrRuleRunTooLarge
+RuleActivity(ctx, q ActivityQuery) (ActivityPage, error)              // the log, newest first
+UndoActivity(ctx, id ActivityID) error                                // ErrRuleMessageGone when the message is not where the rule left it
+UndoRule(ctx, id RuleID) (int, error)                                 // every entry of a rule's
+OnRuleActivity(report func(accountID string))                         // actions applied in the background
 ```
 
 IMAP details:

@@ -67,6 +67,7 @@ func parseMessage(raw []byte, attachmentCap int64) (Message, int, error) {
 	m.To = addresses(h, "To")
 	m.Cc = addresses(h, "Cc")
 	m.ReplyTo = addresses(h, "Reply-To")
+	m.RawHeaders = keptHeaders(h)
 
 	var text, htmlBody strings.Builder
 	var attachmentBytes int64
@@ -85,7 +86,7 @@ func parseMessage(raw []byte, attachmentCap int64) (Message, int, error) {
 		}
 		part++
 		contentType, params := partContentType(p.Header)
-		if _, ok := p.Header.(*gomsgmail.InlineHeader); ok && strings.HasPrefix(contentType, "text/") {
+		if bodyText(p.Header, contentType) {
 			data, cut := readCapped(p.Body, maxBodyPart)
 			truncated = truncated || cut
 			switch {
@@ -97,16 +98,8 @@ func parseMessage(raw []byte, attachmentCap int64) (Message, int, error) {
 			_ = params
 			continue
 		}
-		// Any other part is an attachment, inline or not. Inline pictures
-		// without a name are still worth listing.
-		name := ""
-		if ah, ok := p.Header.(*gomsgmail.AttachmentHeader); ok {
-			name, _ = ah.Filename()
-		}
-		if name == "" {
-			name = params["name"]
-		}
-		if name == "" && !strings.HasPrefix(contentType, "image/") && !strings.HasPrefix(contentType, "application/") {
+		name, ok := attachmentName(p.Header, contentType, params)
+		if !ok {
 			// Unknown inline part: read and drop so the reader can move on.
 			_, _ = io.Copy(io.Discard, p.Body)
 			dropped++
@@ -145,6 +138,31 @@ func parseMessage(raw []byte, attachmentCap int64) (Message, int, error) {
 	m.HasAttachments = len(m.Attachments) > 0
 	m.Preview = preview(m.BodyText)
 	return m, dropped, nil
+}
+
+// attachmentName is the file name of a part that is no text of the body,
+// and whether it is one of the message's attachments: any such part with
+// a name, inline or not, and a picture or a document without one, which
+// is still worth listing.
+func attachmentName(h gomsgmail.PartHeader, contentType string, params map[string]string) (string, bool) {
+	name := ""
+	if ah, ok := h.(*gomsgmail.AttachmentHeader); ok {
+		name, _ = ah.Filename()
+	}
+	if name == "" {
+		name = params["name"]
+	}
+	if name == "" && !strings.HasPrefix(contentType, "image/") && !strings.HasPrefix(contentType, "application/") {
+		return "", false
+	}
+	return name, true
+}
+
+// bodyText reports whether a part is text of the message's body rather
+// than an attachment.
+func bodyText(h gomsgmail.PartHeader, contentType string) bool {
+	_, inline := h.(*gomsgmail.InlineHeader)
+	return inline && strings.HasPrefix(contentType, "text/")
 }
 
 // partContentType reads a part's media type, as its header interface does

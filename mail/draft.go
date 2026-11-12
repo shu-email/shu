@@ -32,6 +32,9 @@ type Draft struct {
 	Body       string
 	InReplyTo  string
 	References []string
+	// Identity is the identity the draft is written from, by ID: "" for
+	// the account's own address, which one deleted falls back to.
+	Identity string
 	// Attachments are the files attached, in the order they were added.
 	// Their bytes are in the draft file store (see attach.go). They
 	// change through AttachFile and RemoveAttachment only: a save of the
@@ -111,7 +114,17 @@ func NewDraftID() string {
 // attachments are no part of it: a save does not change them.
 func sameDraftContent(a, b Draft) bool {
 	return a.To == b.To && a.Cc == b.Cc && a.Bcc == b.Bcc && a.Subject == b.Subject &&
-		a.Body == b.Body && a.InReplyTo == b.InReplyTo && slices.Equal(a.References, b.References)
+		a.Body == b.Body && a.InReplyTo == b.InReplyTo && slices.Equal(a.References, b.References) &&
+		a.Identity == b.Identity
+}
+
+// saysWhatWasSent reports whether a draft still says what a message sent
+// from it said: one edited since stays a draft.
+func saysWhatWasSent(d Draft, sent Outgoing) bool {
+	out := d.outgoing()
+	return out.Subject == sent.Subject && out.Text == sent.Text &&
+		slices.Equal(out.To, sent.To) && slices.Equal(out.Cc, sent.Cc) && slices.Equal(out.Bcc, sent.Bcc) &&
+		out.Identity == sent.Identity && sameAttachments(out.Attachments, sent.Attachments)
 }
 
 // draftAddresses reads a recipient field as far as it parses. A draft may
@@ -153,19 +166,21 @@ func (d Draft) outgoing() Outgoing {
 		InReplyTo:   d.InReplyTo,
 		References:  d.References,
 		MessageID:   d.MessageID,
+		Identity:    d.Identity,
 		Attachments: d.Attachments,
 	}
 }
 
-// summary is the draft's row in the Drafts folder.
-func (d Draft) summary(a Account) Summary {
+// summary is the draft's row in the Drafts folder, from the identity it
+// is written from.
+func (d Draft) summary(from Identity) Summary {
 	return Summary{
-		Account:        a.ID,
+		Account:        from.AccountID,
 		DraftID:        d.ID,
 		MessageID:      d.MessageID,
 		InReplyTo:      d.InReplyTo,
 		References:     d.References,
-		From:           Address{Name: a.Name, Email: a.Email},
+		From:           from.Address(),
 		To:             draftAddresses(d.To),
 		Cc:             draftAddresses(d.Cc),
 		Subject:        strings.TrimSpace(d.Subject),
@@ -191,9 +206,11 @@ func (d Draft) matches(query string) bool {
 }
 
 // draftMessage builds the server copy of a draft, attachments included:
-// another mail client that opens it gets the whole draft.
-func (s *Service) draftMessage(a Account, d Draft) ([]byte, error) {
+// another mail client that opens it gets the whole draft, from the
+// identity it is written from.
+func (s *Service) draftMessage(a Account, from Identity, d Draft) ([]byte, error) {
 	out := d.outgoing()
+	out.From = from.Address()
 	bcc := out.Bcc
 	out.Bcc = nil
 	msg, err := s.newMessage(a, out, d.UpdatedAt)
@@ -201,16 +218,10 @@ func (s *Service) draftMessage(a Account, d Draft) ([]byte, error) {
 		return nil, err
 	}
 	msg.SetGenHeaderPreformatted(gomail.Header(draftIDHeader), d.ID)
-	if len(bcc) > 0 {
-		// A message going out must not show its Bcc, so go-mail never
-		// writes it; a draft has to keep it for the next editor.
-		parts := make([]string, 0, len(bcc))
-		for _, addr := range toStdAddresses(bcc) {
-			parts = append(parts, addr.String())
-		}
-		// Preformatted headers are written as given, so the folding of a
-		// long list is done here: one address a line.
-		msg.SetGenHeaderPreformatted(gomail.Header("Bcc"), strings.Join(parts, ",\r\n "))
+	// A message going out must not show its Bcc, so go-mail never writes
+	// it; a draft has to keep it for the next editor.
+	if value := headerAddresses(bcc); value != "" {
+		msg.SetGenHeaderPreformatted(gomail.Header("Bcc"), value)
 	}
 	return rawMessage(msg, d.AttachmentBytes())
 }
@@ -264,7 +275,11 @@ func (s *Service) createDraft(ctx context.Context, a Account, d Draft) (Draft, e
 	d.Attachments, d.Conflict = s.draftsReplaced[d.ID]
 	delete(s.draftsReplaced, d.ID)
 	if d.MessageID == "" || d.Conflict {
-		d.MessageID = newMessageID(a.Email)
+		from, err := s.identity(ctx, a, d.Identity)
+		if err != nil {
+			return Draft{}, err
+		}
+		d.MessageID = newMessageID(from.Email)
 	}
 	d.UpdatedAt = s.now()
 	return s.store.SaveDraft(ctx, d)
@@ -299,6 +314,18 @@ func (s *Service) DraftList(ctx context.Context, accountID, query string, limit 
 	if err != nil {
 		return nil, err
 	}
+	added, err := s.store.Identities(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	from := func(d Draft) Identity {
+		for _, id := range added {
+			if id.ID == d.Identity {
+				return id
+			}
+		}
+		return ownIdentity(a)
+	}
 	out := make([]Summary, 0, len(drafts))
 	uploaded := map[UID]bool{}
 	for _, d := range drafts {
@@ -308,7 +335,7 @@ func (s *Service) DraftList(ctx context.Context, accountID, query string, limit 
 			uploaded[d.ServerUID] = true
 		}
 		if !d.PendingDelete && d.matches(query) {
-			out = append(out, d.summary(a))
+			out = append(out, d.summary(from(d)))
 		}
 	}
 	if folder.Name != "" {
@@ -814,7 +841,11 @@ func (s *Service) uploadDraft(ctx context.Context, box *draftBox, a Account, d D
 		result.Deferred++
 		return nil
 	}
-	raw, err := s.draftMessage(a, d)
+	from, err := s.identity(ctx, a, d.Identity)
+	if err != nil {
+		return err
+	}
+	raw, err := s.draftMessage(a, from, d)
 	if err != nil {
 		return err
 	}
@@ -944,10 +975,7 @@ func (s *Service) retireSentDraft(ctx context.Context, accountID string, sent Ou
 		if d.PendingDelete || d.MessageID != sent.MessageID {
 			continue
 		}
-		out := d.outgoing()
-		if out.Subject != sent.Subject || out.Text != sent.Text ||
-			!slices.Equal(out.To, sent.To) || !slices.Equal(out.Cc, sent.Cc) ||
-			!sameAttachments(out.Attachments, sent.Attachments) {
+		if !saysWhatWasSent(d, sent) {
 			return false
 		}
 		return s.retireDraft(ctx, accountID, d.ID)
@@ -1079,6 +1107,16 @@ func (s *Service) AdoptDraft(ctx context.Context, accountID, folder string, uid 
 		// what could not be kept. The draft stays where it is.
 		return Draft{}, ErrDraftHasAttachments
 	}
+	identities, err := s.Identities(ctx, accountID)
+	if err != nil {
+		return Draft{}, err
+	}
+	// It goes on from the address it was written from, where that is one
+	// of the account's.
+	from, ok := identityFor(identities, msg.From)
+	if !ok {
+		from = identities[0]
+	}
 	// The files and the rows naming them are made in one step, as the
 	// sweep sees it.
 	s.fileMu.Lock()
@@ -1111,6 +1149,7 @@ func (s *Service) AdoptDraft(ctx context.Context, accountID, folder string, uid 
 		Body:        msg.BodyText,
 		InReplyTo:   msg.InReplyTo,
 		References:  msg.References,
+		Identity:    from.ID,
 		Attachments: attachments,
 		MessageID:   msg.MessageID,
 		UpdatedAt:   s.now(),
@@ -1122,7 +1161,7 @@ func (s *Service) AdoptDraft(ctx context.Context, accountID, folder string, uid 
 		ServerUIDValidity: selected.UIDValidity,
 	}
 	if d.MessageID == "" {
-		d.MessageID = newMessageID(a.Email)
+		d.MessageID = newMessageID(from.Email)
 	}
 	s.draftMu.Lock()
 	defer s.draftMu.Unlock()

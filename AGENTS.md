@@ -54,6 +54,17 @@ Windows and Linux. It is written in Go with
 - The outbox keeps a message without attachments as its bytes. For one
   with attachments it keeps the envelope and the references to the
   stored files, and builds the message again for each try.
+- A message sent with a delay waits it out in the outbox, `scheduled`
+  with the time it is due, so that it outlives the app: `Service.Schedule`
+  writes it, `SendScheduled` sends it when it is due, `Unsend` takes it
+  back until then and returns its draft, and `DeliverScheduled` sends,
+  as the app starts, those an earlier run left waiting. One change of the
+  entry's state in the store (`Store.ClaimOutbox`, from `scheduled` to
+  `sending` or to `cancelled`) decides, so a message is never both sent
+  and taken back. A message goes from one of its account's identities,
+  its own address or an alias the user entered, in its From and in the
+  envelope alike. Its Bcc recipients are in the envelope only: the copy
+  saved in Sent alone names them.
 - Mail is received while the app runs by one watcher per account inside
   `mail.Service` (`Watch`, `Unwatch`, `Nudge`, `SetOnline`). A watcher
   keeps its own connection to the inbox, opened read-only, idles where

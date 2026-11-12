@@ -263,3 +263,77 @@ func TestHostileAttachmentNameIsSentAsAName(t *testing.T) {
 		check(t, env, d)
 	})
 }
+
+// The Bcc header of a Sent copy, and of a draft's server copy, is written
+// here from addresses the user typed. A name is encoded whatever it holds,
+// an address that does not read back as itself is left out, and nothing
+// adds a header or ends the header early.
+func TestBccHeaderCannotAddHeaders(t *testing.T) {
+	bcc := []Address{
+		{Name: "Eve\r\nX-Injected: yes", Email: "eve@example.com"},
+		{Name: `"Quoted" <name>; and, more`, Email: "q@example.com"},
+		{Email: "x@evil.example>\r\nX-Injected: yes"},
+		{Email: "x@evil.example\r\n\r\nbody"},
+		{Name: "长的名字" + strings.Repeat("长", 80), Email: "long@example.com"},
+	}
+	value := headerAddresses(bcc)
+	for i, line := range strings.Split(value, "\r\n") {
+		if len(line) > 998 || (i > 0 && !strings.HasPrefix(line, " ")) {
+			t.Errorf("line %d of the header = %q", i, line)
+		}
+	}
+	if unfolded := strings.ReplaceAll(value, "\r\n ", " "); strings.ContainsFunc(unfolded, unicode.IsControl) {
+		t.Errorf("the header holds a control character: %q", value)
+	}
+	raw := "From: ann@example.com\r\nTo: bob@example.com\r\nSubject: x\r\n\r\nBody\r\n"
+	kept := strings.Join(func() []string {
+		var parts []string
+		for _, p := range sentCopy([]byte(raw), bcc) {
+			parts = append(parts, string(p))
+		}
+		return parts
+	}(), "")
+	if names := headerNames(kept); slices.Contains(names, "x-injected") || !slices.Contains(names, "bcc") {
+		t.Errorf("headers of the Sent copy = %v:\n%s", names, kept)
+	}
+	if !strings.HasSuffix(kept, "\r\n\r\nBody\r\n") || !strings.HasPrefix(kept, "From: ann@example.com\r\n") {
+		t.Errorf("the Sent copy moved the body:\n%s", kept)
+	}
+	named, _ := draftHeaders([]byte(kept))
+	want := []Address{bcc[0], bcc[1], bcc[4]}
+	if !slices.Equal(named, want) {
+		t.Errorf("the Sent copy names %+v, want %+v", named, want)
+	}
+	if got := sentCopy([]byte(raw), nil); len(got) != 1 || string(got[0]) != raw {
+		t.Errorf("a message without Bcc is saved as %q", got)
+	}
+}
+
+// A message goes from one of the account's identities, whatever the From
+// it comes with: that is the engine's to set, so a caller cannot put an
+// address of its own, or a header, there.
+func TestFromIsTheIdentitys(t *testing.T) {
+	ctx := context.Background()
+	env := newAttachEnv(t, nil)
+	out := Outgoing{
+		To: []Address{{Email: "bob@example.com"}}, Subject: "Hi", Text: "Hello",
+		From: Address{Name: "Boss\r\nBcc: evil@example.com", Email: "boss@evil.example"},
+	}
+	if _, err := env.svc.Send(ctx, env.a.ID, out); err != nil {
+		t.Fatal(err)
+	}
+	received := env.smtp.received()
+	if len(received) != 1 {
+		t.Fatalf("delivered %d messages", len(received))
+	}
+	if got := env.smtp.senders(); !slices.Equal(got, []string{env.a.Email}) {
+		t.Errorf("envelope sender = %v", got)
+	}
+	if got := env.smtp.recipients(); !slices.Equal(got, []string{"bob@example.com"}) {
+		t.Errorf("recipients = %v", got)
+	}
+	m, err := ParseMessage([]byte(received[0]))
+	if err != nil || m.From != (Address{Name: env.a.Name, Email: env.a.Email}) || strings.Contains(received[0], "evil") {
+		t.Errorf("sent from %+v, %v:\n%s", m.From, err, received[0])
+	}
+}

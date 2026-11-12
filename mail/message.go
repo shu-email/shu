@@ -113,8 +113,11 @@ type Message struct {
 	BodyHTML      string       `json:"bodyHTML,omitempty"`
 	BodyTruncated bool         `json:"bodyTruncated,omitempty"`
 	Attachments   []Attachment `json:"attachments,omitempty"`
-	RawHeaders    string       `json:"rawHeaders,omitempty"`
-	CachedAt      time.Time    `json:"cachedAt,omitempty"`
+	// RawHeaders is the header lines the cache keeps of the message as
+	// they came, which no other field holds: its Delivered-To, which says
+	// which of the user's addresses it reached (see DeliveredTo).
+	RawHeaders string    `json:"rawHeaders,omitempty"`
+	CachedAt   time.Time `json:"cachedAt,omitempty"`
 	// BodyCached reports whether the body is in the cache; a summary
 	// whose body was never fetched has none.
 	BodyCached bool `json:"bodyCached,omitempty"`
@@ -164,7 +167,9 @@ const (
 	SpecialFlagged = `\Flagged`
 )
 
-// Outgoing is a message to send.
+// Outgoing is a message to send. Its Bcc recipients get it and are named
+// nowhere a recipient sees: not in the message sent, only in the copy
+// the Sent folder keeps.
 type Outgoing struct {
 	To         []Address `json:"to,omitempty"`
 	Cc         []Address `json:"cc,omitempty"`
@@ -174,6 +179,13 @@ type Outgoing struct {
 	InReplyTo  string    `json:"inReplyTo,omitempty"`
 	References []string  `json:"references,omitempty"`
 	MessageID  string    `json:"messageID,omitempty"`
+	// Identity is the identity the message goes from, by its ID: "" for
+	// the account's own address, as is one deleted meanwhile.
+	Identity string `json:"identity,omitempty"`
+	// From is the address the message goes from, which the engine sets
+	// from Identity as it builds the message. The outbox keeps it, so
+	// that a message sent again goes from the address it was sent from.
+	From Address `json:"from,omitzero"`
 	// Attachments are files of the draft file store, in the order they
 	// go into the message. The outbox keeps these few fields of each, and
 	// never the bytes.
@@ -217,6 +229,11 @@ const (
 	// there, or an earlier try of a message that has since been
 	// delivered. It is not offered again and holds on to no files.
 	StateCancelled = "cancelled"
+	// StateScheduled is a message waiting out its send delay: none of it
+	// has left. Until it is due Unsend takes it back; then it leaves. One
+	// step that succeeds once moves it on, to sending or to cancelled, so
+	// that it is never both sent and taken back.
+	StateScheduled = "scheduled"
 )
 
 // PendingSend is an outbox entry. Raw is the message as it was built,
@@ -233,6 +250,12 @@ type PendingSend struct {
 	LastError string    `json:"lastError,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 	SentAt    time.Time `json:"sentAt,omitempty"`
+	// DueAt is when a message scheduled with a send delay leaves; zero
+	// for one sent at once.
+	DueAt time.Time `json:"dueAt,omitzero"`
+	// DraftID is the draft a scheduled message was written as. It stays
+	// a draft while the message waits, which is what Unsend gives back.
+	DraftID string `json:"draftID,omitempty"`
 }
 
 // FlagUpdate refreshes the flags of a cached message during a sync.

@@ -12,7 +12,7 @@ import (
 // draftColumns are the draft fields every query reads.
 const draftColumns = `id, account_id, to_text, cc_text, bcc_text, subject, body,
 	in_reply_to, references_json, message_id, updated_at, revision, synced_revision,
-	server_folder, server_uid, server_uidvalidity, pending_delete, conflict`
+	server_folder, server_uid, server_uidvalidity, pending_delete, conflict, identity`
 
 func draftRow(r []any) mail.Draft {
 	return mail.Draft{
@@ -34,6 +34,7 @@ func draftRow(r []any) mail.Draft {
 		ServerUIDValidity: uint32(number(r[15])),
 		PendingDelete:     truth(r[16]),
 		Conflict:          truth(r[17]),
+		Identity:          text(r[18]),
 	}
 }
 
@@ -114,16 +115,17 @@ func attachmentInsert(id string, position int, a mail.Attachment, guard string, 
 // attachments that may be out of date.
 func (s *Store) SaveDraft(ctx context.Context, d mail.Draft) (mail.Draft, error) {
 	stmts := []stmtType{stmt(`INSERT INTO drafts (`+draftColumns+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (id) DO UPDATE SET
 			to_text=excluded.to_text, cc_text=excluded.cc_text, bcc_text=excluded.bcc_text,
 			subject=excluded.subject, body=excluded.body,
 			in_reply_to=excluded.in_reply_to, references_json=excluded.references_json,
+			identity=excluded.identity,
 			updated_at=excluded.updated_at, revision=drafts.revision + 1`,
 		d.ID, d.AccountID, d.To, d.Cc, d.Bcc, d.Subject, d.Body,
 		d.InReplyTo, encodeJSON(d.References), d.MessageID, d.UpdatedAt.Unix(),
 		d.SyncedRevision, d.ServerFolder, int64(d.ServerUID), int64(d.ServerUIDValidity),
-		boolInt(d.PendingDelete), boolInt(d.Conflict))}
+		boolInt(d.PendingDelete), boolInt(d.Conflict), d.Identity)}
 	for i, a := range d.Attachments {
 		// Only the statement above tells a new row from an old one: the
 		// row it made is at revision 1, the one it changed is past it.

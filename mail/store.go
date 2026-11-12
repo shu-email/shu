@@ -25,10 +25,21 @@ type Store interface {
 	DeleteAccount(ctx context.Context, id string) error
 	ActiveAccount(ctx context.Context) (string, error)
 	SetActiveAccount(ctx context.Context, id string) error
-	// Setting and SetSetting keep small values that are no secrets. The
-	// one under MutedKey goes when its account is deleted.
+	// Setting and SetSetting keep small values that are no secrets. Those
+	// under MutedKey and SignatureKey go when their account is deleted.
 	Setting(ctx context.Context, key string) (string, bool, error)
 	SetSetting(ctx context.Context, key, value string) error
+
+	// Identities. Identities lists those added to an account, in the
+	// order they were; its own address is the account's and no row.
+	// SaveIdentity adds one after them, or changes the name and address
+	// of one there is. DeleteIdentity removes one, and in the same step
+	// has the drafts written from it go from the account's own address,
+	// an edit their server copies are to follow. They go with their
+	// account.
+	Identities(ctx context.Context, accountID string) ([]Identity, error)
+	SaveIdentity(ctx context.Context, id Identity) error
+	DeleteIdentity(ctx context.Context, id string) error
 
 	// Folders.
 	Folders(ctx context.Context, accountID string) ([]Folder, error)
@@ -85,11 +96,18 @@ type Store interface {
 	FolderUIDs(ctx context.Context, accountID, folder string) ([]UID, error)
 	ApplyOlder(ctx context.Context, accountID string, b OlderBatch) error
 
-	// Outbox.
+	// Outbox. PendingSends lists an account's entries that are neither
+	// delivered, cancelled nor scheduled. ClaimOutbox moves an entry from
+	// one state to another if it is in the first, and reports whether it
+	// was: of callers that claim the same entry from the same state, one
+	// gets true. ScheduledSends lists the scheduled entries of every
+	// account, the soonest due first.
 	EnqueueOutbox(ctx context.Context, p PendingSend) error
 	Outbox(ctx context.Context, id string) (PendingSend, error)
 	PendingSends(ctx context.Context, accountID string) ([]PendingSend, error)
 	SetOutboxState(ctx context.Context, id, state, lastError string) error
+	ClaimOutbox(ctx context.Context, id, from, to string) (bool, error)
+	ScheduledSends(ctx context.Context) ([]PendingSend, error)
 
 	// Drafts. Drafts lists an account's rows newest first, those awaiting
 	// deletion on the server included. SaveDraft creates a row as given,

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"time"
 )
 
 // memStore is the in-memory Store the mail tests use. The UI and the
@@ -20,8 +21,10 @@ type memStore struct {
 	// draftOrder is when each draft was created, which breaks a tie
 	// between two edited in the same second as SQLite's rowid does.
 	draftOrder map[string]int
-	// failDraftSync makes SetDraftSync fail, as a full disk would.
+	// failDraftSync makes SetDraftSync fail, as a full disk would, and
+	// failFileRefs the listing of the attachment files in use.
 	failDraftSync error
+	failFileRefs  error
 	// afterDrafts runs once, right after the next Drafts call returned
 	// its rows: the moment a sync has read the drafts and something else
 	// changes them. afterDraft does the same for the next Draft call,
@@ -289,7 +292,7 @@ func (s *memStore) PendingSends(ctx context.Context, accountID string) ([]Pendin
 			continue
 		}
 		switch p.State {
-		case StatePending, StateFailed:
+		case StatePending, StateFailed, StateUnknown:
 			out = append(out, p)
 		case StateSending:
 			p.State = StateUnknown
@@ -357,10 +360,12 @@ func (s *memStore) SaveDraft(ctx context.Context, d Draft) (Draft, error) {
 	old, ok := s.drafts[d.ID]
 	if !ok {
 		d.Revision = 1
+		d.Attachments = append([]Attachment(nil), d.Attachments...)
 		s.draftOrder[d.ID] = len(s.draftOrder) + 1
 		s.drafts[d.ID] = d
 		return d, nil
 	}
+	// The attachments of a stored draft are not a save's to change.
 	old.To, old.Cc, old.Bcc = d.To, d.Cc, d.Bcc
 	old.Subject, old.Body = d.Subject, d.Body
 	old.InReplyTo, old.References = d.InReplyTo, d.References
@@ -368,6 +373,46 @@ func (s *memStore) SaveDraft(ctx context.Context, d Draft) (Draft, error) {
 	old.Revision++
 	s.drafts[d.ID] = old
 	return old, nil
+}
+
+func (s *memStore) SetDraftAttachments(ctx context.Context, id string, list []Attachment, updatedAt time.Time) (Draft, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	old, ok := s.drafts[id]
+	if !ok {
+		return Draft{}, ErrNotFound
+	}
+	old.Attachments = append([]Attachment(nil), list...)
+	old.UpdatedAt = updatedAt
+	old.Revision++
+	s.drafts[id] = old
+	return old, nil
+}
+
+func (s *memStore) DraftFileRefs(ctx context.Context) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.failFileRefs != nil {
+		return nil, s.failFileRefs
+	}
+	var out []string
+	for _, d := range s.drafts {
+		if d.PendingDelete {
+			continue
+		}
+		for _, a := range d.Attachments {
+			out = append(out, a.ContentHash)
+		}
+	}
+	for _, p := range s.outbox {
+		if p.State == StateSent || p.State == StateCancelled {
+			continue
+		}
+		for _, a := range p.Envelope.Attachments {
+			out = append(out, a.ContentHash)
+		}
+	}
+	return out, nil
 }
 
 func (s *memStore) SetDraftSync(ctx context.Context, d Draft) error {

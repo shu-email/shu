@@ -32,6 +32,11 @@ type Draft struct {
 	Body       string
 	InReplyTo  string
 	References []string
+	// Attachments are the files attached, in the order they were added.
+	// Their bytes are in the draft file store (see attach.go). They
+	// change through AttachFile and RemoveAttachment only: a save of the
+	// text leaves them as they are.
+	Attachments []Attachment
 	// MessageID stays the same in every copy uploaded and in the message
 	// sent, so other clients see one message being rewritten.
 	MessageID string
@@ -73,6 +78,9 @@ type DraftSyncResult struct {
 	// client's version.
 	Replaced  int
 	Conflicts int
+	// Deferred counts the drafts SyncDraftEdits left for a full sync:
+	// their attachments are too large to upload at every pause.
+	Deferred int
 }
 
 // Draft errors the UI explains.
@@ -81,8 +89,9 @@ var (
 	// or sent.
 	ErrDraftDiscarded = errors.New("mail: the draft was discarded")
 	// ErrDraftHasAttachments refuses to take over another client's draft
-	// whose attachments this app could not keep.
-	ErrDraftHasAttachments = errors.New("mail: the draft has attachments")
+	// that has attachments this app could not keep whole: an edit here
+	// would replace the message with one that lacks them.
+	ErrDraftHasAttachments = errors.New("mail: the draft has attachments that are too large to keep")
 )
 
 // draftIDHeader marks a server copy as the upload of a local draft. A
@@ -98,7 +107,8 @@ func NewDraftID() string {
 	return hex.EncodeToString(b[:])
 }
 
-// sameDraftContent reports whether two drafts say the same.
+// sameDraftContent reports whether two drafts say the same. The
+// attachments are no part of it: a save does not change them.
 func sameDraftContent(a, b Draft) bool {
 	return a.To == b.To && a.Cc == b.Cc && a.Bcc == b.Bcc && a.Subject == b.Subject &&
 		a.Body == b.Body && a.InReplyTo == b.InReplyTo && slices.Equal(a.References, b.References)
@@ -135,31 +145,33 @@ func addressesText(list []Address) string {
 // outgoing is the draft as a message, with the recipients that parse.
 func (d Draft) outgoing() Outgoing {
 	return Outgoing{
-		To:         draftAddresses(d.To),
-		Cc:         draftAddresses(d.Cc),
-		Bcc:        draftAddresses(d.Bcc),
-		Subject:    strings.TrimSpace(d.Subject),
-		Text:       d.Body,
-		InReplyTo:  d.InReplyTo,
-		References: d.References,
-		MessageID:  d.MessageID,
+		To:          draftAddresses(d.To),
+		Cc:          draftAddresses(d.Cc),
+		Bcc:         draftAddresses(d.Bcc),
+		Subject:     strings.TrimSpace(d.Subject),
+		Text:        d.Body,
+		InReplyTo:   d.InReplyTo,
+		References:  d.References,
+		MessageID:   d.MessageID,
+		Attachments: d.Attachments,
 	}
 }
 
 // summary is the draft's row in the Drafts folder.
 func (d Draft) summary(a Account) Summary {
 	return Summary{
-		DraftID:    d.ID,
-		MessageID:  d.MessageID,
-		InReplyTo:  d.InReplyTo,
-		References: d.References,
-		From:       Address{Name: a.Name, Email: a.Email},
-		To:         draftAddresses(d.To),
-		Cc:         draftAddresses(d.Cc),
-		Subject:    strings.TrimSpace(d.Subject),
-		Preview:    preview(d.Body),
-		Date:       d.UpdatedAt,
-		Seen:       true,
+		DraftID:        d.ID,
+		MessageID:      d.MessageID,
+		InReplyTo:      d.InReplyTo,
+		References:     d.References,
+		From:           Address{Name: a.Name, Email: a.Email},
+		To:             draftAddresses(d.To),
+		Cc:             draftAddresses(d.Cc),
+		Subject:        strings.TrimSpace(d.Subject),
+		Preview:        preview(d.Body),
+		Date:           d.UpdatedAt,
+		Seen:           true,
+		HasAttachments: len(d.Attachments) > 0,
 	}
 }
 
@@ -177,12 +189,13 @@ func (d Draft) matches(query string) bool {
 	return false
 }
 
-// draftMessage builds the server copy of a draft.
-func draftMessage(a Account, d Draft) ([]byte, error) {
+// draftMessage builds the server copy of a draft, attachments included:
+// another mail client that opens it gets the whole draft.
+func (s *Service) draftMessage(a Account, d Draft) ([]byte, error) {
 	out := d.outgoing()
 	bcc := out.Bcc
 	out.Bcc = nil
-	msg, err := newMessage(a, out, d.UpdatedAt)
+	msg, err := s.newMessage(a, out, d.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -198,12 +211,14 @@ func draftMessage(a Account, d Draft) ([]byte, error) {
 		// long list is done here: one address a line.
 		msg.SetGenHeaderPreformatted(gomail.Header("Bcc"), strings.Join(parts, ",\r\n "))
 	}
-	return rawMessage(msg)
+	return rawMessage(msg, d.AttachmentBytes())
 }
 
 // SaveDraft writes a draft to the cache and nothing else. No connection is
 // made, so writing works offline; SyncDrafts uploads it later. A draft
 // without an ID is new. The stored draft comes back, with its revision.
+// The attachments are not SaveDraft's to change: the stored draft keeps
+// the ones it has, whatever d lists.
 func (s *Service) SaveDraft(ctx context.Context, d Draft) (Draft, error) {
 	a, ok, err := s.store.Account(ctx, d.AccountID)
 	if err != nil {
@@ -221,27 +236,34 @@ func (s *Service) SaveDraft(ctx context.Context, d Draft) (Draft, error) {
 	if err != nil {
 		return Draft{}, err
 	}
-	if exists {
-		if old.PendingDelete {
-			return Draft{}, ErrDraftDiscarded
-		}
-		if sameDraftContent(old, d) {
-			return old, nil
-		}
-		d.MessageID = old.MessageID
-	} else {
-		// A new row starts with nothing on the server, whatever was passed.
-		d.Revision, d.SyncedRevision = 0, 0
-		d.ServerFolder, d.ServerUID, d.ServerUIDValidity = "", 0, 0
-		d.PendingDelete = false
-		// A draft another client replaced while its window stayed open
-		// comes back with the window's next save. It is another message
-		// now, kept beside the other client's.
-		d.Conflict = s.draftsReplaced[d.ID]
-		delete(s.draftsReplaced, d.ID)
-		if d.MessageID == "" || d.Conflict {
-			d.MessageID = newMessageID(a.Email)
-		}
+	if !exists {
+		return s.createDraft(ctx, a, d)
+	}
+	if old.PendingDelete {
+		return Draft{}, ErrDraftDiscarded
+	}
+	if sameDraftContent(old, d) {
+		return old, nil
+	}
+	d.MessageID = old.MessageID
+	d.UpdatedAt = s.now()
+	return s.store.SaveDraft(ctx, d)
+}
+
+// createDraft stores a draft that has no row yet. draftMu is held.
+func (s *Service) createDraft(ctx context.Context, a Account, d Draft) (Draft, error) {
+	// A new row starts with nothing on the server and nothing attached,
+	// whatever was passed.
+	d.Revision, d.SyncedRevision = 0, 0
+	d.ServerFolder, d.ServerUID, d.ServerUIDValidity = "", 0, 0
+	d.PendingDelete = false
+	// A draft another client replaced while its window stayed open
+	// comes back with the window's next save. It is another message
+	// now, kept beside the other client's, with the files it had.
+	d.Attachments, d.Conflict = s.draftsReplaced[d.ID]
+	delete(s.draftsReplaced, d.ID)
+	if d.MessageID == "" || d.Conflict {
+		d.MessageID = newMessageID(a.Email)
 	}
 	d.UpdatedAt = s.now()
 	return s.store.SaveDraft(ctx, d)
@@ -360,6 +382,10 @@ type draftBox struct {
 	// present is the UIDs the folder holds, kept in step with what this
 	// connection appends and removes.
 	present map[UID]bool
+	// heavy says this sync uploads the drafts whose attachments pass
+	// DraftAutoUploadLimit too. One made at a pause in the typing does
+	// not.
+	heavy bool
 }
 
 // holds reports whether a draft's recorded place is in this folder as it
@@ -644,6 +670,21 @@ func draftsFolderOf(folders []Folder) string {
 // mail clients did. It can fail and be run again: a draft counts as
 // uploaded only once the server took it.
 func (s *Service) SyncDrafts(ctx context.Context, accountID string) (DraftSyncResult, error) {
+	return s.syncDrafts(ctx, accountID, true)
+}
+
+// SyncDraftEdits is the sync a pause in the typing asks for. It does what
+// SyncDrafts does, except that a draft carrying more attachments than
+// DraftAutoUploadLimit is not uploaded: publishing an edit uploads the
+// whole draft again, which is too much to do after every sentence. Such
+// a draft stays to upload, and SyncDrafts uploads it.
+func (s *Service) SyncDraftEdits(ctx context.Context, accountID string) (DraftSyncResult, error) {
+	return s.syncDrafts(ctx, accountID, false)
+}
+
+// syncDrafts syncs an account's drafts, those heavy with attachments
+// included or left for later.
+func (s *Service) syncDrafts(ctx context.Context, accountID string, heavy bool) (DraftSyncResult, error) {
 	var result DraftSyncResult
 	release, err := s.lockDraftSync(ctx)
 	if err != nil {
@@ -680,6 +721,7 @@ func (s *Service) SyncDrafts(ctx context.Context, accountID string) (DraftSyncRe
 		return result, nil
 	}
 	result.Folder = box.folder
+	box.heavy = heavy
 	var failed error
 	for _, d := range drafts {
 		if err := ctx.Err(); err != nil {
@@ -796,8 +838,9 @@ func (s *Service) dropReplacedDraft(ctx context.Context, d Draft) (bool, error) 
 	}
 	// A window still editing the draft saves it again: SaveDraft then
 	// keeps it as a draft of its own instead of losing what the window
-	// shows.
-	s.draftsReplaced[d.ID] = true
+	// shows. The files it had are remembered for that, which also keeps
+	// the sweep from taking them.
+	s.draftsReplaced[d.ID] = cur.Attachments
 	return true, nil
 }
 
@@ -813,7 +856,13 @@ func (s *Service) uploadDraft(ctx context.Context, box *draftBox, a Account, d D
 	if err != nil || !ok || d.PendingDelete {
 		return err
 	}
-	raw, err := draftMessage(a, d)
+	if !box.heavy && d.AttachmentBytes() > DraftAutoUploadLimit {
+		// It stays to upload: the next sync that takes heavy drafts
+		// finds it as this one did.
+		result.Deferred++
+		return nil
+	}
+	raw, err := s.draftMessage(a, d)
 	if err != nil {
 		return err
 	}
@@ -907,6 +956,11 @@ func (s *Service) DiscardDraft(ctx context.Context, id string) error {
 	if err != nil || !ok {
 		return err
 	}
+	// The draft is gone from this device, so its files are no longer
+	// its: they go now, unless something else names them.
+	if len(d.Attachments) > 0 {
+		_ = s.SweepDraftFiles(ctx)
+	}
 	s.flushDraftDeletions(ctx, d.AccountID)
 	return nil
 }
@@ -940,7 +994,8 @@ func (s *Service) retireSentDraft(ctx context.Context, accountID string, sent Ou
 		}
 		out := d.outgoing()
 		if out.Subject != sent.Subject || out.Text != sent.Text ||
-			!slices.Equal(out.To, sent.To) || !slices.Equal(out.Cc, sent.Cc) {
+			!slices.Equal(out.To, sent.To) || !slices.Equal(out.Cc, sent.Cc) ||
+			!sameAttachments(out.Attachments, sent.Attachments) {
 			return false
 		}
 		return s.retireDraft(ctx, accountID, d.ID)
@@ -1019,7 +1074,8 @@ func (s *Service) DismissDraftConflict(ctx context.Context, id string) error {
 
 // AdoptDraft turns a draft another mail client wrote into a draft on this
 // device, linked to that server message so that an edit here replaces it.
-// A draft already adopted is returned as it is.
+// Its attachments come with it, into the draft file store, and go back up
+// with the first edit. A draft already adopted is returned as it is.
 func (s *Service) AdoptDraft(ctx context.Context, accountID, folder string, uid UID) (Draft, error) {
 	a, password, err := s.account(ctx, accountID)
 	if err != nil {
@@ -1053,7 +1109,9 @@ func (s *Service) AdoptDraft(ctx context.Context, accountID, folder string, uid 
 	if err != nil {
 		return Draft{}, err
 	}
-	msg, err := ParseMessage(raw)
+	// Every attachment a draft may have here is read: one left out would
+	// be lost at the first edit.
+	msg, dropped, err := parseMessage(raw, MaxAttachmentBytes)
 	if err != nil {
 		return Draft{}, fmt.Errorf("mime: %w", err)
 	}
@@ -1064,24 +1122,46 @@ func (s *Service) AdoptDraft(ctx context.Context, accountID, folder string, uid 
 			return d, nil
 		}
 	}
-	if len(msg.Attachments) > 0 {
-		// An edit here would replace the message with one that has no
-		// attachments. Until compose has them, the draft stays where it
-		// is.
+	if dropped > 0 {
+		// An edit here would replace the message with one that lacks
+		// what could not be kept. The draft stays where it is.
 		return Draft{}, ErrDraftHasAttachments
 	}
+	// The files and the rows naming them are made in one step, as the
+	// sweep sees it.
+	s.fileMu.Lock()
+	defer s.fileMu.Unlock()
+	var attachments []Attachment
+	for _, part := range msg.Attachments {
+		hash, err := s.storeBytes(part.Data)
+		if err != nil {
+			return Draft{}, err
+		}
+		att := Attachment{
+			Filename:    cleanFilename(part.Filename),
+			ContentType: mediaType(part.ContentType),
+			Size:        part.Size,
+			ContentHash: hash,
+		}
+		// The same file under the same name twice says nothing more
+		// than once, and a draft holds it once.
+		if !slices.ContainsFunc(attachments, func(have Attachment) bool { return sameAttachment(have, att) }) {
+			attachments = append(attachments, att)
+		}
+	}
 	d := Draft{
-		ID:         NewDraftID(),
-		AccountID:  accountID,
-		To:         addressesText(msg.To),
-		Cc:         addressesText(msg.Cc),
-		Bcc:        addressesText(bcc),
-		Subject:    msg.Subject,
-		Body:       msg.BodyText,
-		InReplyTo:  msg.InReplyTo,
-		References: msg.References,
-		MessageID:  msg.MessageID,
-		UpdatedAt:  s.now(),
+		ID:          NewDraftID(),
+		AccountID:   accountID,
+		To:          addressesText(msg.To),
+		Cc:          addressesText(msg.Cc),
+		Bcc:         addressesText(bcc),
+		Subject:     msg.Subject,
+		Body:        msg.BodyText,
+		InReplyTo:   msg.InReplyTo,
+		References:  msg.References,
+		Attachments: attachments,
+		MessageID:   msg.MessageID,
+		UpdatedAt:   s.now(),
 		// The server already has this content: nothing to upload until
 		// it is edited.
 		SyncedRevision:    1,

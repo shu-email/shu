@@ -25,6 +25,11 @@ type fakeSMTP struct {
 	rcpts    []string
 	user     string
 	pass     string
+	// refuse is the server's answer to a message it has read whole, as a
+	// provider refusing one too large gives it. onData takes the place of
+	// reading the message: a server that stalls, or does anything else.
+	refuse error
+	onData func(r io.Reader) error
 }
 
 type smtpBackend struct{ f *fakeSMTP }
@@ -74,9 +79,18 @@ func (s *smtpSession) Data(r io.Reader) error {
 	if !s.auth {
 		return smtp.ErrAuthRequired
 	}
+	s.f.mu.Lock()
+	onData, refuse := s.f.onData, s.f.refuse
+	s.f.mu.Unlock()
+	if onData != nil {
+		return onData(r)
+	}
 	b, err := io.ReadAll(r)
 	if err != nil {
 		return err
+	}
+	if refuse != nil {
+		return refuse
 	}
 	s.f.mu.Lock()
 	s.f.messages = append(s.f.messages, string(b))
@@ -89,6 +103,13 @@ func (s *smtpSession) Logout() error { return nil }
 
 func startFakeSMTP(t *testing.T) *fakeSMTP {
 	t.Helper()
+	return startFakeSMTPWith(t, nil)
+}
+
+// startFakeSMTPWith starts the server after configure has set it up, as
+// with the size limit a provider announces.
+func startFakeSMTPWith(t *testing.T, configure func(*smtp.Server)) *fakeSMTP {
+	t.Helper()
 	cert, err := selfSignedCert()
 	if err != nil {
 		t.Fatal(err)
@@ -98,6 +119,9 @@ func startFakeSMTP(t *testing.T) *fakeSMTP {
 	server.Domain = "localhost"
 	server.TLSConfig = &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
 	server.ErrorLog = testSMTPLogger{t}
+	if configure != nil {
+		configure(server)
+	}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)

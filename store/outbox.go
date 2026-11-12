@@ -8,8 +8,10 @@ import (
 	"shu/mail"
 )
 
-// EnqueueOutbox writes a message to send and its raw form in one row,
-// before any network call.
+// EnqueueOutbox writes a message to send in one row, before any network
+// call: its envelope and its raw form. A message with attachments comes
+// without a raw form, as that would put the files' bytes in the database;
+// its envelope names the files instead.
 func (s *Store) EnqueueOutbox(ctx context.Context, p mail.PendingSend) error {
 	envelope, err := json.Marshal(p.Envelope)
 	if err != nil {
@@ -57,12 +59,14 @@ func outboxRow(r []any) (mail.PendingSend, error) {
 }
 
 // PendingSends lists an account's unsent entries, oldest first. Rows
-// left "sending" by a crash are reported as unknown.
+// left "sending" by a crash are reported as unknown. A send the user
+// cancelled before any of it left is not among them: there is nothing of
+// it to deliver or to ask about.
 func (s *Store) PendingSends(ctx context.Context, accountID string) ([]mail.PendingSend, error) {
 	rows, err := s.query(ctx, `SELECT id, account_id, raw, envelope_json, state, attempts,
 		COALESCE(last_error, ''), created_at, sent_at
-		FROM outbox WHERE account_id = ? AND state <> ? ORDER BY created_at`,
-		accountID, mail.StateSent)
+		FROM outbox WHERE account_id = ? AND state NOT IN (?, ?) ORDER BY created_at`,
+		accountID, mail.StateSent, mail.StateCancelled)
 	if err != nil {
 		return nil, err
 	}

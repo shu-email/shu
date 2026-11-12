@@ -127,6 +127,17 @@ var migrations = [][]string{
 			conflict INTEGER NOT NULL DEFAULT 0)`,
 		`CREATE INDEX drafts_account ON drafts (account_id, updated_at DESC)`,
 	},
+	// v4: the files attached to a draft, in the order they were added.
+	// Their bytes are no part of the database: content_hash names the
+	// file that holds them, which several drafts may share.
+	{
+		`CREATE TABLE draft_attachments (
+			draft_id TEXT NOT NULL REFERENCES drafts(id) ON DELETE CASCADE,
+			position INTEGER NOT NULL,
+			filename TEXT NOT NULL DEFAULT '', content_type TEXT NOT NULL DEFAULT '',
+			size INTEGER NOT NULL DEFAULT 0, content_hash TEXT NOT NULL,
+			PRIMARY KEY (draft_id, position))`,
+	},
 }
 
 // SchemaVersion is the version Open migrates to.

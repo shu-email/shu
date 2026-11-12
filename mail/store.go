@@ -3,6 +3,7 @@ package mail
 import (
 	"context"
 	"errors"
+	"time"
 )
 
 // ErrNotFound is returned when a cached row does not exist.
@@ -44,15 +45,23 @@ type Store interface {
 
 	// Drafts. Drafts lists an account's rows newest first, those awaiting
 	// deletion on the server included. SaveDraft creates a row as given,
-	// at revision 1, or writes the content of an existing one and raises
-	// its revision; it returns the stored row. SetDraftSync writes the
-	// sync state and the Message-ID of an existing row, never its content
-	// or revision, and reports ErrNotFound when the row is gone.
+	// at revision 1 and with its attachments, or writes the text of an
+	// existing one and raises its revision, leaving its attachments as
+	// they are; it returns the stored row. SetDraftAttachments replaces
+	// the attachments of an existing row and raises its revision.
+	// SetDraftSync writes the sync state and the Message-ID of an
+	// existing row, never its content or revision. Both report
+	// ErrNotFound when the row is gone.
 	Drafts(ctx context.Context, accountID string) ([]Draft, error)
 	Draft(ctx context.Context, id string) (Draft, bool, error)
 	SaveDraft(ctx context.Context, d Draft) (Draft, error)
+	SetDraftAttachments(ctx context.Context, id string, list []Attachment, updatedAt time.Time) (Draft, error)
 	SetDraftSync(ctx context.Context, d Draft) error
 	DeleteDraft(ctx context.Context, id string) error
+	// DraftFileRefs lists the content hashes of the attachment files in
+	// use, over all accounts: those of the drafts neither discarded nor
+	// sent, and those of the outbox entries still to deliver.
+	DraftFileRefs(ctx context.Context) ([]string, error)
 }
 
 // SecretStore keeps account passwords. production uses mygo.Secrets, tests

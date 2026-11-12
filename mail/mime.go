@@ -24,14 +24,25 @@ const (
 // ParseMessage parses a raw RFC 822 message into the cache's model. The
 // bodies are kept in HTML and plain text; attachments carry their bytes.
 func ParseMessage(raw []byte) (Message, error) {
+	m, _, err := parseMessage(raw, maxAttachments)
+	return m, err
+}
+
+// parseMessage parses a message, keeping at most attachmentCap bytes of
+// attachments, and counts the parts it left out: attachments past the
+// cap, and parts it could not read or had no way to list. A reader
+// shows what it got; whoever would write the message back must know that
+// something is missing.
+func parseMessage(raw []byte, attachmentCap int64) (Message, int, error) {
 	var m Message
+	dropped := 0
 	m.CachedAt = nowUTC()
 	r, err := gomsgmail.CreateReader(bytes.NewReader(raw))
 	if err != nil && !gomsg.IsUnknownCharset(err) {
-		return m, err
+		return m, dropped, err
 	}
 	if r == nil {
-		return m, err
+		return m, dropped, err
 	}
 	defer r.Close()
 
@@ -63,7 +74,7 @@ func ParseMessage(raw []byte) (Message, error) {
 			break
 		}
 		if err != nil && !gomsg.IsUnknownCharset(err) {
-			return m, err
+			return m, dropped, err
 		}
 		if p == nil {
 			break
@@ -94,14 +105,17 @@ func ParseMessage(raw []byte) (Message, error) {
 		if name == "" && !strings.HasPrefix(contentType, "image/") && !strings.HasPrefix(contentType, "application/") {
 			// Unknown inline part: read and drop so the reader can move on.
 			_, _ = io.Copy(io.Discard, p.Body)
+			dropped++
 			continue
 		}
 		data, err := io.ReadAll(p.Body)
 		if err != nil {
+			dropped++
 			continue
 		}
-		if attachmentBytes+int64(len(data)) > maxAttachments {
+		if attachmentBytes+int64(len(data)) > attachmentCap {
 			truncated = true
+			dropped++
 			continue
 		}
 		attachmentBytes += int64(len(data))
@@ -126,7 +140,7 @@ func ParseMessage(raw []byte) (Message, error) {
 	m.BodyTruncated = truncated
 	m.HasAttachments = len(m.Attachments) > 0
 	m.Preview = preview(m.BodyText)
-	return m, nil
+	return m, dropped, nil
 }
 
 // partContentType reads a part's media type, as its header interface does

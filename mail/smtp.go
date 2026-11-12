@@ -8,15 +8,84 @@ import (
 	"errors"
 	"fmt"
 	"net/mail"
+	"net/textproto"
+	"strconv"
 	"strings"
 	"time"
 
 	gomail "github.com/wneessen/go-mail"
 )
 
+// ErrDeliveryUnknown is a send that stopped once the message had begun
+// to leave, without the server's answer to it: one cancelled or cut off
+// on the way. The server may or may not have the message. The outbox
+// keeps it as StateUnknown, and nothing sends it again on its own.
+var ErrDeliveryUnknown = errors.New("mail: the message may or may not have been delivered")
+
+// RejectedError is the SMTP server refusing a message, in its own words:
+// too large, a recipient it does not know, a policy. The message was not
+// delivered.
+type RejectedError struct {
+	Code  int
+	Reply string
+}
+
+func (e *RejectedError) Error() string {
+	return fmt.Sprintf("smtp: the server refused the message: %d %s", e.Code, e.Reply)
+}
+
+// TooLarge reports whether the server gave the message's size as its
+// reason, by the codes RFC 5321 and RFC 3463 have for that.
+func (e *RejectedError) TooLarge() bool {
+	return e.Code == 552 || strings.HasPrefix(e.Reply, "5.3.4") || strings.HasPrefix(e.Reply, "5.2.3")
+}
+
+// SizeLimitError is a message larger than the server announced it takes.
+// It is not sent: the server would read all of it and then refuse it.
+type SizeLimitError struct {
+	Size  int64
+	Limit int64
+}
+
+func (e *SizeLimitError) Error() string {
+	return fmt.Sprintf("smtp: the message is %d bytes and the server takes at most %d", e.Size, e.Limit)
+}
+
+// The time a send may wait. go-mail gives the whole exchange one deadline,
+// its connection timeout, which a message with attachments on a slow line
+// outlives; here each block written gets its own, and the server gets the
+// ten minutes RFC 5321 asks for to answer the end of the message, as
+// giving up early there is what delivers a message twice.
+const (
+	smtpBlock         = 32 << 10
+	smtpAnswerTimeout = 10 * time.Minute
+)
+
+// smtpBlockTimeout is how long one block of a message may take to be
+// written. A test replaces it.
+var smtpBlockTimeout = time.Minute
+
+type sendProgressKey struct{}
+
+// WithSendProgress returns a context under which Send and RetryPending
+// report how much of the message they have handed to the SMTP connection,
+// of how much. The counts never go back, and reach the total once the
+// server has taken the message. report runs on the sending goroutine.
+func WithSendProgress(ctx context.Context, report func(sent, total int64)) context.Context {
+	return context.WithValue(ctx, sendProgressKey{}, report)
+}
+
+// SendProgress is the function WithSendProgress put in ctx, or nil.
+func SendProgress(ctx context.Context) func(sent, total int64) {
+	report, _ := ctx.Value(sendProgressKey{}).(func(sent, total int64))
+	return report
+}
+
 // Send builds the raw message, writes the outbox row, sends over SMTP and
 // appends a copy to Sent. The outbox makes a crash recoverable and keeps
-// the client from sending the same message twice on its own.
+// the client from sending the same message twice on its own. Cancelling
+// ctx stops a send under way; the error then tells whether anything left
+// (ErrDeliveryUnknown) or not.
 func (s *Service) Send(ctx context.Context, accountID string, out Outgoing) (SendResult, error) {
 	a, password, err := s.account(ctx, accountID)
 	if err != nil {
@@ -33,7 +102,7 @@ func (s *Service) Send(ctx context.Context, accountID string, out Outgoing) (Sen
 	if out.MessageID == "" {
 		out.MessageID = newMessageID(a.Email)
 	}
-	msg, raw, err := buildMessage(a, out, now)
+	msg, raw, err := s.buildMessage(a, out, now)
 	if err != nil {
 		return SendResult{}, err
 	}
@@ -45,39 +114,220 @@ func (s *Service) Send(ctx context.Context, accountID string, out Outgoing) (Sen
 		State:     StatePending,
 		CreatedAt: now,
 	}
-	if err := s.store.EnqueueOutbox(ctx, pending); err != nil {
+	if err := s.enqueue(ctx, &pending); err != nil {
 		return SendResult{}, err
 	}
-	if err := s.store.SetOutboxState(ctx, pending.ID, StateSending, ""); err != nil {
-		return SendResult{}, err
-	}
-	client, err := s.smtpClient(a, password)
-	if err != nil {
-		_ = s.store.SetOutboxState(ctx, pending.ID, StateFailed, err.Error())
-		return SendResult{}, err
-	}
-	if err := client.DialAndSendWithContext(ctx, msg); err != nil {
-		_ = s.store.SetOutboxState(ctx, pending.ID, StateFailed, err.Error())
-		return SendResult{}, fmt.Errorf("smtp: %w", err)
-	}
-	if err := s.store.SetOutboxState(ctx, pending.ID, StateSent, ""); err != nil {
+	if err := s.deliver(ctx, a, password, pending.ID, msg, raw); err != nil {
 		return SendResult{}, err
 	}
 	pending.State = StateSent
 	pending.SentAt = now
 	result := SendResult{Outbox: pending}
 	// The message is out, so its draft is done: it leaves this device
-	// now, and the server when the server can be reached.
-	sentDraft := s.retireDraft(ctx, accountID, out.DraftID)
+	// now, and the server when the server can be reached. A context
+	// cancelled since does not undo that.
+	sentDraft := s.retireDraft(context.WithoutCancel(ctx), accountID, out.DraftID)
+	superseded := s.supersede(context.WithoutCancel(ctx), accountID, out.MessageID, pending.ID)
+	s.afterDelivery(ctx, a, password, raw, sentDraft || superseded || len(out.Attachments) > 0, &result)
+	if sentDraft {
+		s.flushDraftDeletions(ctx, accountID)
+	}
+	return result, nil
+}
+
+// supersede closes the outbox entries of the earlier tries of a message
+// that is now delivered: the same draft, sent before and refused or cut
+// off, under the same Message-ID. Sending one of those again would
+// deliver the message twice, in a form the user has since changed, and
+// until it is closed it holds on to the files that form had attached.
+// It reports whether there was one.
+func (s *Service) supersede(ctx context.Context, accountID, messageID, delivered string) bool {
+	if messageID == "" {
+		return false
+	}
+	pending, err := s.store.PendingSends(ctx, accountID)
+	if err != nil {
+		return false
+	}
+	closed := false
+	for _, p := range pending {
+		if p.ID == delivered || p.Envelope.MessageID != messageID {
+			continue
+		}
+		if s.store.SetOutboxState(ctx, p.ID, StateCancelled, "") == nil {
+			closed = true
+		}
+	}
+	return closed
+}
+
+// enqueue writes the outbox row of a message about to be sent. One with
+// attachments is kept as its envelope alone, which names the files: their
+// bytes do not go into the database, and the message is built again if
+// it is ever resent. The row is what keeps those files from the sweep
+// from here on, so it is written in one step with the check that they
+// are there.
+func (s *Service) enqueue(ctx context.Context, pending *PendingSend) error {
+	if len(pending.Envelope.Attachments) == 0 {
+		return s.store.EnqueueOutbox(ctx, *pending)
+	}
+	pending.Raw = nil
+	s.fileMu.Lock()
+	defer s.fileMu.Unlock()
+	if err := s.checkAttachments(pending.Envelope.Attachments); err != nil {
+		return err
+	}
+	return s.store.EnqueueOutbox(ctx, *pending)
+}
+
+// deliver sends a message whose outbox row is written, and records in
+// the row how it ended.
+func (s *Service) deliver(ctx context.Context, a Account, password, id string, msg *gomail.Msg, raw []byte) error {
+	// A send that was cancelled still has an outcome to record.
+	record := context.WithoutCancel(ctx)
+	if err := s.store.SetOutboxState(record, id, StateSending, ""); err != nil {
+		return err
+	}
+	left, err := s.transmit(ctx, a, password, msg, raw)
+	switch {
+	case err == nil:
+		return s.store.SetOutboxState(record, id, StateSent, "")
+	case left:
+		_ = s.store.SetOutboxState(record, id, StateUnknown, err.Error())
+		return fmt.Errorf("%w: %w", ErrDeliveryUnknown, err)
+	case errors.Is(ctx.Err(), context.Canceled):
+		// Stopped by the user before any of it left.
+		_ = s.store.SetOutboxState(record, id, StateCancelled, "")
+	default:
+		_ = s.store.SetOutboxState(record, id, StateFailed, err.Error())
+	}
+	return err
+}
+
+// transmit hands a message to the account's SMTP server. go-mail connects,
+// secures the connection and logs in; the message itself is written here,
+// from the raw form already built, so that it is encoded once, its way
+// out can be counted, and a cancelled context stops it. left reports that
+// part of the message went out and the server did not answer to it: it
+// may or may not have been delivered.
+func (s *Service) transmit(ctx context.Context, a Account, password string, msg *gomail.Msg, raw []byte) (left bool, err error) {
+	from, err := msg.GetSender(false)
+	if err != nil {
+		return false, fmt.Errorf("smtp: %w", err)
+	}
+	rcpts, err := msg.GetRecipients()
+	if err != nil {
+		return false, fmt.Errorf("smtp: %w", err)
+	}
+	client, err := s.smtpClient(a, password)
+	if err != nil {
+		return false, fmt.Errorf("smtp: %w", err)
+	}
+	conn, err := client.DialToSMTPClientWithContext(ctx)
+	if err != nil {
+		return false, stopped(ctx, err)
+	}
+	defer conn.Close()
+	// go-mail takes the context for connecting alone. Hanging up is what
+	// stops a send under way: a write waiting on a slow line fails at
+	// once.
+	stop := context.AfterFunc(ctx, func() { conn.Text.Close() })
+	defer stop()
+
+	total := int64(len(raw))
+	if ok, param := conn.Extension("SIZE"); ok {
+		limit, _ := strconv.ParseInt(strings.TrimSpace(param), 10, 64)
+		if limit > 0 && total > limit {
+			_ = conn.Quit()
+			return false, &SizeLimitError{Size: total, Limit: limit}
+		}
+	}
+	if err := conn.Mail(from); err != nil {
+		return false, refused(ctx, err)
+	}
+	for _, rcpt := range rcpts {
+		if err := conn.Rcpt(rcpt); err != nil {
+			return false, refused(ctx, err)
+		}
+	}
+	w, err := conn.Data()
+	if err != nil {
+		return false, refused(ctx, err)
+	}
+	// The progress is told as it changes by a two-hundredth of the whole,
+	// and says the whole only once the server took the message.
+	report := SendProgress(ctx)
+	step, told := max(total/200, 1), int64(-1)
+	tell := func(sent int64) {
+		if report != nil && (told < 0 || sent-told >= step || sent == total) && sent > told {
+			told = sent
+			report(sent, total)
+		}
+	}
+	tell(0)
+	for sent := 0; sent < len(raw); {
+		if err := ctx.Err(); err != nil {
+			return left, stopped(ctx, err)
+		}
+		if err := conn.UpdateDeadline(smtpBlockTimeout); err != nil {
+			return left, stopped(ctx, err)
+		}
+		n := min(smtpBlock, len(raw)-sent)
+		left = true
+		if _, err := w.Write(raw[sent : sent+n]); err != nil {
+			return true, stopped(ctx, err)
+		}
+		sent += n
+		tell(min(int64(sent), total-1))
+	}
+	if err := conn.UpdateDeadline(smtpAnswerTimeout); err != nil {
+		return left, stopped(ctx, err)
+	}
+	// Closing sends the end of the message and reads the server's answer.
+	if err := w.Close(); err != nil {
+		var reply *textproto.Error
+		if errors.As(err, &reply) {
+			// It answered, and the answer is no.
+			return false, &RejectedError{Code: reply.Code, Reply: reply.Msg}
+		}
+		return true, stopped(ctx, err)
+	}
+	tell(total)
+	_ = conn.Quit()
+	return false, nil
+}
+
+// stopped names what ended a send: the context, where that was it, not
+// the closed connection it left behind.
+func stopped(ctx context.Context, err error) error {
+	if cause := ctx.Err(); cause != nil {
+		return fmt.Errorf("smtp: %w", cause)
+	}
+	return fmt.Errorf("smtp: %w", err)
+}
+
+// refused turns the server's answer to a command into a RejectedError,
+// and leaves any other failure as it is.
+func refused(ctx context.Context, err error) error {
+	var reply *textproto.Error
+	if errors.As(err, &reply) && ctx.Err() == nil {
+		return &RejectedError{Code: reply.Code, Reply: reply.Msg}
+	}
+	return stopped(ctx, err)
+}
+
+// afterDelivery saves the sent copy in the server's Sent folder and, where
+// the message carried files or was a draft, removes the files nothing
+// names any more.
+func (s *Service) afterDelivery(ctx context.Context, a Account, password string, raw []byte, sweep bool, result *SendResult) {
 	if err := s.appendSent(ctx, a, password, raw); err != nil {
 		result.Warning = err
 	} else {
 		result.Copied = true
 	}
-	if sentDraft {
-		s.flushDraftDeletions(ctx, accountID)
+	if sweep {
+		_ = s.SweepDraftFiles(context.WithoutCancel(ctx))
 	}
-	return result, nil
 }
 
 // appendSent saves the sent copy in the server's Sent folder.
@@ -107,14 +357,19 @@ func (s *Service) appendSent(ctx context.Context, a Account, password string, ra
 	return nil
 }
 
-// buildMessage makes the message and the raw form the outbox keeps and
-// APPEND reuses.
-func buildMessage(a Account, out Outgoing, now time.Time) (*gomail.Msg, []byte, error) {
-	msg, err := newMessage(a, out, now)
+// buildMessage makes the message and its raw form, which is what is sent
+// and what APPEND saves in Sent. The outbox keeps it too, for a message
+// without attachments.
+func (s *Service) buildMessage(a Account, out Outgoing, now time.Time) (*gomail.Msg, []byte, error) {
+	msg, err := s.newMessage(a, out, now)
 	if err != nil {
 		return nil, nil, err
 	}
-	raw, err := rawMessage(msg)
+	var files int64
+	for _, att := range out.Attachments {
+		files += att.Size
+	}
+	raw, err := rawMessage(msg, files)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -124,7 +379,7 @@ func buildMessage(a Account, out Outgoing, now time.Time) (*gomail.Msg, []byte, 
 // newMessage fills a message from what was written. A draft has headers
 // of its own to add before the raw form is made, and may have nobody to
 // go to yet.
-func newMessage(a Account, out Outgoing, now time.Time) (*gomail.Msg, error) {
+func (s *Service) newMessage(a Account, out Outgoing, now time.Time) (*gomail.Msg, error) {
 	msg := gomail.NewMsg()
 	if a.Name != "" {
 		if err := msg.FromFormat(a.Name, a.Email); err != nil {
@@ -156,12 +411,28 @@ func newMessage(a Account, out Outgoing, now time.Time) (*gomail.Msg, error) {
 		}
 		msg.SetGenHeader(gomail.HeaderReferences, strings.Join(refs, " "))
 	}
+	if len(out.Attachments) > 0 {
+		files := make([]*gomail.File, 0, len(out.Attachments))
+		for _, att := range out.Attachments {
+			file, err := s.attachmentFile(att)
+			if err != nil {
+				return nil, err
+			}
+			files = append(files, file)
+		}
+		msg.SetAttachments(files)
+	}
 	return msg, nil
 }
 
-// rawMessage writes a message as RFC 822 bytes.
-func rawMessage(msg *gomail.Msg) ([]byte, error) {
+// rawMessage writes a message as RFC 822 bytes. attachments is the size
+// of the files it carries: the buffer starts with room for them, so that
+// a large message is not copied again and again as it grows.
+func rawMessage(msg *gomail.Msg, attachments int64) ([]byte, error) {
 	var buf bytes.Buffer
+	if attachments > 0 {
+		buf.Grow(int(EncodedSize(attachments)) + 16<<10)
+	}
 	if _, err := msg.WriteTo(&buf); err != nil {
 		return nil, err
 	}
@@ -215,7 +486,8 @@ func newOutboxID() string {
 }
 
 // RetryPending resends an outbox entry the user asked to retry. It is
-// only for the manual retry surface: nothing calls it on its own.
+// only for the manual retry surface: nothing calls it on its own. An
+// entry with attachments is built again from the files it names.
 func (s *Service) RetryPending(ctx context.Context, id string) (SendResult, error) {
 	pending, err := s.store.Outbox(ctx, id)
 	if err != nil {
@@ -232,34 +504,25 @@ func (s *Service) RetryPending(ctx context.Context, id string) (SendResult, erro
 	if pending.Envelope.MessageID == "" {
 		pending.Envelope.MessageID = newMessageID(a.Email)
 	}
-	msg, _, err := buildMessage(a, pending.Envelope, now)
+	msg, raw, err := s.buildMessage(a, pending.Envelope, now)
 	if err != nil {
 		return SendResult{}, err
 	}
-	if err := s.store.SetOutboxState(ctx, id, StateSending, ""); err != nil {
-		return SendResult{}, err
-	}
-	client, err := s.smtpClient(a, password)
-	if err == nil {
-		err = client.DialAndSendWithContext(ctx, msg)
-	}
-	if err != nil {
-		_ = s.store.SetOutboxState(ctx, id, StateFailed, err.Error())
-		return SendResult{}, fmt.Errorf("smtp: %w", err)
-	}
-	if err := s.store.SetOutboxState(ctx, id, StateSent, ""); err != nil {
+	if err := s.deliver(ctx, a, password, id, msg, raw); err != nil {
 		return SendResult{}, err
 	}
 	result := SendResult{Outbox: pending}
 	// The outbox does not know which draft a message was. The draft is
 	// found by its Message-ID, and goes only if it still says what was
 	// sent: one edited since the failed send keeps the newer text.
-	sentDraft := s.retireSentDraft(ctx, pending.AccountID, pending.Envelope)
-	if err := s.appendSent(ctx, a, password, pending.Raw); err != nil {
-		result.Warning = err
-	} else {
-		result.Copied = true
+	sentDraft := s.retireSentDraft(context.WithoutCancel(ctx), pending.AccountID, pending.Envelope)
+	// The copy for Sent is the message as the outbox kept it. One with
+	// attachments was not kept: it is the one just built.
+	sent := pending.Raw
+	if len(sent) == 0 {
+		sent = raw
 	}
+	s.afterDelivery(ctx, a, password, sent, sentDraft || len(pending.Envelope.Attachments) > 0, &result)
 	if sentDraft {
 		s.flushDraftDeletions(ctx, pending.AccountID)
 	}

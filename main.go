@@ -65,6 +65,7 @@ type app struct {
 
 	showAccounts bool
 	showSettings bool
+	accountOpen  bool
 	accountForm  accountForm
 	accountBusy  bool
 	accountErr   string
@@ -698,6 +699,7 @@ func (a *app) mailView(c *ui.Context) {
 		panes.OnShortcut(0, ui.KeyF, func() { a.forward() })
 		panes.OnShortcut(0, ui.KeyDelete, func() { a.moveSelected(mail.SpecialTrash) })
 	})
+	a.accountModal(c)
 }
 
 // titleBar draws the search field, sync and compose.
@@ -749,7 +751,7 @@ func (a *app) sidebar(c *ui.Context, t *ui.Theme) {
 				ui.Text(c, name).FontSize(12).Bold().SingleLine()
 				ui.Text(c, email).FontSize(11).TextColor(t.TextMuted).SingleLine()
 			})
-			ui.PopoverMenuButton(c, "⋯", func(m *ui.Menu) {
+			ui.PopoverMenuButton(c, "", func(m *ui.Menu) {
 				for _, acc := range a.accounts {
 					label := acc.Label()
 					if m.Item(label + " · " + acc.Email).Radio(acc.ID == a.active).Chosen() {

@@ -615,3 +615,52 @@ func TestMultiSelectArchive(t *testing.T) {
 		t.Error("selection survives the move")
 	}
 }
+
+// Adding an account when one exists floats the form over the mail window.
+func TestAddAccountOverlay(t *testing.T) {
+	a, fs := sampleApp(t)
+	tt := ui.NewTester(a.view, 1220, 800)
+	a.openAccountForm(nil)
+	tt.Frame()
+	if !a.accountOpen || a.showAccounts {
+		t.Fatalf("accountOpen=%v showAccounts=%v", a.accountOpen, a.showAccounts)
+	}
+	if !tt.HasText(locales.AddAccount()) {
+		t.Errorf("overlay title missing: %q", tt.Texts())
+	}
+	a.accountForm.Name = "Second"
+	a.accountForm.Email = "second@example.com"
+	a.accountForm.Password = "secret"
+	a.accountForm.Host = "imap.example.com"
+	a.accountForm.Port = "993"
+	a.accountForm.SMTPHost = "smtp.example.com"
+	a.accountForm.SMTPPort = "465"
+	tt.Frame()
+	if err := tt.Click("Test and save"); err != nil {
+		t.Fatal(err)
+	}
+	if len(fs.accounts) != 2 {
+		t.Fatalf("accounts = %+v", fs.accounts)
+	}
+	if a.accountOpen {
+		t.Error("overlay stays open after saving")
+	}
+}
+
+// Editing the active account uses the same overlay, and Cancel dismisses
+// it without saving.
+func TestEditAccountOverlayCancel(t *testing.T) {
+	a, _ := sampleApp(t)
+	tt := ui.NewTester(a.view, 1220, 800)
+	a.openAccountForm(a.activeAccount())
+	tt.Frame()
+	if !tt.HasText(locales.EditAccount()) {
+		t.Errorf("edit title missing: %q", tt.Texts())
+	}
+	if err := tt.Click("Cancel"); err != nil {
+		t.Fatal(err)
+	}
+	if a.accountOpen {
+		t.Error("Cancel did not close the overlay")
+	}
+}

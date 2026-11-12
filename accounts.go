@@ -90,12 +90,19 @@ func (f accountForm) account() (mail.Account, error) {
 	}, nil
 }
 
-// openAccountForm shows the account view for editing, or a blank form.
+// openAccountForm shows the account form in a floating panel over the
+// mail window, or the full-window onboarding view when no account exists.
 func (a *app) openAccountForm(acc *mail.Account) {
 	a.showSettings = false
-	a.showAccounts = true
 	a.accountErr = ""
 	a.accountNote = ""
+	if len(a.accounts) == 0 {
+		a.showAccounts = true
+		a.accountOpen = false
+	} else {
+		a.showAccounts = false
+		a.accountOpen = true
+	}
 	if acc == nil {
 		a.accountForm = accountForm{Provider: providerNames()[0], TLS: "TLS", SMTPTLS: "STARTTLS"}
 		if a.accountForm.Provider != locales.ProviderCustom() {
@@ -106,6 +113,82 @@ func (a *app) openAccountForm(acc *mail.Account) {
 		return
 	}
 	a.accountForm = formFromAccount(*acc)
+}
+
+// closeAccountForm dismisses the floating form.
+func (a *app) closeAccountForm() {
+	a.accountOpen = false
+	a.accountErr = ""
+	a.accountNote = ""
+}
+
+// accountModal floats the account form over the mail window.
+func (a *app) accountModal(c *ui.Context) {
+	if !a.accountOpen {
+		return
+	}
+	t := c.Theme()
+	ui.Modal(c, &a.accountOpen, func() {
+		ui.Column(c).Width(560).Gap(12).Children(func() {
+			ui.Row(c).AlignItems(ui.Center).Gap(10).Children(func() {
+				title := locales.AddAccount()
+				if a.accountForm.editing {
+					title = locales.EditAccount()
+				}
+				ui.Text(c, title).FontSize(18).Bold()
+				ui.Spacer(c)
+				a.iconButton(c, closeIcon, locales.Cancel(), locales.Cancel()).OnClick(a.closeAccountForm)
+			})
+			ui.Scroll(c).Height(430).KeepScrollbars(true).Children(func() {
+				ui.Column(c).Padding(2, 2).PaddingEnd(10).Gap(14).Children(func() {
+					a.accountFields(c, t)
+					a.accountStatus(c, t)
+				})
+			})
+			ui.Divider(c)
+			a.accountActions(c, true)
+		})
+	})
+}
+
+// accountStatus draws the progress, error and success lines.
+func (a *app) accountStatus(c *ui.Context, t *ui.Theme) {
+	if a.accountBusy {
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Spinner(c).Size(14, 14)
+			ui.Text(c, a.accountNote).FontSize(12).TextColor(t.TextMuted)
+		})
+	}
+	if a.accountErr != "" {
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Icon(c, alertIcon).FontSize(14).TextColor(t.Warning)
+			ui.Text(c, a.accountErr).FontSize(12).TextColor(t.Text).MaxLines(3)
+		})
+	}
+	if a.accountNote != "" && !a.accountBusy {
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Icon(c, checkIcon).FontSize(14).TextColor(t.Success)
+			ui.Text(c, a.accountNote).FontSize(12).TextColor(t.TextMuted)
+		})
+	}
+}
+
+// accountActions draws the form's actions, destructive on the left and
+// the primary action on the right.
+func (a *app) accountActions(c *ui.Context, modal bool) {
+	ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+		if a.accountForm.editing {
+			ui.Button(c, locales.DeleteAccount()).OnClick(func() { a.deleteAccount() })
+		}
+		ui.Spacer(c)
+		if modal {
+			ui.Button(c, locales.Cancel()).OnClick(a.closeAccountForm)
+		} else if len(a.accounts) > 0 {
+			ui.Button(c, locales.Cancel()).OnClick(func() { a.showAccounts = false })
+		}
+		ui.PrimaryButton(c, locales.TestAndSave()).Disabled(a.accountBusy).
+			OnClick(func() { a.saveAccount() })
+	})
 }
 
 // applyProvider fills the server fields from a preset.
@@ -128,7 +211,7 @@ func (a *app) accountsView(c *ui.Context) {
 			Padding(0, max(bar.Right, 0)+16, 0, max(bar.Left, 0)+16).
 			BorderWidth(0, 0, 1, 0).BorderColor(t.Border).DragWindow().Children(func() {
 			if len(a.accounts) > 0 {
-				a.iconButton(c, chevronDownIcon, locales.Back(), locales.Back()).
+				a.iconButton(c, chevronLeftIcon, locales.Back(), locales.Back()).
 					OnClick(func() { a.showAccounts = false })
 			}
 			title := locales.AccountsTitle()
@@ -145,34 +228,8 @@ func (a *app) accountsView(c *ui.Context) {
 					ui.Text(c, locales.AccountsIntro()).FontSize(14).TextColor(t.TextMuted)
 				}
 				a.accountFields(c, t)
-				if a.accountBusy {
-					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-						ui.Spinner(c).Size(14, 14)
-						ui.Text(c, a.accountNote).FontSize(12).TextColor(t.TextMuted)
-					})
-				}
-				if a.accountErr != "" {
-					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-						ui.Icon(c, alertIcon).FontSize(14).TextColor(t.Warning)
-						ui.Text(c, a.accountErr).FontSize(12).TextColor(t.Text).MaxLines(3)
-					})
-				}
-				if a.accountNote != "" && !a.accountBusy {
-					ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-						ui.Icon(c, checkIcon).FontSize(14).TextColor(t.Success)
-						ui.Text(c, a.accountNote).FontSize(12).TextColor(t.TextMuted)
-					})
-				}
-				ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-					ui.PrimaryButton(c, locales.TestAndSave()).Disabled(a.accountBusy).
-						OnClick(func() { a.saveAccount() })
-					if a.accountForm.editing {
-						ui.Button(c, locales.DeleteAccount()).OnClick(func() { a.deleteAccount() })
-					}
-					if len(a.accounts) > 0 {
-						ui.Button(c, locales.Cancel()).OnClick(func() { a.showAccounts = false })
-					}
-				})
+				a.accountStatus(c, t)
+				a.accountActions(c, false)
 			})
 		})
 	})
@@ -204,7 +261,6 @@ func (a *app) accountFields(c *ui.Context, t *ui.Theme) {
 		pw := ui.TextInput(c, &f.Password).Password().Label(locales.Password())
 		if f.editing {
 			pw.Placeholder(locales.PasswordKeep())
-			ui.Text(c, locales.PasswordKeep()).FontSize(11).TextColor(t.TextMuted)
 		}
 		ui.Text(c, locales.PasswordAppNote()).FontSize(11).TextColor(t.TextMuted)
 	})
@@ -325,6 +381,7 @@ func (a *app) afterAccountSaved(id string) {
 			}
 			a.accounts = accounts
 			a.showAccounts = false
+			a.accountOpen = false
 			a.active = id
 			a.beginAccount()
 			a.run(func() {
@@ -369,8 +426,8 @@ func (a *app) deleteAccount() {
 				}
 				a.accounts = accounts
 				a.showAccounts = false
+				a.accountOpen = false
 				if len(accounts) == 0 {
-					a.showAccounts = true
 					a.openAccountForm(nil)
 					return
 				}

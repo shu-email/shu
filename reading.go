@@ -115,8 +115,8 @@ func (a *app) senderHeader(c *ui.Context, t *ui.Theme, m mail.Summary) {
 		ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
 			ui.Text(c, displayName(m.From)).FontSize(14).Bold().SingleLine()
 			ui.Text(c, m.From.Email).FontSize(12).TextColor(t.TextMuted).SingleLine()
-			if to := recipients(m.To); to != "" {
-				ui.Text(c, locales.To()+" "+to).FontSize(11).TextColor(t.TextMuted).SingleLine()
+			if to := a.recipientLine(m); to != "" {
+				ui.Text(c, to).FontSize(11).TextColor(t.TextMuted).SingleLine()
 			}
 		})
 		ui.Column(c).Shrink(0).AlignItems(ui.End).Gap(1).Children(func() {
@@ -126,6 +126,19 @@ func (a *app) senderHeader(c *ui.Context, t *ui.Theme, m mail.Summary) {
 			}
 		})
 	})
+}
+
+// recipientLine writes "to me" when the account is the only recipient,
+// else the recipients.
+func (a *app) recipientLine(m mail.Summary) string {
+	if len(m.To) == 1 && a.activeAccount() != nil &&
+		strings.EqualFold(m.To[0].Email, a.activeAccount().Email) {
+		return locales.ToMe()
+	}
+	if to := recipients(m.To); to != "" {
+		return locales.To() + " " + to
+	}
+	return ""
 }
 
 // recipients writes an address list compactly.
@@ -417,12 +430,12 @@ func (a *app) moveSelected(special string) {
 			if err != nil {
 				a.err = err.Error()
 			} else if len(targets) == 1 && first.DestUID != 0 {
-				label := locales.Archive()
+				label := locales.Archived()
 				switch special {
 				case mail.SpecialTrash:
-					label = locales.Delete()
+					label = locales.Deleted()
 				case mail.SpecialJunk:
-					label = locales.Junk()
+					label = locales.MovedToJunk()
 				}
 				a.undo = &undoMove{accountID: accountID, source: targets[0].Folder, dest: dest, destUID: first.DestUID, label: label}
 			}

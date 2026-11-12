@@ -56,6 +56,17 @@ type fakeIMAP struct {
 	// xoauthTries counts the exchanges.
 	xoauth      func(user, token string) bool
 	xoauthTries atomic.Int32
+	// statusDone runs once, after the next STATUS was answered and before
+	// the client hears the answer: the moment a sync has read a folder's
+	// counts and not yet fetched its new mail.
+	statusDone func()
+}
+
+// afterStatus has do run once the next STATUS is answered.
+func (f *fakeIMAP) afterStatus(do func()) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.statusDone = do
 }
 
 // fakeSelect is one SELECT or EXAMINE the fake server received.
@@ -78,6 +89,18 @@ func (s *fakeSession) Select(mailbox string, options *imap.SelectOptions) (*imap
 	s.f.selects = append(s.f.selects, fakeSelect{mailbox, options != nil && options.ReadOnly})
 	s.f.mu.Unlock()
 	return s.SessionIMAP4rev2.Select(mailbox, options)
+}
+
+func (s *fakeSession) Status(mailbox string, options *imap.StatusOptions) (*imap.StatusData, error) {
+	data, err := s.SessionIMAP4rev2.Status(mailbox, options)
+	s.f.mu.Lock()
+	done := s.f.statusDone
+	s.f.statusDone = nil
+	s.f.mu.Unlock()
+	if done != nil {
+		done()
+	}
+	return data, err
 }
 
 // Idle reports the selected mailbox's changes while the client idles. The
@@ -516,6 +539,78 @@ func TestUIDValidityResetDropsCache(t *testing.T) {
 	msgs, _ := svc.CachedMessages(ctx, a.ID, "INBOX", "", 50)
 	if len(msgs) != 1 || msgs[0].Subject != "HTML only" {
 		t.Errorf("after reset = %+v", msgs)
+	}
+}
+
+// arriveAfterStatus has a message reach the folder just after the next
+// STATUS was answered: a sync has read the folder's counts by then, and
+// fetches its new mail after.
+func arriveAfterStatus(t *testing.T, f *fakeIMAP, mailbox string, raw []byte) {
+	f.afterStatus(func() {
+		// The server's goroutine: an error is reported, not fatal.
+		if _, err := f.user.Append(mailbox, appendLiteral{bytes.NewReader(raw)}, &imap.AppendOptions{Time: time.Unix(1_700_000_000, 0)}); err != nil {
+			t.Errorf("append %s: %v", mailbox, err)
+		}
+	})
+}
+
+// unreadOf counts the unread messages of a list.
+func unreadOf(list []Summary) int {
+	n := 0
+	for _, m := range list {
+		if !m.Seen {
+			n++
+		}
+	}
+	return n
+}
+
+// A message can reach a folder while it syncs, after its counts were read
+// and before its new mail is fetched. The sync writes it with the counts
+// read after it, so the cache never holds an unread message its folder's
+// count leaves out.
+func TestSyncCountsMailThatArrivesDuringIt(t *testing.T) {
+	ctx := context.Background()
+	f := startFakeIMAP(t, allCaps())
+	f.create(t, "INBOX")
+	f.append(t, "INBOX", readFixture(t, "plain.eml"))
+	svc, store, a := newIMAPService(t, f, "secret")
+	if err := svc.SyncFolder(ctx, a.ID, "INBOX", 50); err != nil {
+		t.Fatal(err)
+	}
+	arriveAfterStatus(t, f, "INBOX", readFixture(t, "html-only.eml"))
+	if err := svc.SyncFolder(ctx, a.ID, "INBOX", 50); err != nil {
+		t.Fatal(err)
+	}
+	msgs, _ := svc.CachedMessages(ctx, a.ID, "INBOX", "", 50)
+	folder, _, _ := store.Folder(ctx, a.ID, "INBOX")
+	if len(msgs) != 2 || folder.Total != 2 || folder.Unread != unreadOf(msgs) {
+		t.Errorf("cached %d messages, %d unread; the folder counts %d unread of %d",
+			len(msgs), unreadOf(msgs), folder.Unread, folder.Total)
+	}
+}
+
+// The same in a watcher's check: it announces the message with the inbox's
+// counts, and those count it. The window shows the badge from them as it
+// shows the notification.
+func TestWatchCountsTheMailItAnnounces(t *testing.T) {
+	f := startFakeIMAP(t, allCaps())
+	f.create(t, "INBOX")
+	f.append(t, "INBOX", readFixture(t, "plain.eml"))
+	r := newWatchRig(t, f, "secret", false)
+	r.watch()
+	r.checked()
+	r.timer()
+	arriveAfterStatus(t, f, "INBOX", readFixture(t, "html-only.eml"))
+	r.svc.Nudge()
+	ev := r.checked()
+	if got := subjects(ev.New); len(got) != 1 || got[0] != "HTML only" {
+		t.Fatalf("announced %v, want the message that arrived during the check", got)
+	}
+	for _, folder := range ev.Folders {
+		if folder.Name == "INBOX" && (folder.Unread != 2 || folder.Total != 2) {
+			t.Errorf("announced with the inbox at %d unread of %d, want 2 of 2", folder.Unread, folder.Total)
+		}
 	}
 }
 

@@ -2,7 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io/fs"
+	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -54,6 +59,23 @@ type composeState struct {
 	draft     draftStatus
 	syncTimer *time.Timer
 
+	// attachments is what the stored draft has attached, as the window
+	// last heard. Only the engine changes a draft's files: attaching and
+	// removing are jobs, which take turns with the saves, and the window
+	// takes the list each one returns, the newest revision's winning.
+	// removing is the files taken off here whose job has not answered,
+	// which an older list must not bring back; attaching counts the
+	// files being copied in.
+	attachments []mail.Attachment
+	attachRev   int64
+	attachMsgID string
+	removing    map[string]bool
+	attaching   int
+	picking     bool
+	// focused is the control the keyboard is on, among the attach button
+	// and the attachments.
+	focused string
+
 	// source is the message being replied to, which an AI draft reads;
 	// nil for a new message or a forward. guidance is what the user asks
 	// the draft to say, job the draft in progress and review its payload
@@ -68,6 +90,12 @@ type composeState struct {
 	err     string
 	note    string
 	closed  bool
+	// A send under way: how much of the message has gone, of how much,
+	// and the way to stop it.
+	sendSent   int64
+	sendTotal  int64
+	sendCancel context.CancelFunc
+	cancelling bool
 
 	win    *mygo.Window
 	ctx    context.Context
@@ -133,6 +161,7 @@ func (a *app) resumeDraft(d mail.Draft) *composeState {
 		references: append([]string(nil), d.References...),
 	}
 	cs.noteDraft(d)
+	cs.takeAttachments(d)
 	return a.showCompose(cs)
 }
 
@@ -202,9 +231,21 @@ func addressesText(list []mail.Address) string {
 // view draws the compose window.
 func (cs *composeState) view(c *ui.Context) {
 	t := c.Theme()
-	ui.Column(c).Fill().Background(t.Background).Padding(18, 20).Gap(10).
+	root := ui.Column(c).Fill().Background(t.Background).Padding(18, 20).Gap(10).
 		OnShortcut(ui.Cmd, ui.KeyEnter, cs.send).
-		OnShortcut(0, ui.KeyEscape, cs.close).Children(func() {
+		OnShortcut(ui.Cmd|ui.Shift, ui.KeyA, cs.pickFiles).
+		OnShortcut(0, ui.KeyEscape, cs.close)
+	// The whole window takes files dropped on it, and says so while they
+	// are over it. A message on its way takes none.
+	dragOver := false
+	if cs.canAttach() {
+		if files := root.DroppedFiles(); files != nil {
+			cs.attach(files)
+		}
+		dragOver = root.FileDragOver()
+	}
+	hasFiles := len(cs.attachments) > 0 || cs.attaching > 0
+	root.Children(func() {
 		cs.row(c, locales.To(), "name@example.com", &cs.to)
 		cs.row(c, locales.Cc(), "", &cs.cc)
 		if cs.showBcc {
@@ -217,31 +258,65 @@ func (cs *composeState) view(c *ui.Context) {
 			cs.draftRow(c, t)
 		}
 		ui.Divider(c)
-		// The body takes the room there is. Its minimum leaves the notices
-		// and the actions below it on screen at the window's smallest.
-		ui.TextArea(c, &cs.body).Grow(1).MinHeight(120).Label(locales.Body()).
+		// The body takes the room there is. Its minimum leaves the
+		// attachments, the notices and the actions below it on screen at
+		// the window's smallest.
+		bodyMin := float32(120)
+		if hasFiles {
+			bodyMin = 56
+		}
+		ui.TextArea(c, &cs.body).Grow(1).MinHeight(bodyMin).Label(locales.Body()).
 			Placeholder(locales.ComposeBodyPlaceholder()).OnChange(cs.changed)
+		if hasFiles {
+			cs.attachmentList(c, t)
+		}
 		if cs.draft.conflict {
 			cs.conflictNotice(c, t)
 		}
+		if cs.sending && cs.sendTotal > 0 {
+			cs.sendProgress(c, t)
+		}
 		if cs.err != "" {
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Row(c).Shrink(0).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Icon(c, alertIcon).FontSize(14).TextColor(t.Warning)
-				ui.Text(c, cs.err).FontSize(12).TextColor(t.Text).MaxLines(3).Grow(1)
+				// A status, so that a screen reader says why a file was
+				// not attached or a message not sent.
+				ui.Text(c, cs.err).FontSize(12).TextColor(t.Text).MaxLines(4).Grow(1).MinWidth(0).
+					Role(ui.RoleStatus)
 			})
 		}
-		ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Shrink(0).Gap(10).AlignItems(ui.Center).Children(func() {
+			attach := cs.app.iconButton(c, paperclipIcon, locales.AttachFiles(), locales.AttachFilesTip(attachKey())).
+				FocusBind(&cs.focused, focusAttach).KeyShortcuts(ui.Cmd|ui.Shift, ui.KeyA).
+				Disabled(!cs.canAttach()).OnClick(cs.pickFiles)
+			if !cs.canAttach() {
+				// An icon does not grey out with its button as a label
+				// does.
+				attach.Opacity(0.45)
+			}
 			// Closing the window keeps the draft; this is the way to
 			// throw it away.
 			ui.Button(c, locales.DiscardDraft()).Disabled(cs.sending).OnClick(cs.discard)
 			cs.statusLine(c, t)
-			key := "Ctrl+Enter"
-			if runtime.GOOS == "darwin" {
-				key = "⌘↩"
+			if !cs.sending {
+				key := "Ctrl+Enter"
+				if runtime.GOOS == "darwin" {
+					key = "⌘↩"
+				}
+				ui.Text(c, locales.SendHint(key)).FontSize(11).TextColor(t.TextMuted).Shrink(0)
 			}
-			ui.Text(c, locales.SendHint(key)).FontSize(11).TextColor(t.TextMuted).Shrink(0)
 			if cs.note != "" {
 				ui.Text(c, cs.note).FontSize(12).TextColor(t.TextMuted)
+			}
+			if cs.sending {
+				// The way to stop a message on its way, which with
+				// attachments can take a while. It takes the hint's
+				// place, to fit the window at its narrowest.
+				label := locales.CancelSend()
+				if cs.cancelling {
+					label = locales.SendCancelling()
+				}
+				ui.Button(c, label).Label(locales.CancelSend()).Disabled(cs.cancelling).OnClick(cs.cancelSend)
 			}
 			label := locales.Send()
 			if cs.sending {
@@ -250,8 +325,138 @@ func (cs *composeState) view(c *ui.Context) {
 			ui.PrimaryButton(c, label).Label(locales.Send()).Disabled(cs.sending).
 				OnClick(func() { cs.send() })
 		})
+		if dragOver {
+			cs.dropHint(c, t)
+		}
 	})
 	aiReviewModal(c, &cs.review)
+}
+
+// focusAttach is the attach button among the controls cs.focused names.
+const focusAttach = "attach"
+
+// attachmentFocus names an attachment among them. A draft has a file
+// once under a name, so the two tell its attachments apart.
+func attachmentFocus(att mail.Attachment) string {
+	return "file:" + att.ContentHash + "/" + att.Filename
+}
+
+// attachKey is the shortcut that opens the file picker, as the platform
+// writes it.
+func attachKey() string {
+	if runtime.GOOS == "darwin" {
+		return "⇧⌘A"
+	}
+	return "Ctrl+Shift+A"
+}
+
+// attachmentsHeight is the room the attachments take at most: two rows
+// of them and the top of a third, which shows there are more. Those
+// scroll, so that the actions stay on screen however many files a
+// message has.
+const (
+	attachmentsHeight   = 106
+	attachmentRowHeight = 48
+	attachmentRing      = 3
+)
+
+// wholeMB writes a limit that is a round number of megabytes as one.
+func wholeMB(n int64) string { return fmt.Sprintf("%d MB", n>>20) }
+
+// attachmentList shows what is attached: the count and the size together,
+// a warning when the message is likely to be refused for its size, and a
+// card for each file.
+func (cs *composeState) attachmentList(c *ui.Context, t *ui.Theme) {
+	total := cs.attachmentBytes()
+	// The list gives way before the actions do: with a warning, a notice
+	// and a send's progress all showing in a small window, it keeps one
+	// row and scrolls.
+	ui.Column(c).MinHeight(0).Gap(6).Children(func() {
+		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+			ui.Icon(c, paperclipIcon).FontSize(12).TextColor(t.TextMuted)
+			if len(cs.attachments) > 0 {
+				ui.Text(c, locales.AttachmentsTotal(len(cs.attachments), formatSize(total))).
+					FontSize(11).TextColor(t.TextMuted).SingleLine()
+			}
+			if cs.attaching > 0 {
+				ui.Spinner(c).Size(11, 11)
+				ui.Text(c, locales.Attaching(cs.attaching)).FontSize(11).TextColor(t.TextMuted).SingleLine()
+			}
+		})
+		if encoded := mail.EncodedSize(total); encoded > mail.AttachmentWarnBytes {
+			// Only the server knows its limit: this warns, and stops
+			// nothing.
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Padding(6, 10).Radius(8).
+				Background(t.Warning.Alpha(0.12)).Children(func() {
+				ui.Icon(c, alertIcon).FontSize(13).TextColor(t.Warning)
+				ui.Text(c, locales.AttachmentsWarning(formatSize(encoded), wholeMB(mail.AttachmentWarnBytes))).
+					FontSize(11).Grow(1).MinWidth(0).MaxLines(3).Role(ui.RoleStatus)
+			})
+		}
+		if len(cs.attachments) == 0 {
+			return
+		}
+		// The scroll area cuts off what is drawn outside it, and the
+		// focus ring of a card is: the cards stand in from its edge by
+		// the ring's width, and the area out by as much, to line up.
+		ui.Scroll(c).Margin(-attachmentRing).MaxHeight(attachmentsHeight).MinHeight(attachmentRowHeight).Children(func() {
+			ui.Row(c).Wrap().Gap(6).Padding(attachmentRing).Children(func() {
+				for _, att := range cs.attachments {
+					cs.attachmentCard(c, t, att)
+				}
+			})
+		})
+	})
+}
+
+// attachmentCard is one attached file: its name, its type and size, and
+// the button that takes it off. The card is the keyboard's stop, where
+// Delete and Backspace remove the file; the button is the pointer's.
+func (cs *composeState) attachmentCard(c *ui.Context, t *ui.Theme, att mail.Attachment) {
+	name := att.Filename
+	if name == "" {
+		name = locales.Attachment()
+	}
+	remove := func() { cs.removeAttachment(att) }
+	ui.Row(c.Key(attachmentFocus(att))).Width(232).Padding(5, 6, 5, 10).Gap(6).AlignItems(ui.Center).
+		Radius(8).Background(t.Surface).Border(1, t.Border).
+		FocusBind(&cs.focused, attachmentFocus(att)).
+		KeyShortcuts(0, ui.KeyDelete).
+		OnShortcut(0, ui.KeyDelete, remove).
+		OnShortcut(0, ui.KeyBackspace, remove).Children(func() {
+		ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
+			ui.Text(c, name).FontSize(12).Bold().SingleLine()
+			ui.Text(c, att.ContentType+" · "+formatSize(att.Size)).
+				FontSize(11).TextColor(t.TextMuted).SingleLine()
+		})
+		ui.Button(c, "").Label(locales.RemoveAttachment(name)).Tooltip(locales.RemoveAttachment(name)).
+			Padding(4, 5).TabStop(false).Disabled(cs.sending).OnClick(remove).
+			Children(func() { ui.Icon(c, closeIcon).FontSize(13) })
+	})
+}
+
+// sendProgress shows how much of the message has gone to the server.
+func (cs *composeState) sendProgress(c *ui.Context, t *ui.Theme) {
+	text := locales.SendProgress(formatSize(cs.sendSent), formatSize(cs.sendTotal))
+	// The engine keeps the last byte back until the server has taken the
+	// message: all of it is out, and the wait is for the answer.
+	if cs.sendSent >= cs.sendTotal-1 {
+		text = locales.SendFinishing()
+	}
+	ui.Column(c).Shrink(0).Gap(5).Children(func() {
+		ui.Text(c, text).FontSize(11).TextColor(t.TextMuted).SingleLine()
+		ui.Progress(c, float64(cs.sendSent)/float64(cs.sendTotal)).Label(locales.Sending())
+	})
+}
+
+// dropHint covers the window while files are dragged over it, to say
+// that it takes them.
+func (cs *composeState) dropHint(c *ui.Context, t *ui.Theme) {
+	ui.Column(c).Absolute().Top(8).Right(8).Bottom(8).Left(8).Center().Gap(8).Radius(12).
+		Background(t.Background.Alpha(0.92)).Border(2, t.Accent).Children(func() {
+		ui.Icon(c, paperclipIcon).FontSize(26).TextColor(t.Accent)
+		ui.Text(c, locales.DropToAttach()).FontSize(14).Bold().TextColor(t.Accent)
+	})
 }
 
 // row is a compact compose field with its label inline, as mail apps
@@ -276,7 +481,9 @@ func (cs *composeState) statusLine(c *ui.Context, t *ui.Theme) {
 		ui.Icon(c, icon).FontSize(12).TextColor(color)
 		// It is no live region: it changes with every pause in the
 		// typing, which a screen reader should not read out each time.
-		ui.Text(c, text).FontSize(11).TextColor(t.TextMuted).SingleLine().Grow(1).MinWidth(0)
+		// Two lines, as beside the attach button a narrow window has no
+		// room to say on one where the draft is.
+		ui.Text(c, text).FontSize(11).TextColor(t.TextMuted).MaxLines(2).Grow(1).MinWidth(0)
 	})
 }
 
@@ -294,8 +501,21 @@ func (cs *composeState) draftNote(t *ui.Theme) (string, *ui.SVG, ui.Color) {
 		return locales.DraftLocalOnly(), draftIcon, t.TextMuted
 	case d.offline:
 		return locales.DraftOffline(), draftIcon, t.TextMuted
+	case cs.attachmentBytes() > mail.DraftAutoUploadLimit:
+		// A pause in the typing does not upload this one: saying it is
+		// only saved here would leave out when it goes up.
+		return locales.DraftUploadsLater(), draftIcon, t.TextMuted
 	}
 	return locales.DraftSaved(), draftIcon, t.TextMuted
+}
+
+// attachmentBytes is the size of the files attached, together.
+func (cs *composeState) attachmentBytes() int64 {
+	var total int64
+	for _, att := range cs.attachments {
+		total += att.Size
+	}
+	return total
 }
 
 // conflictNotice says that another mail client changed the draft, and
@@ -312,14 +532,213 @@ func (cs *composeState) conflictNotice(c *ui.Context, t *ui.Theme) {
 	})
 }
 
-// empty reports a window with nothing written in it.
+// empty reports a window with nothing written in it and nothing
+// attached.
 func (cs *composeState) empty() bool {
 	for _, field := range []string{cs.to, cs.cc, cs.bcc, cs.subject, cs.body} {
 		if strings.TrimSpace(field) != "" {
 			return false
 		}
 	}
-	return true
+	return len(cs.attachments) == 0 && cs.attaching == 0
+}
+
+// canAttach reports whether the window takes files now: not once its
+// message is on its way or gone.
+func (cs *composeState) canAttach() bool {
+	return !cs.sending && !cs.sent && !cs.closed && !cs.gone.Load()
+}
+
+// attachTimeout is how long copying one file into the draft may take. It
+// is long: the file may be large and on a slow disk, and nobody waits
+// for it but the copy.
+const attachTimeout = 10 * time.Minute
+
+// pickFiles asks which files to attach. The dialog blocks, so a job
+// shows it.
+func (cs *composeState) pickFiles() {
+	a := cs.app
+	if a.pickFiles == nil || cs.picking || !cs.canAttach() {
+		return
+	}
+	cs.picking = true
+	a.run(func() {
+		paths, _ := a.pickFiles(cs.win)
+		a.post(func() {
+			cs.picking = false
+			cs.attach(paths)
+			cs.redraw()
+		})
+	})
+}
+
+// attach copies files into the draft, one after another. Each is in the
+// draft, and stays with it, as soon as its copy is done; one that cannot
+// be attached says why and leaves the others alone.
+func (cs *composeState) attach(paths []string) {
+	if len(paths) == 0 || !cs.canAttach() {
+		return
+	}
+	a := cs.app
+	if cs.draftID == "" {
+		// As for a first edit: the jobs queued behind this one write the
+		// same draft.
+		cs.draftID = mail.NewDraftID()
+	}
+	cs.err = ""
+	cs.attaching += len(paths)
+	// The engine makes the draft from this if it is not stored yet, and
+	// leaves the text of a stored one to the saves.
+	d := cs.snapshot()
+	accountID := cs.accountID
+	a.run(func() {
+		for _, path := range paths {
+			var (
+				saved mail.Draft
+				err   error
+			)
+			cs.saveMu.Lock()
+			gone := cs.gone.Load()
+			if !gone {
+				// Not the window's context: a file dropped just before
+				// the window closes is still attached.
+				ctx, cancel := context.WithTimeout(context.Background(), attachTimeout)
+				saved, _, err = a.svc.AttachFile(ctx, d, path)
+				cancel()
+			}
+			cs.saveMu.Unlock()
+			a.post(func() {
+				cs.attaching--
+				switch {
+				case gone || cs.gone.Load():
+				case err != nil:
+					text := attachErrorText(path, err)
+					if cs.err != "" {
+						text = cs.err + "\n" + text
+					}
+					cs.err = text
+				default:
+					cs.draft.err = ""
+					cs.noteDraft(saved)
+					cs.takeAttachments(saved)
+					a.reloadDrafts(accountID)
+				}
+				cs.redraw()
+			})
+		}
+		a.post(func() { cs.attachmentsChanged() })
+	})
+}
+
+// attachmentsChanged plans the upload of a draft whose files changed. A
+// window closed meanwhile made its last sync before the change was in.
+func (cs *composeState) attachmentsChanged() {
+	switch {
+	case cs.gone.Load() || cs.sent:
+	case cs.closed:
+		cs.app.syncDrafts(cs.accountID)
+	default:
+		cs.scheduleSync()
+	}
+}
+
+// attachErrorText says why a file was not attached.
+func attachErrorText(path string, err error) string {
+	name := filepath.Base(path)
+	switch {
+	case errors.Is(err, mail.ErrAttachDirectory):
+		return locales.AttachFolder(name)
+	case errors.Is(err, mail.ErrAttachTooLarge):
+		return locales.AttachTooLarge(name, wholeMB(mail.MaxAttachmentBytes))
+	case errors.Is(err, fs.ErrNotExist):
+		return locales.AttachMissing(name)
+	case errors.Is(err, fs.ErrPermission):
+		return locales.AttachDenied(name)
+	}
+	return locales.AttachFailed(name, err.Error())
+}
+
+// takeAttachments takes what a stored draft has attached. The jobs
+// answer out of order, so the list of an older revision is ignored,
+// except that a draft kept apart from another client's version is a new
+// message, whose count starts again. A file taken off here stays off
+// while its job has not answered.
+func (cs *composeState) takeAttachments(d mail.Draft) {
+	if d.MessageID == cs.attachMsgID && d.Revision < cs.attachRev {
+		return
+	}
+	cs.attachMsgID, cs.attachRev = d.MessageID, d.Revision
+	cs.attachments = cs.attachments[:0:0]
+	for _, att := range d.Attachments {
+		if !cs.removing[attachmentFocus(att)] {
+			cs.attachments = append(cs.attachments, att)
+		}
+	}
+}
+
+// removeAttachment takes a file off the draft. It goes from the window
+// at once, and the keyboard goes to the file after it, or before it, or
+// to the attach button when it was the last: never nowhere.
+func (cs *composeState) removeAttachment(att mail.Attachment) {
+	key := attachmentFocus(att)
+	i := slices.IndexFunc(cs.attachments, func(have mail.Attachment) bool { return attachmentFocus(have) == key })
+	if i < 0 || cs.draftID == "" || !cs.canAttach() {
+		return
+	}
+	cs.attachments = slices.Delete(slices.Clone(cs.attachments), i, i+1)
+	switch {
+	case i < len(cs.attachments):
+		cs.focused = attachmentFocus(cs.attachments[i])
+	case i > 0:
+		cs.focused = attachmentFocus(cs.attachments[i-1])
+	default:
+		cs.focused = focusAttach
+	}
+	if cs.removing == nil {
+		cs.removing = map[string]bool{}
+	}
+	cs.removing[key] = true
+	cs.err = ""
+	a := cs.app
+	id, accountID := cs.draftID, cs.accountID
+	a.run(func() {
+		var (
+			saved mail.Draft
+			err   error
+		)
+		cs.saveMu.Lock()
+		gone := cs.gone.Load()
+		if !gone {
+			ctx, cancel := a.ctx()
+			saved, err = a.svc.RemoveAttachment(ctx, id, att)
+			cancel()
+		}
+		cs.saveMu.Unlock()
+		a.post(func() {
+			delete(cs.removing, key)
+			switch {
+			case gone || cs.gone.Load():
+			case err != nil:
+				// It is still attached, so it shows again.
+				name := att.Filename
+				if name == "" {
+					name = locales.Attachment()
+				}
+				cs.err = locales.AttachRemoveFailed(name, err.Error())
+				if !slices.ContainsFunc(cs.attachments, func(have mail.Attachment) bool {
+					return attachmentFocus(have) == key
+				}) {
+					cs.attachments = append(cs.attachments, att)
+				}
+			default:
+				cs.noteDraft(saved)
+				cs.takeAttachments(saved)
+				a.reloadDrafts(accountID)
+				cs.attachmentsChanged()
+			}
+			cs.redraw()
+		})
+	})
 }
 
 // snapshot is the draft as the window holds it now.
@@ -422,7 +841,10 @@ func (cs *composeState) scheduleSync() {
 			if cs.closed || cs.gone.Load() || cs.saveSeq.Load() != seq {
 				return
 			}
-			a.syncDrafts(cs.accountID)
+			// A draft with large attachments waits for the window to
+			// close, or for a sync of the account: the status line says
+			// so.
+			a.syncDraftEdits(cs.accountID)
 		})
 	})
 }
@@ -497,22 +919,44 @@ func (cs *composeState) send() {
 		cs.err = locales.SendFailed(err.Error())
 		return
 	}
+	if cs.attaching > 0 || len(cs.removing) > 0 {
+		// What is attached is still changing: the message would go
+		// without a file, or with one just taken off.
+		cs.err = locales.AttachBusy()
+		return
+	}
 	out := mail.Outgoing{
 		To: to, Cc: cc, Bcc: bcc, Subject: strings.TrimSpace(cs.subject), Text: cs.body,
 		InReplyTo: cs.inReplyTo, References: cs.references,
-		DraftID: cs.draftID,
+		Attachments: slices.Clone(cs.attachments),
+		DraftID:     cs.draftID,
 	}
 	cs.sending = true
 	cs.err = ""
 	cs.note = ""
+	cs.sendSent, cs.sendTotal, cs.cancelling = 0, 0, false
 	accountID := cs.accountID
 	app := cs.app
 	draft := cs.snapshot()
 	// The saves still waiting give way to the one below.
 	seq := cs.saveSeq.Add(1)
+	// The Cancel button stops the send, and so does closing the window.
+	// A minute is enough for a message of text; one with attachments
+	// gets what a slow line needs for them. A line that stops moving
+	// ends the send sooner: the engine does not wait on it this long.
+	sendCtx, stop := context.WithCancel(cs.ctx)
+	cs.sendCancel = stop
+	timeout := time.Minute + time.Duration(mail.EncodedSize(cs.attachmentBytes())/sendSlowestRate)*time.Second
 	app.run(func() {
-		ctx, cancel := context.WithTimeout(cs.ctx, 60*time.Second)
+		defer stop()
+		ctx, cancel := context.WithTimeout(sendCtx, timeout)
 		defer cancel()
+		ctx = mail.WithSendProgress(ctx, func(sent, total int64) {
+			app.post(func() {
+				cs.sendSent, cs.sendTotal = sent, total
+				cs.redraw()
+			})
+		})
 		cs.saveMu.Lock()
 		if draft.ID != "" && cs.saveSeq.Load() == seq {
 			// The draft holds what is being sent before it goes, so that
@@ -529,9 +973,11 @@ func (cs *composeState) send() {
 		}
 		cs.saveMu.Unlock()
 		app.post(func() {
-			cs.sending = false
+			cs.sending, cs.sendCancel, cs.cancelling = false, nil, false
 			if err != nil {
-				cs.err = locales.SendFailed(err.Error())
+				// Whatever stopped it, the window stays as it was, with
+				// the draft and its attachments, to send again or not.
+				cs.err = sendErrorText(err)
 				app.loadPending(app.gen)
 				// The failure belongs to this window, which the mail
 				// window's update does not redraw.
@@ -548,6 +994,46 @@ func (cs *composeState) send() {
 			cs.close()
 		})
 	})
+}
+
+// sendSlowestRate is the bytes a second a send is given time for: a line
+// slower than this may run into the send's time limit.
+const sendSlowestRate = 32 << 10
+
+// cancelSend stops the message on its way. The send answers with what
+// became of it.
+func (cs *composeState) cancelSend() {
+	if !cs.sending || cs.sendCancel == nil {
+		return
+	}
+	cs.cancelling = true
+	cs.sendCancel()
+}
+
+// sendErrorText says why a message was not sent, in the server's words
+// where it has any, and whether it may have been delivered all the same.
+func sendErrorText(err error) string {
+	var (
+		over     *mail.SizeLimitError
+		rejected *mail.RejectedError
+	)
+	switch {
+	case errors.As(err, &over):
+		return locales.SendOverLimit(formatSize(over.Size), formatSize(over.Limit))
+	case errors.As(err, &rejected) && rejected.TooLarge():
+		return locales.SendRejectedSize(rejected.Reply)
+	case errors.As(err, &rejected):
+		return locales.SendRejected(rejected.Reply)
+	case errors.Is(err, mail.ErrDeliveryUnknown) && errors.Is(err, context.Canceled):
+		return locales.SendCancelledUnknown()
+	case errors.Is(err, mail.ErrDeliveryUnknown):
+		return locales.SendInterrupted(err.Error())
+	case errors.Is(err, context.Canceled):
+		return locales.SendCancelled()
+	case errors.Is(err, mail.ErrAttachmentMissing):
+		return locales.SendAttachmentMissing()
+	}
+	return locales.SendFailed(err.Error())
 }
 
 // parseRecipients parses one text field of addresses.

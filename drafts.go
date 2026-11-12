@@ -22,7 +22,10 @@ const draftsFolder = "drafts"
 type draftSync struct {
 	running bool
 	again   bool
-	waiting bool
+	// againFull says the sync asked for meanwhile is one that takes the
+	// drafts with large attachments too.
+	againFull bool
+	waiting   bool
 }
 
 // localDrafts counts the rows that are drafts on this device rather than
@@ -38,10 +41,17 @@ func localDrafts(list []mail.Summary) int {
 }
 
 // syncDrafts uploads an account's drafts and applies what other mail
-// clients did to them. It runs after edits settle, when a compose window
-// closes, and with every account sync. One sync runs at a time; a request
-// made meanwhile runs it once more.
-func (a *app) syncDrafts(accountID string) {
+// clients did to them. It runs when a compose window closes and with
+// every account sync. One sync runs at a time; a request made meanwhile
+// runs it once more.
+func (a *app) syncDrafts(accountID string) { a.runDraftSync(accountID, true) }
+
+// syncDraftEdits is the sync that runs after edits settle. A draft with
+// large attachments would be uploaded whole at every pause in the typing,
+// so this one leaves those for syncDrafts.
+func (a *app) syncDraftEdits(accountID string) { a.runDraftSync(accountID, false) }
+
+func (a *app) runDraftSync(accountID string, full bool) {
 	if a.account(accountID) == nil {
 		return
 	}
@@ -52,6 +62,7 @@ func (a *app) syncDrafts(accountID string) {
 	}
 	if state.running {
 		state.again = true
+		state.againFull = state.againFull || full
 		return
 	}
 	state.running = true
@@ -61,7 +72,15 @@ func (a *app) syncDrafts(accountID string) {
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
-		result, err := a.svc.SyncDrafts(ctx, accountID)
+		var (
+			result mail.DraftSyncResult
+			err    error
+		)
+		if full {
+			result, err = a.svc.SyncDrafts(ctx, accountID)
+		} else {
+			result, err = a.svc.SyncDraftEdits(ctx, accountID)
+		}
 		if err == nil && result.Folder != "" && showing {
 			_ = a.svc.SyncFolder(ctx, accountID, result.Folder, 50)
 		}
@@ -78,8 +97,9 @@ func (a *app) syncDrafts(accountID string) {
 			}
 			a.reloadDrafts(accountID)
 			if state.again {
-				state.again = false
-				a.syncDrafts(accountID)
+				again := state.againFull
+				state.again, state.againFull = false, false
+				a.runDraftSync(accountID, again)
 			}
 		})
 	})
@@ -130,7 +150,9 @@ func (a *app) loadDraftBody(g uint64, m mail.Summary) {
 				// read of the list.
 				delete(a.bodies, key)
 			default:
-				a.bodies[key] = mail.FetchResult{Message: mail.Message{Summary: m, BodyText: d.Body, BodyCached: true}}
+				a.bodies[key] = mail.FetchResult{Message: mail.Message{
+					Summary: m, BodyText: d.Body, BodyCached: true, Attachments: d.Attachments,
+				}}
 			}
 		})
 	})

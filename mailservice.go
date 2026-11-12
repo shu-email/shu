@@ -38,6 +38,15 @@ type mailService interface {
 	Draft(ctx context.Context, id string) (mail.Draft, bool, error)
 	SaveDraft(ctx context.Context, d mail.Draft) (mail.Draft, error)
 	SyncDrafts(ctx context.Context, accountID string) (mail.DraftSyncResult, error)
+	// SyncDraftEdits is the sync a pause in typing asks for: it leaves
+	// the drafts with large attachments for SyncDrafts.
+	SyncDraftEdits(ctx context.Context, accountID string) (mail.DraftSyncResult, error)
+	// AttachFile copies a file into a draft, which it creates if it is
+	// not stored yet. Only it and RemoveAttachment change what a draft
+	// has attached.
+	AttachFile(ctx context.Context, d mail.Draft, path string) (mail.Draft, mail.Attachment, error)
+	RemoveAttachment(ctx context.Context, id string, att mail.Attachment) (mail.Draft, error)
+	SweepDraftFiles(ctx context.Context) error
 	DiscardDraft(ctx context.Context, id string) error
 	AdoptDraft(ctx context.Context, accountID, folder string, uid mail.UID) (mail.Draft, error)
 	DismissDraftConflict(ctx context.Context, id string) error

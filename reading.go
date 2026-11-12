@@ -284,7 +284,9 @@ func (a *app) bodyText(c *ui.Context, t *ui.Theme, text string) {
 	})
 }
 
-// attachments lists the message's attachments with a Save as button.
+// attachments lists the message's attachments with a Save as button. A
+// draft of this device shows what it has attached and no more: its files
+// are changed in its compose window.
 func (a *app) attachments(c *ui.Context, t *ui.Theme, m mail.Summary, list []mail.Attachment) {
 	ui.Column(c).Gap(8).Children(func() {
 		ui.Text(c, locales.Attachments()).FontSize(11).Bold().TextColor(t.TextMuted)
@@ -305,6 +307,9 @@ func (a *app) attachments(c *ui.Context, t *ui.Theme, m mail.Summary, list []mai
 					ui.Text(c, fmt.Sprintf("%s · %s", att.ContentType, formatSize(att.Size))).
 						FontSize(11).TextColor(t.TextMuted).SingleLine()
 				})
+				if m.DraftID != "" {
+					return
+				}
 				ui.Button(c, "").Label(locales.SaveAs()).Tooltip(locales.SaveAs()).
 					Padding(6, 8).OnClick(func() { a.saveAttachment(m, att) }).
 					Children(func() { ui.Icon(c, downloadIcon).FontSize(15) })

@@ -291,7 +291,7 @@ func (a *app) messageRow(row ui.ListRow) {
 						ui.Text(c, meta).FontSize(11).TextColor(muted).Shrink(0).SingleLine()
 					}
 					if m.HasAttachments {
-						ui.Icon(c, paperclipIcon).FontSize(11).TextColor(muted)
+						ui.Icon(c, paperclipIcon).FontSize(11).TextColor(muted).Label(locales.HasAttachments())
 					}
 					if m.Flagged {
 						ui.Icon(c, starFilledIcon).FontSize(11).TextColor(starColor)

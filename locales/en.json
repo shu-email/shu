@@ -557,7 +557,201 @@
       }
     }
   },
-  "draftHasAttachments": "This draft has attachments, which Shu cannot edit yet. Open it in the mail client it was written in.",
+  "draftHasAttachments": "This draft has attachments Shu cannot keep whole: they are too large or cannot be read. Open it in the mail client it was written in.",
+  "draftUploadsLater": "Saved on this device · uploads on close or sync",
+  "hasAttachments": "Has attachments",
+  "attachFiles": "Attach files",
+  "attach": "Attach",
+  "attachFilesTip": "Attach files ({key})",
+  "@attachFilesTip": {
+    "description": "The tooltip of the button that attaches files, with its keyboard shortcut.",
+    "placeholders": {
+      "key": {
+        "type": "String",
+        "example": "⇧⌘A"
+      }
+    }
+  },
+  "removeAttachment": "Remove {name}",
+  "@removeAttachment": {
+    "description": "The button that takes one attached file off the message.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "report.pdf"
+      }
+    }
+  },
+  "attachmentsTotal": "{count, plural, one {# attachment} other {# attachments}} · {size}",
+  "@attachmentsTotal": {
+    "description": "How many files are attached and their size together.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      },
+      "size": {
+        "type": "String",
+        "example": "3.4 MB"
+      }
+    }
+  },
+  "attachmentsWarning": "This message will be about {size} when sent. Mail servers often refuse messages over {limit}, so it may not go through.",
+  "@attachmentsWarning": {
+    "description": "A warning, not an error: the server decides. size is the message as encoded for sending.",
+    "placeholders": {
+      "size": {
+        "type": "String",
+        "example": "27.4 MB"
+      },
+      "limit": {
+        "type": "String",
+        "example": "20 MB"
+      }
+    }
+  },
+  "@draftUploadsLater": {
+    "description": "The status of a draft with large attachments: it is not uploaded at every pause in the typing, only when its window closes or the account syncs."
+  },
+  "dropToAttach": "Drop files to attach them",
+  "attaching": "{count, plural, one {Attaching # file…} other {Attaching # files…}}",
+  "@attaching": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "attachBusy": "Wait until the files are attached, then send.",
+  "attachFolder": "“{name}” is a folder. Only files can be attached.",
+  "@attachFolder": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Photos"
+      }
+    }
+  },
+  "attachMissing": "“{name}” could not be found. It may have been moved or deleted.",
+  "@attachMissing": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "report.pdf"
+      }
+    }
+  },
+  "attachDenied": "Shu is not allowed to read “{name}”.",
+  "@attachDenied": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "report.pdf"
+      }
+    }
+  },
+  "attachTooLarge": "“{name}” was not attached: a message can carry at most {limit} of attachments.",
+  "@attachTooLarge": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "video.mov"
+      },
+      "limit": {
+        "type": "String",
+        "example": "100 MB"
+      }
+    }
+  },
+  "attachFailed": "Could not attach “{name}”: {error}",
+  "@attachFailed": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "report.pdf"
+      },
+      "error": {
+        "type": "String",
+        "example": "disk full"
+      }
+    }
+  },
+  "attachRemoveFailed": "Could not remove “{name}”: {error}",
+  "@attachRemoveFailed": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "report.pdf"
+      },
+      "error": {
+        "type": "String",
+        "example": "disk full"
+      }
+    }
+  },
+  "sendProgress": "Sending · {sent} of {total}",
+  "@sendProgress": {
+    "description": "How much of a message with attachments has gone to the server.",
+    "placeholders": {
+      "sent": {
+        "type": "String",
+        "example": "1.2 MB"
+      },
+      "total": {
+        "type": "String",
+        "example": "4.6 MB"
+      }
+    }
+  },
+  "sendFinishing": "Waiting for the server to accept the message…",
+  "cancelSend": "Cancel sending",
+  "sendCancelling": "Cancelling…",
+  "sendCancelled": "Sending was cancelled. Nothing was sent; the draft and its attachments are still here.",
+  "sendCancelledUnknown": "Sending was cancelled while the message was on its way. It was most likely not delivered, but Shu cannot be sure, and will not send it again on its own. The draft and its attachments are still here.",
+  "sendInterrupted": "The connection was lost while the message was on its way, so Shu cannot tell whether it was delivered, and will not send it again on its own. The draft and its attachments are still here. ({error})",
+  "@sendInterrupted": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "connection reset"
+      }
+    }
+  },
+  "sendRejected": "The server refused the message: {reply}",
+  "@sendRejected": {
+    "description": "reply is the mail server's own answer.",
+    "placeholders": {
+      "reply": {
+        "type": "String",
+        "example": "550 5.7.1 Message rejected"
+      }
+    }
+  },
+  "sendRejectedSize": "The server refused the message as too large: {reply}. Nothing was sent. Remove an attachment and send again.",
+  "@sendRejectedSize": {
+    "description": "reply is the mail server's own answer.",
+    "placeholders": {
+      "reply": {
+        "type": "String",
+        "example": "552 5.3.4 Message size exceeds limit"
+      }
+    }
+  },
+  "sendOverLimit": "This message is {size}, and the server accepts at most {limit}. Nothing was sent. Remove an attachment and send again.",
+  "@sendOverLimit": {
+    "placeholders": {
+      "size": {
+        "type": "String",
+        "example": "31.0 MB"
+      },
+      "limit": {
+        "type": "String",
+        "example": "25.0 MB"
+      }
+    }
+  },
+  "sendAttachmentMissing": "An attached file is no longer on this device, so nothing was sent. Remove it and attach it again.",
   "@mailboxSummary": {
     "placeholders": {
       "messages": {

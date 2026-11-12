@@ -2550,12 +2550,344 @@ func (msgs Messages) DraftDiscardFailed(error string) string {
 	return Catalog.Format(msgs.locale, "draftDiscardFailed", map[string]any{"error": error})
 }
 
-// DraftHasAttachments says "This draft has attachments, which Shu cannot edit yet. Open it in the mail client it was written in."
+// DraftHasAttachments says "This draft has attachments Shu cannot keep whole: they are too large or cannot be read. Open it in the mail client it…"
 // in the language the app shows.
 func DraftHasAttachments() string { return In(i18n.Locale()).DraftHasAttachments() }
 
-// DraftHasAttachments says "This draft has attachments, which Shu cannot edit yet. Open it in the mail client it was written in."
+// DraftHasAttachments says "This draft has attachments Shu cannot keep whole: they are too large or cannot be read. Open it in the mail client it…"
 // in the language of msgs.
 func (msgs Messages) DraftHasAttachments() string {
 	return Catalog.Format(msgs.locale, "draftHasAttachments", nil)
+}
+
+// DraftUploadsLater says "Saved on this device · uploads on close or sync"
+// in the language the app shows.
+//
+// The status of a draft with large attachments: it is not uploaded at every
+// pause in the typing, only when its window closes or the account syncs.
+func DraftUploadsLater() string { return In(i18n.Locale()).DraftUploadsLater() }
+
+// DraftUploadsLater says "Saved on this device · uploads on close or sync"
+// in the language of msgs.
+//
+// The status of a draft with large attachments: it is not uploaded at every
+// pause in the typing, only when its window closes or the account syncs.
+func (msgs Messages) DraftUploadsLater() string {
+	return Catalog.Format(msgs.locale, "draftUploadsLater", nil)
+}
+
+// HasAttachments says "Has attachments"
+// in the language the app shows.
+func HasAttachments() string { return In(i18n.Locale()).HasAttachments() }
+
+// HasAttachments says "Has attachments"
+// in the language of msgs.
+func (msgs Messages) HasAttachments() string {
+	return Catalog.Format(msgs.locale, "hasAttachments", nil)
+}
+
+// AttachFiles says "Attach files"
+// in the language the app shows.
+func AttachFiles() string { return In(i18n.Locale()).AttachFiles() }
+
+// AttachFiles says "Attach files"
+// in the language of msgs.
+func (msgs Messages) AttachFiles() string {
+	return Catalog.Format(msgs.locale, "attachFiles", nil)
+}
+
+// Attach says "Attach"
+// in the language the app shows.
+func Attach() string { return In(i18n.Locale()).Attach() }
+
+// Attach says "Attach"
+// in the language of msgs.
+func (msgs Messages) Attach() string {
+	return Catalog.Format(msgs.locale, "attach", nil)
+}
+
+// AttachFilesTip says "Attach files ({key})"
+// in the language the app shows.
+//
+// The tooltip of the button that attaches files, with its keyboard
+// shortcut.
+func AttachFilesTip(key string) string { return In(i18n.Locale()).AttachFilesTip(key) }
+
+// AttachFilesTip says "Attach files ({key})"
+// in the language of msgs.
+//
+// The tooltip of the button that attaches files, with its keyboard
+// shortcut.
+func (msgs Messages) AttachFilesTip(key string) string {
+	return Catalog.Format(msgs.locale, "attachFilesTip", map[string]any{"key": key})
+}
+
+// RemoveAttachment says "Remove {name}"
+// in the language the app shows.
+//
+// The button that takes one attached file off the message.
+func RemoveAttachment(name string) string { return In(i18n.Locale()).RemoveAttachment(name) }
+
+// RemoveAttachment says "Remove {name}"
+// in the language of msgs.
+//
+// The button that takes one attached file off the message.
+func (msgs Messages) RemoveAttachment(name string) string {
+	return Catalog.Format(msgs.locale, "removeAttachment", map[string]any{"name": name})
+}
+
+// AttachmentsTotal says "{count, plural, one {# attachment} other {# attachments}} · {size}"
+// in the language the app shows.
+//
+// How many files are attached and their size together.
+func AttachmentsTotal(count int, size string) string {
+	return In(i18n.Locale()).AttachmentsTotal(count, size)
+}
+
+// AttachmentsTotal says "{count, plural, one {# attachment} other {# attachments}} · {size}"
+// in the language of msgs.
+//
+// How many files are attached and their size together.
+func (msgs Messages) AttachmentsTotal(count int, size string) string {
+	return Catalog.Format(msgs.locale, "attachmentsTotal", map[string]any{"count": count, "size": size})
+}
+
+// AttachmentsWarning says "This message will be about {size} when sent. Mail servers often refuse messages over {limit}, so it may not go through."
+// in the language the app shows.
+//
+// A warning, not an error: the server decides. size is the message as
+// encoded for sending.
+func AttachmentsWarning(size string, limit string) string {
+	return In(i18n.Locale()).AttachmentsWarning(size, limit)
+}
+
+// AttachmentsWarning says "This message will be about {size} when sent. Mail servers often refuse messages over {limit}, so it may not go through."
+// in the language of msgs.
+//
+// A warning, not an error: the server decides. size is the message as
+// encoded for sending.
+func (msgs Messages) AttachmentsWarning(size string, limit string) string {
+	return Catalog.Format(msgs.locale, "attachmentsWarning", map[string]any{"size": size, "limit": limit})
+}
+
+// DropToAttach says "Drop files to attach them"
+// in the language the app shows.
+func DropToAttach() string { return In(i18n.Locale()).DropToAttach() }
+
+// DropToAttach says "Drop files to attach them"
+// in the language of msgs.
+func (msgs Messages) DropToAttach() string {
+	return Catalog.Format(msgs.locale, "dropToAttach", nil)
+}
+
+// Attaching says "{count, plural, one {Attaching # file…} other {Attaching # files…}}"
+// in the language the app shows.
+func Attaching(count int) string { return In(i18n.Locale()).Attaching(count) }
+
+// Attaching says "{count, plural, one {Attaching # file…} other {Attaching # files…}}"
+// in the language of msgs.
+func (msgs Messages) Attaching(count int) string {
+	return Catalog.Format(msgs.locale, "attaching", map[string]any{"count": count})
+}
+
+// AttachBusy says "Wait until the files are attached, then send."
+// in the language the app shows.
+func AttachBusy() string { return In(i18n.Locale()).AttachBusy() }
+
+// AttachBusy says "Wait until the files are attached, then send."
+// in the language of msgs.
+func (msgs Messages) AttachBusy() string {
+	return Catalog.Format(msgs.locale, "attachBusy", nil)
+}
+
+// AttachFolder says "“{name}” is a folder. Only files can be attached."
+// in the language the app shows.
+func AttachFolder(name string) string { return In(i18n.Locale()).AttachFolder(name) }
+
+// AttachFolder says "“{name}” is a folder. Only files can be attached."
+// in the language of msgs.
+func (msgs Messages) AttachFolder(name string) string {
+	return Catalog.Format(msgs.locale, "attachFolder", map[string]any{"name": name})
+}
+
+// AttachMissing says "“{name}” could not be found. It may have been moved or deleted."
+// in the language the app shows.
+func AttachMissing(name string) string { return In(i18n.Locale()).AttachMissing(name) }
+
+// AttachMissing says "“{name}” could not be found. It may have been moved or deleted."
+// in the language of msgs.
+func (msgs Messages) AttachMissing(name string) string {
+	return Catalog.Format(msgs.locale, "attachMissing", map[string]any{"name": name})
+}
+
+// AttachDenied says "Shu is not allowed to read “{name}”."
+// in the language the app shows.
+func AttachDenied(name string) string { return In(i18n.Locale()).AttachDenied(name) }
+
+// AttachDenied says "Shu is not allowed to read “{name}”."
+// in the language of msgs.
+func (msgs Messages) AttachDenied(name string) string {
+	return Catalog.Format(msgs.locale, "attachDenied", map[string]any{"name": name})
+}
+
+// AttachTooLarge says "“{name}” was not attached: a message can carry at most {limit} of attachments."
+// in the language the app shows.
+func AttachTooLarge(name string, limit string) string {
+	return In(i18n.Locale()).AttachTooLarge(name, limit)
+}
+
+// AttachTooLarge says "“{name}” was not attached: a message can carry at most {limit} of attachments."
+// in the language of msgs.
+func (msgs Messages) AttachTooLarge(name string, limit string) string {
+	return Catalog.Format(msgs.locale, "attachTooLarge", map[string]any{"name": name, "limit": limit})
+}
+
+// AttachFailed says "Could not attach “{name}”: {error}"
+// in the language the app shows.
+func AttachFailed(name string, error string) string {
+	return In(i18n.Locale()).AttachFailed(name, error)
+}
+
+// AttachFailed says "Could not attach “{name}”: {error}"
+// in the language of msgs.
+func (msgs Messages) AttachFailed(name string, error string) string {
+	return Catalog.Format(msgs.locale, "attachFailed", map[string]any{"name": name, "error": error})
+}
+
+// AttachRemoveFailed says "Could not remove “{name}”: {error}"
+// in the language the app shows.
+func AttachRemoveFailed(name string, error string) string {
+	return In(i18n.Locale()).AttachRemoveFailed(name, error)
+}
+
+// AttachRemoveFailed says "Could not remove “{name}”: {error}"
+// in the language of msgs.
+func (msgs Messages) AttachRemoveFailed(name string, error string) string {
+	return Catalog.Format(msgs.locale, "attachRemoveFailed", map[string]any{"name": name, "error": error})
+}
+
+// SendProgress says "Sending · {sent} of {total}"
+// in the language the app shows.
+//
+// How much of a message with attachments has gone to the server.
+func SendProgress(sent string, total string) string {
+	return In(i18n.Locale()).SendProgress(sent, total)
+}
+
+// SendProgress says "Sending · {sent} of {total}"
+// in the language of msgs.
+//
+// How much of a message with attachments has gone to the server.
+func (msgs Messages) SendProgress(sent string, total string) string {
+	return Catalog.Format(msgs.locale, "sendProgress", map[string]any{"sent": sent, "total": total})
+}
+
+// SendFinishing says "Waiting for the server to accept the message…"
+// in the language the app shows.
+func SendFinishing() string { return In(i18n.Locale()).SendFinishing() }
+
+// SendFinishing says "Waiting for the server to accept the message…"
+// in the language of msgs.
+func (msgs Messages) SendFinishing() string {
+	return Catalog.Format(msgs.locale, "sendFinishing", nil)
+}
+
+// CancelSend says "Cancel sending"
+// in the language the app shows.
+func CancelSend() string { return In(i18n.Locale()).CancelSend() }
+
+// CancelSend says "Cancel sending"
+// in the language of msgs.
+func (msgs Messages) CancelSend() string {
+	return Catalog.Format(msgs.locale, "cancelSend", nil)
+}
+
+// SendCancelling says "Cancelling…"
+// in the language the app shows.
+func SendCancelling() string { return In(i18n.Locale()).SendCancelling() }
+
+// SendCancelling says "Cancelling…"
+// in the language of msgs.
+func (msgs Messages) SendCancelling() string {
+	return Catalog.Format(msgs.locale, "sendCancelling", nil)
+}
+
+// SendCancelled says "Sending was cancelled. Nothing was sent; the draft and its attachments are still here."
+// in the language the app shows.
+func SendCancelled() string { return In(i18n.Locale()).SendCancelled() }
+
+// SendCancelled says "Sending was cancelled. Nothing was sent; the draft and its attachments are still here."
+// in the language of msgs.
+func (msgs Messages) SendCancelled() string {
+	return Catalog.Format(msgs.locale, "sendCancelled", nil)
+}
+
+// SendCancelledUnknown says "Sending was cancelled while the message was on its way. It was most likely not delivered, but Shu cannot be sure, and…"
+// in the language the app shows.
+func SendCancelledUnknown() string { return In(i18n.Locale()).SendCancelledUnknown() }
+
+// SendCancelledUnknown says "Sending was cancelled while the message was on its way. It was most likely not delivered, but Shu cannot be sure, and…"
+// in the language of msgs.
+func (msgs Messages) SendCancelledUnknown() string {
+	return Catalog.Format(msgs.locale, "sendCancelledUnknown", nil)
+}
+
+// SendInterrupted says "The connection was lost while the message was on its way, so Shu cannot tell whether it was delivered, and will not s…"
+// in the language the app shows.
+func SendInterrupted(error string) string { return In(i18n.Locale()).SendInterrupted(error) }
+
+// SendInterrupted says "The connection was lost while the message was on its way, so Shu cannot tell whether it was delivered, and will not s…"
+// in the language of msgs.
+func (msgs Messages) SendInterrupted(error string) string {
+	return Catalog.Format(msgs.locale, "sendInterrupted", map[string]any{"error": error})
+}
+
+// SendRejected says "The server refused the message: {reply}"
+// in the language the app shows.
+//
+// reply is the mail server's own answer.
+func SendRejected(reply string) string { return In(i18n.Locale()).SendRejected(reply) }
+
+// SendRejected says "The server refused the message: {reply}"
+// in the language of msgs.
+//
+// reply is the mail server's own answer.
+func (msgs Messages) SendRejected(reply string) string {
+	return Catalog.Format(msgs.locale, "sendRejected", map[string]any{"reply": reply})
+}
+
+// SendRejectedSize says "The server refused the message as too large: {reply}. Nothing was sent. Remove an attachment and send again."
+// in the language the app shows.
+//
+// reply is the mail server's own answer.
+func SendRejectedSize(reply string) string { return In(i18n.Locale()).SendRejectedSize(reply) }
+
+// SendRejectedSize says "The server refused the message as too large: {reply}. Nothing was sent. Remove an attachment and send again."
+// in the language of msgs.
+//
+// reply is the mail server's own answer.
+func (msgs Messages) SendRejectedSize(reply string) string {
+	return Catalog.Format(msgs.locale, "sendRejectedSize", map[string]any{"reply": reply})
+}
+
+// SendOverLimit says "This message is {size}, and the server accepts at most {limit}. Nothing was sent. Remove an attachment and send again."
+// in the language the app shows.
+func SendOverLimit(size string, limit string) string {
+	return In(i18n.Locale()).SendOverLimit(size, limit)
+}
+
+// SendOverLimit says "This message is {size}, and the server accepts at most {limit}. Nothing was sent. Remove an attachment and send again."
+// in the language of msgs.
+func (msgs Messages) SendOverLimit(size string, limit string) string {
+	return Catalog.Format(msgs.locale, "sendOverLimit", map[string]any{"size": size, "limit": limit})
+}
+
+// SendAttachmentMissing says "An attached file is no longer on this device, so nothing was sent. Remove it and attach it again."
+// in the language the app shows.
+func SendAttachmentMissing() string { return In(i18n.Locale()).SendAttachmentMissing() }
+
+// SendAttachmentMissing says "An attached file is no longer on this device, so nothing was sent. Remove it and attach it again."
+// in the language of msgs.
+func (msgs Messages) SendAttachmentMissing() string {
+	return Catalog.Format(msgs.locale, "sendAttachmentMissing", nil)
 }

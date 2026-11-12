@@ -20,6 +20,16 @@ import (
 )
 
 // app is the state the windows show.
+// undoMove remembers the last move so the list can offer to take it
+// back. The destination UID comes from the server's MOVE/COPY response.
+type undoMove struct {
+	accountID string
+	source    string
+	dest      string
+	destUID   mail.UID
+	label     string
+}
+
 type app struct {
 	svc mailService
 
@@ -40,6 +50,7 @@ type app struct {
 	all         []mail.Summary
 	selected    int
 	list        ui.ListState
+	sel         ui.Selection[string]
 	searchField ui.Handle
 	focusList   bool
 	bodies      map[string]mail.FetchResult
@@ -50,6 +61,7 @@ type app struct {
 
 	pending          []mail.PendingSend
 	pendingDismissed bool
+	undo             *undoMove
 
 	showAccounts bool
 	showSettings bool
@@ -69,6 +81,7 @@ type app struct {
 	newWindow func(mygo.WindowOptions) *mygo.Window
 	saveFile  func(parent *mygo.Window, name string) (string, error)
 	setLocale func(string)
+	setBadge  func(int)
 	lang      int
 }
 
@@ -119,6 +132,7 @@ func (a *app) attach(win *mygo.Window) {
 		return mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: parent, DefaultPath: name})
 	}
 	a.setLocale = mygo.App.SetLocale
+	a.setBadge = mygo.App.SetBadgeCount
 	win.OnClosed(func() { a.closed = true })
 	mygo.App.OnLocaleChanged(func(string) { win.SetTitle(locales.AppName()) })
 }
@@ -172,7 +186,9 @@ func (a *app) beginAccount() {
 	a.folder = ""
 	a.query = ""
 	a.selected = -1
+	a.undo = nil
 	a.list = ui.ListState{}
+	a.sel.Clear()
 	a.bodies = map[string]mail.FetchResult{}
 	a.all = nil
 	a.loadCache(a.gen)
@@ -193,6 +209,7 @@ func (a *app) loadCache(g uint64) {
 			if err == nil {
 				a.folders = folders
 				a.ensureFolder()
+				a.updateBadge()
 			}
 			a.loadMessages(g)
 			a.syncAccount(g)
@@ -219,6 +236,7 @@ func (a *app) syncAccount(g uint64) {
 					a.folders = folders
 				}
 				a.ensureFolder()
+				a.updateBadge()
 			}
 			a.loadMessages(g)
 			a.syncFolder(g)
@@ -252,6 +270,7 @@ func (a *app) syncFolder(g uint64) {
 				if folders != nil {
 					a.folders = folders
 				}
+				a.updateBadge()
 			}
 			a.loadMessages(g)
 		})
@@ -282,13 +301,31 @@ func (a *app) loadMessages(g uint64) {
 				return
 			}
 			a.all = msgs
+			a.pruneSelection()
 			a.restoreSelection(key)
-			if a.selected < 0 && len(a.all) > 0 && query == "" {
+			if a.selected < 0 && len(a.all) > 0 && query == "" && a.sel.Len() == 0 {
 				a.selected = 0
 			}
 			a.reloadBody()
 		})
 	})
+}
+
+// pruneSelection forgets rows the list no longer shows, so the count and
+// actions match what the user sees.
+func (a *app) pruneSelection() {
+	if a.sel.Len() == 0 {
+		return
+	}
+	present := make(map[string]bool, len(a.all))
+	for _, m := range a.all {
+		present[summaryKey(m)] = true
+	}
+	for k := range a.sel.All() {
+		if !present[k] {
+			a.sel.Remove(k)
+		}
+	}
 }
 
 // selectedKey is the identity of the chosen message, or "".
@@ -401,6 +438,22 @@ func (a *app) applySeen(key string) {
 			}
 		}
 	}
+	a.updateBadge()
+}
+
+// updateBadge puts the active account's inbox unread count on the Dock.
+func (a *app) updateBadge() {
+	if a.setBadge == nil {
+		return
+	}
+	n := 0
+	for _, f := range a.folders {
+		if f.SpecialUse == mail.SpecialInbox {
+			n = f.Unread
+			break
+		}
+	}
+	a.setBadge(n)
 }
 
 // loadPending reads the outbox's leftovers for the delivery banner.
@@ -422,13 +475,18 @@ func (a *app) loadPending(g uint64) {
 }
 
 // search re-reads the list with the search field's text.
-func (a *app) search() { a.loadMessages(a.gen) }
+func (a *app) search() {
+	a.sel.Clear()
+	a.loadMessages(a.gen)
+}
 
 // selectFolder switches the list to a folder and syncs it.
 func (a *app) selectFolder() {
 	a.gen++
 	a.selected = -1
+	a.undo = nil
 	a.list = ui.ListState{}
+	a.sel.Clear()
 	a.all = nil
 	a.query = ""
 	a.loadMessages(a.gen)

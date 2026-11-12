@@ -278,29 +278,68 @@ func safeFileName(name string) string {
 	return name
 }
 
-// toggleStar flips the chosen message's flag, optimistically.
+// targets is the chosen messages: those selected with Cmd or Shift, or
+// the one row chosen.
+func (a *app) targets() []mail.Summary {
+	if a.sel.Len() > 0 {
+		chosen := map[string]bool{}
+		for k := range a.sel.All() {
+			chosen[k] = true
+		}
+		var out []mail.Summary
+		for _, m := range a.all {
+			if chosen[summaryKey(m)] {
+				out = append(out, m)
+			}
+		}
+		if len(out) > 0 {
+			return out
+		}
+	}
+	if a.selected >= 0 && a.selected < len(a.all) {
+		return []mail.Summary{a.all[a.selected]}
+	}
+	return nil
+}
+
+// toggleStar stars or unstars the chosen messages, optimistically.
 func (a *app) toggleStar() {
-	if a.selected < 0 || a.selected >= len(a.all) {
+	targets := a.targets()
+	if len(targets) == 0 {
 		return
 	}
-	idx := a.selected
-	m := a.all[idx]
-	key := summaryKey(m)
-	on := !m.Flagged
-	a.all[idx].Flagged = on
+	allFlagged := true
+	chosen := map[string]bool{}
+	for _, m := range targets {
+		chosen[summaryKey(m)] = true
+		if !m.Flagged {
+			allFlagged = false
+		}
+	}
+	on := !allFlagged
+	for i := range a.all {
+		if chosen[summaryKey(a.all[i])] {
+			a.all[i].Flagged = on
+		}
+	}
 	g := a.gen
-	accountID, folder, uid := a.active, m.Folder, m.UID
+	accountID := a.active
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
-		err := a.svc.SetFlag(ctx, accountID, folder, uid, mail.FlagFlagged, on)
+		var err error
+		for _, m := range targets {
+			if err = a.svc.SetFlag(ctx, accountID, m.Folder, m.UID, mail.FlagFlagged, on); err != nil {
+				break
+			}
+		}
 		a.post(func() {
 			if a.stale(g) {
 				return
 			}
 			if err != nil {
 				for i := range a.all {
-					if summaryKey(a.all[i]) == key {
+					if chosen[summaryKey(a.all[i])] {
 						a.all[i].Flagged = !on
 					}
 				}
@@ -314,43 +353,106 @@ func (a *app) toggleStar() {
 	})
 }
 
-// moveSelected archives, junks or deletes the chosen message.
+// moveSelected archives, junks or deletes the chosen messages.
 func (a *app) moveSelected(special string) {
-	if a.selected < 0 || a.selected >= len(a.all) {
+	targets := a.targets()
+	if len(targets) == 0 {
 		return
 	}
 	dest := a.folderBySpecial(special)
 	if dest == "" {
 		return
 	}
-	idx := a.selected
-	m := a.all[idx]
-	g := a.gen
-	accountID, folder, uid := a.active, m.Folder, m.UID
-	// Optimistic: hide the row, move the choice to its neighbour.
-	a.all = append(a.all[:idx], a.all[idx+1:]...)
-	if idx >= len(a.all) {
+	chosen := map[string]bool{}
+	unread := map[string]int{}
+	for _, m := range targets {
+		chosen[summaryKey(m)] = true
+		if !m.Seen {
+			unread[m.Folder]++
+		}
+	}
+	kept := make([]mail.Summary, 0, len(a.all)-len(targets))
+	for _, m := range a.all {
+		if !chosen[summaryKey(m)] {
+			kept = append(kept, m)
+		}
+	}
+	a.all = kept
+	a.sel.Clear()
+	a.undo = nil
+	if a.selected >= len(a.all) {
 		a.selected = len(a.all) - 1
 	}
-	if !m.Seen {
+	for folder, n := range unread {
 		for i := range a.folders {
 			if a.folders[i].Name == folder {
-				a.folders[i].Unread = max(0, a.folders[i].Unread-1)
+				a.folders[i].Unread = max(0, a.folders[i].Unread-n)
 			}
 		}
 	}
+	a.updateBadge()
+	g := a.gen
+	accountID := a.active
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
-		err := a.svc.Move(ctx, accountID, folder, uid, dest)
+		var (
+			first mail.MoveResult
+			err   error
+		)
+		for i, m := range targets {
+			result, moveErr := a.svc.Move(ctx, accountID, m.Folder, m.UID, dest)
+			if moveErr != nil {
+				err = moveErr
+				break
+			}
+			if i == 0 {
+				first = result
+			}
+		}
 		a.post(func() {
 			if a.stale(g) {
 				return
 			}
 			if err != nil {
 				a.err = err.Error()
+			} else if len(targets) == 1 && first.DestUID != 0 {
+				label := locales.Archive()
+				switch special {
+				case mail.SpecialTrash:
+					label = locales.Delete()
+				case mail.SpecialJunk:
+					label = locales.Junk()
+				}
+				a.undo = &undoMove{accountID: accountID, source: targets[0].Folder, dest: dest, destUID: first.DestUID, label: label}
 			}
 			a.loadMessages(g)
+		})
+	})
+}
+
+// undoLastMove moves the message back from the folder it went to, then
+// syncs the source folder so its row returns.
+func (a *app) undoLastMove() {
+	u := a.undo
+	if u == nil {
+		return
+	}
+	a.undo = nil
+	g := a.gen
+	a.run(func() {
+		ctx, cancel := a.ctx()
+		defer cancel()
+		err := a.svc.MoveBack(ctx, u.accountID, u.dest, u.source, u.destUID)
+		a.post(func() {
+			if a.stale(g) {
+				return
+			}
+			if err != nil {
+				a.err = err.Error()
+				return
+			}
+			a.syncFolder(g)
 		})
 	})
 }
@@ -511,6 +613,7 @@ func (a *app) stepMessage(delta int) {
 	if len(a.all) == 0 {
 		return
 	}
+	a.sel.Clear()
 	next := a.selected + delta
 	if a.selected < 0 {
 		next = 0
@@ -522,56 +625,72 @@ func (a *app) stepMessage(delta int) {
 	a.reloadBody()
 }
 
-// toggleRead marks the chosen message read or unread, optimistically.
+// toggleRead marks the chosen messages read or unread, optimistically.
 func (a *app) toggleRead() {
-	if a.selected < 0 || a.selected >= len(a.all) {
+	targets := a.targets()
+	if len(targets) == 0 {
 		return
 	}
-	idx := a.selected
-	m := a.all[idx]
-	key := summaryKey(m)
-	on := !m.Seen
-	accountID, folder, uid := a.active, m.Folder, m.UID
-	folderIndex := -1
-	for i := range a.folders {
-		if a.folders[i].Name == folder {
-			folderIndex = i
+	allSeen := true
+	chosen := map[string]bool{}
+	for _, m := range targets {
+		chosen[summaryKey(m)] = true
+		if !m.Seen {
+			allSeen = false
 		}
 	}
-	if on {
-		a.all[idx].Seen = true
-		if folderIndex >= 0 {
-			a.folders[folderIndex].Unread = max(0, a.folders[folderIndex].Unread-1)
+	on := !allSeen
+	delta := map[string]int{}
+	for i := range a.all {
+		m := &a.all[i]
+		if !chosen[summaryKey(*m)] || m.Seen == on {
+			continue
 		}
-	} else {
-		a.all[idx].Seen = false
-		if folderIndex >= 0 {
-			a.folders[folderIndex].Unread++
+		m.Seen = on
+		if on {
+			delta[m.Folder]--
+		} else {
+			delta[m.Folder]++
 		}
 	}
+	for folder, d := range delta {
+		for i := range a.folders {
+			if a.folders[i].Name == folder {
+				a.folders[i].Unread = max(0, a.folders[i].Unread+d)
+			}
+		}
+	}
+	a.updateBadge()
 	g := a.gen
+	accountID := a.active
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
-		err := a.svc.SetFlag(ctx, accountID, folder, uid, mail.FlagSeen, on)
+		var err error
+		for _, m := range targets {
+			if err = a.svc.SetFlag(ctx, accountID, m.Folder, m.UID, mail.FlagSeen, on); err != nil {
+				break
+			}
+		}
 		a.post(func() {
 			if a.stale(g) {
 				return
 			}
 			if err != nil {
 				for i := range a.all {
-					if summaryKey(a.all[i]) == key {
+					if chosen[summaryKey(a.all[i])] {
 						a.all[i].Seen = !on
 					}
 				}
-				if folderIndex >= 0 {
-					if on {
-						a.folders[folderIndex].Unread++
-					} else {
-						a.folders[folderIndex].Unread = max(0, a.folders[folderIndex].Unread-1)
+				for folder, d := range delta {
+					for i := range a.folders {
+						if a.folders[i].Name == folder {
+							a.folders[i].Unread = max(0, a.folders[i].Unread-d)
+						}
 					}
 				}
 				a.err = err.Error()
+				a.updateBadge()
 			}
 		})
 	})

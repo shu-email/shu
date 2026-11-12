@@ -1295,3 +1295,33 @@ func ShortcutsHint() string { return In(i18n.Locale()).ShortcutsHint() }
 func (msgs Messages) ShortcutsHint() string {
 	return Catalog.Format(msgs.locale, "shortcutsHint", nil)
 }
+
+// Undo says "Undo"
+// in the language the app shows.
+func Undo() string { return In(i18n.Locale()).Undo() }
+
+// Undo says "Undo"
+// in the language of msgs.
+func (msgs Messages) Undo() string {
+	return Catalog.Format(msgs.locale, "undo", nil)
+}
+
+// SelectedCount says "{count, plural, one {# message selected} other {# messages selected}}"
+// in the language the app shows.
+func SelectedCount(count int) string { return In(i18n.Locale()).SelectedCount(count) }
+
+// SelectedCount says "{count, plural, one {# message selected} other {# messages selected}}"
+// in the language of msgs.
+func (msgs Messages) SelectedCount(count int) string {
+	return Catalog.Format(msgs.locale, "selectedCount", map[string]any{"count": count})
+}
+
+// ClearSelection says "Clear selection"
+// in the language the app shows.
+func ClearSelection() string { return In(i18n.Locale()).ClearSelection() }
+
+// ClearSelection says "Clear selection"
+// in the language of msgs.
+func (msgs Messages) ClearSelection() string {
+	return Catalog.Format(msgs.locale, "clearSelection", nil)
+}

@@ -25,7 +25,8 @@ type mailService interface {
 	FetchMessage(ctx context.Context, accountID, folder string, uid mail.UID, markSeen bool) (mail.FetchResult, error)
 
 	SetFlag(ctx context.Context, accountID, folder string, uid mail.UID, flag mail.Flag, on bool) error
-	Move(ctx context.Context, accountID, folder string, uid mail.UID, dest string) error
+	Move(ctx context.Context, accountID, folder string, uid mail.UID, dest string) (mail.MoveResult, error)
+	MoveBack(ctx context.Context, accountID, from, to string, uid mail.UID) error
 	Send(ctx context.Context, accountID string, out mail.Outgoing) (mail.SendResult, error)
 	RetryPending(ctx context.Context, id string) (mail.SendResult, error)
 	PendingSends(ctx context.Context, accountID string) ([]mail.PendingSend, error)

@@ -150,6 +150,13 @@ type Outgoing struct {
 	MessageID  string    `json:"messageID,omitempty"`
 }
 
+// MoveResult is where a message went and its UID there, when the server
+// reports one. An undo needs that UID.
+type MoveResult struct {
+	Folder  string
+	DestUID UID
+}
+
 // SendResult says whether the Sent copy was saved. Copied is false when
 // the provider has no Sent folder, which the UI reports.
 type SendResult struct {

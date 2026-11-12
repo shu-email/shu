@@ -28,6 +28,7 @@ type fakeService struct {
 	password   map[string]string
 	sent       []mail.Outgoing
 	moved      []string
+	moveBacks  []string
 	flagCalls  []string
 	attachment mail.Attachment
 }
@@ -268,10 +269,10 @@ func (f *fakeService) SetFlag(ctx context.Context, accountID, folder string, uid
 	return nil
 }
 
-func (f *fakeService) Move(ctx context.Context, accountID, folder string, uid mail.UID, dest string) error {
+func (f *fakeService) Move(ctx context.Context, accountID, folder string, uid mail.UID, dest string) (mail.MoveResult, error) {
 	f.moved = append(f.moved, folder+"->"+dest)
 	if f.moveErr != nil {
-		return f.moveErr
+		return mail.MoveResult{}, f.moveErr
 	}
 	key := listKey(accountID, folder)
 	list := f.messages[key]
@@ -285,6 +286,31 @@ func (f *fakeService) Move(ctx context.Context, accountID, folder string, uid ma
 		m.UID = 1000 + uid
 		destKey := listKey(accountID, dest)
 		f.messages[destKey] = append(f.messages[destKey], m)
+		f.recount(accountID, folder)
+		f.recount(accountID, dest)
+		return mail.MoveResult{Folder: dest, DestUID: m.UID}, nil
+	}
+	return mail.MoveResult{Folder: dest}, nil
+}
+
+func (f *fakeService) MoveBack(ctx context.Context, accountID, from, to string, uid mail.UID) error {
+	f.moveBacks = append(f.moveBacks, from+"->"+to)
+	key := listKey(accountID, from)
+	list := f.messages[key]
+	for i := range list {
+		if list[i].UID != uid {
+			continue
+		}
+		m := list[i]
+		f.messages[key] = append(list[:i], list[i+1:]...)
+		m.Folder = to
+		if m.UID > 1000 {
+			m.UID -= 1000
+		}
+		srcKey := listKey(accountID, to)
+		f.messages[srcKey] = append(f.messages[srcKey], m)
+		f.recount(accountID, from)
+		f.recount(accountID, to)
 		return nil
 	}
 	return nil

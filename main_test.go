@@ -538,3 +538,80 @@ func TestCmdKFocusesSearch(t *testing.T) {
 		t.Errorf("query = %q after Cmd+K and typing", a.query)
 	}
 }
+
+// Archiving offers an undo that moves the message back and restores its
+// row.
+func TestUndoMove(t *testing.T) {
+	a, fs := sampleApp(t)
+	tt := ui.NewTester(a.view, 1220, 800)
+	if err := tt.Click("Archive message"); err != nil {
+		t.Fatal(err)
+	}
+	if a.undo == nil {
+		t.Fatal("no undo offered")
+	}
+	if tt.HasText("Design review — Thursday at 10") {
+		t.Error("archived message remains")
+	}
+	if err := tt.Click("Undo"); err != nil {
+		t.Fatal(err)
+	}
+	if len(fs.moveBacks) != 1 || fs.moveBacks[0] != "Archive->INBOX" {
+		t.Fatalf("move backs = %v", fs.moveBacks)
+	}
+	if a.undo != nil {
+		t.Error("undo stays after use")
+	}
+	if !tt.HasText("Design review — Thursday at 10") {
+		t.Errorf("undo did not restore the row: %q", tt.Texts())
+	}
+}
+
+// The Dock badge follows the inbox's unread count.
+func TestUnreadDockBadge(t *testing.T) {
+	fs := newFakeService()
+	fs.addAccount(testAccount("a1", "Shu Mail", "me@example.com"), "secret", testFolders(), testMessages("a1"))
+	a := newTestApp(fs)
+	badge := -1
+	a.setBadge = func(n int) { badge = n }
+	a.start()
+	if badge != 1 {
+		t.Fatalf("badge = %d after opening the folder", badge)
+	}
+	tt := ui.NewTester(a.view, 1220, 800)
+	tt.Key(0, ui.KeyU)
+	if badge != 2 {
+		t.Errorf("badge = %d after marking unread", badge)
+	}
+}
+
+// Cmd-click chooses several messages, and a toolbar action applies to all
+// of them.
+func TestMultiSelectArchive(t *testing.T) {
+	a, fs := sampleApp(t)
+	tt := ui.NewTester(a.view, 1220, 800)
+	if err := tt.Click("Design review — Thursday at 10"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ClickWith(ui.Cmd, "[shu-email/shu] Pull request #128"); err != nil {
+		t.Fatal(err)
+	}
+	if a.sel.Len() != 2 {
+		t.Fatalf("selection = %d", a.sel.Len())
+	}
+	if !tt.HasText(locales.SelectedCount(2)) {
+		t.Errorf("selection count missing: %q", tt.Texts())
+	}
+	if err := tt.Click("Archive message"); err != nil {
+		t.Fatal(err)
+	}
+	if len(fs.moved) != 2 {
+		t.Fatalf("moves = %v", fs.moved)
+	}
+	if len(a.all) != 1 {
+		t.Errorf("rows left = %d, want 1", len(a.all))
+	}
+	if a.sel.Len() != 0 {
+		t.Error("selection survives the move")
+	}
+}

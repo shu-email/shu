@@ -54,6 +54,20 @@ Windows and Linux. It is written in Go with
 - The outbox keeps a message without attachments as its bytes. For one
   with attachments it keeps the envelope and the references to the
   stored files, and builds the message again for each try.
+- Mail is received while the app runs by one watcher per account inside
+  `mail.Service` (`Watch`, `Unwatch`, `Nudge`, `SetOnline`). A watcher
+  keeps its own connection to the inbox, opened read-only, idles where
+  the server can push and polls otherwise, backs off when it fails, and
+  never changes a flag or moves a message. It reports data
+  (`mail.WatchEvent`: state, folder counts, the messages to announce);
+  the window decides what to notify, draws the state and sets the badge.
+  A message is handed out for announcing at most once: `Store.TakeNew`
+  moves the folder's watermark (`watermarks` table) in the same step
+  that returns it. The settings of checking and notifying are
+  `mail.Settings`, kept in the store. Notifications, focus, wake and
+  network reach the window through hook fields on `app` that `attach`
+  sets. The target of a notification travels in its ID, which is parsed
+  as untrusted input.
 - `ai/` is the AI layer: provider settings, the excerpt that decides what
   part of a message may leave the device, the features (summary, triage,
   draft reply) and `Service.send`, the single egress point every model

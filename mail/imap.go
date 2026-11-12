@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"mime"
+	"net"
 	"strings"
 	"time"
 
@@ -14,41 +15,97 @@ import (
 	"github.com/emersion/go-message/charset"
 )
 
-// imapSession is one short-lived IMAP connection.
+// imapSession is one IMAP connection: a short one for most operations, a
+// lasting one for a watcher.
 type imapSession struct {
 	client *imapclient.Client
 	caps   imap.CapSet
+	// release ends the closing of the connection with the context it was
+	// dialed under. Only a connection that outlives one operation needs
+	// it called.
+	release func()
+}
+
+// whenDone runs fn when ctx ends, until release is called. release waits
+// for a call of fn that has begun, so none is left running behind it.
+func whenDone(ctx context.Context, fn func()) (release func()) {
+	done := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() {
+		defer close(done)
+		fn()
+	})
+	return func() {
+		if !stop() {
+			<-done
+		}
+	}
 }
 
 // capHas reports whether the server advertised a capability.
 func (s *imapSession) capHas(c imap.Cap) bool { return s.caps.Has(c) }
 
+// dialTimeout bounds reaching a server and its TLS handshake.
+const dialTimeout = 30 * time.Second
+
+// loginError is a sign-in the server refused. Trying again does not help
+// until the user changes something, which a watcher has to know.
+type loginError struct{ err error }
+
+func (e *loginError) Error() string { return "imap: login: " + e.err.Error() }
+func (e *loginError) Unwrap() error { return e.err }
+
+// connect reaches the server and starts TLS. Cancelling ctx gives up at
+// once, which the library's own dialing would not: a watcher that is
+// stopped must not wait out a timeout for a server that does not answer.
+func connect(ctx context.Context, a Account, options *imapclient.Options) (*imapclient.Client, error) {
+	dialer := &net.Dialer{Timeout: dialTimeout}
+	if a.IMAP.TLS == TLSImplicit {
+		cfg := options.TLSConfig.Clone()
+		if cfg.NextProtos == nil {
+			cfg.NextProtos = []string{"imap"}
+		}
+		conn, err := (&tls.Dialer{NetDialer: dialer, Config: cfg}).DialContext(ctx, "tcp", a.IMAP.Addr())
+		if err != nil {
+			return nil, err
+		}
+		return imapclient.New(conn, options), nil
+	}
+	conn, err := dialer.DialContext(ctx, "tcp", a.IMAP.Addr())
+	if err != nil {
+		return nil, err
+	}
+	// The STARTTLS exchange takes no context: hanging up is what ends it.
+	release := whenDone(ctx, func() { conn.Close() })
+	defer release()
+	return imapclient.NewStartTLS(conn, options)
+}
+
 // dialIMAP connects, logs in and reads the capabilities.
 func (s *Service) dialIMAP(ctx context.Context, a Account, password string) (*imapSession, error) {
+	return s.dialIMAPWith(ctx, a, password, nil)
+}
+
+// dialIMAPWith is dialIMAP for a connection that stays open: handler
+// hears what the server says of the selected mailbox between commands.
+// The connection is closed when ctx ends.
+func (s *Service) dialIMAPWith(ctx context.Context, a Account, password string, handler *imapclient.UnilateralDataHandler) (*imapSession, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	options := &imapclient.Options{
-		TLSConfig:   s.tlsConfigFor(a.IMAP.Host),
-		WordDecoder: &mime.WordDecoder{CharsetReader: charset.Reader},
+		TLSConfig:             s.tlsConfigFor(a.IMAP.Host),
+		WordDecoder:           &mime.WordDecoder{CharsetReader: charset.Reader},
+		UnilateralDataHandler: handler,
 	}
-	var (
-		c   *imapclient.Client
-		err error
-	)
-	if a.IMAP.TLS == TLSImplicit {
-		c, err = imapclient.DialTLS(a.IMAP.Addr(), options)
-	} else {
-		c, err = imapclient.DialStartTLS(a.IMAP.Addr(), options)
-	}
+	c, err := connect(ctx, a, options)
 	if err != nil {
 		return nil, fmt.Errorf("imap: connect %s: %w", a.IMAP.Addr(), err)
 	}
-	stop := context.AfterFunc(ctx, func() { c.Close() })
+	release := whenDone(ctx, func() { c.Close() })
 	ok := false
 	defer func() {
 		if !ok {
-			stop()
+			release()
 			c.Close()
 		}
 	}()
@@ -59,6 +116,11 @@ func (s *Service) dialIMAP(ctx context.Context, a Account, password string) (*im
 		return nil, errors.New("imap: the username is empty")
 	}
 	if err := c.Login(a.Username, password).Wait(); err != nil {
+		// A connection that broke during the exchange is no refusal.
+		var refused *imap.Error
+		if errors.As(err, &refused) {
+			return nil, &loginError{err}
+		}
 		return nil, fmt.Errorf("imap: login: %w", err)
 	}
 	caps, err := c.Capability().Wait()
@@ -66,7 +128,7 @@ func (s *Service) dialIMAP(ctx context.Context, a Account, password string) (*im
 		return nil, fmt.Errorf("imap: capabilities: %w", err)
 	}
 	ok = true
-	return &imapSession{client: c, caps: caps}, nil
+	return &imapSession{client: c, caps: caps, release: release}, nil
 }
 
 // close logs out, or just hangs up when that is not possible.
@@ -171,11 +233,31 @@ func fetchOptions(withPreview bool) *imap.FetchOptions {
 }
 
 // fetchSummaries reads headers (and a preview) for a number set.
+//
+// An update the server sends unasked while the fetch runs, as it may on
+// a connection that stays on a folder, is taken by the IMAP library for
+// the fetch's answer about that message, and the answer proper is then
+// dropped: the message comes with its flags and without its headers. A
+// fetch that got such an answer is made once more, when the update is
+// out of the way. A message still without its envelope then is kept as
+// it is, as it always was: one odd message must not stop a folder from
+// syncing, and opening it reads its headers with its body.
 func fetchSummaries(c *imapSession, set imap.NumSet, withPreview bool) ([]Message, []FlagUpdate, error) {
+	messages, flags, whole, err := fetchSummariesOnce(c, set, withPreview, false)
+	if err == nil && !whole {
+		messages, flags, _, err = fetchSummariesOnce(c, set, withPreview, true)
+	}
+	return messages, flags, err
+}
+
+// fetchSummariesOnce is one fetch of fetchSummaries. whole is false when
+// an answer lacked the UID or the envelope that were asked for. A message
+// without a UID is left out; one without an envelope is too, unless
+// lenient.
+func fetchSummariesOnce(c *imapSession, set imap.NumSet, withPreview, lenient bool) (messages []Message, flags []FlagUpdate, whole bool, err error) {
 	opts := fetchOptions(withPreview)
 	cmd := c.client.Fetch(set, opts)
-	var messages []Message
-	var flags []FlagUpdate
+	whole = true
 	for {
 		data := cmd.Next()
 		if data == nil {
@@ -184,19 +266,22 @@ func fetchSummaries(c *imapSession, set imap.NumSet, withPreview bool) ([]Messag
 		buf, err := data.Collect()
 		if err != nil {
 			cmd.Close()
-			return nil, nil, fmt.Errorf("imap: fetch: %w", err)
+			return nil, nil, false, fmt.Errorf("imap: fetch: %w", err)
 		}
 		m := summaryFromFetch(buf, withPreview)
-		if m.UID == 0 {
-			continue
+		if m.UID == 0 || buf.Envelope == nil {
+			whole = false
+			if m.UID == 0 || !lenient {
+				continue
+			}
 		}
 		messages = append(messages, m)
 		flags = append(flags, FlagUpdate{UID: m.UID, Seen: m.Seen, Flagged: m.Flagged})
 	}
 	if err := cmd.Close(); err != nil {
-		return nil, nil, fmt.Errorf("imap: fetch: %w", err)
+		return nil, nil, false, fmt.Errorf("imap: fetch: %w", err)
 	}
-	return messages, flags, nil
+	return messages, flags, whole, nil
 }
 
 func summaryFromFetch(buf *imapclient.FetchMessageBuffer, withPreview bool) Message {
@@ -374,22 +459,32 @@ func (s *Service) syncFolder(ctx context.Context, a Account, password, folder st
 	if err != nil {
 		return fmt.Errorf("imap: select %s: %w", folder, err)
 	}
+	return s.syncSelected(ctx, c, a.ID, folder, selected.UIDValidity, limit, limit)
+}
+
+// syncSelected syncs the folder a connection has selected, under the
+// UIDVALIDITY the server gave when it was. It only reads, so it works as
+// well on a folder opened read-only. limit is how many of the newest
+// messages a first sync fetches and how many have their flags refreshed;
+// keep is how many of the messages that arrived since the last sync are
+// kept, the newest ones.
+func (s *Service) syncSelected(ctx context.Context, c *imapSession, accountID, folder string, uidValidity uint32, limit, keep int) error {
 	status, err := c.client.Status(folder, &imap.StatusOptions{
 		NumMessages: true, NumUnseen: true, UIDValidity: true,
 	}).Wait()
 	if err != nil {
 		return fmt.Errorf("imap: status %s: %w", folder, err)
 	}
-	cached, hasCached, err := s.store.Folder(ctx, a.ID, folder)
+	cached, hasCached, err := s.store.Folder(ctx, accountID, folder)
 	if err != nil {
 		return err
 	}
-	reset := hasCached && cached.UIDValidity != 0 && selected.UIDValidity != 0 && cached.UIDValidity != selected.UIDValidity
+	reset := hasCached && cached.UIDValidity != 0 && uidValidity != 0 && cached.UIDValidity != uidValidity
 
 	batch := SyncBatch{
 		Folder: Folder{
 			Name:        folder,
-			UIDValidity: selected.UIDValidity,
+			UIDValidity: uidValidity,
 			SyncedAt:    s.now(),
 		},
 		Reset: reset,
@@ -405,6 +500,7 @@ func (s *Service) syncFolder(ctx context.Context, a Account, password, folder st
 	var set imap.NumSet
 	if reset || !hasCached || cached.LastUID == 0 {
 		set = recentSeqSet(total, limit)
+		keep = limit
 	} else {
 		var uids imap.UIDSet
 		uids.AddRange(imap.UID(cached.LastUID+1), 0)
@@ -420,9 +516,9 @@ func (s *Service) syncFolder(ctx context.Context, a Account, password, folder st
 		if err != nil {
 			return err
 		}
-		// Trim to the newest limit even when the server ignored it.
-		if len(messages) > limit {
-			messages = messages[len(messages)-limit:]
+		// Trim to the newest ones even when the server ignored the limit.
+		if len(messages) > keep {
+			messages = messages[len(messages)-keep:]
 		}
 		batch.Messages = messages
 		if reset {
@@ -462,7 +558,7 @@ func (s *Service) syncFolder(ctx context.Context, a Account, password, folder st
 			}
 		}
 	}
-	return s.store.ApplySync(ctx, a.ID, batch)
+	return s.store.ApplySync(ctx, accountID, batch)
 }
 
 // fetchMessage reads and parses one message's body.

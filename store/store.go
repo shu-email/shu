@@ -138,6 +138,15 @@ var migrations = [][]string{
 			size INTEGER NOT NULL DEFAULT 0, content_hash TEXT NOT NULL,
 			PRIMARY KEY (draft_id, position))`,
 	},
+	// v5: the watermark of a folder watched for new mail: the highest UID
+	// that was announced, under the UIDVALIDITY it belongs to. A message
+	// is announced once, so the row is kept apart from the sync cursor,
+	// which every sync moves, and goes only with its folder.
+	{
+		`CREATE TABLE watermarks (
+			folder_id INTEGER PRIMARY KEY REFERENCES folders(id) ON DELETE CASCADE,
+			uidvalidity INTEGER NOT NULL, uid INTEGER NOT NULL)`,
+	},
 }
 
 // SchemaVersion is the version Open migrates to.

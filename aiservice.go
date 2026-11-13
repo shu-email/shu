@@ -18,6 +18,9 @@ type aiService interface {
 	// CLIStatus checks a local tool with its version and sign-in commands
 	// only, without a model request.
 	CLIStatus(ctx context.Context, id ai.ProviderID, path string) ai.CLIStatus
+	// CLIModels asks an installed tool which models it reports, without a
+	// model request; nil leaves the field free text.
+	CLIModels(ctx context.Context, id ai.ProviderID, path string) ([]string, error)
 	Config(ctx context.Context) (ai.Config, error)
 	SaveConfig(ctx context.Context, cfg ai.Config) error
 	KeyStored(id ai.ProviderID) (bool, error)

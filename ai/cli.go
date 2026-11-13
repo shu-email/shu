@@ -3,6 +3,7 @@ package ai
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -196,7 +197,15 @@ func (s *Service) runCLI(ctx context.Context, cfg Config, model string, req requ
 	defer cancel()
 	out, err := runProcess(ctx, path, args, prompt, env, 8<<20)
 	if err != nil {
-		return "", cliError(ctx, err)
+		kind := cliError(ctx, err)
+		if e, ok := kind.(*Error); ok && e.Kind == KindCLIFailed {
+			// A failed run is often a signed-out tool: say so instead of
+			// a generic failure, using the content-free status command.
+			if status := s.CLIStatus(ctx, cfg.Provider, cfg.CLIPath(cfg.Provider)); status.Installed && !status.SignedIn {
+				return "", &Error{Kind: KindCLISignIn}
+			}
+		}
+		return "", kind
 	}
 	text := stripANSI(out)
 	if strings.TrimSpace(text) == "" {
@@ -387,3 +396,65 @@ func (b *capBuffer) Write(p []byte) (int, error) {
 }
 
 func (b *capBuffer) String() string { return b.buf.String() }
+
+// CLIModels asks an installed tool which models it offers, without a
+// model request and without spending quota. Only Claude Code answers
+// today, through its control protocol; others return nil so the field
+// stays free text.
+func (s *Service) CLIModels(ctx context.Context, id ProviderID, explicit string) ([]string, error) {
+	if CLIName(id) != "claude" {
+		return nil, nil
+	}
+	path, ok := cliFind("claude", explicit)
+	if !ok {
+		return nil, &Error{Kind: KindCLINotInstalled}
+	}
+	args := []string{
+		"-p", "--input-format", "stream-json", "--output-format", "stream-json",
+		"--verbose", "--no-session-persistence",
+		"--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`,
+	}
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	out, err := runProcess(ctx, path, args,
+		`{"type":"control_request","request_id":"shu-models","request":{"subtype":"initialize"}}`+"\n",
+		cliEnvironment(nil), 2<<20)
+	if err != nil {
+		return nil, cliError(ctx, err)
+	}
+	return claudeModels(out), nil
+}
+
+// claudeModels reads the model values out of a control response.
+func claudeModels(output string) []string {
+	seen := map[string]bool{}
+	var models []string
+	for _, line := range strings.Split(stripANSI(output), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.Contains(line, `"models"`) {
+			continue
+		}
+		var event struct {
+			Response struct {
+				Response struct {
+					Models []struct {
+						Value       string `json:"value"`
+						DisplayName string `json:"displayName"`
+					} `json:"models"`
+				} `json:"response"`
+			} `json:"response"`
+		}
+		if json.Unmarshal([]byte(line), &event) != nil {
+			continue
+		}
+		for _, m := range event.Response.Response.Models {
+			value := strings.TrimSpace(m.Value)
+			if value == "" || value == "default" || seen[value] {
+				continue
+			}
+			seen[value] = true
+			models = append(models, value)
+		}
+	}
+	return models
+}

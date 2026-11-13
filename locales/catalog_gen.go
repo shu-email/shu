@@ -9879,3 +9879,233 @@ func TransferNoSelection() string { return In(i18n.Locale()).TransferNoSelection
 func (msgs Messages) TransferNoSelection() string {
 	return Catalog.Format(msgs.locale, "transferNoSelection", nil)
 }
+
+// ShortcutsTitle says "Keyboard shortcuts"
+// in the language the app shows.
+func ShortcutsTitle() string { return In(i18n.Locale()).ShortcutsTitle() }
+
+// ShortcutsTitle says "Keyboard shortcuts"
+// in the language of msgs.
+func (msgs Messages) ShortcutsTitle() string {
+	return Catalog.Format(msgs.locale, "shortcutsTitle", nil)
+}
+
+// ShortcutsIntro says "These work anywhere in the mail window. They never fire while you are typing in a field."
+// in the language the app shows.
+func ShortcutsIntro() string { return In(i18n.Locale()).ShortcutsIntro() }
+
+// ShortcutsIntro says "These work anywhere in the mail window. They never fire while you are typing in a field."
+// in the language of msgs.
+func (msgs Messages) ShortcutsIntro() string {
+	return Catalog.Format(msgs.locale, "shortcutsIntro", nil)
+}
+
+// ShortcutsReading says "Moving and reading"
+// in the language the app shows.
+func ShortcutsReading() string { return In(i18n.Locale()).ShortcutsReading() }
+
+// ShortcutsReading says "Moving and reading"
+// in the language of msgs.
+func (msgs Messages) ShortcutsReading() string {
+	return Catalog.Format(msgs.locale, "shortcutsReading", nil)
+}
+
+// ShortcutsWriting says "Writing"
+// in the language the app shows.
+func ShortcutsWriting() string { return In(i18n.Locale()).ShortcutsWriting() }
+
+// ShortcutsWriting says "Writing"
+// in the language of msgs.
+func (msgs Messages) ShortcutsWriting() string {
+	return Catalog.Format(msgs.locale, "shortcutsWriting", nil)
+}
+
+// ShortcutsApp says "The app"
+// in the language the app shows.
+func ShortcutsApp() string { return In(i18n.Locale()).ShortcutsApp() }
+
+// ShortcutsApp says "The app"
+// in the language of msgs.
+func (msgs Messages) ShortcutsApp() string {
+	return Catalog.Format(msgs.locale, "shortcutsApp", nil)
+}
+
+// ShortcutNext says "Next message"
+// in the language the app shows.
+func ShortcutNext() string { return In(i18n.Locale()).ShortcutNext() }
+
+// ShortcutNext says "Next message"
+// in the language of msgs.
+func (msgs Messages) ShortcutNext() string {
+	return Catalog.Format(msgs.locale, "shortcutNext", nil)
+}
+
+// ShortcutPrevious says "Previous message"
+// in the language the app shows.
+func ShortcutPrevious() string { return In(i18n.Locale()).ShortcutPrevious() }
+
+// ShortcutPrevious says "Previous message"
+// in the language of msgs.
+func (msgs Messages) ShortcutPrevious() string {
+	return Catalog.Format(msgs.locale, "shortcutPrevious", nil)
+}
+
+// ShortcutMarkRead says "Mark read or unread"
+// in the language the app shows.
+func ShortcutMarkRead() string { return In(i18n.Locale()).ShortcutMarkRead() }
+
+// ShortcutMarkRead says "Mark read or unread"
+// in the language of msgs.
+func (msgs Messages) ShortcutMarkRead() string {
+	return Catalog.Format(msgs.locale, "shortcutMarkRead", nil)
+}
+
+// ShortcutStar says "Star or unstar"
+// in the language the app shows.
+func ShortcutStar() string { return In(i18n.Locale()).ShortcutStar() }
+
+// ShortcutStar says "Star or unstar"
+// in the language of msgs.
+func (msgs Messages) ShortcutStar() string {
+	return Catalog.Format(msgs.locale, "shortcutStar", nil)
+}
+
+// ShortcutArchive says "Archive"
+// in the language the app shows.
+func ShortcutArchive() string { return In(i18n.Locale()).ShortcutArchive() }
+
+// ShortcutArchive says "Archive"
+// in the language of msgs.
+func (msgs Messages) ShortcutArchive() string {
+	return Catalog.Format(msgs.locale, "shortcutArchive", nil)
+}
+
+// ShortcutReply says "Reply"
+// in the language the app shows.
+func ShortcutReply() string { return In(i18n.Locale()).ShortcutReply() }
+
+// ShortcutReply says "Reply"
+// in the language of msgs.
+func (msgs Messages) ShortcutReply() string {
+	return Catalog.Format(msgs.locale, "shortcutReply", nil)
+}
+
+// ShortcutReplyAll says "Reply all"
+// in the language the app shows.
+func ShortcutReplyAll() string { return In(i18n.Locale()).ShortcutReplyAll() }
+
+// ShortcutReplyAll says "Reply all"
+// in the language of msgs.
+func (msgs Messages) ShortcutReplyAll() string {
+	return Catalog.Format(msgs.locale, "shortcutReplyAll", nil)
+}
+
+// ShortcutForward says "Forward"
+// in the language the app shows.
+func ShortcutForward() string { return In(i18n.Locale()).ShortcutForward() }
+
+// ShortcutForward says "Forward"
+// in the language of msgs.
+func (msgs Messages) ShortcutForward() string {
+	return Catalog.Format(msgs.locale, "shortcutForward", nil)
+}
+
+// ShortcutDelete says "Delete"
+// in the language the app shows.
+func ShortcutDelete() string { return In(i18n.Locale()).ShortcutDelete() }
+
+// ShortcutDelete says "Delete"
+// in the language of msgs.
+func (msgs Messages) ShortcutDelete() string {
+	return Catalog.Format(msgs.locale, "shortcutDelete", nil)
+}
+
+// ShortcutLabels says "Change labels"
+// in the language the app shows.
+func ShortcutLabels() string { return In(i18n.Locale()).ShortcutLabels() }
+
+// ShortcutLabels says "Change labels"
+// in the language of msgs.
+func (msgs Messages) ShortcutLabels() string {
+	return Catalog.Format(msgs.locale, "shortcutLabels", nil)
+}
+
+// ShortcutCompose says "Compose"
+// in the language the app shows.
+func ShortcutCompose() string { return In(i18n.Locale()).ShortcutCompose() }
+
+// ShortcutCompose says "Compose"
+// in the language of msgs.
+func (msgs Messages) ShortcutCompose() string {
+	return Catalog.Format(msgs.locale, "shortcutCompose", nil)
+}
+
+// ShortcutSend says "Send"
+// in the language the app shows.
+func ShortcutSend() string { return In(i18n.Locale()).ShortcutSend() }
+
+// ShortcutSend says "Send"
+// in the language of msgs.
+func (msgs Messages) ShortcutSend() string {
+	return Catalog.Format(msgs.locale, "shortcutSend", nil)
+}
+
+// ShortcutAttach says "Attach files"
+// in the language the app shows.
+func ShortcutAttach() string { return In(i18n.Locale()).ShortcutAttach() }
+
+// ShortcutAttach says "Attach files"
+// in the language of msgs.
+func (msgs Messages) ShortcutAttach() string {
+	return Catalog.Format(msgs.locale, "shortcutAttach", nil)
+}
+
+// ShortcutSearch says "Search mail"
+// in the language the app shows.
+func ShortcutSearch() string { return In(i18n.Locale()).ShortcutSearch() }
+
+// ShortcutSearch says "Search mail"
+// in the language of msgs.
+func (msgs Messages) ShortcutSearch() string {
+	return Catalog.Format(msgs.locale, "shortcutSearch", nil)
+}
+
+// ShortcutSync says "Sync mail"
+// in the language the app shows.
+func ShortcutSync() string { return In(i18n.Locale()).ShortcutSync() }
+
+// ShortcutSync says "Sync mail"
+// in the language of msgs.
+func (msgs Messages) ShortcutSync() string {
+	return Catalog.Format(msgs.locale, "shortcutSync", nil)
+}
+
+// ShortcutSettings says "Settings"
+// in the language the app shows.
+func ShortcutSettings() string { return In(i18n.Locale()).ShortcutSettings() }
+
+// ShortcutSettings says "Settings"
+// in the language of msgs.
+func (msgs Messages) ShortcutSettings() string {
+	return Catalog.Format(msgs.locale, "shortcutSettings", nil)
+}
+
+// ShortcutShortcuts says "Keyboard shortcuts"
+// in the language the app shows.
+func ShortcutShortcuts() string { return In(i18n.Locale()).ShortcutShortcuts() }
+
+// ShortcutShortcuts says "Keyboard shortcuts"
+// in the language of msgs.
+func (msgs Messages) ShortcutShortcuts() string {
+	return Catalog.Format(msgs.locale, "shortcutShortcuts", nil)
+}
+
+// ShortcutClose says "Close a dialog or cancel"
+// in the language the app shows.
+func ShortcutClose() string { return In(i18n.Locale()).ShortcutClose() }
+
+// ShortcutClose says "Close a dialog or cancel"
+// in the language of msgs.
+func (msgs Messages) ShortcutClose() string {
+	return Catalog.Format(msgs.locale, "shortcutClose", nil)
+}

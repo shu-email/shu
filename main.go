@@ -233,6 +233,8 @@ type app struct {
 	// transfer is the import, export or backup running or just done
 	// (transfer.go).
 	transfer transferState
+	// shortcutsOpen shows the keyboard reference (shortcuts.go).
+	shortcutsOpen bool
 	// Remote images and attachment previews (images.go): images is the
 	// senders whose pictures are allowed, imagesShown the messages the
 	// user chose to show them in, and preview the open preview.
@@ -1279,6 +1281,8 @@ func (a *app) longTime(c *ui.Context, t time.Time) string {
 // view is the window's root: settings, account setup, the address book,
 // the rules or the three panes.
 func (a *app) view(c *ui.Context) {
+	c.OnShortcut(ui.Cmd, ui.KeySlash, func() { a.shortcutsOpen = true })
+	a.shortcutsDialog(c)
 	switch {
 	case a.showSettings:
 		a.settingsView(c)
@@ -1456,6 +1460,9 @@ func (a *app) sidebar(c *ui.Context, t *ui.Theme, vibrant bool) {
 				m.Separator()
 				if m.Item(locales.NewFolder()).Chosen() {
 					a.openNewFolder("")
+				}
+				if m.Item(locales.ShortcutsTitle()).Chosen() {
+					a.shortcutsOpen = true
 				}
 				var hidden []string
 				for _, f := range a.folders {

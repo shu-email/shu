@@ -443,6 +443,23 @@ MIME: prefer `text/plain`; when only HTML exists, extract text with
 `x/net/html` (skip script/style/head, break on block elements, collapse blank
 lines). Keep the original HTML for the webview.
 
+### Keyboard reference and accessibility (added since)
+
+- `shortcuts.go` holds the reference as data (groups and rows), opened with
+  Cmd+/ (Ctrl+/ elsewhere) or the account menu, in a modal with the keys drawn
+  as the system writes them. It lists the implemented shortcuts only; a test
+  checks the rows the window takes and both languages.
+- Plain keys are registered in the panes' focus subtree, so typing in a field
+  never takes them (`TestShortcutsDoNotStealTyping`); Cmd shortcuts are scoped
+  the same way. The modal is opened from the root context, where no text field
+  can be focused.
+- Icon-only buttons keep a `Label` and a `Tooltip`; an automation audit of the
+  main screens finds no unnamed interactive element.
+- Motion uses `ui.ElementTransition` and MyGo's reduced-motion behavior; text
+  sizes come from the theme (`t.FontSize`), and colors from the theme, so the
+  platform's larger text and contrast settings carry through. The layout is
+  checked at 1000×640 in light and dark.
+
 ### Import, export and the settings backup (added since)
 
 - `mail/transfer.go` streams an mbox with `readMbox` (the `From ` separators

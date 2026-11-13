@@ -626,7 +626,7 @@ func (s *Service) setFlags(ctx context.Context, accountID string, msgs []Message
 		if queue && retryable(err) {
 			// The server is out of reach: the cache shows the change the
 			// user asked for, and the worker makes it later.
-			s.setFlagsInCache(ctx, accountID, groups, flag, on)
+			_ = s.setFlagsInCache(ctx, accountID, groups, flag, on)
 			s.requeueOperations(ctx, accountID, allIDs(ids))
 			return nil
 		}
@@ -637,7 +637,7 @@ func (s *Service) setFlags(ctx context.Context, accountID string, msgs []Message
 	for i, g := range groups {
 		if err := storeFlagsIn(c, g.folder, validity[i], g.uids, flag, on); err != nil {
 			if queue && retryable(err) {
-				s.setFlagsInCache(ctx, accountID, groups[i:], flag, on)
+				_ = s.setFlagsInCache(ctx, accountID, groups[i:], flag, on)
 				s.requeueOperations(ctx, accountID, allIDs(ids[i:]))
 				return nil
 			}
@@ -656,16 +656,18 @@ func (s *Service) setFlags(ctx context.Context, accountID string, msgs []Message
 }
 
 // setFlagsInCache shows flags the server has not been told of yet: the
-// change waits in the queue for it.
-func (s *Service) setFlagsInCache(ctx context.Context, accountID string, groups []uidGroup, flag Flag, on bool) {
+// change waits in the queue for it. A row a sync removed meanwhile has
+// nothing to change.
+func (s *Service) setFlagsInCache(ctx context.Context, accountID string, groups []uidGroup, flag Flag, on bool) error {
 	bg := context.WithoutCancel(ctx)
 	for _, g := range groups {
 		for _, uid := range g.uids {
 			if err := s.store.SetFlag(bg, accountID, g.folder, uid, flag, on); err != nil && !errors.Is(err, ErrNotFound) {
-				return
+				return err
 			}
 		}
 	}
+	return nil
 }
 
 // Move archives, junks or deletes a message: the cache row is a tombstone

@@ -752,6 +752,14 @@ func (a *app) setLabel(lt labelTargets, l mail.Label, on bool) {
 		if err == nil && on {
 			folders, _ = a.svc.CachedFolders(ctx, account)
 		}
+		// Only the messages whose label the change moves: one that had it
+		// stays so when the undo takes it off the others.
+		var changed []mail.Summary
+		for _, m := range msgs {
+			if m.HasLabel(l.ID) != on {
+				changed = append(changed, m)
+			}
+		}
 		a.post(func() {
 			if folders != nil {
 				a.setAccountFolders(account, folders)
@@ -763,13 +771,15 @@ func (a *app) setLabel(lt labelTargets, l mail.Label, on bool) {
 			switch {
 			case a.signInRequired(account, err):
 				a.err = locales.ActionNeedsSignIn()
-			case err != nil:
-				a.err = locales.LabelChangeFailed(err.Error())
 			default:
-				if on {
+				if err != nil {
+					a.err = locales.LabelChangeFailed(err.Error())
+				} else if on {
 					a.noteKeptHere(l, msgs)
 				}
-				a.offerLabelUndo(account, refsOf(msgs), l, on)
+				// Those the change reached can be taken back even when the
+				// folders after them failed.
+				a.offerLabelUndo(account, refsOf(changed), l, on)
 			}
 			a.readList(g, false, false)
 		})

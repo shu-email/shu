@@ -114,6 +114,101 @@ func TestUndoAFlagTheServerRefused(t *testing.T) {
 	}
 }
 
+// A refused action left in the queue does not hide a later change the
+// server made: the undo sets that one back.
+func TestUndoOfAFlagMadeAgainAfterARefusal(t *testing.T) {
+	ctx := context.Background()
+	svc, store, f, a := threadService(t, allCaps(), in("INBOX", "gmail-1.eml"))
+	svc.SetClock(newTestClock().Now)
+	msgs, err := svc.CachedMessages(ctx, a.ID, "INBOX", "", 50)
+	if err != nil || len(msgs) == 0 {
+		t.Fatalf("cached = %d, %v", len(msgs), err)
+	}
+	refs := []MessageRef{{"INBOX", msgs[0].UID}}
+	f.stop()
+	if err := svc.SetFlags(ctx, a.ID, refs, FlagFlagged, true); err != nil {
+		t.Fatal(err)
+	}
+	ops := queued(t, store, a.ID)
+	if len(ops) != 1 {
+		t.Fatalf("queued = %+v", ops)
+	}
+	// The worker leaves it as the server refusing it does, cache back.
+	if err := store.FailOperation(ctx, ops[0].ID, "the server refused it"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetFlag(ctx, a.ID, "INBOX", refs[0].UID, FlagFlagged, false); err != nil {
+		t.Fatal(err)
+	}
+	// The server is back, and the user stars it again: this one it has.
+	f.restart(t)
+	if err := svc.SetFlags(ctx, a.ID, refs, FlagFlagged, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.UndoFlagChange(ctx, a.ID, refs, FlagFlagged, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := flaggedOn(t, f, "INBOX", imap.FlagFlagged); len(got) != 0 {
+		t.Errorf("the server's stars = %v, want none", got)
+	}
+	if cached, _, _ := store.GetMessage(ctx, a.ID, "INBOX", refs[0].UID); cached.Flagged {
+		t.Error("the cache kept the star")
+	}
+}
+
+// A folder the server reset since the change was queued names other
+// messages now: the undo leaves them alone.
+func TestUndoOfAFlagUnderANewUIDVALIDITY(t *testing.T) {
+	ctx := context.Background()
+	f := startFakeIMAP(t, allCaps())
+	f.create(t, "INBOX")
+	f.append(t, "INBOX", readFixture(t, "plain.eml"))
+	svc, store, a := newIMAPService(t, f, "secret")
+	svc.SetClock(newTestClock().Now)
+	if _, err := svc.SyncAccount(ctx, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SyncFolder(ctx, a.ID, "INBOX", 50); err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := svc.CachedMessages(ctx, a.ID, "INBOX", "", 50)
+	if err != nil || len(msgs) != 1 {
+		t.Fatalf("cached = %d, %v", len(msgs), err)
+	}
+	refs := []MessageRef{{"INBOX", msgs[0].UID}}
+	f.stop()
+	if err := svc.SetFlags(ctx, a.ID, refs, FlagFlagged, true); err != nil {
+		t.Fatal(err)
+	}
+	if ops := queued(t, store, a.ID); len(ops) != 1 {
+		t.Fatalf("queued = %+v", ops)
+	}
+	// The folder is made anew: the cache's UID names another message.
+	f.restart(t)
+	if err := f.user.Delete("INBOX"); err != nil {
+		t.Fatal(err)
+	}
+	f.create(t, "INBOX")
+	// Starred already, so a revert on the wrong message shows.
+	f.appendFlagged(t, "INBOX", readFixture(t, "html-only.eml"), imap.FlagFlagged)
+	if _, err := svc.SyncAccount(ctx, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SyncFolder(ctx, a.ID, "INBOX", 50); err != nil {
+		t.Fatal(err)
+	}
+	after, err := svc.CachedMessages(ctx, a.ID, "INBOX", "", 50)
+	if err != nil || len(after) != 1 || after[0].UID != refs[0].UID || !after[0].Flagged {
+		t.Fatalf("after the reset = %+v, %v", after, err)
+	}
+	if err := svc.UndoFlagChange(ctx, a.ID, refs, FlagFlagged, true); err != nil {
+		t.Fatal(err)
+	}
+	if cached, _, _ := store.GetMessage(ctx, a.ID, "INBOX", refs[0].UID); !cached.Flagged {
+		t.Error("the undo touched the message now under that UID")
+	}
+}
+
 // A label taken back while it waits for the server is dropped, and the
 // server never hears of it.
 func TestUndoALabelWaitingForTheServer(t *testing.T) {

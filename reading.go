@@ -582,6 +582,12 @@ func (a *app) toggleStar() {
 		}
 	}
 	on := !allFlagged
+	var changed []mail.Summary
+	for _, m := range targets {
+		if m.Flagged != on {
+			changed = append(changed, m)
+		}
+	}
 	for i := range a.all {
 		if chosen[summaryKey(a.all[i])] {
 			a.all[i].Flagged = on
@@ -601,6 +607,9 @@ func (a *app) toggleStar() {
 			if a.stale(g) {
 				return
 			}
+			// Those the change reached can be taken back even when later
+			// ones failed.
+			a.offerFlagUndo(changed, mail.FlagFlagged, on)
 			if err != nil {
 				for i := range a.all {
 					if chosen[summaryKey(a.all[i])] {
@@ -610,7 +619,6 @@ func (a *app) toggleStar() {
 				a.err = failureText(err)
 				return
 			}
-			a.offerFlagUndo(targets, mail.FlagFlagged, on)
 			if a.folder == "starred" && !on {
 				a.loadMessages(g)
 			}
@@ -740,8 +748,10 @@ func (a *app) undoLastAction() {
 }
 
 // undoFlagOrLabel takes back a change of one flag or one label on
-// messages, each account's with a call of its own, and reads the list and
-// the folders again so the counts agree with the cache.
+// messages, each account's with a call of its own, and reads the list
+// again; a flag's undo reads the folders too, as their unread counts
+// follow it. The list's read loads the labels, so a label's undo need
+// not.
 func (a *app) undoFlagOrLabel(u *undoAction) {
 	g := a.gen
 	accounts := slices.Sorted(maps.Keys(u.refs))
@@ -760,9 +770,11 @@ func (a *app) undoFlagOrLabel(u *undoAction) {
 			}
 		}
 		lists := map[string][]mail.Folder{}
-		for _, id := range accounts {
-			if list, e := a.svc.CachedFolders(ctx, id); e == nil {
-				lists[id] = list
+		if u.labelID == 0 {
+			for _, id := range accounts {
+				if list, e := a.svc.CachedFolders(ctx, id); e == nil {
+					lists[id] = list
+				}
 			}
 		}
 		a.post(func() {
@@ -775,9 +787,7 @@ func (a *app) undoFlagOrLabel(u *undoAction) {
 			for id, list := range lists {
 				a.setAccountFolders(id, list)
 			}
-			if u.labelID != 0 {
-				a.loadLabels(accounts...)
-			}
+			a.updateBadge()
 			a.readList(g, false, false)
 		})
 	})
@@ -1032,6 +1042,9 @@ func (a *app) toggleRead() {
 			if a.stale(g) {
 				return
 			}
+			// Those the change reached can be taken back even when later
+			// ones failed.
+			a.offerFlagUndo(changed, mail.FlagSeen, on)
 			if err != nil {
 				for i := range a.all {
 					if chosen[summaryKey(a.all[i])] {
@@ -1046,7 +1059,6 @@ func (a *app) toggleRead() {
 				a.updateBadge()
 				return
 			}
-			a.offerFlagUndo(changed, mail.FlagSeen, on)
 		})
 	})
 }

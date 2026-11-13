@@ -6,21 +6,22 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"shu/locales"
 	"shu/mail"
 )
 
-// The address book is a view of its own, opened from the mail window's
-// title bar: the contacts in the engine's order, or those a search finds,
-// each with its name and address and the ways to make it a favorite,
-// rename it and delete it, and a form to add one by hand. It reads the
-// book a page at a time as the list nears the end of what it read, and
-// from the top again after each change, so that a change shows at once
-// where it puts the contact, as it does in the next suggestion. Nothing
-// of it leaves the device: the engine reads and writes the book in the
-// local database alone.
+// The address book is a window of its own, opened from the sidebar's menu
+// beside the mail: the contacts in the engine's order, or those a search
+// finds, each with its name and address and the ways to make it a
+// favorite, rename it and delete it, and a form to add one by hand. It
+// reads the book a page at a time as the list nears the end of what it
+// read, and from the top again after each change, so that a change shows
+// at once where it puts the contact, as it does in the next suggestion.
+// Nothing of it leaves the device: the engine reads and writes the book
+// in the local database alone.
 
 // contactsAhead is how near the end of the contacts read the list comes
 // before the next page is read.
@@ -72,16 +73,61 @@ func contactFocus(button string, ct mail.Contact) string {
 	return button + "/" + mail.ContactKey(ct.Email)
 }
 
-// openContacts shows the address book, read anew.
-func (a *app) openContacts() {
-	a.book = addressBook{open: true, reads: a.book.reads}
-	a.readContacts(0)
+// contactsWindowOptions is the address book's window: its own, so that the
+// mail stays readable beside it, and a contact can be looked up, named or
+// added while the message it is about is on screen.
+func (a *app) contactsWindowOptions() mygo.WindowOptions {
+	return mygo.WindowOptions{
+		Title:           locales.Contacts(),
+		Width:           640,
+		Height:          680,
+		MinWidth:        460,
+		MinHeight:       420,
+		TitleBarStyle:   mygo.TitleBarHiddenInset,
+		BackgroundColor: "light-dark(#ffffff, #18181b)",
+		Content:         ui.View(a.contactsView),
+	}
 }
 
-// closeContacts goes back to the mail. Reads and edits still under way
-// change nothing once they answer.
+// openContacts shows the address book, read anew. One window serves every
+// opening: a second call brings the open one forward.
+func (a *app) openContacts() {
+	if a.book.open && a.contactsWin != nil {
+		a.contactsWin.Show()
+		a.contactsWin.Focus()
+		a.contactsWin.Invalidate()
+		return
+	}
+	a.book = addressBook{open: true, reads: a.book.reads}
+	a.readContacts(0)
+	if a.newWindow == nil {
+		// Tests run the view without a window: the book shows in the
+		// main view.
+		return
+	}
+	win := a.newWindow(a.contactsWindowOptions())
+	if win == nil {
+		return
+	}
+	a.contactsWin = win
+	win.OnClosed(func() {
+		// Closed by the user, not by closeContacts, which has already
+		// gone back to the mail.
+		if a.contactsWin == win {
+			a.contactsWin = nil
+			a.closeContacts()
+		}
+	})
+}
+
+// closeContacts closes the address book, or leaves its view in the main
+// window. Reads and edits still under way change nothing once they answer.
 func (a *app) closeContacts() {
 	a.book = addressBook{reads: a.book.reads + 1}
+	if win := a.contactsWin; win != nil {
+		a.contactsWin = nil
+		win.Close()
+	}
 }
 
 // readContacts reads the book from the top, the contacts the search finds,

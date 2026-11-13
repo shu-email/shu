@@ -240,6 +240,10 @@ type app struct {
 	// settingsWin is the settings window, when it is a window of its own;
 	// nil in tests, where the settings show in the main view.
 	settingsWin *mygo.Window
+	// contactsWin and rulesWin are the address book's and the rules'
+	// windows, nil in tests, where they show in the main view.
+	contactsWin *mygo.Window
+	rulesWin    *mygo.Window
 	// inviteResponses, inviteBusy and inviteNote hold the user's RSVP
 	// answers by event UID, the send in flight and its result
 	// (calendar.go).
@@ -350,10 +354,13 @@ func (a *app) post(f func()) {
 	}
 	run := func() {
 		f()
-		// The settings are a window of their own: a result that arrives
-		// after its frame must redraw that window, not the mail one.
-		if w := a.settingsWin; w != nil {
-			w.Invalidate()
+		// The settings, the address book and the rules are windows of
+		// their own: a result that arrives after their frame must redraw
+		// them, not the mail window.
+		for _, w := range []*mygo.Window{a.settingsWin, a.contactsWin, a.rulesWin} {
+			if w != nil {
+				w.Invalidate()
+			}
 		}
 	}
 	if a.update != nil {
@@ -1297,8 +1304,9 @@ func (a *app) longTime(c *ui.Context, t time.Time) string {
 	return i18n.FormatDate(c.Locale(), t, i18n.DateOptions{Date: i18n.MediumStyle, Time: i18n.ShortStyle})
 }
 
-// view is the window's root: settings, account setup, the address book,
-// the rules or the three panes.
+// view is the window's root: the settings, account setup, the address
+// book or the rules, each of them the main view's only where it has no
+// window of its own, or the three panes.
 func (a *app) view(c *ui.Context) {
 	c.OnShortcut(ui.Cmd, ui.KeySlash, func() { a.shortcutsOpen = true })
 	a.shortcutsDialog(c)
@@ -1307,9 +1315,9 @@ func (a *app) view(c *ui.Context) {
 		a.settingsView(c)
 	case a.showAccounts || len(a.accounts) == 0:
 		a.accountsView(c)
-	case a.book.open:
+	case a.book.open && a.contactsWin == nil:
 		a.contactsView(c)
-	case a.rules.open:
+	case a.rules.open && a.rulesWin == nil:
 		a.rulesView(c)
 	default:
 		a.mailView(c)
@@ -1401,10 +1409,10 @@ func (a *app) paneShortcuts(panes ui.Element) {
 	panes.OnShortcut(0, ui.KeyL, a.openLabelPicker)
 }
 
-// sidebarHead is the top of the sidebar, under the window controls:
-// sync, contacts, settings and the button that hides the sidebar. They are
-// flat, as a sidebar's are: glass there would show the window's material
-// through it, which it cannot see.
+// sidebarHead is the top of the sidebar, under the window controls: the
+// sync, the menu of the app's screens beside the mail, and the button that
+// hides the sidebar. They are flat, as a sidebar's are: glass there would
+// show the window's material through it, which it cannot see.
 func (a *app) sidebarHead(c *ui.Context, head float32) {
 	ui.Row(c).Height(head).Shrink(0).AlignItems(ui.Center).Padding(0, 8, 0, 8).
 		DragWindow().Children(func() {
@@ -1413,15 +1421,30 @@ func (a *app) sidebarHead(c *ui.Context, head float32) {
 			ui.Toolbar(c, func() {
 				a.iconButton(c, refreshIcon, locales.Sync(), locales.SyncMail()).
 					OnClick(func() { a.refresh() })
-				a.iconButton(c, bookUserIcon, locales.Contacts(), locales.Contacts()).OnClick(a.openContacts)
-				a.iconButton(c, listFilterIcon, locales.Rules(), locales.RulesTip()).
-					OnClick(func() { a.openRules(rulesTabList) })
-				a.iconButton(c, settingsIcon, locales.Settings(), locales.Settings()).
-					OnClick(func() { a.openSettings(settingsTabGeneral) })
+				a.moreMenuButton(c)
 				a.sidebarToggleButton(c)
 			}).Gap(1).Padding(0).Label(locales.MailboxActions())
 		})
 	})
+}
+
+// moreMenuButton is the sidebar's overflow: contacts, rules and settings
+// are screens of the app beside the mail, shown when they are wanted, so
+// a button each at the top of the sidebar only crowded the mail it lists.
+func (a *app) moreMenuButton(c *ui.Context) ui.Element {
+	return a.iconButton(c, moreIcon, locales.More(), locales.More()).
+		PopoverMenuButton(func(m *ui.Menu) {
+			if m.Item(locales.Contacts()).Chosen() {
+				a.openContacts()
+			}
+			if m.Item(locales.Rules()).Chosen() {
+				a.openRules(rulesTabList)
+			}
+			m.Separator()
+			if m.Item(locales.Settings()).Chosen() {
+				a.openSettings(settingsTabGeneral)
+			}
+		})
 }
 
 // sidebarToggle shows the sidebar, from the top of the list while it is

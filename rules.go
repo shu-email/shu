@@ -7,17 +7,18 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"shu/locales"
 	"shu/mail"
 )
 
-// Rules in the window. A button in the mail window's title bar opens the
-// rules in place of the three panes, as the address book opens: on one
-// tab the rules in their order, each with what it does in words, a switch
-// that pauses it, buttons that move it up and down (the rows drag too),
-// edit it and delete it; on the other the log of what they did
+// Rules in a window of their own. The sidebar's menu opens it beside the
+// mail, as the address book opens: on one tab the rules in their order,
+// each with what it does in words, a switch that pauses it, buttons that
+// move it up and down (the rows drag too), edit it and delete it; on the
+// other the log of what they did
 // (rulelog.go). The editor (ruleeditor.go) checks a rule as it is written
 // and shows beside it the mail it would match now, which saving leaves
 // alone: a rule sorts the mail that arrives, and the mail there was only
@@ -71,19 +72,66 @@ func ruleFocus(control string, id mail.RuleID) string {
 	return control + "/" + strconv.FormatInt(int64(id), 10)
 }
 
+// rulesWindowOptions is the rules' window: its own, so that the mail stays
+// readable beside them, and the message a rule is written for is on screen
+// while the rule is.
+func (a *app) rulesWindowOptions() mygo.WindowOptions {
+	return mygo.WindowOptions{
+		Title:           locales.MailRules(),
+		Width:           1040,
+		Height:          720,
+		MinWidth:        900,
+		MinHeight:       560,
+		TitleBarStyle:   mygo.TitleBarHiddenInset,
+		BackgroundColor: "light-dark(#ffffff, #18181b)",
+		Content:         ui.View(a.rulesView),
+	}
+}
+
 // openRules shows the rules on a tab, read anew, with the labels and
-// folders of every account that the rules name.
+// folders of every account that the rules name. One window serves every
+// opening: a second call brings the open one forward, on that tab, and
+// keeps the rule being written.
 func (a *app) openRules(tab int) {
+	if a.rules.open && a.rulesWin != nil {
+		a.rules.tab = tab
+		a.rulesWin.Show()
+		a.rulesWin.Focus()
+		a.rulesWin.Invalidate()
+		return
+	}
 	a.rules = ruleState{open: true, tab: tab, reads: a.rules.reads, log: ruleLog{reads: a.rules.log.reads}}
 	a.readRules()
 	a.readLog()
 	a.readRuleSources()
+	if a.newWindow == nil {
+		// Tests run the view without a window: the rules show in the main
+		// view.
+		return
+	}
+	win := a.newWindow(a.rulesWindowOptions())
+	if win == nil {
+		return
+	}
+	a.rulesWin = win
+	win.OnClosed(func() {
+		// Closed by the user, not by closeRules, which has already gone
+		// back to the mail.
+		if a.rulesWin == win {
+			a.rulesWin = nil
+			a.closeRules()
+		}
+	})
 }
 
-// closeRules goes back to the mail. Reads and changes still under way
-// change nothing once they answer.
+// closeRules closes the rules, or leaves their view in the main window.
+// Reads and changes still under way change nothing once they answer.
 func (a *app) closeRules() {
 	a.rules = ruleState{reads: a.rules.reads + 1, log: ruleLog{reads: a.rules.log.reads + 1}}
+	if win := a.rulesWin; win != nil {
+		a.rulesWin = nil
+		win.Close()
+	}
 }
 
 // readRuleSources reads what the rules' words and pickers name: each

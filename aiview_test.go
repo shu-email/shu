@@ -179,6 +179,14 @@ func click(t *testing.T, tt *ui.Tester, target string) {
 	}
 }
 
+// clickMore opens the sidebar's menu and chooses one of the app's screens
+// from it, as the user reaches contacts, rules and settings.
+func clickMore(t *testing.T, tt *ui.Tester, item string) {
+	t.Helper()
+	click(t, tt, locales.More())
+	click(t, tt, item)
+}
+
 // With AI off, the button explains how to turn it on and nothing is sent.
 func TestAIOffExplainsAndSendsNothing(t *testing.T) {
 	a, _, provider, _ := aiMessageApp(t, false)

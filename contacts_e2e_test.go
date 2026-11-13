@@ -275,7 +275,7 @@ func TestAddressBookEndToEnd(t *testing.T) {
 	// the suggestions and the edits below open no connection.
 	connections := smtpServer.connections()
 	main := ui.NewTester(a.view, 1220, 800)
-	click(t, main, locales.Contacts())
+	clickMore(t, main, locales.Contacts())
 	click(t, main, locales.RenameContact("Maya Chen"))
 	main.Key(ui.Cmd, ui.KeyA)
 	main.Type("Maya Q. Chen")

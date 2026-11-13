@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"shu/locales"
@@ -14,12 +15,12 @@ import (
 )
 
 // bookApp starts the window on a service and opens the address book from
-// the mail window's title bar.
+// the mail window's sidebar.
 func bookApp(t *testing.T, fs *fakeService) (*app, *ui.Tester) {
 	t.Helper()
 	a := openApp(fs)
 	tt := ui.NewTester(a.view, 1220, 800)
-	click(t, tt, locales.Contacts())
+	clickMore(t, tt, locales.Contacts())
 	if !a.book.open || !tt.HasText(locales.ContactsDetail()) {
 		t.Fatalf("the address book did not open: %q", tt.Texts())
 	}
@@ -73,7 +74,7 @@ func TestAddressBookOpensFromTheMailWindow(t *testing.T) {
 	if a.book.open || !tt.HasText(locales.Inbox()) {
 		t.Fatalf("Done: %q", tt.Texts())
 	}
-	click(t, tt, locales.Contacts())
+	clickMore(t, tt, locales.Contacts())
 	tt.Key(0, ui.KeyEscape)
 	if a.book.open {
 		t.Error("Escape left the address book open")
@@ -398,14 +399,14 @@ func TestContactsStringsInChinese(t *testing.T) {
 	}
 }
 
-// At the main window's smallest size, in both appearances, the contacts
-// button is in the title bar and opens the book, whose search, add button
+// At the main window's smallest size, in both appearances, the sidebar's
+// menu is in the title bar and opens the book, whose search, add button
 // and each row's buttons are inside the window.
 func TestAddressBookAtMinimumSizeAndDark(t *testing.T) {
 	for _, dark := range []bool{false, true} {
 		a := openApp(contactsService())
 		tt := ui.NewTesterWith(a.view, 1000, 640, ui.TesterOptions{Dark: dark})
-		click(t, tt, locales.Contacts())
+		clickMore(t, tt, locales.Contacts())
 		if !a.book.open {
 			t.Fatalf("dark=%v: the contacts button at the smallest size opens nothing", dark)
 		}
@@ -418,5 +419,46 @@ func TestAddressBookAtMinimumSizeAndDark(t *testing.T) {
 				t.Errorf("dark=%v: %q is at %+v (found %v)", dark, label, box, ok)
 			}
 		}
+	}
+}
+
+// The address book opens in a window of its own, with the book's title and
+// room for the list; closing it goes back to the mail.
+func TestAddressBookOpensItsOwnWindow(t *testing.T) {
+	a := openApp(contactsService())
+	var got mygo.WindowOptions
+	calls := 0
+	a.newWindow = func(o mygo.WindowOptions) *mygo.Window {
+		calls++
+		got = o
+		return nil
+	}
+	a.openContacts()
+	if calls != 1 {
+		t.Fatalf("windows = %d", calls)
+	}
+	if got.Title != locales.Contacts() || got.Width < 460 || got.Height < 420 || got.Content == nil {
+		t.Errorf("window = %+v", got)
+	}
+	if !a.book.open {
+		t.Error("the book did not open")
+	}
+	a.closeContacts()
+	if a.book.open {
+		t.Error("closeContacts left the book open")
+	}
+}
+
+// Without a window, the book shows in the main view, which is how the
+// tests without a window read it.
+func TestAddressBookWithoutAWindow(t *testing.T) {
+	a := openApp(contactsService())
+	a.newWindow = nil
+	a.openContacts()
+	if !a.book.open {
+		t.Fatal("the book did not open")
+	}
+	if a.contactsWin != nil {
+		t.Error("a window appeared without newWindow")
 	}
 }

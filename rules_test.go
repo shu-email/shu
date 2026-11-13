@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 
@@ -63,12 +64,12 @@ func newsRule() mail.Rule {
 }
 
 // rulesApp starts the window on a service and opens the rules from the
-// mail window's title bar.
+// mail window's sidebar.
 func rulesApp(t *testing.T, fs *fakeService) (*app, *ui.Tester) {
 	t.Helper()
 	a := openApp(fs)
 	tt := ui.NewTester(a.view, 1220, 800)
-	click(t, tt, locales.Rules())
+	clickMore(t, tt, locales.Rules())
 	if !a.rules.open || !tt.HasText(locales.MailRules()) {
 		t.Fatalf("the rules did not open: %q", tt.Texts())
 	}
@@ -217,7 +218,7 @@ func TestRulesOpenFromTheMailWindow(t *testing.T) {
 	if a.rules.open || !tt.HasText(locales.Inbox()) {
 		t.Fatalf("Done: %q", tt.Texts())
 	}
-	click(t, tt, locales.Rules())
+	clickMore(t, tt, locales.Rules())
 	tt.Key(0, ui.KeyEscape)
 	if a.rules.open {
 		t.Error("Escape left the rules open")
@@ -287,7 +288,7 @@ func TestNewsletterRuleActsOnNewMailOnly(t *testing.T) {
 	if got := rowSubjects(a); !slices.Contains(got, "Minutes") || !slices.Contains(got, "Weekly news 1") || slices.Contains(got, "Weekly news 2") {
 		t.Errorf("the list after the rule moved the new newsletter: %v", got)
 	}
-	click(t, tt, locales.Rules())
+	clickMore(t, tt, locales.Rules())
 	click(t, tt, locales.ActivityTab())
 	if got := ruleRows(tt); !slices.Equal(got, []string{"Weekly news 2"}) || !tt.HasText(locales.StateApplied()) {
 		t.Errorf("the log = %q: %q", got, tt.Texts())
@@ -1250,7 +1251,7 @@ func TestRulesStringsInChinese(t *testing.T) {
 	a := openApp(loggedRules())
 	tt := ui.NewTester(a.view, 1220, 800)
 	tt.SetLocale("zh-Hans")
-	click(t, tt, zh.Rules())
+	clickMore(t, tt, zh.Rules())
 	for _, text := range []string{zh.MailRules(), zh.RulesIntro(), zh.RuleSummary(zh.CondSenderText("news@shop.example"), zh.ActMoveText("Newsletters"))} {
 		if !tt.HasText(text) {
 			t.Errorf("the rules in zh-Hans lack %q: %q", text, tt.Texts())
@@ -1271,8 +1272,8 @@ func within(tt *ui.Tester, name string, w, h float32) bool {
 	return ok && b.W > 0 && b.X >= 0 && b.Y >= 0 && b.X+b.W <= w && b.Y+b.H <= h
 }
 
-// At the main window's smallest size, in both appearances, the rules'
-// button is in the title bar and opens them; the controls of the list,
+// At the main window's smallest size, in both appearances, the sidebar's
+// menu is in the title bar and opens the rules; the controls of the list,
 // the editor with its preview and its offer, and the log are inside the
 // window.
 func TestRulesAtMinimumSizeAndDark(t *testing.T) {
@@ -1281,10 +1282,10 @@ func TestRulesAtMinimumSizeAndDark(t *testing.T) {
 		putMail(fs, "a1", "INBOX", newsletter(40, 8))
 		a := openApp(fs)
 		tt := ui.NewTesterWith(a.view, 1000, 640, ui.TesterOptions{Dark: dark})
-		if !within(tt, locales.Rules(), 1000, 640) {
-			t.Fatalf("dark=%v: the rules' button is not in the title bar", dark)
+		if !within(tt, locales.More(), 1000, 640) {
+			t.Fatalf("dark=%v: the sidebar's menu is not in the title bar", dark)
 		}
-		click(t, tt, locales.Rules())
+		clickMore(t, tt, locales.Rules())
 		for _, label := range []string{locales.NewRule(), locales.Done(), locales.UseRule("Team list"), locales.MoveRuleUp("Team list"),
 			locales.MoveRuleDown("Newsletters"), locales.EditRule("Team list"), locales.DeleteRule("Team list"), locales.ActivityTab()} {
 			if !within(tt, label, 1000, 640) {
@@ -1339,4 +1340,45 @@ func putMail(fs *fakeService, account, folder string, msgs ...mail.Summary) {
 	}
 	sortSummaries(fs.messages[key])
 	fs.recount(account, folder)
+}
+
+// The rules open in a window of their own, with their title and room for
+// the editor and its preview; closing it goes back to the mail.
+func TestRulesOpenTheirOwnWindow(t *testing.T) {
+	a := openApp(rulesService())
+	var got mygo.WindowOptions
+	calls := 0
+	a.newWindow = func(o mygo.WindowOptions) *mygo.Window {
+		calls++
+		got = o
+		return nil
+	}
+	a.openRules(rulesTabList)
+	if calls != 1 {
+		t.Fatalf("windows = %d", calls)
+	}
+	if got.Title != locales.MailRules() || got.Width < 900 || got.Height < 560 || got.Content == nil {
+		t.Errorf("window = %+v", got)
+	}
+	if !a.rules.open {
+		t.Error("the rules did not open")
+	}
+	a.closeRules()
+	if a.rules.open {
+		t.Error("closeRules left the rules open")
+	}
+}
+
+// Without a window, the rules show in the main view, which is how the
+// tests without a window read them.
+func TestRulesWithoutAWindow(t *testing.T) {
+	a := openApp(rulesService())
+	a.newWindow = nil
+	a.openRules(rulesTabList)
+	if !a.rules.open {
+		t.Fatal("the rules did not open")
+	}
+	if a.rulesWin != nil {
+		t.Error("a window appeared without newWindow")
+	}
 }

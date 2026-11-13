@@ -152,7 +152,7 @@ func TestRulesEndToEnd(t *testing.T) {
 	}
 
 	// The rule, written in the window: its preview lists the old one.
-	click(t, tt, locales.Rules())
+	clickMore(t, tt, locales.Rules())
 	click(t, tt, locales.NewRule())
 	tt.Type("Newsletters")
 	typeIn(t, tt, locales.ValueOf(1), "news@shop.example")
@@ -208,7 +208,7 @@ func TestRulesEndToEnd(t *testing.T) {
 	}
 
 	// Undo in the log brings it back, and it stays.
-	click(t, tt, locales.Rules())
+	clickMore(t, tt, locales.Rules())
 	click(t, tt, locales.ActivityTab())
 	queue.until(t, "the log", func() bool {
 		tt.Frame()

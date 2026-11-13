@@ -358,13 +358,16 @@ func (a *app) announce(ev mail.WatchEvent) {
 
 // looksAt reports whether the user is looking at a folder's list: the
 // window has the focus and shows that folder, unfiltered. Mail arriving
-// there appears before their eyes, and a notification would repeat it.
+// there appears before their eyes, and a notification would repeat it. A
+// screen that has a window of its own covers nothing: the list is still
+// there, in the window the user has, while the other one is behind it.
 func (a *app) looksAt(accountID, folder string) bool {
 	if a.focused == nil || !a.focused() {
 		return false
 	}
 	shown := a.active == accountID && a.folder == folder || a.isUnified() && a.isInboxOf(accountID, folder)
-	return !a.showSettings && !a.showAccounts && !a.rules.open && shown && strings.TrimSpace(a.query) == ""
+	covered := a.showAccounts || a.showSettings && a.settingsWin == nil || a.rules.open && a.rulesWin == nil
+	return !covered && shown && strings.TrimSpace(a.query) == ""
 }
 
 // notesFor writes the notifications of an account's new messages, newest

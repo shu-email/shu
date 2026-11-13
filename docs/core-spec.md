@@ -786,8 +786,9 @@ server or a model carries it, and `ai/` has no way to it.
   contact's address in place of that entry, the spaces around it kept. A field with
   problems is checked again as it changes, so an entry fixed by typing loses its
   message. Drafts keep saving whatever is typed, unvalidated.
-- The address book view: a contacts button beside Settings in the mail window's title
-  bar opens it in place of the three panes (Done or Escape go back); it is no mail
+- The address book view: Contacts in the sidebar's menu (`main.go`, the button that
+  holds what the top of the sidebar no longer shows) opens it in a window of its own,
+  so that the mail stays readable beside it (Done or Escape close it); it is no mail
   folder. It says that the contacts stay on this device, has a search field, which
   takes the keyboard as the view opens and finds contacts as suggestions do, and lists
   them in the engine's order in a virtual list read a page at a time (`Contacts` with
@@ -872,9 +873,10 @@ through the `mailService` calls above (`rules.go`, `ruleeditor.go`, `rulelog.go`
 Nothing in the window can make a rule send, forward or delete mail: the editor offers
 the engine's actions, `mail.ActionKinds`, and no others.
 
-- Where: a Rules button in the mail window's title bar, beside the address book's,
-  opens the rules in place of the three panes (Done or Escape go back). Two tabs: the
-  rules, and their activity. "Make a rule from this message…" in the list's menu of a
+- Where: Rules in the sidebar's menu, beside Contacts and Settings, opens the rules in
+  a window of their own (`rulesWindowOptions`), so that the message a rule is written
+  for stays on screen (Done or Escape close it; a second call brings the open one
+  forward and keeps the rule being written). Two tabs: the rules, and their activity. "Make a rule from this message…" in the list's menu of a
   row (one message, or one conversation's newest) and in a conversation message's
   own menu opens the editor of a new rule for its mailing list, where the cache keeps
   its List-Id, else for its sender's address, moving its mail to a folder still to

@@ -134,8 +134,12 @@ field's own value appear before any result does.
 
 ## Shu's tree
 
-- Title bar: Hide sidebar, the search field (`textField`, with a Clear
-  button once it has text), Sync, Settings, Compose.
+- Sidebar's top: Sync, the More `menuButton` (Contacts, Rules, Settings)
+  and Hide sidebar.
+- Message list's top: the folder's title and summary, Group by
+  conversation, Triage with AI and Compose. The reading pane's floating
+  bar holds its actions, the search field (`textField`, with a Clear
+  button once it has text) and Search filters.
 - Sidebar: the Accounts `menuButton`, then the Mailboxes `tree`, with a
   `treeItem` per folder keyed by its name (`key=INBOX`, `key=Sent`,
   `key=drafts`, `key=starred`); the open one is `checked`.

@@ -34,7 +34,9 @@ Windows and Linux. It is written in Go with
   IMAP/SMTP, MIME and the `Service` the UI calls; `store/` is the SQLite
   implementation of the `mail.Store` interface and owns the schema,
   migrations, FTS5 index and outbox. Views read through `Service` and
-  never open a connection or write a row themselves.
+  never open a connection or write a row themselves. The migrations are
+  the schema; a schema change follows `docs/schema-migrations.md` and
+  upgrades every past version in `store/migrations_test.go`.
 - A draft lives in the database, and that copy is the truth; the message
   in the server's Drafts folder mirrors it for other mail clients.
   `Service.SaveDraft` writes the row and never touches the network, so

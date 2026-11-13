@@ -99,8 +99,11 @@ func TestRunProcessCancelWindows(t *testing.T) {
 	defer cancel()
 	start := time.Now()
 	_, err := runProcess(ctx, script, nil, "", nil, 1<<20)
-	if KindOf(err) != KindCancelled && KindOf(err) != KindTimeout {
-		t.Fatalf("err = %v", err)
+	// runProcess hands back the context's own error, which the service
+	// classifies with cliError as it does any launch's; the kind is what
+	// the window words for a tool that ran out of time or was called off.
+	if kind := KindOf(cliError(ctx, err)); kind != KindCancelled && kind != KindTimeout {
+		t.Fatalf("err = %v, kind %v", err, kind)
 	}
 	if took := time.Since(start); took > 10*time.Second {
 		t.Errorf("cancel took %s", took)

@@ -196,6 +196,8 @@
   "aiNoModel": "尚未选择模型，请在设置中填写。",
   "aiOpenSettings": "打开 AI 设置",
   "aiErrInvalidKey": "服务商拒绝了该 API 密钥。",
+  "aiErrProviderOff": "此服务商已关闭，请在设置中重新打开。",
+  "aiErrKeyEndpoint": "该 API 密钥是为另一个服务器保存的，请为当前服务器重新保存。",
   "aiErrRateLimit": "已达到服务商的速率限制，请稍后再试。",
   "aiErrTimeout": "模型应答超时。",
   "aiErrUnreachable": "无法连接到服务器。",

@@ -29,6 +29,9 @@ type Service struct {
 
 // NewService wires the settings store and the keychain.
 func NewService(store Store, secrets Secrets) *Service {
+	// A run killed before its cleanup leaves a private directory behind;
+	// a start is the one moment nothing else is using them.
+	sweepCLIDirs()
 	return &Service{
 		store:   store,
 		secrets: secrets,
@@ -114,6 +117,9 @@ func (s *Service) usable(cfg Config, model, typedKey string) (string, error) {
 	if !ok {
 		return "", &Error{Kind: KindBadConfig}
 	}
+	if cfg.ProviderOff(cfg.Provider) {
+		return "", &Error{Kind: KindProviderOff}
+	}
 	if strings.TrimSpace(model) == "" {
 		return "", &Error{Kind: KindNoModel}
 	}
@@ -138,6 +144,11 @@ func (s *Service) usable(cfg Config, model, typedKey string) (string, error) {
 	}
 	if key == "" && p.NeedsKey {
 		return "", &Error{Kind: KindNoKey}
+	}
+	// A stored key goes only to the server it was given to. One typed now
+	// is bound to this endpoint as it is saved.
+	if key != "" && strings.TrimSpace(typedKey) == "" && cfg.KeyEndpointMismatch(cfg.Provider) {
+		return "", &Error{Kind: KindKeyEndpoint}
 	}
 	return key, nil
 }

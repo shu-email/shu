@@ -26,6 +26,14 @@ type providersPanel struct {
 	statuses map[ai.ProviderID]ai.CLIStatus
 	keys     map[ai.ProviderID]bool
 	loaded   bool
+	// revealAccount shows the address a tool reports; it is masked until
+	// the user asks, so a screenshot of the panel gives no account away.
+	revealAccount bool
+	// askingRemove holds the open confirmation, and removing the one in
+	// flight: a second click must not start another.
+	askingRemove bool
+	removing     bool
+	note         string
 }
 
 // connectionForm is the add/edit overlay.
@@ -248,6 +256,9 @@ func (a *app) providersDialog(c *ui.Context) {
 		return
 	}
 	t := c.Theme()
+	// The panel may be drawn in either window; its clipboard and URL
+	// actions take the services of the frame that drew it.
+	services := c.Services()
 	ui.Modal(c, &p.open, func() {
 		ui.Column(c).Width(700).Gap(10).Children(func() {
 			ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
@@ -291,6 +302,7 @@ func (a *app) providersDialog(c *ui.Context) {
 			}
 		})
 	})
+	a.removeProviderAlert(c)
 }
 
 // providerList lists the connections and then the installed tools.
@@ -611,14 +623,19 @@ func (a *app) providerOverview(c *ui.Context, t *ui.Theme) {
 	} else {
 		ui.Button(c, locales.AiProviderUse()).OnClick(func() { a.selectProvider(p.selected) })
 	}
+	a.providerOffSwitch(c, t)
 	ui.Text(c, a.providerStatusLine(p.selected)).FontSize(12).TextColor(t.Text).MaxLines(3)
 	if ai.CLIProvider(p.selected) {
 		status := p.statuses[p.selected]
 		if status.Path != "" {
 			ui.Text(c, status.Path).FontSize(11).TextColor(t.TextMuted).Selectable().SingleLine()
 		}
+		a.cliAccountRow(c, t, status)
+		a.cliNextSteps(c, t, status, services)
 		ui.Text(c, locales.AiLocalToolIsolation()).FontSize(11).TextColor(t.TextMuted).MaxLines(5)
 		ui.Text(c, locales.AiLocalToolIntro()).FontSize(11).TextColor(t.TextMuted).MaxLines(4)
+		ui.Text(c, locales.AiLocalToolNotOfficial()).FontSize(11).TextColor(t.TextMuted).MaxLines(5)
+		a.removeProviderRow(c, t)
 		return
 	}
 	ui.Text(c, preset.BaseURL).FontSize(11).TextColor(t.TextMuted).Selectable().SingleLine()
@@ -630,6 +647,159 @@ func (a *app) providerOverview(c *ui.Context, t *ui.Theme) {
 	default:
 		ui.Text(c, locales.AiKeyOptional()).FontSize(11).TextColor(t.TextMuted)
 	}
+	a.removeProviderRow(c, t)
+}
+
+// cliAccountRow says which account a tool is signed in as, masked until
+// the user reveals it: the address is the tool's, not Shu's, and the
+// panel should not put it on screen by itself.
+func (a *app) cliAccountRow(c *ui.Context, t *ui.Theme, status ai.CLIStatus) {
+	p := &a.providers
+	if status.Account == "" {
+		return
+	}
+	account := status.Account
+	if !p.revealAccount {
+		account = maskAddress(account)
+	}
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Icon(c, mailIcon).FontSize(12).TextColor(t.TextMuted)
+		ui.Text(c, locales.AiLocalToolAccount(account)).FontSize(11).TextColor(t.TextMuted).
+			Grow(1).MinWidth(0).SingleLine()
+		label := locales.AiLocalToolAccountShow()
+		if p.revealAccount {
+			label = locales.AiLocalToolAccountHide()
+		}
+		ui.Button(c, label).Label(label).OnClick(func() { p.revealAccount = !p.revealAccount })
+	})
+}
+
+// maskAddress keeps the first letter and the domain, so the user
+// recognises the account while a screenshot does not name it.
+func maskAddress(address string) string {
+	at := strings.LastIndex(address, "@")
+	if at <= 0 {
+		return "•••"
+	}
+	local := address[:at]
+	head := string([]rune(local)[:1])
+	return head + "•••" + address[at:]
+}
+
+// cliNextSteps is what the user can do next while a tool is not ready,
+// with the reason the status line gives above it.
+func (a *app) cliNextSteps(c *ui.Context, t *ui.Theme, status ai.CLIStatus, services ui.Services) {
+	p := &a.providers
+	ui.Row(c).Gap(8).Wrap().Children(func() {
+		if !status.Installed {
+			if url := ai.CLIInstallURL(p.selected); url != "" {
+				ui.Button(c, locales.AiLocalToolInstall()).OnClick(func() { services.OpenURL(url) })
+			}
+		}
+		if status.Installed && status.Outdated {
+			// An update is the one fix for an outdated tool, and it comes
+			// before sign-in: its status command may work while the flags
+			// Shu launches it with do not.
+			if url := ai.CLIInstallURL(p.selected); url != "" {
+				ui.Button(c, locales.AiLocalToolUpdate()).OnClick(func() { services.OpenURL(url) })
+			}
+		}
+		if status.Installed && !status.Outdated && !status.SignedIn {
+			if command := ai.CLISignInCommand(p.selected); command != "" {
+				ui.Button(c, locales.AiLocalToolSignInCommand()).OnClick(func() { a.copySignIn(services, command) })
+			}
+		}
+		if p.loaded {
+			label := locales.AiLocalToolCheck()
+			ui.Button(c, label).Disabled(p.removing).OnClick(a.loadProviderStates)
+		}
+	})
+}
+
+// copySignIn puts a tool's sign-in command on the clipboard, which the
+// user runs in a terminal: Shu never runs it, since it needs a browser
+// and would make the tool's credentials its own.
+func (a *app) copySignIn(services ui.Services, command string) {
+	services.WriteClipboard(command)
+	a.providers.note = locales.AiLocalToolCopied(command)
+}
+
+// removeProviderRow is the destructive action, set apart from the
+// others: it asks first, and names what will be gone.
+func (a *app) removeProviderRow(c *ui.Context, t *ui.Theme) {
+	p := &a.providers
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Padding(8, 0).Children(func() {
+		ui.Text(c, locales.AiProviderRemoveHint()).FontSize(11).TextColor(t.TextMuted).Grow(1).MaxLines(2)
+		ui.Button(c, locales.AiProviderRemove()).Disabled(p.removing).OnClick(func() { p.askingRemove = true })
+	})
+	if p.note != "" {
+		ui.Text(c, p.note).FontSize(11).TextColor(t.Success).MaxLines(2).Role(ui.RoleStatus)
+	}
+}
+
+// removeProviderAlert is the confirmation. It blocks until answered, so
+// it is drawn beside the panel and never from a job: the panel stays
+// readable behind it.
+func (a *app) removeProviderAlert(c *ui.Context) {
+	p := &a.providers
+	if !p.askingRemove {
+		return
+	}
+	preset, ok := ai.ProviderByID(p.selected)
+	if !ok {
+		p.askingRemove = false
+		return
+	}
+	message := locales.AiProviderRemoveKey()
+	if ai.CLIProvider(p.selected) {
+		message = locales.AiProviderRemoveTool(len(a.aiForm.cfg.CLIEnvNames(p.selected)))
+	}
+	if ui.AlertDialog(c, &p.askingRemove, locales.AiProviderRemoveTitle(aiProviderName(preset)), message,
+		locales.Cancel(), locales.AiProviderRemoveButton()) == 1 {
+		a.removeProvider(p.selected)
+	}
+}
+
+// removeProvider forgets a provider's setup and key in the background,
+// then reloads what the panel and the settings show.
+func (a *app) removeProvider(id ai.ProviderID) {
+	p := &a.providers
+	if p.removing {
+		return
+	}
+	p.removing, p.note = true, ""
+	a.run(func() {
+		ctx, cancel := a.ctx()
+		defer cancel()
+		err := a.ai.RemoveProvider(ctx, id)
+		cfg, cfgErr := a.ai.Config(ctx)
+		a.post(func() {
+			p.removing = false
+			if err != nil {
+				p.note, _ = aiErrorText(err)
+				return
+			}
+			f := &a.aiForm
+			f.key, f.note, f.err = "", "", ""
+			f.keyStored = false
+			if cfgErr != nil {
+				f.err, _ = aiErrorText(cfgErr)
+				return
+			}
+			f.setConfig(cfg)
+			// The removed provider keeps no state of its own, so a later
+			// look at it starts empty rather than showing what it had.
+			delete(p.statuses, id)
+			delete(p.keys, id)
+			if preset, ok := ai.ProviderByID(id); ok {
+				p.note = locales.AiProviderRemoved(aiProviderName(preset))
+			}
+			if ai.CLIProvider(f.cfg.Provider) {
+				a.loadCLIStatus()
+			}
+			a.loadProviderStates()
+		})
+	})
 }
 
 // providerModels edits the chosen model and, for an installed tool, which
@@ -702,6 +872,49 @@ func (a *app) visibleCLIModels() []string {
 	return out
 }
 
+// providerOffSwitch turns the chosen provider on or off. It is a switch
+// of its own, apart from making a provider the active one: an off
+// provider keeps its setup and its key, and only leaves the pickers.
+func (a *app) providerOffSwitch(c *ui.Context, t *ui.Theme) {
+	f := &a.aiForm
+	id := a.providers.selected
+	ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+		var caption ui.Element
+		ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
+			caption = ui.Text(c, locales.AiProviderEnabled()).FontSize(12)
+			ui.Text(c, locales.AiProviderOffHint()).FontSize(11).TextColor(t.TextMuted).MaxLines(2)
+		})
+		on := !f.cfg.ProviderOff(id)
+		ui.Switch(c, &on).LabelledBy(caption).Label(locales.AiProviderEnabled()).OnChange(func() {
+			f.cfg.SetProviderOff(id, !on)
+			a.saveAI()
+		})
+	})
+}
+
+// providerEffort picks the reasoning effort a local tool runs with.
+func (a *app) providerEffort(c *ui.Context, t *ui.Theme) {
+	f := &a.aiForm
+	id := a.providers.selected
+	options := append([]string{locales.AiProviderEffortDefault()}, ai.Efforts...)
+	choice := locales.AiProviderEffortDefault()
+	current := f.cfg.Effort(id)
+	for _, effort := range ai.Efforts {
+		if current == effort {
+			choice = effort
+		}
+	}
+	caption := ui.Text(c, locales.AiProviderEffort()).FontSize(11).Bold().TextColor(t.TextMuted)
+	ui.Select(c, &choice, options).LabelledBy(caption).Width(200).OnChange(func() {
+		effort := choice
+		if effort == locales.AiProviderEffortDefault() {
+			effort = ""
+		}
+		f.cfg.SetEffort(id, effort)
+		a.saveAI()
+	})
+}
+
 // providerAdvanced holds the connection details: command path and values
 // for a tool, endpoint and key for an API connection.
 func (a *app) providerAdvanced(c *ui.Context, t *ui.Theme) {
@@ -713,6 +926,7 @@ func (a *app) providerAdvanced(c *ui.Context, t *ui.Theme) {
 	}
 	preset, _ := ai.ProviderByID(p.selected)
 	if ai.CLIProvider(p.selected) {
+		a.providerEffort(c, t)
 		a.aiCLIEnvSection(c, t)
 		return
 	}
@@ -755,6 +969,10 @@ func (a *app) aiAPIKeyFields(c *ui.Context, t *ui.Theme) {
 	})
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		switch {
+		case f.keyStored && f.cfg.KeyEndpointMismatch(f.cfg.Provider):
+			ui.Icon(c, alertIcon).FontSize(13).TextColor(t.Warning)
+			ui.Text(c, locales.AiProviderKeyMoved()).FontSize(11).TextColor(t.Warning).Grow(1).MaxLines(2)
+			ui.Button(c, locales.AiKeyDelete()).OnClick(a.deleteAIKey)
 		case f.keyStored:
 			ui.Icon(c, checkIcon).FontSize(13).TextColor(t.Success)
 			ui.Text(c, locales.AiKeyStored()).FontSize(11).TextColor(t.TextMuted).Grow(1)

@@ -2012,6 +2012,26 @@ func (msgs Messages) AiErrInvalidKey() string {
 	return Catalog.Format(msgs.locale, "aiErrInvalidKey", nil)
 }
 
+// AiErrProviderOff says "This provider is switched off. Turn it on in Settings."
+// in the language the app shows.
+func AiErrProviderOff() string { return In(i18n.Locale()).AiErrProviderOff() }
+
+// AiErrProviderOff says "This provider is switched off. Turn it on in Settings."
+// in the language of msgs.
+func (msgs Messages) AiErrProviderOff() string {
+	return Catalog.Format(msgs.locale, "aiErrProviderOff", nil)
+}
+
+// AiErrKeyEndpoint says "This API key was saved for another server. Save it again for this one."
+// in the language the app shows.
+func AiErrKeyEndpoint() string { return In(i18n.Locale()).AiErrKeyEndpoint() }
+
+// AiErrKeyEndpoint says "This API key was saved for another server. Save it again for this one."
+// in the language of msgs.
+func (msgs Messages) AiErrKeyEndpoint() string {
+	return Catalog.Format(msgs.locale, "aiErrKeyEndpoint", nil)
+}
+
 // AiErrRateLimit says "The provider's rate limit was reached. Try again in a moment."
 // in the language the app shows.
 func AiErrRateLimit() string { return In(i18n.Locale()).AiErrRateLimit() }

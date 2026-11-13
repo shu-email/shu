@@ -191,7 +191,7 @@ func TestConversationSummaryNeedsAIOn(t *testing.T) {
 	if err := s.SaveConfig(ctx, cfg); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetKey(ProviderOpenAI, testKey); err != nil {
+	if err := s.SetKey(ctx, ProviderOpenAI, testKey); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.SummarizeConversation(ctx, testConversation()); KindOf(err) != KindFeatureOff {

@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -27,8 +29,40 @@ type CLIStatus struct {
 	SignedIn  bool
 	Path      string
 	Version   string
+	// Outdated says the version is older than the flags Shu starts the
+	// tool with, so a launch is refused with a clear error instead of
+	// failing on an argument the tool does not know.
+	Outdated bool
+	// Account is the address the tool reports it is signed in as, or ""
+	// when the tool keeps it to itself. It comes from the tool's own
+	// status command, never from its credentials.
+	Account string
 	// Err names a failure without any prompt or credential.
 	Err string
+}
+
+// CLISignInCommand is the command that signs a tool in, for the user to
+// run in a terminal. Shu never runs it: it would need a browser prompt
+// and the user's password.
+func CLISignInCommand(id ProviderID) string {
+	switch CLIName(id) {
+	case "claude":
+		return "claude auth login"
+	case "codex":
+		return "codex login"
+	}
+	return ""
+}
+
+// CLIInstallURL is where a tool is installed from.
+func CLIInstallURL(id ProviderID) string {
+	switch CLIName(id) {
+	case "claude":
+		return "https://docs.claude.com/en/docs/claude-code/setup"
+	case "codex":
+		return "https://developers.openai.com/codex/cli/"
+	}
+	return ""
 }
 
 // CLIName is a provider's command name, or "" for one that is not a
@@ -150,11 +184,15 @@ func (s *Service) CLIStatus(ctx context.Context, id ProviderID, explicit string)
 	status := CLIStatus{Installed: true, Path: path}
 	if err == nil {
 		status.Version = cliVersion(out)
+		status.Outdated = cliOutdated(command, status.Version)
 	}
 	switch command {
 	case "claude":
 		auth, err := s.runCLIProbe(ctx, path, []string{"auth", "status", "--json"})
 		status.SignedIn = err == nil && strings.Contains(auth, `"loggedIn": true`)
+		if status.SignedIn {
+			status.Account = claudeAccount(auth)
+		}
 	case "codex":
 		_, err := s.runCLIProbe(ctx, path, []string{"login", "status"})
 		status.SignedIn = err == nil
@@ -172,6 +210,82 @@ func (s *Service) runCLIProbe(ctx context.Context, path string, args []string) (
 }
 
 var versionPattern = regexp.MustCompile(`\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z.-]+)?`)
+
+// cliMinimum is the oldest release of each tool that takes the flags Shu
+// launches it with: cliLaunch adds arguments an older build rejects, and
+// a rejection would otherwise read as a generic failure.
+var cliMinimum = map[string]string{
+	"claude": "1.0.0",
+	"codex":  "0.20.0",
+}
+
+// cliOutdated reports whether a reported version is older than the
+// minimum. A version that cannot be read is not called outdated: an
+// update is the user's call, and a wrong guess would refuse a tool that
+// works.
+func cliOutdated(command, version string) bool {
+	min, ok := cliMinimum[command]
+	if !ok || version == "" {
+		return false
+	}
+	have, ok := versionParts(version)
+	if !ok {
+		return false
+	}
+	want, _ := versionParts(min)
+	for i := 0; i < 3; i++ {
+		if have[i] != want[i] {
+			return have[i] < want[i]
+		}
+	}
+	return false
+}
+
+// versionParts are the three numbers of a version, zero where one is
+// missing, so "1.2" compares as "1.2.0". ok is false when the version
+// does not start with a number at all, which is no version to compare.
+func versionParts(version string) ([3]int, bool) {
+	var out [3]int
+	for i, part := range strings.SplitN(version, ".", 3) {
+		digits := part
+		if cut := strings.IndexFunc(part, func(r rune) bool { return r < '0' || r > '9' }); cut >= 0 {
+			digits = part[:cut]
+		}
+		n, err := strconv.Atoi(digits)
+		if err != nil {
+			if i == 0 {
+				return out, false
+			}
+			return out, true
+		}
+		out[i] = n
+	}
+	return out, true
+}
+
+// claudeAccount reads the address out of a sign-in status. The shape of
+// that answer has changed once already, so every place an address may sit
+// is read, and anything else is left alone: a wrong guess would put some
+// other field in the panel as if it were an account.
+func claudeAccount(output string) string {
+	var status map[string]any
+	if json.Unmarshal([]byte(strings.TrimSpace(stripANSI(output))), &status) != nil {
+		return ""
+	}
+	for _, key := range []string{"email", "emailAddress", "account"} {
+		if address, ok := status[key].(string); ok && strings.Contains(address, "@") {
+			return strings.TrimSpace(address)
+		}
+	}
+	if nested, ok := status["account"].(map[string]any); ok {
+		for _, key := range []string{"email", "emailAddress"} {
+			if address, ok := nested[key].(string); ok && strings.Contains(address, "@") {
+				return strings.TrimSpace(address)
+			}
+		}
+	}
+	return ""
+}
 
 func cliVersion(output string) string {
 	if m := versionPattern.FindString(output); m != "" {
@@ -191,7 +305,7 @@ func (s *Service) runCLI(ctx context.Context, cfg Config, model string, req requ
 		return "", &Error{Kind: KindCLINotInstalled}
 	}
 	prompt := req.system + "\n\n" + req.user
-	args, env := cliLaunch(p.CLI, model, cfg.Provider)
+	args, env := cliLaunch(p.CLI, model, cfg.Provider, cfg.Effort(cfg.Provider))
 	for _, item := range s.cliEnvFrom(cfg, cfg.Provider) {
 		if env == nil {
 			env = map[string]string{}
@@ -205,9 +319,14 @@ func (s *Service) runCLI(ctx context.Context, cfg Config, model string, req requ
 	if err != nil {
 		kind := cliError(ctx, err)
 		if e, ok := kind.(*Error); ok && e.Kind == KindCLIFailed {
-			// A failed run is often a signed-out tool: say so instead of
-			// a generic failure, using the content-free status command.
-			if status := s.CLIStatus(ctx, cfg.Provider, cfg.CLIPath(cfg.Provider)); status.Installed && !status.SignedIn {
+			// A failed run is often a signed-out or outdated tool: say
+			// so instead of a generic failure, using the content-free
+			// status command.
+			status := s.CLIStatus(ctx, cfg.Provider, cfg.CLIPath(cfg.Provider))
+			switch {
+			case status.Installed && status.Outdated:
+				return "", &Error{Kind: KindCLIOutdated}
+			case status.Installed && !status.SignedIn:
 				return "", &Error{Kind: KindCLISignIn}
 			}
 		}
@@ -221,8 +340,10 @@ func (s *Service) runCLI(ctx context.Context, cfg Config, model string, req requ
 }
 
 // cliLaunch is the command line of one tool. No prompt is ever an
-// argument; each reads it from standard input.
-func cliLaunch(command, model string, id ProviderID) ([]string, map[string]string) {
+// argument; each reads it from standard input. Effort is one of Efforts,
+// or "" to leave the tool's own default.
+func cliLaunch(command, model string, id ProviderID, effort string) ([]string, map[string]string) {
+	effort = strings.TrimSpace(effort)
 	switch command {
 	case "claude":
 		args := []string{
@@ -240,6 +361,9 @@ func cliLaunch(command, model string, id ProviderID) ([]string, map[string]strin
 		}
 		if strings.TrimSpace(model) != "" {
 			args = append(args, "--model", strings.TrimSpace(model))
+		}
+		if EffortValid(effort) {
+			args = append(args, "--effort", effort)
 		}
 		return args, map[string]string{
 			"CLAUDE_CODE_SKIP_PROMPT_HISTORY": "1",
@@ -275,6 +399,9 @@ func cliLaunch(command, model string, id ProviderID) ([]string, map[string]strin
 		}
 		if strings.TrimSpace(model) != "" {
 			args = append(args, "--model", strings.TrimSpace(model))
+		}
+		if EffortValid(effort) {
+			args = append(args, "-c", "model_reasoning_effort="+effort)
 		}
 		args = append(args, "-")
 		return args, nil
@@ -329,10 +456,51 @@ func cliError(ctx context.Context, err error) error {
 	return &Error{Kind: KindCLIFailed}
 }
 
+// cliTempPrefix names a run's private directory. The process ID that
+// follows it lets a later start tell a directory left by a crash from one
+// a running instance is still using.
+const cliTempPrefix = "shu-cli-"
+
+// sweepCLIDirs removes the private directories of runs that no longer
+// exist: a process killed before its defer ran leaves one behind, and
+// nothing else knows to remove it. Directories of this process and of
+// one still alive are left alone, and so are those a live process does
+// not own but wrote a moment ago.
+func sweepCLIDirs() {
+	root := os.TempDir()
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return
+	}
+	alive := map[int]bool{}
+	for _, entry := range entries {
+		name := entry.Name()
+		if !entry.IsDir() || !strings.HasPrefix(name, cliTempPrefix) {
+			continue
+		}
+		rest := strings.TrimPrefix(name, cliTempPrefix)
+		dash := strings.Index(rest, "-")
+		if dash <= 0 {
+			continue
+		}
+		pid, err := strconv.Atoi(rest[:dash])
+		if err != nil || pid == os.Getpid() {
+			continue
+		}
+		if running, ok := alive[pid]; ok && running {
+			continue
+		}
+		if alive[pid] = processAlive(pid); alive[pid] {
+			continue
+		}
+		_ = os.RemoveAll(filepath.Join(root, name))
+	}
+}
+
 // runProcess runs one command in a private working directory, with stdio
 // bounded and the process group killed when ctx ends.
 func runProcess(ctx context.Context, path string, args []string, stdin string, env map[string]string, maxOutput int) (string, error) {
-	dir, err := os.MkdirTemp("", "shu-cli-*")
+	dir, err := os.MkdirTemp("", fmt.Sprintf("%s%d-*", cliTempPrefix, os.Getpid()))
 	if err != nil {
 		return "", err
 	}

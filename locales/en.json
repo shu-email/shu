@@ -359,6 +359,8 @@
   "aiNoModel": "No model is chosen. Pick one in Settings.",
   "aiOpenSettings": "Open AI settings",
   "aiErrInvalidKey": "The provider rejected the API key.",
+  "aiErrProviderOff": "This provider is switched off. Turn it on in Settings.",
+  "aiErrKeyEndpoint": "This API key was saved for another server. Save it again for this one.",
   "aiErrRateLimit": "The provider's rate limit was reached. Try again in a moment.",
   "aiErrTimeout": "The model took too long to answer.",
   "aiErrUnreachable": "The server could not be reached.",

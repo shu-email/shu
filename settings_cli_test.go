@@ -37,7 +37,9 @@ func TestAISettingsLocalToolStatus(t *testing.T) {
 	}
 	a.openSettings(settingsTabAI)
 	tt := ui.NewTester(a.view, 1220, 900)
-	for _, text := range []string{locales.AiLocalToolIntro(), locales.AiLocalToolPath(),
+	a.openProviders()
+	tt.Frame()
+	for _, text := range []string{locales.AiLocalToolIntro(),
 		locales.AiLocalToolVersion("2.1.323"), script, locales.AiLocalToolIsolation()} {
 		if !tt.HasText(text) {
 			t.Errorf("missing %q in %q", text, tt.Texts())
@@ -49,6 +51,7 @@ func TestAISettingsLocalToolStatus(t *testing.T) {
 	if len(a.aiForm.cliModels) != 2 || a.aiForm.cliModels[1] != "opus" {
 		t.Errorf("models = %q", a.aiForm.cliModels)
 	}
+	click(t, tt, locales.AiProviderModels())
 	if !tt.HasText(locales.AiModel()) {
 		t.Errorf("the model field is missing: %q", tt.Texts())
 	}
@@ -77,10 +80,30 @@ func TestAISettingsLocalToolPath(t *testing.T) {
 	}
 	a.openSettings(settingsTabAI)
 	tt := ui.NewTester(a.view, 1220, 900)
+	a.openProviders()
+	tt.Frame()
 	if a.aiForm.cliStatus.Err != "the command path does not run" {
 		t.Errorf("status = %+v", a.aiForm.cliStatus)
 	}
 	if !tt.HasText("the command path does not run") {
 		t.Errorf("the bad path is not reported: %q", tt.Texts())
+	}
+}
+
+// Hidden models leave the model suggestions, but the chosen default is
+// always offered even if it was hidden earlier.
+func TestProviderModelHiding(t *testing.T) {
+	a, _, _, _ := aiMessageApp(t, true)
+	a.aiForm.cfg = ai.DefaultConfig()
+	a.aiForm.cfg.UseProvider(ai.ProviderClaudeCLI)
+	a.aiForm.cfg.Model = "sonnet"
+	a.aiForm.cliModels = []string{"sonnet", "opus", "haiku"}
+	a.aiForm.cfg.SetModelHidden(ai.ProviderClaudeCLI, "opus", true)
+	if got := a.visibleCLIModels(); len(got) != 2 || got[1] != "haiku" {
+		t.Errorf("visible = %q", got)
+	}
+	a.aiForm.cfg.SetModelHidden(ai.ProviderClaudeCLI, "sonnet", true)
+	if got := a.visibleCLIModels(); len(got) != 2 || got[0] != "sonnet" {
+		t.Errorf("the default is hidden: %q", got)
 	}
 }

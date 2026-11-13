@@ -3668,5 +3668,19 @@
         "example": "the keychain refused the value"
       }
     }
-  }
+  },
+  "aiProvidersTitle": "AI Providers",
+  "aiProvidersIntro": "Installed tools and API connections, and the models each one offers.",
+  "aiManageProviders": "Manage providers…",
+  "aiProviderOverview": "Overview",
+  "aiProviderModels": "Models",
+  "aiProviderAdvanced": "Advanced",
+  "aiProviderInUse": "In use",
+  "aiProviderUse": "Use this provider",
+  "aiProviderApi": "API connection",
+  "aiProviderModelShown": "Shown in the model pickers",
+  "aiProviderModelHidden": "Hidden from the model pickers",
+  "aiProviderModelDefault": "The chosen model always stays visible.",
+  "aiProviderNoModels": "This provider reports no models yet. Type one below.",
+  "aiProviderModelHint": "Type a model, or choose one this provider reports."
 }

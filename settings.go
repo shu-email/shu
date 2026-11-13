@@ -369,6 +369,7 @@ func (a *app) settingsView(c *ui.Context) {
 				}
 			})
 		})
+		a.providersDialog(c)
 	})
 }
 
@@ -401,7 +402,6 @@ func (a *app) aiSettingsView(c *ui.Context, t *ui.Theme) {
 		})
 		return
 	}
-	provider, _ := ai.ProviderByID(f.cfg.Provider)
 	ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
 		ui.Icon(c, sparklesIcon).FontSize(20).TextColor(t.Accent)
 		ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
@@ -411,80 +411,7 @@ func (a *app) aiSettingsView(c *ui.Context, t *ui.Theme) {
 		ui.Switch(c, &f.cfg.Enabled).Label(locales.AiEnable()).OnChange(a.saveAI)
 	})
 
-	a.section(c, locales.Provider(), func() {
-		ui.Select(c, &f.provider, aiProviderNames()).FillWidth().Label(locales.Provider()).
-			OnChange(a.chooseAIProvider)
-		if ai.CLIProvider(f.cfg.Provider) {
-			a.aiLocalToolSection(c, t)
-			return
-		}
-		if provider.EditableURL {
-			a.field(c, locales.AiBaseURL(), func() ui.Element {
-				return ui.TextInput(c, &f.cfg.BaseURL).Label(locales.AiBaseURL()).
-					Placeholder("http://localhost:11434/v1").OnChange(a.saveAI)
-			})
-		}
-		if ai.NeedsHTTPOptIn(f.cfg) {
-			ui.Row(c).Gap(10).AlignItems(ui.Center).Padding(8, 10).Radius(8).
-				Background(t.Warning.Alpha(0.12)).Children(func() {
-				ui.Icon(c, alertIcon).FontSize(14).TextColor(t.Warning)
-				var caption ui.Element
-				ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
-					ui.Text(c, locales.AiHTTPWarning()).FontSize(12)
-					caption = ui.Text(c, locales.AiAllowHTTP()).FontSize(12).Bold()
-				})
-				// The caption names the switch and toggles it when clicked.
-				ui.Switch(c, &f.cfg.AllowHTTP).LabelledBy(caption).OnChange(a.saveAI)
-			})
-		}
-		a.field(c, locales.AiModel(), func() ui.Element {
-			return ui.TextInput(c, &f.cfg.Model).Label(locales.AiModel()).
-				Placeholder(provider.Model).OnChange(a.saveAI)
-		})
-		ui.Column(c).Gap(4).Children(func() {
-			// The caption names the input, so a click on it focuses it.
-			caption := ui.Text(c, locales.AiKey()).FontSize(11).Bold().TextColor(t.TextMuted)
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				placeholder := locales.AiKeyPlaceholder()
-				if f.keyStored {
-					placeholder = locales.AiKeyReplace()
-				}
-				ui.TextInput(c, &f.key).Password().Grow(1).LabelledBy(caption).
-					Placeholder(placeholder).OnSubmit(a.saveAIKey)
-				ui.Button(c, locales.AiKeySave()).Disabled(strings.TrimSpace(f.key) == "").
-					OnClick(a.saveAIKey)
-			})
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				switch {
-				case f.keyStored:
-					ui.Icon(c, checkIcon).FontSize(13).TextColor(t.Success)
-					ui.Text(c, locales.AiKeyStored()).FontSize(11).TextColor(t.TextMuted).Grow(1)
-					ui.Button(c, locales.AiKeyDelete()).OnClick(a.deleteAIKey)
-				case provider.NeedsKey:
-					ui.Text(c, locales.AiKeyMissing()).FontSize(11).TextColor(t.TextMuted)
-				default:
-					ui.Text(c, locales.AiKeyOptional()).FontSize(11).TextColor(t.TextMuted)
-				}
-			})
-		})
-		ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
-			label := locales.AiTest()
-			if f.busy {
-				label = locales.AiTesting()
-			}
-			ui.Button(c, label).Label(locales.AiTest()).Disabled(f.busy).OnClick(a.testAI)
-			switch {
-			case f.busy:
-				ui.Spinner(c).Size(14, 14)
-			case f.err != "":
-				ui.Icon(c, alertIcon).FontSize(14).TextColor(t.Warning)
-				ui.Text(c, f.err).FontSize(12).Grow(1).MaxLines(2)
-			case f.note != "":
-				ui.Icon(c, checkIcon).FontSize(14).TextColor(t.Success)
-				ui.Text(c, f.note).FontSize(12).TextColor(t.TextMuted).Grow(1)
-			}
-		})
-	})
+	a.section(c, locales.Provider(), func() { a.providersSummary(c, t) })
 
 	a.section(c, locales.AiCapabilities(), func() {
 		details := [3][2]string{

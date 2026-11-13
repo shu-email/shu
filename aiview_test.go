@@ -449,6 +449,9 @@ func TestAISettings(t *testing.T) {
 	if !cfg.Enabled {
 		t.Fatal("the switch did not save")
 	}
+	a.openProviders()
+	tt.Frame()
+	click(t, tt, locales.AiProviderAdvanced())
 	if !tt.HasText(locales.AiKeyMissing()) {
 		t.Errorf("missing-key note absent: %q", tt.Texts())
 	}
@@ -484,6 +487,8 @@ func TestAISettings(t *testing.T) {
 		t.Errorf("invalid key not explained: %q", tt.Texts())
 	}
 	provider.status = 0
+	a.providers.open = false
+	tt.Frame()
 
 	// Each capability has a switch of its own.
 	click(t, tt, locales.AiTriage())
@@ -492,6 +497,9 @@ func TestAISettings(t *testing.T) {
 		t.Errorf("capability switches = %v", cfg.Off)
 	}
 
+	a.openProviders()
+	tt.Frame()
+	click(t, tt, locales.AiProviderAdvanced())
 	click(t, tt, locales.AiKeyDelete())
 	if len(secrets) != 0 {
 		t.Errorf("keychain after delete = %v", secrets)
@@ -501,9 +509,13 @@ func TestAISettings(t *testing.T) {
 	}
 
 	// A remote server over plain HTTP shows the warning and its opt-in.
+	a.providers.open = false
 	a.aiForm.provider = locales.AiProviderCustom()
 	a.chooseAIProvider()
 	a.aiForm.cfg.BaseURL = "http://models.example.com/v1"
+	a.openProviders()
+	tt.Frame()
+	click(t, tt, locales.AiProviderAdvanced())
 	tt.Frame()
 	if !tt.HasText(locales.AiHTTPWarning()) {
 		t.Fatalf("no plain HTTP warning: %q", tt.Texts())
@@ -515,6 +527,8 @@ func TestAISettings(t *testing.T) {
 	// A local server needs neither the warning nor a key.
 	a.aiForm.provider = locales.AiProviderLocal()
 	a.chooseAIProvider()
+	a.providers.open = false
+	a.openProviders()
 	tt.Frame()
 	if tt.HasText(locales.AiHTTPWarning()) || !tt.HasText(locales.AiKeyOptional()) {
 		t.Errorf("local provider view: %q", tt.Texts())

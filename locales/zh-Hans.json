@@ -1354,5 +1354,19 @@
         "example": "the keychain refused the value"
       }
     }
-  }
+  },
+  "aiProvidersTitle": "AI 服务商",
+  "aiProvidersIntro": "已安装的工具与 API 连接，以及它们各自提供的模型。",
+  "aiManageProviders": "管理服务商…",
+  "aiProviderOverview": "概览",
+  "aiProviderModels": "模型",
+  "aiProviderAdvanced": "高级",
+  "aiProviderInUse": "使用中",
+  "aiProviderUse": "使用此服务商",
+  "aiProviderApi": "API 连接",
+  "aiProviderModelShown": "在模型选择中显示",
+  "aiProviderModelHidden": "在模型选择中隐藏",
+  "aiProviderModelDefault": "已选定的模型始终可见。",
+  "aiProviderNoModels": "此服务商尚未报告模型，可在下方手动输入。",
+  "aiProviderModelHint": "输入模型，或选择此服务商报告的模型。"
 }

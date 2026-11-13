@@ -145,6 +145,8 @@ func (a *app) providerStatusLine(id ai.ProviderID) string {
 			return status.Err
 		}
 		return locales.AiLocalToolNotInstalled()
+	case status.Outdated:
+		return locales.AiLocalToolOutdated()
 	case !status.SignedIn:
 		return locales.AiLocalToolSignIn()
 	case status.Version != "":
@@ -256,9 +258,6 @@ func (a *app) providersDialog(c *ui.Context) {
 		return
 	}
 	t := c.Theme()
-	// The panel may be drawn in either window; its clipboard and URL
-	// actions take the services of the frame that drew it.
-	services := c.Services()
 	ui.Modal(c, &p.open, func() {
 		ui.Column(c).Width(700).Gap(10).Children(func() {
 			ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
@@ -290,7 +289,7 @@ func (a *app) providersDialog(c *ui.Context) {
 					case p.selected != "":
 						a.toolDetail(c, t)
 					default:
-						ui.Text(c, locales.AiProviderNoConnection()).FontSize(12).TextColor(t.TextMuted)
+						a.providerOverview(c, t, c.Services())
 					}
 				})
 			})
@@ -587,7 +586,9 @@ func (a *app) saveConnection() {
 	f.provider = aiProviderName(preset)
 	f.keyStored, _ = a.ai.KeyStored(ai.ConnectionKeyID(conn))
 	if form.key != "" {
-		_ = a.ai.SetKey(ai.ConnectionKeyID(conn), form.key)
+		ctx, cancel := a.ctx()
+		_ = a.ai.SetKey(ctx, ai.ConnectionKeyID(conn), form.key)
+		cancel()
 	}
 	a.saveAI()
 	p.conn, p.editing, p.selected = conn.ID, false, ""
@@ -606,12 +607,12 @@ func (a *app) toolDetail(c *ui.Context, t *ui.Theme) {
 			case 2:
 				a.providerAdvanced(c, t)
 			default:
-				a.providerOverview(c, t)
+				a.providerOverview(c, t, c.Services())
 			}
 		})
 	})
 }
-func (a *app) providerOverview(c *ui.Context, t *ui.Theme) {
+func (a *app) providerOverview(c *ui.Context, t *ui.Theme, services ui.Services) {
 	p := &a.providers
 	preset, _ := ai.ProviderByID(p.selected)
 	ui.Text(c, aiProviderName(preset)).FontSize(15).Bold()

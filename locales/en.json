@@ -3685,12 +3685,78 @@
   "aiProviderModelDefault": "The chosen model always stays visible.",
   "aiProviderNoModels": "This provider reports no models yet. Type one below.",
   "aiProviderModelHint": "Type a model, or choose one this provider reports.",
+  "aiProviderOff": "Off",
+  "aiProviderOffHint": "Its models leave the pickers. Its setup and key are kept.",
+  "aiProviderEnabled": "Available in Shu",
+  "aiProviderEffort": "Reasoning effort",
+  "aiProviderEffortDefault": "Default",
+  "aiProviderKeyMoved": "This key was saved for another server. Save it again for this one.",
+  "aiProviderRemove": "Remove provider",
+  "aiProviderRemoveButton": "Remove",
+  "aiProviderRemoveHint": "Deletes this provider’s setup from this device, its keychain entries included. Mail and drafts stay.",
+  "aiProviderRemoveTitle": "Remove {name}?",
+  "@aiProviderRemoveTitle": {
+    "description": "The title that asks before a provider's setup is deleted.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Claude Code"
+      }
+    }
+  },
+  "aiProviderRemoveKey": "Shu forgets this provider's setup and deletes its API key from the login Keychain. Mail, drafts and summaries stay, and adding the provider again starts from an empty setup.",
+  "aiProviderRemoveTool": "Shu forgets this provider's setup and deletes its keychain entries: the {count, plural, one {value it was given} other {# values it was given}}. The tool itself, its sign-in and its files stay untouched, and adding it again starts from an empty setup.",
+  "@aiProviderRemoveTool": {
+    "description": "The message before a local tool's setup is deleted; it names how many keychain values go.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "aiProviderRemoved": "{name} was removed.",
+  "@aiProviderRemoved": {
+    "description": "The note after a provider's setup was deleted.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Claude Code"
+      }
+    }
+  },
+  "aiLocalToolAccount": "Signed in as {account}",
+  "@aiLocalToolAccount": {
+    "description": "The account a local tool reports it is signed in as.",
+    "placeholders": {
+      "account": {
+        "type": "String",
+        "example": "m••••@example.com"
+      }
+    }
+  },
+  "aiLocalToolAccountShow": "Show account",
+  "aiLocalToolAccountHide": "Hide account",
+  "aiLocalToolSignInCommand": "Copy sign-in command",
+  "aiLocalToolCopied": "Copied {command}",
+  "@aiLocalToolCopied": {
+    "description": "Confirms the sign-in command is on the clipboard.",
+    "placeholders": {
+      "command": {
+        "type": "String",
+        "example": "claude auth login"
+      }
+    }
+  },
+  "aiLocalToolInstall": "Open install page",
+  "aiLocalToolOutdated": "Update required",
+  "aiLocalToolUpdate": "Open update page",
+  "aiLocalToolNotOfficial": "Shu is not affiliated with the tools’ vendors, and this is not an official integration. Using a subscription through another app may be restricted by the vendor’s terms; check them before relying on it.",
   "aiProviderNeedsURL": "Server URL needed",
   "aiProviderNoConnection": "No provider selected",
   "aiProviderAdd": "Add API connection",
   "aiProviderEdit": "Edit…",
   "aiProviderDelete": "Remove connection",
-  "aiProviderEnabled": "Enabled",
   "aiProviderFetchModels": "Fetch models",
   "aiProviderFetching": "Fetching models…",
   "aiProviderModelsCount": "{count, plural, one {# model} other {# models}}",

@@ -354,6 +354,9 @@ func (c Config) Clone() Config {
 	out.CLIPaths = cloneProviderMap(c.CLIPaths)
 	out.CLIEnv = cloneEnvMap(c.CLIEnv)
 	out.HiddenModels = cloneEnvMap(c.HiddenModels)
+	out.OffProviders = append([]ProviderID(nil), c.OffProviders...)
+	out.Efforts = cloneProviderMap(c.Efforts)
+	out.KeyEndpoints = cloneProviderMap(c.KeyEndpoints)
 	out.Connections = append([]AIConnection(nil), c.Connections...)
 	return out
 }
@@ -565,10 +568,14 @@ func (s *Service) SetKey(ctx context.Context, id ProviderID, key string) error {
 	if key == "" {
 		return &Error{Kind: KindNoKey}
 	}
-	if _, ok := ProviderByID(id); !ok && !strings.HasPrefix(string(id), "conn:") {
+	p, ok := ProviderByID(id)
+	if !ok && !strings.HasPrefix(string(id), "conn:") {
 		return &Error{Kind: KindBadConfig}
 	}
-	endpoint := p.BaseURL
+	endpoint := ""
+	if ok {
+		endpoint = p.BaseURL
+	}
 	if cfg, err := s.Config(ctx); err == nil && cfg.Provider == id {
 		endpoint = cfg.Endpoint()
 	}

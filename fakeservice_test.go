@@ -100,6 +100,7 @@ type fakeService struct {
 	onSend      func(ctx context.Context, out mail.Outgoing) error
 	attachCalls []string
 	sweeps      int
+	prepares    int
 
 	// Watching. watching is each watched account's report, which a test
 	// calls as the engine's watcher would; watchLog is every call that
@@ -1156,6 +1157,29 @@ func (f *fakeService) touchDraft(d mail.Draft) mail.Draft {
 func (f *fakeService) SweepDraftFiles(ctx context.Context) error {
 	f.sweeps++
 	return nil
+}
+
+func (f *fakeService) PrepareCache(ctx context.Context) error {
+	f.prepares++
+	return nil
+}
+
+func (f *fakeService) TempFile(ext string, data []byte) (string, error) {
+	file, err := os.CreateTemp("", "shu-*"+filepath.Ext(ext))
+	if err != nil {
+		return "", err
+	}
+	name := file.Name()
+	if _, err := file.Write(data); err != nil {
+		file.Close()
+		os.Remove(name)
+		return "", err
+	}
+	if err := file.Close(); err != nil {
+		os.Remove(name)
+		return "", err
+	}
+	return name, nil
 }
 
 func (f *fakeService) DiscardDraft(ctx context.Context, id string) error {

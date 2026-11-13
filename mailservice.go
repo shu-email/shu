@@ -106,6 +106,12 @@ type mailService interface {
 	UpdateIdentity(ctx context.Context, id mail.Identity) (mail.Identity, error)
 	DeleteIdentity(ctx context.Context, accountID, id string) error
 	Attachment(ctx context.Context, accountID, folder string, uid mail.UID, part string) (mail.Attachment, []byte, error)
+	// The parsed cache. PrepareCache runs as the app starts: it drops what
+	// an older build wrote when the cache version changed, and sweeps the
+	// files no row names. TempFile writes bytes to a temporary file of the
+	// cache for the window to open.
+	PrepareCache(ctx context.Context) error
+	TempFile(ext string, data []byte) (string, error)
 
 	// The address book, kept on this device alone. Suggest reads the
 	// contacts a recipient being typed may be, best first, leaving out

@@ -258,6 +258,12 @@ Windows and Linux. It is written in Go with
   metadata, the outbox and the drafts. Attachment bytes never go into SQLite: those of
   received mail go to the cache directory, those of drafts to the
   user-data directory, both keyed by content hash.
+- The parsed cache is versioned: `mail.CacheVersion` names the form of
+  the bodies and attachment rows, and `Service.PrepareCache`, which the
+  app runs as it starts, drops them when a build changed it, then sweeps
+  the attachment files and temporary files no row names. It never touches
+  drafts, the outbox, contacts, labels, rules or settings, which the
+  server cannot give again.
 
 ## Before changing MyGo UI
 

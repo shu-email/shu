@@ -191,7 +191,7 @@ func (a *app) addInviteToCalendar(inv *mail.CalendarInvite) {
 		a.inviteNote = locales.InviteAddFailed(locales.InviteUnreadable())
 		return
 	}
-	path, err := writeTemp("shu-event", ".ics", []byte(inv.Raw))
+	path, err := a.svc.TempFile(".ics", []byte(inv.Raw))
 	if err != nil {
 		a.inviteNote = locales.InviteAddFailed(err.Error())
 		return

@@ -26,6 +26,9 @@ type Service struct {
 	dataDir   string
 	tlsConfig *tls.Config
 	clock     func() time.Time
+	// started is when this run began: a temporary file older than it is
+	// an earlier run's, which the sweep may take.
+	started time.Time
 
 	// Drafts are saved while a sync uploads them. draftMu makes each
 	// read-then-write of a draft row one step, draftSync lets one job at
@@ -106,7 +109,7 @@ type Service struct {
 // are kept in, which is no cache.
 func NewService(store Store, secrets SecretStore, cacheDir string) *Service {
 	s := &Service{
-		store: store, secrets: secrets, cacheDir: cacheDir, clock: time.Now,
+		store: store, secrets: secrets, cacheDir: cacheDir, clock: time.Now, started: time.Now(),
 		draftSync:      make(chan struct{}, 1),
 		draftsReplaced: map[string][]Attachment{},
 		incoming:       map[string]bool{},
@@ -252,6 +255,8 @@ func (s *Service) RemoveAccount(ctx context.Context, id string) error {
 	// A missing keychain entry is not an error; the account is gone
 	// either way.
 	_ = s.secrets.Delete(PasswordKey(id))
+	// Its cached mail went with it, and so may its attachment files.
+	_ = s.SweepCache(ctx)
 	return nil
 }
 
@@ -668,6 +673,11 @@ func (s *Service) MoveMessages(ctx context.Context, accountID string, msgs []Mes
 			}
 		}
 	}
+	if len(results) >= cacheSweepAfter {
+		// A move of many messages leaves their attachments' files with
+		// no row: take them now rather than at the next start.
+		_ = s.SweepCache(ctx)
+	}
 	return results, cacheErr
 }
 
@@ -809,7 +819,7 @@ func (s *Service) cacheAttachment(a *Attachment) error {
 	if a.ContentHash == "" {
 		return errors.New("mail: attachment has no content hash")
 	}
-	dir := filepath.Join(s.cacheDir, "attachments")
+	dir := filepath.Join(s.cacheDir, attachmentCacheDir)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}

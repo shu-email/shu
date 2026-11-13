@@ -588,9 +588,10 @@ func TestNeedsSignInAtStartup(t *testing.T) {
 	a.setLocale = func(string) {}
 	q := queueJobs(a)
 	a.start()
-	// The sweep and the accounts, and none of the syncs they ask for.
-	first := q.jobs[:2]
-	q.jobs = q.jobs[2:]
+	// The cache preparation, the draft sweep and the accounts, and none
+	// of the syncs they ask for.
+	first := q.jobs[:3]
+	q.jobs = q.jobs[3:]
 	for _, job := range first {
 		job()
 	}

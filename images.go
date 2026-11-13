@@ -172,7 +172,7 @@ func (a *app) previewAttachment(m mail.Summary, att mail.Attachment) {
 				p.kind, p.text = "text", truncateText(string(data))
 			case att.ContentType == "application/pdf", strings.HasSuffix(strings.ToLower(att.Filename), ".pdf"):
 				p.kind = "pdf"
-				if path, err := writeTemp("shu-preview", ".pdf", data); err == nil {
+				if path, err := a.svc.TempFile(".pdf", data); err == nil {
 					p.path = path
 				}
 			}
@@ -248,7 +248,7 @@ func (a *app) attachmentPreviewDialog(c *ui.Context) {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				if len(p.data) > 0 {
 					if p.path == "" && a.win != nil {
-						if path, err := writeTemp("shu-preview", previewExt(p), p.data); err == nil {
+						if path, err := a.svc.TempFile(previewExt(p), p.data); err == nil {
 							p.path = path
 						}
 					}
@@ -383,19 +383,6 @@ func previewExt(p *attachmentPreview) string {
 		return ".txt"
 	}
 	return filepath.Ext(p.name)
-}
-
-func writeTemp(prefix, ext string, data []byte) (string, error) {
-	f, err := os.CreateTemp("", prefix+"-*"+ext)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	if _, err := f.Write(data); err != nil {
-		_ = os.Remove(f.Name())
-		return "", err
-	}
-	return f.Name(), nil
 }
 
 // previewable reports whether an attachment has a preview in the app.

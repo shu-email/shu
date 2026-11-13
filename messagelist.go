@@ -368,14 +368,15 @@ func (a *app) emptyState() string {
 	}
 }
 
-// undoBanner offers to take back the last archive, junk or delete.
+// undoBanner offers to take back the last change: a move, a label, or a
+// flag.
 func (a *app) undoBanner(c *ui.Context, t *ui.Theme) {
 	ui.Row(c.Key("banner/undo")).Shrink(0).Gap(8).AlignItems(ui.Center).Padding(8, 14).
 		Background(t.Success.Alpha(0.10)).Transition(bannerMotion).Children(func() {
 		ui.Icon(c, checkIcon).FontSize(14).TextColor(t.Success)
 		ui.Text(c, a.undo.label).FontSize(12).Bold().Grow(1)
 		ui.Button(c, locales.Undo()).Label(locales.Undo()).
-			OnClick(func() { a.undoLastMove() })
+			OnClick(func() { a.undoLastAction() })
 		a.iconButton(c, closeIcon, locales.Dismiss(), locales.Dismiss()).
 			OnClick(func() { a.setUndo(nil) })
 	})

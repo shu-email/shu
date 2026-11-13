@@ -723,7 +723,7 @@ func TestUndoExpires(t *testing.T) {
 		fn()
 		return nil
 	}
-	a.setUndo(&undoMove{label: "Archived"})
+	a.setUndo(&undoAction{label: "Archived"})
 	if !fired {
 		t.Fatal("no timer was armed")
 	}

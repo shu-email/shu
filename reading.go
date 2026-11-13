@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -580,6 +582,12 @@ func (a *app) toggleStar() {
 		}
 	}
 	on := !allFlagged
+	var changed []mail.Summary
+	for _, m := range targets {
+		if m.Flagged != on {
+			changed = append(changed, m)
+		}
+	}
 	for i := range a.all {
 		if chosen[summaryKey(a.all[i])] {
 			a.all[i].Flagged = on
@@ -599,6 +607,9 @@ func (a *app) toggleStar() {
 			if a.stale(g) {
 				return
 			}
+			// Those the change reached can be taken back even when later
+			// ones failed.
+			a.offerFlagUndo(changed, mail.FlagFlagged, on)
 			if err != nil {
 				for i := range a.all {
 					if chosen[summaryKey(a.all[i])] {
@@ -700,14 +711,20 @@ func (a *app) moveSelected(special string) {
 	})
 }
 
-// undoLastMove moves the message back from the folder it went to, then
-// syncs the source folder so its row returns.
-func (a *app) undoLastMove() {
+// undoLastAction takes back what the last action offered: a move's
+// message returns from the folder it went to, a flag or label change
+// goes back the way it came, and a move still in the queue is dropped
+// rather than made.
+func (a *app) undoLastAction() {
 	u := a.undo
 	if u == nil {
 		return
 	}
 	a.setUndo(nil)
+	if u.refs != nil {
+		a.undoFlagOrLabel(u)
+		return
+	}
 	if len(u.moved) > 0 || u.reminder != nil {
 		a.undoThreadMove(u)
 		return
@@ -726,6 +743,52 @@ func (a *app) undoLastMove() {
 				return
 			}
 			a.syncMovedBack(g, u.accountID, u.source)
+		})
+	})
+}
+
+// undoFlagOrLabel takes back a change of one flag or one label on
+// messages, each account's with a call of its own, and reads the list
+// again; a flag's undo reads the folders too, as their unread counts
+// follow it. The list's read loads the labels, so a label's undo need
+// not.
+func (a *app) undoFlagOrLabel(u *undoAction) {
+	g := a.gen
+	accounts := slices.Sorted(maps.Keys(u.refs))
+	a.run(func() {
+		ctx, cancel := a.ctx()
+		defer cancel()
+		var err error
+		for _, account := range accounts {
+			if u.labelID != 0 {
+				err = a.svc.UndoLabelChange(ctx, account, u.refs[account], u.labelID, u.on)
+			} else {
+				err = a.svc.UndoFlagChange(ctx, account, u.refs[account], u.flag, u.on)
+			}
+			if err != nil {
+				break
+			}
+		}
+		lists := map[string][]mail.Folder{}
+		if u.labelID == 0 {
+			for _, id := range accounts {
+				if list, e := a.svc.CachedFolders(ctx, id); e == nil {
+					lists[id] = list
+				}
+			}
+		}
+		a.post(func() {
+			if a.stale(g) {
+				return
+			}
+			if err != nil {
+				a.err = failureText(err)
+			}
+			for id, list := range lists {
+				a.setAccountFolders(id, list)
+			}
+			a.updateBadge()
+			a.readList(g, false, false)
 		})
 	})
 }
@@ -979,6 +1042,9 @@ func (a *app) toggleRead() {
 			if a.stale(g) {
 				return
 			}
+			// Those the change reached can be taken back even when later
+			// ones failed.
+			a.offerFlagUndo(changed, mail.FlagSeen, on)
 			if err != nil {
 				for i := range a.all {
 					if chosen[summaryKey(a.all[i])] {
@@ -991,6 +1057,7 @@ func (a *app) toggleRead() {
 				}
 				a.err = failureText(err)
 				a.updateBadge()
+				return
 			}
 		})
 	})

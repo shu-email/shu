@@ -704,6 +704,14 @@ func (a *app) toggleThreadStar() {
 				}
 			}
 		}
+		// Only those whose star the change moves: one already starred
+		// stays so when the undo puts the others back.
+		var changed []mail.Summary
+		for _, m := range msgs {
+			if m.Flagged != on {
+				changed = append(changed, m)
+			}
+		}
 		if err == nil {
 			err = a.setFlags(ctx, msgs, mail.FlagFlagged, on)
 		}
@@ -711,13 +719,16 @@ func (a *app) toggleThreadStar() {
 			if a.stale(g) {
 				return
 			}
-			switch {
-			case err != nil:
+			// Those the change reached can be taken back even when later
+			// ones failed.
+			a.offerFlagUndo(changed, mail.FlagFlagged, on)
+			if err != nil {
 				// The cache changed only where the server did: read
 				// again, it shows what is so.
 				a.err = failureText(err)
 				a.readMessages(g, false)
-			case folder == "starred" && !on:
+			}
+			if err == nil && folder == "starred" && !on {
 				a.loadMessages(g)
 			}
 		})
@@ -779,6 +790,9 @@ func (a *app) toggleThreadRead() {
 			if a.stale(g) {
 				return
 			}
+			// Those the change reached can be taken back even when later
+			// ones failed.
+			a.offerFlagUndo(changed, mail.FlagSeen, seen)
 			if err != nil {
 				a.err = failureText(err)
 				a.readMessages(g, false)
@@ -871,7 +885,7 @@ func (a *app) moveThreads(special string) {
 			}
 			// What moved before a failure can be taken back as well.
 			if canUndo(moved) {
-				a.setUndo(&undoMove{label: label, moved: moved})
+				a.setUndo(&undoAction{label: label, moved: moved})
 			}
 			a.loadMessages(g)
 			a.loadFollowUps(g)
@@ -925,7 +939,7 @@ func threadMovedLabel(special string, n int) string {
 // undoThreadMove takes back a move of several messages, then syncs the
 // folders they went back to, so that their rows return, and reads the
 // folders of each account it reached with their counts.
-func (a *app) undoThreadMove(u *undoMove) {
+func (a *app) undoThreadMove(u *undoAction) {
 	g, shown := a.gen, a.active
 	accounts := slices.Sorted(maps.Keys(u.moved))
 	if !slices.Contains(accounts, shown) {
@@ -1008,6 +1022,9 @@ func (a *app) flagMessage(m mail.Summary, flag mail.Flag, on bool) {
 		return
 	}
 	key := summaryKey(m)
+	// A message already the way the change would leave it is no change,
+	// and no undo.
+	changes := flag == mail.FlagFlagged && m.Flagged != on || flag == mail.FlagSeen && m.Seen != on
 	if flag == mail.FlagSeen {
 		a.seenInThread([]mail.Summary{m}, on)
 	} else {
@@ -1023,11 +1040,15 @@ func (a *app) flagMessage(m mail.Summary, flag mail.Flag, on bool) {
 			if a.stale(g) {
 				return
 			}
-			switch {
-			case err != nil:
+			if err != nil {
 				a.err = failureText(err)
 				a.readMessages(g, false)
-			case folder == "starred" && flag == mail.FlagFlagged && !on:
+				return
+			}
+			if changes {
+				a.offerFlagUndo([]mail.Summary{m}, flag, on)
+			}
+			if folder == "starred" && flag == mail.FlagFlagged && !on {
 				a.readMessages(g, false)
 			}
 		})
@@ -1088,7 +1109,7 @@ func (a *app) moveMessageToFolder(m mail.Summary, dest string) {
 			if err != nil {
 				a.err = failureText(err)
 			} else if canUndo(moved) {
-				a.setUndo(&undoMove{label: label, moved: moved})
+				a.setUndo(&undoAction{label: label, moved: moved})
 			}
 			a.loadMessages(g)
 			a.loadFollowUps(g)

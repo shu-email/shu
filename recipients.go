@@ -613,7 +613,6 @@ func (cs *composeState) checkRecipients(reveal bool, fields ...recipientField) {
 const (
 	problemsHeight    = 260
 	problemsMinHeight = 100
-	problemsBodyMin   = 32
 )
 
 // recipientProblems says, field by field, what of the recipients a send

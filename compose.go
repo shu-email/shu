@@ -340,22 +340,16 @@ func (cs *composeState) view(c *ui.Context) {
 			cs.draftRow(c, t)
 		}
 		ui.Divider(c)
-		// The body takes the room there is. Its minimum leaves the
-		// attachments, the notices and the actions below it on screen at
-		// the window's smallest, and each row shown besides To, Cc and
-		// Subject takes its room from it.
-		bodyMin := float32(120)
-		if hasFiles {
+		// The body takes the room there is, and gives it back rather than
+		// push what is below off the window: it is the only part that
+		// grows, so the fields, the attachments and the actions keep their
+		// room whatever the fonts of the platform make of them. With
+		// attachments it keeps room to write in, and above them the
+		// problems of the recipients, which cannot wait, take it back to
+		// whatever is left.
+		bodyMin := float32(0)
+		if hasFiles && !problems {
 			bodyMin = 56
-		}
-		for _, more := range []bool{len(ids) > 1, cs.showBcc, drafting} {
-			if more {
-				bodyMin -= extraRowRoom
-			}
-		}
-		bodyMin = max(bodyMin, 56)
-		if problems {
-			bodyMin = problemsBodyMin
 		}
 		body := ui.TextArea(c, &cs.body).Grow(1).MinHeight(bodyMin).Label(locales.Body()).
 			Placeholder(locales.ComposeBodyPlaceholder()).FocusBind(&cs.focused, focusBody).OnChange(cs.changed)
@@ -445,10 +439,6 @@ func (cs *composeState) view(c *ui.Context) {
 	})
 	aiReviewModal(c, &cs.review)
 }
-
-// extraRowRoom is the room a row of the compose window's fields takes
-// with the gap above it, with some to spare for fonts of taller lines.
-const extraRowRoom = 40
 
 // The fields and the attach button among the controls cs.focused names.
 const (

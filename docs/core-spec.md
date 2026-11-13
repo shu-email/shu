@@ -583,11 +583,25 @@ lines). Keep the original HTML for the webview.
   "Show HTML/Show plain text" toggle. HTML is rendered by an on-demand
   `win.NewWebView({Page:{Untrusted:true}})` with `ui.WebView` in the body slot;
   before loading, inject the CSP
-  `default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; form-action 'none'; base-uri 'none'`,
+  `default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; form-action 'none'; base-uri 'none'`
+  (or the same with `img-src data: http: https:` once the user allowed that
+  message's remote images),
   strip `<script>` and event attributes; `Page.OnWillNavigate` cancels navigation
   and asks before opening an http(s) link, showing its real destination
   (`security.go`); the user's `Open link` calls `c.Services().OpenURL`. Windowless
   tests only check the toggle state and the sanitizing function, not rendering.
+- Remote images and previews (`mail/images.go`, `images.go`): an inline image a
+  message names by `Content-ID` is embedded at parse time as a data URI, so it
+  shows with no request and is not listed as an attachment. Remote `img` sources
+  stay blocked by default; the reading pane says so and offers **Load images**
+  for the message or **Always for this sender**, the latter kept by the engine
+  (`Service.RemoteImages` / `SetRemoteImages`, a JSON setting keyed by address
+  without case) and revocable with **Block images again**. Attachment cards offer
+  a preview for images, text/PDF; the image decodes in the app, text shows
+  selectable, a PDF loads into a second untrusted web view when there is a
+  window, and anything else can still be opened in the default app or saved.
+  **Save all** writes every file to a chosen folder, keeping duplicate names
+  apart.
 - Sender authentication and phishing advice (`mail/trust.go`, `security.go`):
   `Message.Trust` reads the `Authentication-Results` the receiving server added
   (else `ARC-Authentication-Results`, else `Received-SPF`) from `RawHeaders`, and

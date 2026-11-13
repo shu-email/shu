@@ -230,6 +230,14 @@ type app struct {
 	folderNote string
 	// networkForm is the Network tab's editable state (network.go).
 	networkForm networkForm
+	// Remote images and attachment previews (images.go): images is the
+	// senders whose pictures are allowed, imagesShown the messages the
+	// user chose to show them in, and preview the open preview.
+	images       map[string]bool
+	imagesShown  map[string]bool
+	imagesLoaded bool
+	preview      attachmentPreview
+	previewView  *mygo.WebView
 	// rules is the rules' view, open or not (rules.go); the live checks
 	// of the rule being written take turns under ruleCheckMu, and one a
 	// later check overtook (ruleCheckSeq) does not run.
@@ -244,9 +252,12 @@ type app struct {
 	// While it is nil the attach button opens nothing; dropping files
 	// still attaches them.
 	pickFiles func(parent *mygo.Window) ([]string, error)
-	setLocale func(string)
-	setBadge  func(int)
-	after     func(time.Duration, func()) *time.Timer
+	// pickFolder asks where to save several attachments. It blocks, so
+	// jobs call it.
+	pickFolder func(parent *mygo.Window) (string, error)
+	setLocale  func(string)
+	setBadge   func(int)
+	after      func(time.Duration, func()) *time.Timer
 	// confirmDiscard asks whether to delete that many drafts for good.
 	// It blocks, so jobs call it. While it is nil nothing is discarded.
 	confirmDiscard func(parent *mygo.Window, count int) bool
@@ -295,6 +306,8 @@ func newApp(svc mailService) *app {
 		signatures:    map[string]mail.Signature{},
 		aliases:       map[string][]mail.Identity{},
 		labels:        newLabelState(),
+		images:        map[string]bool{},
+		imagesShown:   map[string]bool{},
 		securityOpen:  map[string]bool{},
 	}
 }
@@ -340,6 +353,16 @@ func (a *app) attach(win *mygo.Window) {
 		return mygo.Dialog.Open(mygo.OpenDialogOptions{
 			Parent: parent, Title: locales.AttachFiles(), ButtonLabel: locales.Attach(), Multiple: true,
 		})
+	}
+	a.pickFolder = func(parent *mygo.Window) (string, error) {
+		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{
+			Parent: parent, Title: locales.SaveAllAttachments(), ButtonLabel: locales.Save(),
+			Directory: true, CreateDirectories: true,
+		})
+		if err != nil || len(paths) == 0 {
+			return "", err
+		}
+		return paths[0], nil
 	}
 	a.setLocale = mygo.App.SetLocale
 	a.setBadge = mygo.App.SetBadgeCount
@@ -519,6 +542,9 @@ func (a *app) loadCache(g uint64) {
 				a.ensureFolder()
 				a.aimFolder()
 				a.updateBadge()
+			}
+			if !a.imagesLoaded {
+				a.loadImagePolicy()
 			}
 			a.loadMessages(g)
 			a.syncAccount(g)
@@ -1329,6 +1355,7 @@ func (a *app) mailView(c *ui.Context) {
 	aiReviewModal(c, &a.review)
 	a.linkDialog(c)
 	a.folderDialog(c)
+	a.attachmentPreviewDialog(c)
 }
 
 // paneShortcuts gives the sidebar and the panes the unmodified shortcuts.

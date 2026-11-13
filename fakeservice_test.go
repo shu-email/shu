@@ -29,18 +29,19 @@ type fakeService struct {
 	bodies   map[string]mail.Message
 	pending  []mail.PendingSend
 
-	testErr    error
-	flagErr    error
-	moveErr    error
-	sendErr    error
-	sendWarn   error
-	retryErr   error
-	password   map[string]string
-	sent       []mail.Outgoing
-	moved      []string
-	moveBacks  []string
-	flagCalls  []string
-	attachment mail.Attachment
+	testErr         error
+	flagErr         error
+	moveErr         error
+	sendErr         error
+	sendWarn        error
+	retryErr        error
+	password        map[string]string
+	sent            []mail.Outgoing
+	moved           []string
+	moveBacks       []string
+	flagCalls       []string
+	attachment      mail.Attachment
+	attachmentBytes []byte
 	// folderCalls records the folder actions taken, in order, and
 	// folderErr makes them fail.
 	folderCalls []string
@@ -51,6 +52,10 @@ type fakeService struct {
 	networkSet    mail.NetworkSettings
 	networkStored bool
 	networkErr    error
+	// remote is the senders whose images are allowed, and remoteErr makes
+	// the policy calls fail.
+	remote    map[string]bool
+	remoteErr error
 
 	// Drafts. The fake keeps them as the engine does: saving is local,
 	// and SyncDrafts is the step that reaches the server, or fails to.
@@ -873,6 +878,9 @@ func (f *fakeService) Attachment(ctx context.Context, accountID, folder string, 
 	}
 	if f.attachment.Part == "" {
 		return mail.Attachment{}, nil, mail.ErrNotFound
+	}
+	if f.attachmentBytes != nil {
+		return f.attachment, f.attachmentBytes, nil
 	}
 	return f.attachment, []byte("data"), nil
 }
@@ -2503,4 +2511,24 @@ func (f *fakeService) HTTPClient(ctx context.Context) (*http.Client, error) {
 		return nil, f.networkErr
 	}
 	return http.DefaultClient, nil
+}
+
+func (f *fakeService) RemoteImages(ctx context.Context) (map[string]bool, error) {
+	return f.remote, f.remoteErr
+}
+
+func (f *fakeService) SetRemoteImages(ctx context.Context, from mail.Address, on bool) error {
+	if f.remoteErr != nil {
+		return f.remoteErr
+	}
+	if f.remote == nil {
+		f.remote = map[string]bool{}
+	}
+	key := mail.RemoteImageKey(from)
+	if on {
+		f.remote[key] = true
+	} else {
+		delete(f.remote, key)
+	}
+	return nil
 }

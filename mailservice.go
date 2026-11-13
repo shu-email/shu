@@ -63,6 +63,10 @@ type mailService interface {
 	// window of a folder synced for the first time.
 	SyncFolder(ctx context.Context, accountID, folder string, limit int) error
 	FetchMessage(ctx context.Context, accountID, folder string, uid mail.UID, markSeen bool) (mail.FetchResult, error)
+	// Remote image policy, by sender: pictures an HTML message names on
+	// the network stay blocked until the user allows them.
+	RemoteImages(ctx context.Context) (map[string]bool, error)
+	SetRemoteImages(ctx context.Context, from mail.Address, on bool) error
 
 	SetFlag(ctx context.Context, accountID, folder string, uid mail.UID, flag mail.Flag, on bool) error
 	SetFlags(ctx context.Context, accountID string, msgs []mail.MessageRef, flag mail.Flag, on bool) error

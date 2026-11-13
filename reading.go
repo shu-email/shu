@@ -76,6 +76,9 @@ func (a *app) messagePane(c *ui.Context, t *ui.Theme) {
 			})
 			a.senderHeader(c, t, *m)
 			a.securityNotice(c, t, *m, msg)
+			if msg != nil {
+				a.imageNotice(c, t, *m, msg)
+			}
 			if msg != nil && len(msg.Attachments) > 0 {
 				a.attachments(c, t, *m, msg.Attachments)
 			}
@@ -421,7 +424,15 @@ func (a *app) bodyText(c *ui.Context, t *ui.Theme, text string) {
 // are changed in its compose window.
 func (a *app) attachments(c *ui.Context, t *ui.Theme, m mail.Summary, list []mail.Attachment) {
 	ui.Column(c).Gap(8).Children(func() {
-		ui.Text(c, locales.Attachments()).FontSize(11).Bold().TextColor(t.TextMuted)
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, locales.Attachments()).FontSize(11).Bold().TextColor(t.TextMuted)
+			if len(list) > 1 && m.DraftID == "" {
+				ui.ButtonBase(c).Label(locales.SaveAllAttachments()).
+					OnClick(func() { a.saveAllAttachments(m, list) }).Children(func() {
+					ui.Text(c, locales.SaveAllAttachments()).FontSize(11).TextColor(t.Accent)
+				})
+			}
+		})
 		for _, att := range list {
 			att := att
 			ui.Row(c).MaxWidth(420).Padding(8, 10).Gap(10).AlignItems(ui.Center).Radius(8).
@@ -447,6 +458,11 @@ func (a *app) attachments(c *ui.Context, t *ui.Theme, m mail.Summary, list []mai
 				})
 				if m.DraftID != "" {
 					return
+				}
+				if previewable(att) {
+					ui.Button(c, "").Label(locales.PreviewAttachment(att.Filename)).Tooltip(locales.PreviewAttachment(att.Filename)).
+						Padding(6, 8).OnClick(func() { a.previewAttachment(m, att) }).
+						Children(func() { ui.Icon(c, eyeIcon).FontSize(15) })
 				}
 				ui.Button(c, "").Label(locales.SaveAs()).Tooltip(locales.SaveAs()).
 					Padding(6, 8).OnClick(func() { a.saveAttachment(m, att) }).

@@ -9465,3 +9465,185 @@ func NetworkNoAccount() string { return In(i18n.Locale()).NetworkNoAccount() }
 func (msgs Messages) NetworkNoAccount() string {
 	return Catalog.Format(msgs.locale, "networkNoAccount", nil)
 }
+
+// ImagesBlocked says "Remote images are blocked"
+// in the language the app shows.
+func ImagesBlocked() string { return In(i18n.Locale()).ImagesBlocked() }
+
+// ImagesBlocked says "Remote images are blocked"
+// in the language of msgs.
+func (msgs Messages) ImagesBlocked() string {
+	return Catalog.Format(msgs.locale, "imagesBlocked", nil)
+}
+
+// ImagesBlockedDetail says "This message shows pictures from the network. They are not loaded, so the sender cannot tell that you read it."
+// in the language the app shows.
+func ImagesBlockedDetail() string { return In(i18n.Locale()).ImagesBlockedDetail() }
+
+// ImagesBlockedDetail says "This message shows pictures from the network. They are not loaded, so the sender cannot tell that you read it."
+// in the language of msgs.
+func (msgs Messages) ImagesBlockedDetail() string {
+	return Catalog.Format(msgs.locale, "imagesBlockedDetail", nil)
+}
+
+// LoadImages says "Load images"
+// in the language the app shows.
+func LoadImages() string { return In(i18n.Locale()).LoadImages() }
+
+// LoadImages says "Load images"
+// in the language of msgs.
+func (msgs Messages) LoadImages() string {
+	return Catalog.Format(msgs.locale, "loadImages", nil)
+}
+
+// LoadImagesAlways says "Always for this sender"
+// in the language the app shows.
+func LoadImagesAlways() string { return In(i18n.Locale()).LoadImagesAlways() }
+
+// LoadImagesAlways says "Always for this sender"
+// in the language of msgs.
+func (msgs Messages) LoadImagesAlways() string {
+	return Catalog.Format(msgs.locale, "loadImagesAlways", nil)
+}
+
+// ImagesShownDetail says "Remote images from this message are shown."
+// in the language the app shows.
+func ImagesShownDetail() string { return In(i18n.Locale()).ImagesShownDetail() }
+
+// ImagesShownDetail says "Remote images from this message are shown."
+// in the language of msgs.
+func (msgs Messages) ImagesShownDetail() string {
+	return Catalog.Format(msgs.locale, "imagesShownDetail", nil)
+}
+
+// BlockImages says "Block images again"
+// in the language the app shows.
+func BlockImages() string { return In(i18n.Locale()).BlockImages() }
+
+// BlockImages says "Block images again"
+// in the language of msgs.
+func (msgs Messages) BlockImages() string {
+	return Catalog.Format(msgs.locale, "blockImages", nil)
+}
+
+// ImagesFailed says "Could not change the image setting: {error}"
+// in the language the app shows.
+//
+// The error after allowing or blocking remote images failed.
+func ImagesFailed(error string) string { return In(i18n.Locale()).ImagesFailed(error) }
+
+// ImagesFailed says "Could not change the image setting: {error}"
+// in the language of msgs.
+//
+// The error after allowing or blocking remote images failed.
+func (msgs Messages) ImagesFailed(error string) string {
+	return Catalog.Format(msgs.locale, "imagesFailed", map[string]any{"error": error})
+}
+
+// PreviewAttachment says "Preview {name}"
+// in the language the app shows.
+//
+// The button that opens an attachment preview.
+func PreviewAttachment(name string) string { return In(i18n.Locale()).PreviewAttachment(name) }
+
+// PreviewAttachment says "Preview {name}"
+// in the language of msgs.
+//
+// The button that opens an attachment preview.
+func (msgs Messages) PreviewAttachment(name string) string {
+	return Catalog.Format(msgs.locale, "previewAttachment", map[string]any{"name": name})
+}
+
+// SaveAllAttachments says "Save all"
+// in the language the app shows.
+func SaveAllAttachments() string { return In(i18n.Locale()).SaveAllAttachments() }
+
+// SaveAllAttachments says "Save all"
+// in the language of msgs.
+func (msgs Messages) SaveAllAttachments() string {
+	return Catalog.Format(msgs.locale, "saveAllAttachments", nil)
+}
+
+// AttachmentPreviewTitle says "Preview"
+// in the language the app shows.
+func AttachmentPreviewTitle() string { return In(i18n.Locale()).AttachmentPreviewTitle() }
+
+// AttachmentPreviewTitle says "Preview"
+// in the language of msgs.
+func (msgs Messages) AttachmentPreviewTitle() string {
+	return Catalog.Format(msgs.locale, "attachmentPreviewTitle", nil)
+}
+
+// PreviewUnavailable says "There is no preview for this kind of file."
+// in the language the app shows.
+func PreviewUnavailable() string { return In(i18n.Locale()).PreviewUnavailable() }
+
+// PreviewUnavailable says "There is no preview for this kind of file."
+// in the language of msgs.
+func (msgs Messages) PreviewUnavailable() string {
+	return Catalog.Format(msgs.locale, "previewUnavailable", nil)
+}
+
+// OpenInDefaultApp says "Open in the default app"
+// in the language the app shows.
+func OpenInDefaultApp() string { return In(i18n.Locale()).OpenInDefaultApp() }
+
+// OpenInDefaultApp says "Open in the default app"
+// in the language of msgs.
+func (msgs Messages) OpenInDefaultApp() string {
+	return Catalog.Format(msgs.locale, "openInDefaultApp", nil)
+}
+
+// PreviewFailed says "Could not read the attachment: {error}"
+// in the language the app shows.
+//
+// The error after reading an attachment for preview failed.
+func PreviewFailed(error string) string { return In(i18n.Locale()).PreviewFailed(error) }
+
+// PreviewFailed says "Could not read the attachment: {error}"
+// in the language of msgs.
+//
+// The error after reading an attachment for preview failed.
+func (msgs Messages) PreviewFailed(error string) string {
+	return Catalog.Format(msgs.locale, "previewFailed", map[string]any{"error": error})
+}
+
+// SaveAllDone says "Saved {count} files"
+// in the language the app shows.
+//
+// The note after Save all wrote the attachments.
+func SaveAllDone(count int) string { return In(i18n.Locale()).SaveAllDone(count) }
+
+// SaveAllDone says "Saved {count} files"
+// in the language of msgs.
+//
+// The note after Save all wrote the attachments.
+func (msgs Messages) SaveAllDone(count int) string {
+	return Catalog.Format(msgs.locale, "saveAllDone", map[string]any{"count": count})
+}
+
+// SaveAllFailed says "Saved {saved}, could not save {failed}"
+// in the language the app shows.
+//
+// The note after Save all had failures.
+func SaveAllFailed(saved int, failed int) string {
+	return In(i18n.Locale()).SaveAllFailed(saved, failed)
+}
+
+// SaveAllFailed says "Saved {saved}, could not save {failed}"
+// in the language of msgs.
+//
+// The note after Save all had failures.
+func (msgs Messages) SaveAllFailed(saved int, failed int) string {
+	return Catalog.Format(msgs.locale, "saveAllFailed", map[string]any{"saved": saved, "failed": failed})
+}
+
+// SaveAllNoFolder says "Choose a folder to save the attachments in."
+// in the language the app shows.
+func SaveAllNoFolder() string { return In(i18n.Locale()).SaveAllNoFolder() }
+
+// SaveAllNoFolder says "Choose a folder to save the attachments in."
+// in the language of msgs.
+func (msgs Messages) SaveAllNoFolder() string {
+	return Catalog.Format(msgs.locale, "saveAllNoFolder", nil)
+}

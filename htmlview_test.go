@@ -16,7 +16,7 @@ func TestRenderHTMLSanitizes(t *testing.T) {
 		<iframe src="https://evil.example"></iframe>
 		<form action="https://evil.example"><input value="x"></form>
 	</body></html>`
-	out := renderHTML(source)
+	out := renderHTML(source, false)
 	for _, unwanted := range []string{"<script", "onclick", "onerror", "javascript:", "evil.example/pixel", "<iframe", "<form", "<input"} {
 		if strings.Contains(out, unwanted) {
 			t.Errorf("sanitized HTML still has %q:\n%s", unwanted, out)
@@ -52,6 +52,30 @@ func TestSafeFileName(t *testing.T) {
 	} {
 		if got := safeFileName(in); got != want {
 			t.Errorf("safeFileName(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// Remote pictures stay out until the user allowed them.
+func TestRenderHTMLRemoteImages(t *testing.T) {
+	src := `<p><img src="https://example.com/a.png" alt="a"></p>`
+	blocked := renderHTML(src, false)
+	if strings.Contains(blocked, "https://example.com/a.png") {
+		t.Errorf("the remote image stayed: %q", blocked)
+	}
+	if !strings.Contains(blocked, "img-src data:;") {
+		t.Errorf("the blocked policy changed: %q", blocked)
+	}
+	allowed := renderHTML(src, true)
+	if !strings.Contains(allowed, "https://example.com/a.png") {
+		t.Errorf("the allowed image went: %q", allowed)
+	}
+	if !strings.Contains(allowed, "img-src data: http: https:;") {
+		t.Errorf("the allowed policy is missing: %q", allowed)
+	}
+	for _, out := range []string{blocked, allowed} {
+		if strings.Contains(out, "<script") || strings.Contains(out, "onerror=") {
+			t.Errorf("a script survived: %q", out)
 		}
 	}
 }

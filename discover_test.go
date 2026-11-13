@@ -76,6 +76,9 @@ func TestAccountFormDiscoversPreset(t *testing.T) {
 	if !tt.HasText(locales.DiscoverFound(locales.DiscoverSourcePreset())) {
 		t.Errorf("no word of the preset: %q", tt.Texts())
 	}
+	if f.Provider != "Fastmail" {
+		t.Errorf("the provider on show is %q", f.Provider)
+	}
 	if len(fs.discoveredCalls) != 1 {
 		t.Errorf("lookups %v", fs.discoveredCalls)
 	}
@@ -134,6 +137,11 @@ func TestAccountFormDiscoveryFails(t *testing.T) {
 	}
 	if !tt.HasText(locales.ImapSection()) || !tt.HasText(locales.SmtpSection()) {
 		t.Errorf("the manual form went: %q", tt.Texts())
+	}
+	// The Gmail servers the form opened with did not stay under another
+	// domain's address.
+	if f := a.accountForm; f.Host != "" || f.SMTPHost != "" {
+		t.Errorf("another domain's servers stayed: %q and %q", f.Host, f.SMTPHost)
 	}
 }
 

@@ -152,6 +152,9 @@ func (a *app) openAccountForm(acc *mail.Account) {
 		if a.accountForm.Provider != locales.ProviderCustom() {
 			if p, ok := mail.ProviderByID(strings.ToLower(a.accountForm.Provider)); ok {
 				a.applyProvider(p)
+				// The servers are the provider's, not this address's:
+				// typing another domain's address replaces them.
+				a.accountForm.disc.source = mail.DiscoveryPreset
 			}
 		}
 		a.openSending("")
@@ -361,7 +364,7 @@ func (a *app) accountFields(c *ui.Context, t *ui.Theme) {
 						break
 					}
 				}
-				a.serversChanged()
+				a.providerChanged()
 			})
 	})
 	a.field(c, locales.AccountName(), func() ui.Element {
@@ -472,6 +475,12 @@ func (a *app) discoverSettings() {
 					}
 					f.disc.source = d.Source
 					f.disc.note = locales.DiscoverFound(discoverSource(d.Source))
+					if d.Source == mail.DiscoveryPreset {
+						// The select agrees with the fields on show.
+						if p, ok := mail.ProviderFor(email); ok {
+							f.Provider = p.Name
+						}
+					}
 				}
 			}
 			if err != nil {
@@ -518,6 +527,15 @@ func (a *app) serversChanged() {
 	}
 	f.disc.manual = true
 	f.disc.note, f.disc.err, f.disc.source = "", "", ""
+}
+
+// providerChanged notes that the servers on show are a provider's, which
+// another address's lookup may replace.
+func (a *app) providerChanged() {
+	f := &a.accountForm
+	f.disc.manual = false
+	f.disc.source = mail.DiscoveryPreset
+	f.disc.note, f.disc.err = "", ""
 }
 
 // discoverSource names where a lookup found the servers.

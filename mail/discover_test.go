@@ -418,6 +418,33 @@ func TestDiscoverRedirects(t *testing.T) {
 	}
 }
 
+// The settings' own redirect policy keeps its say, and the lookup's
+// bounds still hold: the two do not call each other round.
+func TestDiscoverRedirectPolicy(t *testing.T) {
+	svc, _, _ := newTestService()
+	loops := 0
+	fake := &discoverHTTP{serve: func(req *http.Request) (*http.Response, error) {
+		loops++
+		resp := httpResponse(302, "")
+		resp.Header.Set("Location", "https://autoconfig.example.com/again")
+		return resp, nil
+	}}
+	svc.discoverClient = func(ctx context.Context) (*http.Client, error) {
+		return &http.Client{Transport: fake, CheckRedirect: func(*http.Request, []*http.Request) error {
+			return nil
+		}}, nil
+	}
+	svc.lookupSRV = func(ctx context.Context, service, proto, name string) (string, []*net.SRV, error) {
+		return "", nil, errors.New("no record")
+	}
+	if _, err := svc.Discover(context.Background(), "ann@example.com"); err == nil {
+		t.Fatal("a redirect loop found settings")
+	}
+	if loops > 12 {
+		t.Errorf("the redirects went round %d times", loops)
+	}
+}
+
 // The configuration formats are read by the fields they carry.
 func TestParseAutoconfig(t *testing.T) {
 	d, err := parseAutoconfig([]byte(autoconfigDocument), "example.com")
@@ -471,6 +498,19 @@ func TestParseAutodiscover(t *testing.T) {
 	}
 	if d.SMTP != (Server{Host: "smtp.example.com", Port: 465, TLS: TLSImplicit}) {
 		t.Errorf("SMTP %+v", d.SMTP)
+	}
+	// The encryption word is enough when the SSL element is missing.
+	doc = `<Autodiscover><Response><Account>
+		<Protocol><Type>IMAP</Type><Server>imap.example.com</Server><Port>993</Port><Encryption>SSL</Encryption></Protocol>
+		<Protocol><Type>SMTP</Type><Server>smtp.example.com</Server><Port>587</Port><Encryption>Auto</Encryption></Protocol>
+	</Account></Response></Autodiscover>`
+	d, err = parseAutodiscover([]byte(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.IMAP != (Server{Host: "imap.example.com", Port: 993, TLS: TLSImplicit}) ||
+		d.SMTP != (Server{Host: "smtp.example.com", Port: 587, TLS: TLSStartTLS}) {
+		t.Errorf("read %+v", d)
 	}
 	if _, err := parseAutodiscover([]byte("no xml")); err == nil {
 		t.Error("text that is no configuration was read")

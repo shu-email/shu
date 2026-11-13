@@ -115,11 +115,19 @@ func (s *Service) Discover(ctx context.Context, email string) (Discovery, error)
 		steps = append(steps, DiscoveryStep{Source: source, Err: err.Error()})
 	}
 
-	if err := s.discoverAutoconfig(ctx, email, domain, &d); err != nil {
+	// The endpoints of one lookup are read with one client: the
+	// settings and the proxy password are read once, and connections
+	// are reused. A client that cannot be made is a failure of both HTTP
+	// sources, and DNS still has its say.
+	client, clientErr := s.discoverHTTPClient(ctx)
+	if clientErr != nil {
+		fail(DiscoveryAutoconfig, clientErr)
+		fail(DiscoveryAutodiscover, clientErr)
+	} else if err := s.discoverAutoconfig(ctx, client, email, domain, &d); err != nil {
 		fail(DiscoveryAutoconfig, err)
 	}
-	if !d.Complete() && ctx.Err() == nil {
-		if err := s.discoverAutodiscover(ctx, email, domain, &d); err != nil {
+	if clientErr == nil && !d.Complete() && ctx.Err() == nil {
+		if err := s.discoverAutodiscover(ctx, client, email, domain, &d); err != nil {
 			fail(DiscoveryAutodiscover, err)
 		}
 	}
@@ -183,10 +191,10 @@ func autoconfigURLs(email, domain string) []string {
 
 // discoverAutoconfig reads the domain's configuration in Thunderbird's
 // format.
-func (s *Service) discoverAutoconfig(ctx context.Context, email, domain string, d *Discovery) error {
+func (s *Service) discoverAutoconfig(ctx context.Context, client *http.Client, email, domain string, d *Discovery) error {
 	var last error
 	for _, u := range autoconfigURLs(email, domain) {
-		body, err := s.discoverFetch(ctx, http.MethodGet, u, "")
+		body, err := s.discoverFetch(ctx, client, http.MethodGet, u, "")
 		if err != nil {
 			last = err
 			if ctx.Err() != nil {
@@ -229,11 +237,11 @@ func autodiscoverRequest(email string) string {
 
 // discoverAutodiscover reads the domain's configuration in Microsoft's
 // format.
-func (s *Service) discoverAutodiscover(ctx context.Context, email, domain string, d *Discovery) error {
+func (s *Service) discoverAutodiscover(ctx context.Context, client *http.Client, email, domain string, d *Discovery) error {
 	var last error
 	body := autodiscoverRequest(email)
 	for _, u := range autodiscoverURLs(domain) {
-		resp, err := s.discoverFetch(ctx, http.MethodPost, u, body)
+		resp, err := s.discoverFetch(ctx, client, http.MethodPost, u, body)
 		if err != nil {
 			last = err
 			if ctx.Err() != nil {
@@ -339,7 +347,7 @@ func (s *Service) lookupMailSRV(ctx context.Context, domain string, imap bool) (
 
 // discoverFetch reads a configuration endpoint, bounded in time and
 // size. A redirect must stay on https.
-func (s *Service) discoverFetch(ctx context.Context, method, u, body string) ([]byte, error) {
+func (s *Service) discoverFetch(ctx context.Context, client *http.Client, method, u, body string) ([]byte, error) {
 	reqCtx, cancel := context.WithTimeout(ctx, s.discoverRequestTimeout)
 	defer cancel()
 	var reader io.Reader
@@ -353,10 +361,6 @@ func (s *Service) discoverFetch(ctx context.Context, method, u, body string) ([]
 	req.Header.Set("User-Agent", "Shu")
 	if body != "" {
 		req.Header.Set("Content-Type", "text/xml; charset=utf-8")
-	}
-	client, err := s.discoverHTTPClient(ctx)
-	if err != nil {
-		return nil, err
 	}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -380,7 +384,7 @@ func (s *Service) discoverHTTPClient(ctx context.Context) (*http.Client, error) 
 	if err != nil {
 		return nil, err
 	}
-	policy := func(req *http.Request, via []*http.Request) error {
+	guard := func(req *http.Request, via []*http.Request) error {
 		if len(via) >= discoverMaxRedirects {
 			return errors.New("too many redirects")
 		}
@@ -389,13 +393,15 @@ func (s *Service) discoverHTTPClient(ctx context.Context) (*http.Client, error) 
 		}
 		return nil
 	}
+	policy := guard
 	if base.CheckRedirect != nil {
+		// The settings' own policy keeps its say, and the guard holds.
 		inner := base.CheckRedirect
 		policy = func(req *http.Request, via []*http.Request) error {
 			if err := inner(req, via); err != nil {
 				return err
 			}
-			return policy(req, via)
+			return guard(req, via)
 		}
 	}
 	return &http.Client{Transport: base.Transport, Timeout: base.Timeout, CheckRedirect: policy}, nil
@@ -477,7 +483,6 @@ func parseAutoconfig(data []byte, domain string) (Discovery, error) {
 func autoconfigServerOf(srv autoconfigServer, domain string, imap bool) (Server, bool) {
 	host := strings.TrimSpace(srv.Hostname)
 	host = strings.ReplaceAll(host, "%EMAILDOMAIN%", domain)
-	host = strings.ReplaceAll(host, "%EMAILDOMAINDOMAIN%", domain)
 	if host == "" {
 		return Server{}, false
 	}
@@ -593,14 +598,14 @@ func autodiscoverTLS(p autodiscoverProtocol) (TLSMode, bool) {
 		return TLSImplicit, true
 	}
 	switch strings.ToLower(strings.TrimSpace(p.Encryption)) {
-	case "", "none", "tls", "starttls":
-		// Without a word from the server, STARTTLS is the safe reading;
-		// "None" means nothing would be encrypted at all.
-		if strings.EqualFold(strings.TrimSpace(p.Encryption), "none") {
-			return "", false
-		}
+	case "ssl":
+		return TLSImplicit, true
+	case "", "auto", "tls", "starttls":
+		// Without a word from the server, or one to find out for
+		// itself, STARTTLS is the safe reading.
 		return TLSStartTLS, true
 	}
+	// "none", or a word this build does not know: no TLS, no setting.
 	return "", false
 }
 

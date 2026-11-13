@@ -31,7 +31,7 @@ func (s *Store) Discovery(ctx context.Context, domain string) (mail.Discovery, b
 
 // SaveDiscovery keeps a domain's servers, replacing what it had.
 func (s *Store) SaveDiscovery(ctx context.Context, d mail.Discovery) error {
-	_, err := s.query(ctx, `INSERT INTO discoveries
+	_, err := s.exec(ctx, `INSERT INTO discoveries
 		(domain, imap_host, imap_port, imap_tls, smtp_host, smtp_port, smtp_tls, source, found_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (domain) DO UPDATE SET

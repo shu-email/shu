@@ -124,6 +124,125 @@ type Config struct {
 	// out of the model pickers, by provider. The chosen default is always
 	// shown.
 	HiddenModels map[ProviderID][]string `json:"hiddenModels,omitempty"`
+	// OffProviders are the providers the user switched off. A provider is
+	// on unless it is listed, and its configuration and credentials stay
+	// while it is off: only its models leave the pickers.
+	OffProviders []ProviderID `json:"offProviders,omitempty"`
+	// Efforts are the reasoning effort a local tool runs with, by
+	// provider; empty leaves the tool's own default.
+	Efforts map[ProviderID]string `json:"efforts,omitempty"`
+	// KeyEndpoints records, by provider, the endpoint a stored key was
+	// saved for, so a key is never sent to a server it was not given to.
+	KeyEndpoints map[ProviderID]string `json:"keyEndpoints,omitempty"`
+}
+
+// ProviderOff reports whether the user switched a provider off. It says
+// nothing about whether it is the chosen one: a request from a provider
+// that is off is refused, and the settings offer to turn it back on.
+func (c Config) ProviderOff(id ProviderID) bool {
+	for _, off := range c.OffProviders {
+		if off == id {
+			return true
+		}
+	}
+	return false
+}
+
+// SetProviderOff switches a provider on or off. Its configuration and
+// its key stay either way, so switching it back needs no setup.
+func (c *Config) SetProviderOff(id ProviderID, off bool) {
+	if c.ProviderOff(id) == off {
+		return
+	}
+	out := c.OffProviders[:0]
+	for _, listed := range c.OffProviders {
+		if listed != id {
+			out = append(out, listed)
+		}
+	}
+	if off {
+		out = append(out, id)
+	}
+	if len(out) == 0 {
+		c.OffProviders = nil
+		return
+	}
+	c.OffProviders = out
+}
+
+// Effort is the reasoning effort a local tool runs with, or "" for the
+// tool's own default.
+func (c Config) Effort(id ProviderID) string { return c.Efforts[id] }
+
+// SetEffort sets or clears a local tool's reasoning effort. An effort
+// outside the set the tools accept is dropped rather than stored.
+func (c *Config) SetEffort(id ProviderID, effort string) {
+	effort = strings.TrimSpace(effort)
+	if effort != "" && !EffortValid(effort) {
+		return
+	}
+	if effort == "" {
+		delete(c.Efforts, id)
+		if len(c.Efforts) == 0 {
+			c.Efforts = nil
+		}
+		return
+	}
+	if c.Efforts == nil {
+		c.Efforts = map[ProviderID]string{}
+	}
+	c.Efforts[id] = effort
+}
+
+// Efforts are the reasoning efforts a local tool accepts, lowest first.
+var Efforts = []string{"low", "medium", "high", "max"}
+
+// EffortValid reports whether an effort is one of Efforts.
+func EffortValid(effort string) bool {
+	for _, known := range Efforts {
+		if known == effort {
+			return true
+		}
+	}
+	return false
+}
+
+// KeyEndpoint is the endpoint a stored key was saved for, and
+// KeyBound reports whether it was saved at all.
+func (c Config) KeyEndpoint(id ProviderID) string { return c.KeyEndpoints[id] }
+
+// SetKeyEndpoint records the endpoint a key is being saved for.
+func (c *Config) SetKeyEndpoint(id ProviderID, endpoint string) {
+	endpoint = strings.TrimRight(strings.TrimSpace(endpoint), "/")
+	if c.KeyEndpoints == nil {
+		c.KeyEndpoints = map[ProviderID]string{}
+	}
+	if endpoint == "" {
+		delete(c.KeyEndpoints, id)
+		if len(c.KeyEndpoints) == 0 {
+			c.KeyEndpoints = nil
+		}
+		return
+	}
+	c.KeyEndpoints[id] = endpoint
+}
+
+// KeyEndpointMismatch reports whether a stored key was given to another
+// endpoint than the one a request would go to now.
+func (c Config) KeyEndpointMismatch(id ProviderID) bool {
+	saved := c.KeyEndpoint(id)
+	if saved == "" {
+		return false
+	}
+	p, ok := ProviderByID(id)
+	if !ok {
+		return false
+	}
+	current := strings.TrimRight(p.BaseURL, "/")
+	if id == c.Provider {
+		current = c.Endpoint()
+	}
+	return saved != current
 }
 
 // ModelHidden reports whether a model is kept out of the pickers.
@@ -174,6 +293,9 @@ func (c Config) Clone() Config {
 	out.CLIPaths = cloneProviderMap(c.CLIPaths)
 	out.CLIEnv = cloneEnvMap(c.CLIEnv)
 	out.HiddenModels = cloneEnvMap(c.HiddenModels)
+	out.OffProviders = append([]ProviderID(nil), c.OffProviders...)
+	out.Efforts = cloneProviderMap(c.Efforts)
+	out.KeyEndpoints = cloneProviderMap(c.KeyEndpoints)
 	return out
 }
 
@@ -374,19 +496,33 @@ func (s *Service) KeyStored(id ProviderID) (bool, error) {
 	return true, nil
 }
 
-// SetKey stores or replaces a provider's key in the keychain.
-func (s *Service) SetKey(id ProviderID, key string) error {
+// SetKey stores or replaces a provider's key in the keychain, and records
+// the endpoint it was given to: a key typed here is meant for the server
+// the settings name now, and is never sent to another. The record is only
+// a note on the request's destination, never a secret, so a failure to
+// write it fails the call: a key with no record could go anywhere.
+func (s *Service) SetKey(ctx context.Context, id ProviderID, key string) error {
 	key = strings.TrimSpace(key)
 	if key == "" {
 		return &Error{Kind: KindNoKey}
 	}
-	if _, ok := ProviderByID(id); !ok {
+	p, ok := ProviderByID(id)
+	if !ok {
 		return &Error{Kind: KindBadConfig}
+	}
+	endpoint := p.BaseURL
+	if cfg, err := s.Config(ctx); err == nil && cfg.Provider == id {
+		endpoint = cfg.Endpoint()
 	}
 	if err := s.secrets.Set(KeyName(id), []byte(key)); err != nil {
 		return &Error{Kind: KindKeychain}
 	}
-	return nil
+	cfg, err := s.Config(ctx)
+	if err != nil {
+		return err
+	}
+	cfg.SetKeyEndpoint(id, endpoint)
+	return s.SaveConfig(ctx, cfg)
 }
 
 // DeleteKey removes a provider's key from the keychain.

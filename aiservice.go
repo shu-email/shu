@@ -28,7 +28,7 @@ type aiService interface {
 	Config(ctx context.Context) (ai.Config, error)
 	SaveConfig(ctx context.Context, cfg ai.Config) error
 	KeyStored(id ai.ProviderID) (bool, error)
-	SetKey(id ai.ProviderID, key string) error
+	SetKey(ctx context.Context, id ai.ProviderID, key string) error
 	DeleteKey(id ai.ProviderID) error
 	Test(ctx context.Context, cfg ai.Config, typedKey string) error
 

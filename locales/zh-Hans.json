@@ -196,6 +196,8 @@
   "aiNoModel": "尚未选择模型，请在设置中填写。",
   "aiOpenSettings": "打开 AI 设置",
   "aiErrInvalidKey": "服务商拒绝了该 API 密钥。",
+  "aiErrProviderOff": "此服务商已关闭，请在设置中重新打开。",
+  "aiErrKeyEndpoint": "该 API 密钥是为另一个服务器保存的，请为当前服务器重新保存。",
   "aiErrRateLimit": "已达到服务商的速率限制，请稍后再试。",
   "aiErrTimeout": "模型应答超时。",
   "aiErrUnreachable": "无法连接到服务器。",
@@ -1368,5 +1370,11 @@
   "aiProviderModelHidden": "在模型选择中隐藏",
   "aiProviderModelDefault": "已选定的模型始终可见。",
   "aiProviderNoModels": "此服务商尚未报告模型，可在下方手动输入。",
-  "aiProviderModelHint": "输入模型，或选择此服务商报告的模型。"
+  "aiProviderModelHint": "输入模型，或选择此服务商报告的模型。",
+  "aiProviderOff": "已关闭",
+  "aiProviderOffHint": "它的模型会从选择列表里消失，配置和密钥保留。",
+  "aiProviderEnabled": "在 Shu 中可用",
+  "aiProviderEffort": "推理强度",
+  "aiProviderEffortDefault": "默认",
+  "aiProviderKeyMoved": "该密钥是为另一个服务器保存的，请为当前服务器重新保存。"
 }

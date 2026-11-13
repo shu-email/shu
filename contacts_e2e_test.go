@@ -149,7 +149,7 @@ func TestTriageCarriesNoContactData(t *testing.T) {
 	if err := aiSvc.SaveConfig(ctx, cfg); err != nil {
 		t.Fatal(err)
 	}
-	if err := aiSvc.SetKey(ai.ProviderOpenAI, testAIKey); err != nil {
+	if err := aiSvc.SetKey(ctx, ai.ProviderOpenAI, testAIKey); err != nil {
 		t.Fatal(err)
 	}
 	a.ai = aiSvc

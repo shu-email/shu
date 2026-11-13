@@ -79,6 +79,9 @@ func (a *app) providerStatusLine(id ai.ProviderID) string {
 	if !ok {
 		return ""
 	}
+	if a.aiForm.cfg.ProviderOff(id) {
+		return locales.AiProviderOff()
+	}
 	if ai.CLIProvider(id) {
 		status := a.providers.statuses[id]
 		if !a.providers.loaded {
@@ -209,6 +212,7 @@ func (a *app) providerOverview(c *ui.Context, t *ui.Theme) {
 	} else {
 		ui.Button(c, locales.AiProviderUse()).OnClick(func() { a.selectProvider(p.selected) })
 	}
+	a.providerOffSwitch(c, t)
 	ui.Text(c, a.providerStatusLine(p.selected)).FontSize(12).TextColor(t.Text).MaxLines(3)
 	if ai.CLIProvider(p.selected) {
 		status := p.statuses[p.selected]
@@ -290,6 +294,49 @@ func (a *app) visibleCLIModels() []string {
 	return out
 }
 
+// providerOffSwitch turns the chosen provider on or off. It is a switch
+// of its own, apart from making a provider the active one: an off
+// provider keeps its setup and its key, and only leaves the pickers.
+func (a *app) providerOffSwitch(c *ui.Context, t *ui.Theme) {
+	f := &a.aiForm
+	id := a.providers.selected
+	ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+		var caption ui.Element
+		ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
+			caption = ui.Text(c, locales.AiProviderEnabled()).FontSize(12)
+			ui.Text(c, locales.AiProviderOffHint()).FontSize(11).TextColor(t.TextMuted).MaxLines(2)
+		})
+		on := !f.cfg.ProviderOff(id)
+		ui.Switch(c, &on).LabelledBy(caption).Label(locales.AiProviderEnabled()).OnChange(func() {
+			f.cfg.SetProviderOff(id, !on)
+			a.saveAI()
+		})
+	})
+}
+
+// providerEffort picks the reasoning effort a local tool runs with.
+func (a *app) providerEffort(c *ui.Context, t *ui.Theme) {
+	f := &a.aiForm
+	id := a.providers.selected
+	options := append([]string{locales.AiProviderEffortDefault()}, ai.Efforts...)
+	choice := locales.AiProviderEffortDefault()
+	current := f.cfg.Effort(id)
+	for _, effort := range ai.Efforts {
+		if current == effort {
+			choice = effort
+		}
+	}
+	caption := ui.Text(c, locales.AiProviderEffort()).FontSize(11).Bold().TextColor(t.TextMuted)
+	ui.Select(c, &choice, options).LabelledBy(caption).Width(200).OnChange(func() {
+		effort := choice
+		if effort == locales.AiProviderEffortDefault() {
+			effort = ""
+		}
+		f.cfg.SetEffort(id, effort)
+		a.saveAI()
+	})
+}
+
 // providerAdvanced holds the connection details: command path and values
 // for a tool, endpoint and key for an API connection.
 func (a *app) providerAdvanced(c *ui.Context, t *ui.Theme) {
@@ -301,6 +348,7 @@ func (a *app) providerAdvanced(c *ui.Context, t *ui.Theme) {
 	}
 	preset, _ := ai.ProviderByID(p.selected)
 	if ai.CLIProvider(p.selected) {
+		a.providerEffort(c, t)
 		a.aiCLIEnvSection(c, t)
 		return
 	}
@@ -343,6 +391,10 @@ func (a *app) aiAPIKeyFields(c *ui.Context, t *ui.Theme) {
 	})
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		switch {
+		case f.keyStored && f.cfg.KeyEndpointMismatch(f.cfg.Provider):
+			ui.Icon(c, alertIcon).FontSize(13).TextColor(t.Warning)
+			ui.Text(c, locales.AiProviderKeyMoved()).FontSize(11).TextColor(t.Warning).Grow(1).MaxLines(2)
+			ui.Button(c, locales.AiKeyDelete()).OnClick(a.deleteAIKey)
 		case f.keyStored:
 			ui.Icon(c, checkIcon).FontSize(13).TextColor(t.Success)
 			ui.Text(c, locales.AiKeyStored()).FontSize(11).TextColor(t.TextMuted).Grow(1)

@@ -107,3 +107,46 @@ func TestProviderModelHiding(t *testing.T) {
 		t.Errorf("the default is hidden: %q", got)
 	}
 }
+
+// The providers panel switches a provider off, and the choice survives a
+// reload. The provider stays chosen: only its models leave the pickers.
+func TestProviderOffSwitch(t *testing.T) {
+	a, _, _, _ := aiMessageApp(t, true)
+	cfg := ai.DefaultConfig()
+	cfg.Enabled = true
+	cfg.UseProvider(ai.ProviderClaudeCLI)
+	cfg.Model = "sonnet"
+	cfg.SetCLIPath(ai.ProviderClaudeCLI, "/nonexistent/claude")
+	if err := a.ai.SaveConfig(context.Background(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	a.aiForm.setConfig(cfg)
+	a.aiForm.cliModels = []string{"sonnet", "opus"}
+	a.openSettings(settingsTabAI)
+	a.openProviders()
+	a.providers.selected = ai.ProviderClaudeCLI
+	tt := ui.NewTester(a.view, 1220, 900)
+	tt.Frame()
+	if !tt.HasText(locales.AiProviderOffHint()) {
+		t.Fatalf("no off switch in %q", tt.Texts())
+	}
+	click(t, tt, locales.AiProviderEnabled())
+	if !a.aiForm.cfg.ProviderOff(ai.ProviderClaudeCLI) {
+		t.Fatal("the provider is still on")
+	}
+	saved, err := a.ai.Config(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !saved.ProviderOff(ai.ProviderClaudeCLI) {
+		t.Error("the choice was not saved")
+	}
+	if saved.Provider != ai.ProviderClaudeCLI {
+		t.Errorf("provider = %q, want it still chosen", saved.Provider)
+	}
+	tt.Frame()
+	click(t, tt, locales.AiProviderEnabled())
+	if a.aiForm.cfg.ProviderOff(ai.ProviderClaudeCLI) {
+		t.Error("the provider did not switch back on")
+	}
+}

@@ -249,7 +249,9 @@ func (a *app) saveAIKey() {
 	}
 	f.key = ""
 	a.run(func() {
-		err := a.ai.SetKey(id, key)
+		ctx, cancel := a.ctx()
+		defer cancel()
+		err := a.ai.SetKey(ctx, id, key)
 		a.post(func() {
 			if f.cfg.Provider != id {
 				return

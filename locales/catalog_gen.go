@@ -2012,6 +2012,26 @@ func (msgs Messages) AiErrInvalidKey() string {
 	return Catalog.Format(msgs.locale, "aiErrInvalidKey", nil)
 }
 
+// AiErrProviderOff says "This provider is switched off. Turn it on in Settings."
+// in the language the app shows.
+func AiErrProviderOff() string { return In(i18n.Locale()).AiErrProviderOff() }
+
+// AiErrProviderOff says "This provider is switched off. Turn it on in Settings."
+// in the language of msgs.
+func (msgs Messages) AiErrProviderOff() string {
+	return Catalog.Format(msgs.locale, "aiErrProviderOff", nil)
+}
+
+// AiErrKeyEndpoint says "This API key was saved for another server. Save it again for this one."
+// in the language the app shows.
+func AiErrKeyEndpoint() string { return In(i18n.Locale()).AiErrKeyEndpoint() }
+
+// AiErrKeyEndpoint says "This API key was saved for another server. Save it again for this one."
+// in the language of msgs.
+func (msgs Messages) AiErrKeyEndpoint() string {
+	return Catalog.Format(msgs.locale, "aiErrKeyEndpoint", nil)
+}
+
 // AiErrRateLimit says "The provider's rate limit was reached. Try again in a moment."
 // in the language the app shows.
 func AiErrRateLimit() string { return In(i18n.Locale()).AiErrRateLimit() }
@@ -10704,4 +10724,64 @@ func AiProviderModelHint() string { return In(i18n.Locale()).AiProviderModelHint
 // in the language of msgs.
 func (msgs Messages) AiProviderModelHint() string {
 	return Catalog.Format(msgs.locale, "aiProviderModelHint", nil)
+}
+
+// AiProviderOff says "Off"
+// in the language the app shows.
+func AiProviderOff() string { return In(i18n.Locale()).AiProviderOff() }
+
+// AiProviderOff says "Off"
+// in the language of msgs.
+func (msgs Messages) AiProviderOff() string {
+	return Catalog.Format(msgs.locale, "aiProviderOff", nil)
+}
+
+// AiProviderOffHint says "Its models leave the pickers. Its setup and key are kept."
+// in the language the app shows.
+func AiProviderOffHint() string { return In(i18n.Locale()).AiProviderOffHint() }
+
+// AiProviderOffHint says "Its models leave the pickers. Its setup and key are kept."
+// in the language of msgs.
+func (msgs Messages) AiProviderOffHint() string {
+	return Catalog.Format(msgs.locale, "aiProviderOffHint", nil)
+}
+
+// AiProviderEnabled says "Available in Shu"
+// in the language the app shows.
+func AiProviderEnabled() string { return In(i18n.Locale()).AiProviderEnabled() }
+
+// AiProviderEnabled says "Available in Shu"
+// in the language of msgs.
+func (msgs Messages) AiProviderEnabled() string {
+	return Catalog.Format(msgs.locale, "aiProviderEnabled", nil)
+}
+
+// AiProviderEffort says "Reasoning effort"
+// in the language the app shows.
+func AiProviderEffort() string { return In(i18n.Locale()).AiProviderEffort() }
+
+// AiProviderEffort says "Reasoning effort"
+// in the language of msgs.
+func (msgs Messages) AiProviderEffort() string {
+	return Catalog.Format(msgs.locale, "aiProviderEffort", nil)
+}
+
+// AiProviderEffortDefault says "Default"
+// in the language the app shows.
+func AiProviderEffortDefault() string { return In(i18n.Locale()).AiProviderEffortDefault() }
+
+// AiProviderEffortDefault says "Default"
+// in the language of msgs.
+func (msgs Messages) AiProviderEffortDefault() string {
+	return Catalog.Format(msgs.locale, "aiProviderEffortDefault", nil)
+}
+
+// AiProviderKeyMoved says "This key was saved for another server. Save it again for this one."
+// in the language the app shows.
+func AiProviderKeyMoved() string { return In(i18n.Locale()).AiProviderKeyMoved() }
+
+// AiProviderKeyMoved says "This key was saved for another server. Save it again for this one."
+// in the language of msgs.
+func (msgs Messages) AiProviderKeyMoved() string {
+	return Catalog.Format(msgs.locale, "aiProviderKeyMoved", nil)
 }

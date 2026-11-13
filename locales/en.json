@@ -359,6 +359,8 @@
   "aiNoModel": "No model is chosen. Pick one in Settings.",
   "aiOpenSettings": "Open AI settings",
   "aiErrInvalidKey": "The provider rejected the API key.",
+  "aiErrProviderOff": "This provider is switched off. Turn it on in Settings.",
+  "aiErrKeyEndpoint": "This API key was saved for another server. Save it again for this one.",
   "aiErrRateLimit": "The provider's rate limit was reached. Try again in a moment.",
   "aiErrTimeout": "The model took too long to answer.",
   "aiErrUnreachable": "The server could not be reached.",
@@ -3682,5 +3684,11 @@
   "aiProviderModelHidden": "Hidden from the model pickers",
   "aiProviderModelDefault": "The chosen model always stays visible.",
   "aiProviderNoModels": "This provider reports no models yet. Type one below.",
-  "aiProviderModelHint": "Type a model, or choose one this provider reports."
+  "aiProviderModelHint": "Type a model, or choose one this provider reports.",
+  "aiProviderOff": "Off",
+  "aiProviderOffHint": "Its models leave the pickers. Its setup and key are kept.",
+  "aiProviderEnabled": "Available in Shu",
+  "aiProviderEffort": "Reasoning effort",
+  "aiProviderEffortDefault": "Default",
+  "aiProviderKeyMoved": "This key was saved for another server. Save it again for this one."
 }

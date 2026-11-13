@@ -191,7 +191,7 @@ func (s *Service) runCLI(ctx context.Context, cfg Config, model string, req requ
 		return "", &Error{Kind: KindCLINotInstalled}
 	}
 	prompt := req.system + "\n\n" + req.user
-	args, env := cliLaunch(p.CLI, model, cfg.Provider)
+	args, env := cliLaunch(p.CLI, model, cfg.Provider, cfg.Effort(cfg.Provider))
 	for _, item := range s.cliEnvFrom(cfg, cfg.Provider) {
 		if env == nil {
 			env = map[string]string{}
@@ -221,8 +221,10 @@ func (s *Service) runCLI(ctx context.Context, cfg Config, model string, req requ
 }
 
 // cliLaunch is the command line of one tool. No prompt is ever an
-// argument; each reads it from standard input.
-func cliLaunch(command, model string, id ProviderID) ([]string, map[string]string) {
+// argument; each reads it from standard input. Effort is one of Efforts,
+// or "" to leave the tool's own default.
+func cliLaunch(command, model string, id ProviderID, effort string) ([]string, map[string]string) {
+	effort = strings.TrimSpace(effort)
 	switch command {
 	case "claude":
 		args := []string{
@@ -240,6 +242,9 @@ func cliLaunch(command, model string, id ProviderID) ([]string, map[string]strin
 		}
 		if strings.TrimSpace(model) != "" {
 			args = append(args, "--model", strings.TrimSpace(model))
+		}
+		if EffortValid(effort) {
+			args = append(args, "--effort", effort)
 		}
 		return args, map[string]string{
 			"CLAUDE_CODE_SKIP_PROMPT_HISTORY": "1",
@@ -275,6 +280,9 @@ func cliLaunch(command, model string, id ProviderID) ([]string, map[string]strin
 		}
 		if strings.TrimSpace(model) != "" {
 			args = append(args, "--model", strings.TrimSpace(model))
+		}
+		if EffortValid(effort) {
+			args = append(args, "-c", "model_reasoning_effort="+effort)
 		}
 		args = append(args, "-")
 		return args, nil

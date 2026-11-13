@@ -165,7 +165,7 @@ func aiAppOf(t *testing.T, on bool, sample func(*testing.T) (*app, *fakeService)
 		if err := svc.SaveConfig(context.Background(), cfg); err != nil {
 			t.Fatal(err)
 		}
-		if err := svc.SetKey(ai.ProviderOpenAI, testAIKey); err != nil {
+		if err := svc.SetKey(context.Background(), ai.ProviderOpenAI, testAIKey); err != nil {
 			t.Fatal(err)
 		}
 	}

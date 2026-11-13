@@ -169,7 +169,7 @@ func newTestService(t *testing.T) (*Service, *fakeProvider, *memStore, *memSecre
 	if err := s.SaveConfig(context.Background(), cfg); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetKey(ProviderOpenAI, testKey); err != nil {
+	if err := s.SetKey(context.Background(), ProviderOpenAI, testKey); err != nil {
 		t.Fatal(err)
 	}
 	return s, provider, store, secrets
@@ -221,7 +221,7 @@ func TestNothingIsSentUntilAIIsSetUp(t *testing.T) {
 	}
 
 	// A key, but the capability's own switch is off.
-	if err := s.SetKey(ProviderOpenAI, testKey); err != nil {
+	if err := s.SetKey(context.Background(), ProviderOpenAI, testKey); err != nil {
 		t.Fatal(err)
 	}
 	cfg.SetFeature(FeatureTriage, false)
@@ -576,7 +576,7 @@ func TestAnthropicWireFormat(t *testing.T) {
 	if _, err := s.Summarize(ctx, testMessage()); KindOf(err) != KindNoKey {
 		t.Fatalf("err = %v, want no key for a provider without one", err)
 	}
-	if err := s.SetKey(ProviderAnthropic, "sk-ant-KEY"); err != nil {
+	if err := s.SetKey(context.Background(), ProviderAnthropic, "sk-ant-KEY"); err != nil {
 		t.Fatal(err)
 	}
 	result, err := s.Summarize(ctx, testMessage())
@@ -629,13 +629,13 @@ func TestKeysStayInTheKeychain(t *testing.T) {
 		}
 	}
 	// Replacing a key keeps one entry.
-	if err := s.SetKey(ProviderOpenAI, "  sk-new  "); err != nil {
+	if err := s.SetKey(context.Background(), ProviderOpenAI, "  sk-new  "); err != nil {
 		t.Fatal(err)
 	}
 	if got := string(secrets.data[KeyName(ProviderOpenAI)]); got != "sk-new" {
 		t.Errorf("replaced key = %q", got)
 	}
-	if err := s.SetKey(ProviderOpenAI, "   "); KindOf(err) != KindNoKey {
+	if err := s.SetKey(context.Background(), ProviderOpenAI, "   "); KindOf(err) != KindNoKey {
 		t.Errorf("empty key: err = %v", err)
 	}
 	if err := s.DeleteKey(ProviderOpenAI); err != nil {
@@ -882,4 +882,125 @@ func TestExcerpt(t *testing.T) {
 	if e := MakeExcerpt("> only\n> quotes", BodyLimit); e.Text != "" || e.Quoted != 2 {
 		t.Errorf("all quoted = %+v", e)
 	}
+}
+
+// A provider switched off refuses a request before any network call, and
+// its settings and key stay for when it is switched back on.
+func TestOffProviderRefusesBeforeSending(t *testing.T) {
+	ctx := context.Background()
+	s, provider, store, secrets := newTestService(t)
+	cfg, err := s.Config(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ProviderOff(ProviderOpenAI) {
+		t.Fatal("a provider is off by default")
+	}
+	cfg.SetProviderOff(ProviderOpenAI, true)
+	if err := s.SaveConfig(ctx, cfg); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Summarize(ctx, testMessage()); KindOf(err) != KindProviderOff {
+		t.Errorf("summarize: err = %v, want provider off", err)
+	}
+	if provider.count() != 0 {
+		t.Errorf("%d requests reached a provider that is off", provider.count())
+	}
+	if got := string(secrets.data[KeyName(ProviderOpenAI)]); got != testKey {
+		t.Errorf("the key went away with the provider: %q", got)
+	}
+	// Switching it back on needs nothing else.
+	cfg, _ = s.Config(ctx)
+	cfg.SetProviderOff(ProviderOpenAI, false)
+	if err := s.SaveConfig(ctx, cfg); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Summarize(ctx, testMessage()); err != nil {
+		t.Fatalf("after switching it on: %v", err)
+	}
+	if provider.count() != 1 {
+		t.Errorf("%d requests, want 1", provider.count())
+	}
+	for k, v := range store.settings {
+		if strings.Contains(v, testKey) {
+			t.Errorf("setting %s holds the key", k)
+		}
+	}
+}
+
+// A key goes only to the endpoint it was saved for: moving an editable
+// provider to another server makes the stored key unusable until it is
+// saved again.
+func TestKeyStaysWithItsEndpoint(t *testing.T) {
+	ctx := context.Background()
+	store, secrets, provider := newMemStore(), newMemSecrets(), &fakeProvider{}
+	s := NewService(store, secrets)
+	s.SetHTTPClient(&http.Client{Transport: provider})
+	cfg := DefaultConfig()
+	cfg.Enabled = true
+	cfg.UseProvider(ProviderCustom)
+	cfg.BaseURL = "https://one.example.com/v1"
+	cfg.Model = "m"
+	if err := s.SaveConfig(ctx, cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetKey(ctx, ProviderCustom, testKey); err != nil {
+		t.Fatal(err)
+	}
+	saved, _ := s.Config(ctx)
+	if got := saved.KeyEndpoint(ProviderCustom); got != "https://one.example.com/v1" {
+		t.Errorf("endpoint = %q", got)
+	}
+	cfg, err := s.Config(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.BaseURL = "https://two.example.com/v1"
+	if err := s.SaveConfig(ctx, cfg); err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.Summarize(ctx, testMessage())
+	if KindOf(err) != KindKeyEndpoint {
+		t.Fatalf("err = %v, want a key saved for another server", err)
+	}
+	if provider.count() != 0 {
+		t.Errorf("the key was sent to the new server")
+	}
+	// Saving it again for this endpoint makes it usable there.
+	if err := s.SetKey(ctx, ProviderCustom, testKey); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Summarize(ctx, testMessage()); err != nil {
+		t.Fatalf("after saving the key again: %v", err)
+	}
+	if got := string(secrets.data[KeyName(ProviderCustom)]); got != testKey {
+		t.Errorf("keychain holds %q", got)
+	}
+}
+
+// The reasoning effort reaches the tool as the option it takes.
+func TestEffortReachesTheTool(t *testing.T) {
+	args, _ := cliLaunch("claude", "sonnet", ProviderClaudeCLI, "high")
+	if !hasPair(args, "--effort", "high") {
+		t.Errorf("claude args = %q", args)
+	}
+	args, _ = cliLaunch("codex", "gpt-5-codex", ProviderCodexCLI, "low")
+	if !hasPair(args, "-c", "model_reasoning_effort=low") {
+		t.Errorf("codex args = %q", args)
+	}
+	for _, eff := range []string{"", "extreme"} {
+		args, _ = cliLaunch("claude", "sonnet", ProviderClaudeCLI, eff)
+		if strings.Contains(strings.Join(args, " "), "--effort") {
+			t.Errorf("effort %q was passed: %q", eff, args)
+		}
+	}
+}
+
+func hasPair(args []string, a, b string) bool {
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == a && args[i+1] == b {
+			return true
+		}
+	}
+	return false
 }

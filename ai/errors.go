@@ -41,6 +41,11 @@ const (
 	KindCLISignIn
 	KindCLIFailed
 	KindCLIOutput
+	// KindProviderOff is a request from a provider the user switched off.
+	KindProviderOff
+	// KindKeyEndpoint is a stored key given to another endpoint than the
+	// one the request would go to now.
+	KindKeyEndpoint
 )
 
 // Error is every failure this package returns. It carries the kind and
@@ -94,6 +99,10 @@ func (e *Error) Error() string {
 		return "The local tool failed. Check that it is signed in and up to date."
 	case KindCLIOutput:
 		return "The local tool returned too much text."
+	case KindProviderOff:
+		return "This provider is switched off. Turn it on in Settings."
+	case KindKeyEndpoint:
+		return "This API key was saved for another server. Save it again for this one."
 	case KindKeychain:
 		text += "the system keychain is not available"
 	default:

@@ -536,7 +536,7 @@ func (f *fakeService) scopeAccounts(sc mail.Scope) []string {
 func (f *fakeService) inScope(sc mail.Scope, m mail.Summary) bool {
 	switch {
 	case sc.Reminded:
-		return f.reminded(m.Account, m.Thread)
+		return f.reminded(m.Account, m.Thread) && f.inLabelScope(m.Account, m.Folder)
 	case sc.Starred:
 		return m.Flagged
 	case sc.Label != 0:

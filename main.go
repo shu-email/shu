@@ -525,10 +525,8 @@ func (a *app) start() {
 			}
 			a.accountsChanged()
 			a.beginAccount()
-			// Reminders due while the app was closed come back now, and
-			// the check runs again while it does.
+			// Reminders due while the app was closed come back now.
 			a.deliverReminders()
-			a.startReminderLoop()
 			if id := a.clicked; id != "" {
 				a.clicked = ""
 				a.openNotification(id)
@@ -633,6 +631,7 @@ func (a *app) syncAccount(g uint64) {
 				a.updateBadge()
 			}
 			a.loadMessages(g)
+			a.loadReminders(g)
 			a.syncFolder(g)
 			a.syncSent(g)
 			a.loadPending(g)
@@ -694,6 +693,7 @@ func (a *app) syncFolder(g uint64) {
 				a.aim.last = true
 			}
 			a.loadMessages(g)
+			a.loadReminders(g)
 		})
 	})
 }
@@ -713,6 +713,7 @@ func (a *app) syncSent(g uint64) {
 		err := a.svc.SyncFolder(ctx, accountID, sent, 0)
 		a.post(func() {
 			if err == nil && !a.stale(g) && a.threaded() {
+				a.loadReminders(g)
 				a.readList(g, false, false)
 			}
 		})

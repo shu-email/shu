@@ -221,7 +221,7 @@ func (a *app) spansAccounts() bool {
 // label's list.
 func (a *app) spansFolders() bool {
 	q := a.listQuery()
-	return q.search != "" && q.scope != scopeHere || labelOf(q.folder) != 0
+	return q.search != "" && q.scope != scopeHere || labelOf(q.folder) != 0 || q.folder == remindersFolder
 }
 
 // hasFilters reports whether a search asks more than its free text.

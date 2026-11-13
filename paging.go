@@ -54,8 +54,8 @@ func (a *app) listQuery() listQuery {
 // isFolder reports whether the list is one folder of the server, whose
 // older mail can be fetched.
 func (q listQuery) isFolder() bool {
-	return q.folder != "" && q.folder != "starred" && q.folder != draftsFolder && q.folder != allInboxes &&
-		labelOf(q.folder) == 0 && q.scope == scopeHere
+	return q.folder != "" && q.folder != "starred" && q.folder != draftsFolder && q.folder != remindersFolder &&
+		q.folder != allInboxes && labelOf(q.folder) == 0 && q.scope == scopeHere
 }
 
 // drafts reports whether the list is of the drafts, which their own read

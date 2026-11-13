@@ -395,15 +395,16 @@ func (s *Service) ScopedConversation(ctx context.Context, accountID string, scop
 	// in is whether a folder is one the scope reads, of those a special
 	// use or a label narrows it to.
 	in := map[string]bool{}
-	if scope.Special != "" || scope.Label != 0 {
+	if scope.Special != "" || scope.Label != 0 || scope.Reminded {
 		folders, err := s.store.Folders(ctx, accountID)
 		if err != nil {
 			return nil, err
 		}
 		for _, f := range folders {
-			if scope.Label != 0 {
+			switch {
+			case scope.Label != 0, scope.Reminded:
 				in[f.Name] = f.InLabelScope()
-			} else {
+			default:
 				in[f.Name] = f.SpecialUse == scope.Special
 			}
 		}
@@ -419,8 +420,7 @@ func (s *Service) ScopedConversation(ctx context.Context, accountID string, scop
 		case scope.Label != 0:
 			return !in[m.Folder] || !m.HasLabel(scope.Label)
 		case scope.Reminded:
-			// The caller names a conversation the list of reminders has,
-			// and every folder of it is in that list.
+			return !in[m.Folder]
 		}
 		return false
 	}), nil

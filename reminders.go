@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"time"
@@ -13,15 +14,21 @@ import (
 )
 
 // remindersFolder is the sidebar's Reminders entry: the conversations the
-// user asked to come back to, in every folder, soonest due first
-// (mail.Reminder). Setting a reminder archives the conversation and saves
-// it here; the engine brings it back to the inbox at its time.
+// user asked to come back to, in every folder but Junk, Trash and Drafts,
+// soonest due first (mail.Reminder). Setting a reminder archives the
+// conversation and saves it here; the engine brings it back to the inbox
+// at its time.
 const remindersFolder = "reminders"
 
 // reminderTick is how often the window asks the engine for due reminders
 // while it runs. A reminder saved for later is due within a minute of its
 // time.
 const reminderTick = time.Minute
+
+// reminderDeliveryTimeout is how long one check of due reminders may take:
+// each one moves mail and syncs a folder, and several can be due after a
+// run offline.
+const reminderDeliveryTimeout = 5 * time.Minute
 
 // reminderLayout is how a custom reminder time is typed: the date, then
 // the time of day, in the app's own clock.
@@ -35,7 +42,6 @@ type reminderForm struct {
 	account string
 	thread  mail.ThreadID
 	when    string
-	now     time.Time
 	loc     *time.Location
 	err     string
 }
@@ -76,15 +82,17 @@ func laterToday(now time.Time) time.Time {
 // thisWeekend is the coming Saturday morning, or Sunday's when Saturday's
 // is past, or next Saturday's when the weekend is over.
 func thisWeekend(now time.Time) time.Time {
-	days := (int(time.Saturday) - int(now.Weekday()) + 7) % 7
-	saturday := dayAt(now, days, 9)
+	if now.Weekday() == time.Sunday {
+		if morning := dayAt(now, 0, 9); morning.After(now) {
+			return morning
+		}
+		return dayAt(now, 6, 9)
+	}
+	saturday := dayAt(now, (int(time.Saturday)-int(now.Weekday())+7)%7, 9)
 	if saturday.After(now) {
 		return saturday
 	}
-	if sunday := saturday.AddDate(0, 0, 1); sunday.After(now) {
-		return sunday
-	}
-	return saturday.AddDate(0, 0, 7)
+	return saturday.AddDate(0, 0, 1)
 }
 
 // nextWeek is the coming Monday morning, a week after when today is
@@ -154,7 +162,7 @@ func (a *app) loadReminders(g uint64) {
 // settings allow one.
 func (a *app) deliverReminders() {
 	a.run(func() {
-		ctx, cancel := a.ctx()
+		ctx, cancel := context.WithTimeout(context.Background(), reminderDeliveryTimeout)
 		defer cancel()
 		delivered, err := a.svc.DeliverReminders(ctx)
 		a.post(func() {
@@ -336,13 +344,15 @@ func (a *app) removeReminder(account string, thread mail.ThreadID) {
 func (a *app) openReminderForm(account string, thread mail.ThreadID, now time.Time) {
 	a.remindForm = reminderForm{
 		open: true, account: account, thread: thread,
-		when: dayAt(now, 1, 9).Format(reminderLayout), now: now, loc: now.Location(),
+		when: dayAt(now, 1, 9).Format(reminderLayout), loc: now.Location(),
 	}
 }
 
 // submitReminderForm sets the reminder the dialog holds, when its time is
-// one that can be read and is still ahead.
-func (a *app) submitReminderForm() {
+// one that can be read and is still ahead at now, the time of the frame
+// that submits it: a dialog left open for a day refuses the time it
+// opened with.
+func (a *app) submitReminderForm(now time.Time) {
 	f := &a.remindForm
 	if !f.open {
 		return
@@ -352,7 +362,7 @@ func (a *app) submitReminderForm() {
 		f.err = locales.ReminderBadTime()
 		return
 	}
-	if !at.After(f.now) {
+	if !at.After(now) {
 		f.err = locales.ReminderTimePast()
 		return
 	}
@@ -374,7 +384,7 @@ func (a *app) reminderDialog(c *ui.Context) {
 			ui.Column(c).Gap(4).Children(func() {
 				caption := ui.Text(c, locales.RemindCustomLabel()).FontSize(11).Bold().TextColor(t.TextMuted)
 				when = ui.TextInput(c, &f.when).LabelledBy(caption).
-					FillWidth().AutoFocus().Invalid(f.err != "").OnSubmit(a.submitReminderForm)
+					FillWidth().AutoFocus().Invalid(f.err != "").OnSubmit(func() { a.submitReminderForm(c.Now()) })
 			})
 			if f.err != "" {
 				a.formError(c, when, f.err)
@@ -383,7 +393,7 @@ func (a *app) reminderDialog(c *ui.Context) {
 				ui.Spacer(c)
 				ui.Button(c, locales.Cancel()).Label(locales.RemindCustomCancelLabel()).OnClick(func() { f.open = false })
 				ui.PrimaryButton(c, locales.RemindCustomSave()).
-					Disabled(strings.TrimSpace(f.when) == "").OnClick(a.submitReminderForm)
+					Disabled(strings.TrimSpace(f.when) == "").OnClick(func() { a.submitReminderForm(c.Now()) })
 			})
 		})
 	})

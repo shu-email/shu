@@ -149,6 +149,9 @@ func (a *app) accountsChanged() {
 	}
 	a.watchAccounts()
 	a.updateBadge()
+	// The due check runs while the app has accounts, including one added
+	// after a first launch without any.
+	a.startReminderLoop()
 }
 
 // watchOp runs a call that starts or stops a watcher. Such a call waits
@@ -308,6 +311,9 @@ func (a *app) watchEvent(ev mail.WatchEvent) {
 	a.setFolders(ev.Folders)
 	a.ensureFolder()
 	a.updateBadge()
+	if len(ev.New) > 0 {
+		a.loadReminders(a.gen)
+	}
 	// Whether to notify depends on what the window shows now, before
 	// the list changes under it.
 	a.announce(ev)

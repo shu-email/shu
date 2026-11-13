@@ -133,8 +133,8 @@ func (s *Store) plan(ctx context.Context, q mail.ListQuery, criteria []criterion
 	}
 	for _, r := range rows.Values {
 		id, f := number(r[0]), mail.Folder{Name: text(r[1]), SpecialUse: text(r[2])}
-		if (q.Scope.Folder == "" || f.Name == q.Scope.Folder) && (q.Scope.Special == "" || f.SpecialUse == q.Scope.Special) &&
-			(p.label == 0 || f.InLabelScope()) {
+		kept := p.label == 0 && !p.reminded || f.InLabelScope()
+		if (q.Scope.Folder == "" || f.Name == q.Scope.Folder) && (q.Scope.Special == "" || f.SpecialUse == q.Scope.Special) && kept {
 			p.folders = append(p.folders, id)
 		}
 		if in != "" && f.NamedBy(in) {

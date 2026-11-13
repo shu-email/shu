@@ -136,7 +136,11 @@ func (s *Store) conversationPage(ctx context.Context, q mail.ListQuery, criteria
 		index[latest[i].Thread] = len(page.Conversations)
 		threads = append(threads, int64(latest[i].Thread))
 		page.Conversations = append(page.Conversations, mail.Conversation{Thread: latest[i].Thread, Account: latest[i].Account, Latest: latest[i]})
-		page.Next = cursor{date: number(r[summaryDate]), id: number(r[summaryID]), set: true}.value()
+		if p.reminded {
+			page.Next = cursor{date: number(r[summaryWidth]), id: int64(latest[i].Thread), set: true}.value()
+		} else {
+			page.Next = cursor{date: number(r[summaryDate]), id: number(r[summaryID]), set: true}.value()
+		}
 	}
 	if len(threads) == 0 {
 		return page, nil
@@ -264,7 +268,12 @@ func (s *Store) conversationCounts(ctx context.Context, p *listPlan, threads []i
 func (p *listPlan) conversationSQL() (string, []any) {
 	where, args := p.inScope("m", p.folders, true)
 	if p.after.set {
-		where += ` AND (m.date, m.id) < (?, ?)`
+		if p.reminded {
+			// The reminders' rows are in the order of their due time.
+			where += ` AND (r.remind_at, m.thread_id) > (?, ?)`
+		} else {
+			where += ` AND (m.date, m.id) < (?, ?)`
+		}
 		args = append(args, p.after.date, p.after.id)
 	}
 	if match, matchArgs := p.matchSQL("h", true); match != "" {
@@ -275,8 +284,17 @@ func (p *listPlan) conversationSQL() (string, []any) {
 	where += ` AND NOT EXISTS (SELECT 1 FROM messages n WHERE n.thread_id = m.thread_id AND ` + newer + `
 		AND n.deleted = 0 AND (n.date, n.id) > (m.date, m.id))`
 	args = append(args, newerArgs...)
-	return `SELECT ` + summaryColumns + `
-		FROM messages m JOIN folders f ON f.id = m.folder_id
+	columns, join, order := summaryColumns, "", "m.date DESC, m.id DESC"
+	if p.reminded {
+		// A row of the reminders carries its due time, which the page
+		// orders and cursors by; the row is the conversation's newest
+		// message in the scope.
+		columns += `, r.remind_at`
+		join = ` JOIN reminders r ON r.thread_id = m.thread_id`
+		order = `r.remind_at, m.thread_id`
+	}
+	return `SELECT ` + columns + `
+		FROM messages m JOIN folders f ON f.id = m.folder_id` + join + `
 		WHERE ` + where + ` AND m.deleted = 0
-		ORDER BY m.date DESC, m.id DESC LIMIT ?`, append(args, p.limit+1)
+		ORDER BY ` + order + ` LIMIT ?`, append(args, p.limit+1)
 }

@@ -19,8 +19,8 @@ type Scope struct {
 	// use (SpecialInbox and the like), Starred to the flagged messages of
 	// every folder, Label to the messages with that label, of its account,
 	// in every folder Folder.InLabelScope keeps (LabelScope), Reminded to
-	// the conversations an account has a reminder for, in every folder.
-	// With none, every folder is read.
+	// the conversations an account has a reminder for, in every folder
+	// InLabelScope keeps. With none, every folder is read.
 	Folder   string  `json:"folder,omitempty"`
 	Special  string  `json:"special,omitempty"`
 	Starred  bool    `json:"starred,omitempty"`
@@ -47,7 +47,7 @@ func AccountScope(accountID, folder string) Scope {
 func AllInboxes() Scope { return Scope{Special: SpecialInbox} }
 
 // RemindersScope is an account's conversations that have a reminder, in
-// every folder.
+// every folder Folder.InLabelScope keeps: not Junk, Trash or Drafts.
 func RemindersScope(accountID string) Scope {
 	return Scope{Accounts: []string{accountID}, Reminded: true}
 }

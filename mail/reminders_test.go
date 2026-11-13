@@ -170,6 +170,32 @@ func TestReminderSurvivesRestart(t *testing.T) {
 	}
 }
 
+// A delivery reads the archive before deciding it is empty: the sync that
+// set the reminder can have failed, leaving its rows out of the cache.
+func TestDeliverReminderReadsTheArchive(t *testing.T) {
+	ctx := context.Background()
+	svc, _, _, f, a := reminderEnv(t)
+	thread := inboxThread(t, svc, a)
+	at := reminderNow.Add(time.Hour)
+	// The mail is archived and the reminder saved, as SetReminder does,
+	// but the sync of the archive it asks for never runs.
+	if _, err := svc.MoveMessages(ctx, a.ID, []MessageRef{{Folder: "INBOX", UID: 1}}, "Archive"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.store.SaveReminder(ctx, Reminder{Account: a.ID, Thread: thread,
+		Subject: "Plain message", RemindAt: at, CreatedAt: reminderNow}); err != nil {
+		t.Fatal(err)
+	}
+	svc.SetClock(func() time.Time { return at })
+	delivered, err := svc.DeliverReminders(ctx)
+	if err != nil || len(delivered) != 1 {
+		t.Fatalf("delivered = %+v, %v", delivered, err)
+	}
+	if got := f.subjects(t, "INBOX"); !slices.Equal(got, []string{"Plain message"}) {
+		t.Errorf("the mail did not come back: %q", got)
+	}
+}
+
 // A conversation already in the archive gets a reminder without a move,
 // and one whose mail the user moved elsewhere meanwhile is not brought
 // back, though the reminder goes.

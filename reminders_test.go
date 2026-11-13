@@ -122,6 +122,26 @@ func TestUndoReminderRestoresTheOldTime(t *testing.T) {
 	}
 }
 
+// The undo keeps the reminder when the mail could not be brought back,
+// as when the server gives no UID to find it by.
+func TestUndoKeepsReminderWhenMoveBackFails(t *testing.T) {
+	a, fs := convApp(t)
+	thread := reminderThread(t, a)
+	a.setReminder("a1", thread.Thread, time.Now().Add(time.Hour))
+	if a.undo == nil {
+		t.Fatal("no undo")
+	}
+	for _, list := range a.undo.moved {
+		for i := range list {
+			list[i].DestUID = 0
+		}
+	}
+	a.undoLastMove()
+	if len(fs.reminders) != 1 || len(a.reminders) != 1 {
+		t.Fatalf("the reminder went with mail that did not come back: %+v, %+v", fs.reminders, a.reminders)
+	}
+}
+
 // Removing a reminder leaves the conversation where it is.
 func TestRemoveReminder(t *testing.T) {
 	a, fs := convApp(t)
@@ -210,6 +230,11 @@ func TestReminderPresets(t *testing.T) {
 	if got := thisWeekend(saturday); !got.Equal(time.Date(2026, 11, 22, 9, 0, 0, 0, time.UTC)) {
 		t.Errorf("this weekend on Saturday = %v", got)
 	}
+	// Sunday morning is today, and after it the next weekend.
+	sundayMorning := time.Date(2026, 11, 22, 8, 0, 0, 0, time.UTC)
+	if got := thisWeekend(sundayMorning); !got.Equal(time.Date(2026, 11, 22, 9, 0, 0, 0, time.UTC)) {
+		t.Errorf("this weekend on Sunday morning = %v", got)
+	}
 	// On Sunday evening it is the next weekend.
 	sunday := time.Date(2026, 11, 22, 20, 0, 0, 0, time.UTC)
 	if got := thisWeekend(sunday); !got.Equal(time.Date(2026, 11, 28, 9, 0, 0, 0, time.UTC)) {
@@ -227,18 +252,24 @@ func TestReminderCustomForm(t *testing.T) {
 		t.Fatal("the dialog did not open")
 	}
 	a.remindForm.when = "not a time"
-	a.submitReminderForm()
+	a.submitReminderForm(now)
 	if !a.remindForm.open || a.remindForm.err != locales.ReminderBadTime() {
 		t.Errorf("a bad time: open %v, err %q", a.remindForm.open, a.remindForm.err)
 	}
 	a.remindForm.when = now.Add(-time.Hour).Format(reminderLayout)
-	a.submitReminderForm()
+	a.submitReminderForm(now)
 	if !a.remindForm.open || a.remindForm.err != locales.ReminderTimePast() {
 		t.Errorf("a past time: open %v, err %q", a.remindForm.open, a.remindForm.err)
 	}
+	// A dialog left open: the time it held is now past.
+	a.remindForm.when = now.Add(2 * time.Hour).Format(reminderLayout)
+	a.submitReminderForm(now.Add(3 * time.Hour))
+	if !a.remindForm.open || a.remindForm.err != locales.ReminderTimePast() {
+		t.Errorf("a time passed while the dialog was open: open %v, err %q", a.remindForm.open, a.remindForm.err)
+	}
 	at := now.Add(26 * time.Hour)
 	a.remindForm.when = at.Format(reminderLayout)
-	a.submitReminderForm()
+	a.submitReminderForm(now)
 	if a.remindForm.open {
 		t.Error("the dialog stayed open")
 	}
@@ -247,6 +278,22 @@ func TestReminderCustomForm(t *testing.T) {
 	}
 	if got := fs.reminders[0].RemindAt.Truncate(time.Minute); !got.Equal(at.Truncate(time.Minute)) {
 		t.Errorf("the reminder is due %v, want %v", got, at)
+	}
+}
+
+// The due check runs while the app has an account, even one added after
+// a start without any.
+func TestReminderLoopStartsWithAnAccount(t *testing.T) {
+	a, _ := convApp(t)
+	a.reminderLoop = false
+	a.after = func(time.Duration, func()) *time.Timer {
+		timer := time.NewTimer(time.Hour)
+		timer.Stop()
+		return timer
+	}
+	a.accountsChanged()
+	if !a.reminderLoop {
+		t.Error("the due check did not start with the accounts")
 	}
 }
 
@@ -265,5 +312,13 @@ func TestRemindersListScope(t *testing.T) {
 	}
 	if got := a.scopeChoices(); len(got) != 1 || got[0] != scopeHere {
 		t.Errorf("the scope choices of reminders = %+v", got)
+	}
+	// The list is no folder of the server, so it fetches no older mail,
+	// and its conversations span folders.
+	if a.listQuery().isFolder() {
+		t.Error("the reminders are a folder of the server")
+	}
+	if !a.spansFolders() {
+		t.Error("a list of reminders does not span folders")
 	}
 }

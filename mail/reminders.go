@@ -177,6 +177,13 @@ func (s *Service) deliverReminder(ctx context.Context, r Reminder) (bool, error)
 	}
 	var syncErr error
 	if archive != "" && inbox != "" {
+		// The archive's rows may be missing: the sync that set the
+		// reminder can fail. Read the folder before deciding there is
+		// nothing to bring back; a failure leaves the reminder for
+		// another try.
+		if err := s.SyncFolder(ctx, r.Account, archive, 0); err != nil {
+			return false, err
+		}
 		msgs, err := s.ScopedConversation(ctx, r.Account, Scope{Accounts: []string{r.Account}, Folder: archive}, r.Thread)
 		if err != nil {
 			return false, err

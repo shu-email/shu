@@ -162,3 +162,65 @@ func TestReminderFollowsMergedConversation(t *testing.T) {
 		t.Errorf("the merged reminder is due %v, want the earlier time", list[0].RemindAt)
 	}
 }
+
+// The reminders' list is soonest due first, and itself a page at a time;
+// a copy in the trash or a draft is not one of its messages.
+func TestRemindedScopeOrdersByDueTime(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	addAccount(t, s, "a1")
+	if err := s.SaveFolders(ctx, "a1", []mail.Folder{
+		{Name: "INBOX", SpecialUse: mail.SpecialInbox},
+		{Name: "Sent", SpecialUse: mail.SpecialSent},
+		{Name: "Trash", SpecialUse: mail.SpecialTrash},
+		{Name: "Drafts", SpecialUse: mail.SpecialDrafts},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	syncMessages(t, s, "a1", "INBOX", mail.Message{Summary: mail.Summary{UID: 1,
+		MessageID: "in@example.org", Subject: "Plan", Date: reminderBase}})
+	syncMessages(t, s, "a1", "Sent", mail.Message{Summary: mail.Summary{UID: 1,
+		MessageID: "out@example.org", Subject: "Report", Date: reminderBase}})
+	// A newer message in the sent conversation: its date alone would put
+	// it first.
+	syncMessages(t, s, "a1", "Sent", mail.Message{Summary: mail.Summary{UID: 2,
+		MessageID: "out2@example.org", InReplyTo: "out@example.org", Subject: "Re: Report",
+		Date: reminderBase.Add(time.Hour)}})
+	inboxThread := threadOf(t, s, "a1", "INBOX", 1)
+	sentThread := threadOf(t, s, "a1", "Sent", 1)
+	// Copies in the trash and the drafts are of the inbox conversation,
+	// and are not in the reminders' scope.
+	syncMessages(t, s, "a1", "Trash", mail.Message{Summary: mail.Summary{UID: 1,
+		MessageID: "in@example.org", Subject: "Plan", Date: reminderBase.Add(2 * time.Hour)}})
+	syncMessages(t, s, "a1", "Drafts", mail.Message{Summary: mail.Summary{UID: 1,
+		MessageID: "draft@example.org", InReplyTo: "in@example.org", Subject: "Re: Plan",
+		Date: reminderBase.Add(3 * time.Hour)}})
+	if _, err := s.SaveReminder(ctx, mail.Reminder{Account: "a1", Thread: sentThread,
+		Subject: "Report", RemindAt: reminderBase.Add(2 * time.Hour), CreatedAt: reminderBase}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveReminder(ctx, mail.Reminder{Account: "a1", Thread: inboxThread,
+		Subject: "Plan", RemindAt: reminderBase.Add(time.Hour), CreatedAt: reminderBase}); err != nil {
+		t.Fatal(err)
+	}
+
+	var order []mail.ThreadID
+	after := mail.Cursor("")
+	for range 3 {
+		page, err := s.ConversationPage(ctx, mail.ListQuery{Scope: mail.RemindersScope("a1"),
+			After: after, Limit: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, c := range page.Conversations {
+			order = append(order, c.Thread)
+			if c.Thread == inboxThread && c.Count != 1 {
+				t.Errorf("the inbox conversation has %d messages in the reminders, want 1", c.Count)
+			}
+		}
+		after = page.Next
+	}
+	if len(order) != 2 || order[0] != inboxThread || order[1] != sentThread {
+		t.Errorf("the reminders are listed %v, want %d then %d", order, inboxThread, sentThread)
+	}
+}

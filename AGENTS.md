@@ -78,8 +78,11 @@ Windows and Linux. It is written in Go with
   folder, and drops the reminder; only the archive's messages move, so
   mail the user moved elsewhere meanwhile stays, and a reminder a thread
   merge carried follows the conversation to its new ID. The reminders'
-  list is `mail.RemindersScope`, reading the cache alone, and the undo
-  of setting one takes it off and puts back the one it replaced.
+  list is `mail.RemindersScope`, the cache alone, soonest due first, and
+  in every folder `Folder.InLabelScope` keeps; its conversations span
+  folders, so their actions leave Sent alone. The undo of setting one
+  takes it off, when the mail came back, and puts back the one it
+  replaced.
 - Mail is received while the app runs by one watcher per account inside
   `mail.Service` (`Watch`, `Unwatch`, `Nudge`, `SetOnline`). A watcher
   keeps its own connection to the inbox, opened read-only, idles where

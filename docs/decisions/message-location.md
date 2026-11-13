@@ -24,8 +24,8 @@ Shu's cache keeps **one row per message copy in a folder**:
 `messages(folder_id, server_uid)` is unique. A move tombstones the
 source row (`deleted = 1`), the server's copy is made, and the source row
 is deleted once the server confirms; the destination row is written by
-the next sync of that folder, which is why the list can show a moved
-message before its destination's sync has caught up (`mail/service.go`,
+the next sync of that folder, so a move reads as the message leaving the
+folder until that sync brings it there (`mail/service.go`,
 `mail/queue.go`, `store/messages.go`). Geary (`MessageTable` +
 `MessageLocationTable`), meli (`folder_and_envelope`) and Penguin Mail
 (`message_mailboxes`) instead keep one row per message identity and a
@@ -43,9 +43,11 @@ What the current model already shares across copies:
   expectations travel by it (`mail.LabelKey`).
 - A contact counts a message once by its contact key — the Message-ID,
   or the same digest — not once per copy (`contact_messages`).
-- Labels are already keyed by the message, not the copy:
-  `message_labels` names `messages.id`, and `local_labels` names
-  `msg_key`.
+- The user's own labels are kept by message identity: `local_labels`
+  names `msg_key`, so a label follows the message through moves and
+  copies. A server label is per copy in the cache (`message_labels`
+  names the copy's row), as a keyword is per mailbox on the server;
+  normalizing would have to re-key those rows.
 - Attachment bytes are content-addressed on disk and deduplicated by
   content hash; only the small metadata rows repeat.
 - The reading pane shows a message once, deduplicating its copies by
@@ -64,8 +66,9 @@ from its mailboxes.
 
 ```sql
 -- One row per message identity in an account. Every header, the body,
--- the security state and the conversation live here; this is today's
--- messages table without the mailbox columns.
+-- the security state and the conversation live here: today's messages
+-- table less its mailbox columns (thread_index, recipients, calendar and
+-- the rest stay as they are).
 CREATE TABLE messages (
   id INTEGER PRIMARY KEY,
   account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
@@ -180,8 +183,12 @@ be first writer wins, by `cached_at`.
 
 Flags write the location. `SetFlags` addresses `MessageRef{folder, uid}`
 today and would keep doing so — a location is exactly that pair. Labels
-are unchanged: `message_labels` still names the message row, and the
-move no longer touches it.
+are unchanged after the backfill: `message_labels` still names the
+message row, and the move no longer touches it. A sync's keywords are
+still per mailbox, though, so two copies of one message with different
+keywords would merge into one set on the shared message; that is a
+decision the normalization has to make, and one more reason it is not a
+pure win.
 
 ## Migration
 
@@ -200,7 +207,7 @@ move no longer touches it.
 3. Rewrite the triggers that keep `threads`, `thread_folders` and
    `messages_fts` in step, then rebuild the FTS index.
 4. Rebuild `messages` with SQLite's table-rebuild dance to drop
-   `folder_id`, `server_uid`, `seen`, `flagged` and the unique
+   `folder_id`, `server_uid`, `seen`, `flagged`, `deleted` and the unique
    constraint; recreate its indexes.
 5. `store/migrations_test.go` gains a seed at the new version with one
    message in two folders; `checkUpgradedData` proves it became one
@@ -241,7 +248,7 @@ the honest rollback is a restored copy:
   joins, pages, searches, aggregates threads, contacts, labels, rules,
   watermarks and the queue is re-read.
 - Six engine files in `mail/` (`block.go`, `queue.go`, `reminders.go`,
-  `service.go`, `store.go`, `undo.go`) and ten test files use
+  `service.go`, `store.go`, `undo.go`) and nine test files use
   `MoveMessages`, `MoveBackMessages`, `MarkDeleted`, `SetFlags` or the
   queue. Their public shape (`MessageRef`, `MoveResult`) survives, but a
   result's meaning (a moved copy) becomes a location.

@@ -705,12 +705,13 @@ func (a *app) syncFolder(g uint64) {
 	})
 }
 
-// syncSent caches the Sent folder with the account in conversation view,
-// so that the replies the user sent, from here or elsewhere, join their
-// conversations. The folder on show is synced by syncFolder.
+// syncSent caches the Sent folder with the account, so that the replies
+// the user sent, from here or elsewhere, join their conversations, and so
+// that the follow-ups can tell the mail they sent from the answers. The
+// folder on show is synced by syncFolder.
 func (a *app) syncSent(g uint64) {
 	sent := a.folderBySpecial(mail.SpecialSent)
-	if !a.mailSet.Conversations || sent == "" || sent == a.folder {
+	if sent == "" || sent == a.folder {
 		return
 	}
 	accountID := a.active
@@ -719,9 +720,12 @@ func (a *app) syncSent(g uint64) {
 		defer cancel()
 		err := a.svc.SyncFolder(ctx, accountID, sent, 0)
 		a.post(func() {
-			if err == nil && !a.stale(g) && a.threaded() {
+			if err != nil || a.stale(g) {
+				return
+			}
+			a.loadFollowUps(g)
+			if a.threaded() {
 				a.loadReminders(g)
-				a.loadFollowUps(g)
 				a.readList(g, false, false)
 			}
 		})

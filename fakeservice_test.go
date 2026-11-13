@@ -2725,7 +2725,7 @@ func (f *fakeService) RestoreReminder(ctx context.Context, r mail.Reminder) (mai
 func (f *fakeService) followUpThreads(sc mail.Scope) map[mail.ThreadID]bool {
 	now := sc.FollowUpNow
 	if now.IsZero() {
-		now = time.Now()
+		now = f.now()
 	}
 	out := map[mail.ThreadID]bool{}
 	for _, accountID := range f.scopeAccounts(sc) {

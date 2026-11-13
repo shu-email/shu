@@ -686,9 +686,11 @@ func (a *app) rowMenu(m *ui.Menu) {
 	if a.folder == followUpFolder && len(targets) > 0 {
 		m.Separator()
 		if m.Item(locales.DismissFollowUp()).Chosen() {
+			threads := make([]mail.ThreadID, 0, len(targets))
 			for _, t := range targets {
-				a.dismissFollowUp(t.Account, t.Thread)
+				threads = append(threads, t.Thread)
 			}
+			a.dismissFollowUp(targets[0].Account, threads...)
 		}
 	}
 }

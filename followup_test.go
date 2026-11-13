@@ -196,3 +196,86 @@ func TestFollowUpListIsConversations(t *testing.T) {
 		t.Error("the follow-ups do not span folders")
 	}
 }
+
+// A reply arriving while the follow-ups are on screen takes the answered
+// conversation off the list and the count.
+func TestFollowUpListDropsAnAnsweredConversation(t *testing.T) {
+	a, fs := followUpApp(t)
+	tt := ui.NewTester(a.view, 1220, 800)
+	tt.Frame()
+	click(t, tt, locales.FollowUp())
+	tt.Frame()
+	reply := mail.Summary{UID: 90, Folder: "INBOX", Thread: 1, MessageID: "venue-reply@example.com",
+		From: mail.Address{Name: "Lin Wei", Email: "lin@example.com"}, To: []mail.Address{{Email: "ann@example.com"}},
+		Subject: "Re: Venue for the offsite", Date: time.Now()}
+	key := listKey("a1", "INBOX")
+	fs.messages[key] = append(fs.messages[key], reply)
+	a.watched["a1"] = *a.account("a1")
+	a.watchEvent(mail.WatchEvent{AccountID: "a1", Folder: "INBOX", Folders: fs.folders["a1"],
+		New: []mail.Summary{reply}})
+	tt.Frame()
+	if a.followUps != 1 {
+		t.Errorf("follow-ups = %d, want 1", a.followUps)
+	}
+	if tt.HasText("Venue for the offsite") {
+		t.Errorf("the answered conversation is still listed: %q", tt.Texts())
+	}
+	if !tt.HasText("Draft in progress") {
+		t.Errorf("the list lost the waiting conversation: %q", tt.Texts())
+	}
+}
+
+// Dismissing several rows takes them all off in one job, and the list and
+// its count follow.
+func TestDismissFollowUpsFromSelection(t *testing.T) {
+	a, fs := followUpApp(t)
+	tt := ui.NewTester(a.view, 1220, 800)
+	tt.Frame()
+	click(t, tt, locales.FollowUp())
+	tt.Frame()
+	click(t, tt, "Venue for the offsite")
+	if err := tt.ClickWith(ui.Cmd, "Draft in progress"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.RightClick("Draft in progress"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem(locales.DismissFollowUp()); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if got := fs.dismissedThreads; len(got) != 2 || !slices.Contains(got, "a1/1") || !slices.Contains(got, "a1/6") {
+		t.Errorf("dismissed = %q", got)
+	}
+	if a.followUps != 0 {
+		t.Errorf("follow-ups = %d, want 0", a.followUps)
+	}
+	for _, gone := range []string{"Venue for the offsite", "Draft in progress"} {
+		if tt.HasText(gone) {
+			t.Errorf("%q is still listed: %q", gone, tt.Texts())
+		}
+	}
+}
+
+// Moving from the follow-ups leaves Sent alone, as the toolbar's move
+// does: the row comes back, and nothing moved on the server.
+func TestFollowUpMoveLeavesSentAlone(t *testing.T) {
+	a, fs := followUpApp(t)
+	tt := ui.NewTester(a.view, 1220, 800)
+	tt.Frame()
+	click(t, tt, locales.FollowUp())
+	tt.Frame()
+	if err := tt.RightClick("Venue for the offsite"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tt.ChooseMenuItem(locales.MoveToFolder(), "Archive"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if len(fs.movedRefs) != 0 {
+		t.Errorf("moves = %v", fs.movedRefs)
+	}
+	if !tt.HasText("Venue for the offsite") {
+		t.Errorf("the conversation did not come back: %q", tt.Texts())
+	}
+}

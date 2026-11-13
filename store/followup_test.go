@@ -234,3 +234,42 @@ func TestFollowUpDismissalFollowsAMerge(t *testing.T) {
 		t.Errorf("the merged conversation came back: %q", got)
 	}
 }
+
+// A server that keeps a copy of sent mail in another folder, as Gmail's
+// All Mail does, does not take the conversation off the list: the copy is
+// the message the user sent.
+func TestFollowUpReadsACopyOfSentMail(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC)
+	s := openTest(t)
+	s.now = func() time.Time { return now }
+	addAccount(t, s, "a1")
+	if err := s.SaveFolders(ctx, "a1", []mail.Folder{
+		{Name: "INBOX", SpecialUse: mail.SpecialInbox},
+		{Name: "Sent", SpecialUse: mail.SpecialSent},
+		{Name: "All Mail", SpecialUse: mail.SpecialArchive},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	ann := mail.Address{Name: "Ann", Email: "ann@example.com"}
+	lin := mail.Address{Name: "Lin", Email: "lin@example.com"}
+	at := now.Add(-10 * 24 * time.Hour)
+	copy := mail.Summary{MessageID: "plan@example.com", From: ann, To: []mail.Address{lin},
+		Subject: "Plan", Date: at, Seen: true}
+	sent := copy
+	sent.UID = 1
+	syncMessages(t, s, "a1", "Sent", mail.Message{Summary: sent})
+	kept := copy
+	kept.UID = 1
+	syncMessages(t, s, "a1", "All Mail", mail.Message{Summary: kept})
+	if got := followUpSubjects(t, s, now); !slices.Equal(got, []string{"Plan"}) {
+		t.Fatalf("a copy of the sent mail took it off: %q", got)
+	}
+	// An answer still counts, whichever folder the server files it in.
+	syncMessages(t, s, "a1", "All Mail", mail.Message{Summary: mail.Summary{UID: 2,
+		MessageID: "answer@example.com", InReplyTo: "plan@example.com", From: lin,
+		To: []mail.Address{ann}, Subject: "Re: Plan", Date: now.Add(-5 * 24 * time.Hour)}})
+	if got := followUpSubjects(t, s, now); len(got) != 0 {
+		t.Errorf("an answered conversation waits: %q", got)
+	}
+}

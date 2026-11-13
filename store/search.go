@@ -375,12 +375,18 @@ func (p *listPlan) followUpCond(m, f string) (string, []any) {
 	}
 	since := p.followNow.Add(-mail.FollowUpMaxAge).Unix()
 	until := p.followNow.Add(-mail.FollowUpMinAge).Unix()
-	cond := `COALESCE(` + f + `.special_use, '') = ? AND ` + m + `.date >= ? AND ` + m + `.date <= ?`
+	// The message is one the user sent: in Sent, or the copy of one that a
+	// server keeps elsewhere too, as Gmail keeps All Mail.
+	cond := `(COALESCE(` + f + `.special_use, '') = ? OR EXISTS (
+		SELECT 1 FROM messages c JOIN folders cf ON cf.id = c.folder_id
+		WHERE c.thread_id = ` + m + `.thread_id AND c.deleted = 0
+			AND COALESCE(cf.special_use, '') = ? AND c.msg_key = ` + m + `.msg_key))`
+	cond += ` AND ` + m + `.date >= ? AND ` + m + `.date <= ?`
 	cond += ` AND NOT EXISTS (SELECT 1 FROM messages x JOIN folders xf ON xf.id = x.folder_id
 		WHERE x.thread_id = ` + m + `.thread_id AND x.deleted = 0 AND COALESCE(xf.special_use, '') IN (?, ?))`
 	cond += ` AND NOT EXISTS (SELECT 1 FROM follow_up_dismissals d
 		WHERE d.thread_id = ` + m + `.thread_id AND d.dismissed_at >= ` + m + `.date)`
-	return cond, []any{mail.SpecialSent, since, until, mail.SpecialJunk, mail.SpecialTrash}
+	return cond, []any{mail.SpecialSent, mail.SpecialSent, since, until, mail.SpecialJunk, mail.SpecialTrash}
 }
 
 // followThreadsSQL selects the conversations a follow-up scope reads: a

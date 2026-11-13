@@ -31,14 +31,21 @@ func (a *app) loadFollowUps(g uint64) {
 	})
 }
 
-// dismissFollowUp takes a conversation off the follow-up list, which the
-// cache keeps until a newer message of the conversation arrives.
-func (a *app) dismissFollowUp(account string, thread mail.ThreadID) {
+// dismissFollowUp takes conversations off the follow-up list, which the
+// cache keeps off until a newer message of each arrives. They go in one
+// job, so that the list and its count are read once they are all off.
+func (a *app) dismissFollowUp(account string, threads ...mail.ThreadID) {
 	g := a.gen
+	all := append([]mail.ThreadID(nil), threads...)
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
-		err := a.svc.DismissFollowUp(ctx, account, thread)
+		var err error
+		for _, thread := range all {
+			if err = a.svc.DismissFollowUp(ctx, account, thread); err != nil {
+				break
+			}
+		}
 		a.post(func() {
 			if a.closed {
 				return

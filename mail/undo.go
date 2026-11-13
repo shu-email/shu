@@ -51,7 +51,10 @@ func (s *Service) UndoLabelChange(ctx context.Context, accountID string, msgs []
 // puts the cache back as it was before them; those the server refused go
 // too, as their cache change went back when they failed. What is left is
 // a change the server has, or one a worker began: invert makes the other
-// one, which waits in the queue as any change does.
+// one, which waits in the queue as any change does. One a worker is
+// making can land after the inverse, which the next sync of the flags
+// puts right; the worker makes one action at a time, so this is the work
+// of a moment.
 func (s *Service) undoChange(ctx context.Context, accountID string, msgs []MessageRef,
 	matches func(PendingOperation) bool,
 	revert func(context.Context, []MessageRef) error,

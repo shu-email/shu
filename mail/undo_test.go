@@ -165,6 +165,40 @@ func TestUndoALabelTheServerHas(t *testing.T) {
 	}
 }
 
+// Taking a label off, then taking that back before the server is told,
+// puts it back on the cache and leaves the server alone.
+func TestUndoTakingALabelOff(t *testing.T) {
+	r, store := newLabelRig(t, nil, map[string][][]byte{
+		"INBOX": {labelMail("One", "a@example.org", "one@x", 1)},
+	})
+	r.svc.SetClock(newTestClock().Now)
+	work := r.create("Work")
+	one := r.message("INBOX", "One")
+	refs := []MessageRef{{"INBOX", one.UID}}
+	if err := r.svc.SetLabel(r.ctx, r.a.ID, refs, work.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	r.f.stop()
+	if err := r.svc.SetLabel(r.ctx, r.a.ID, refs, work.ID, false); err != nil {
+		t.Fatalf("taking it off with the server away = %v", err)
+	}
+	if ops := queued(t, store, r.a.ID); len(ops) != 1 || ops[0].On {
+		t.Fatalf("queued = %+v", ops)
+	}
+	if got := r.labelsOf(r.message("INBOX", "One")); len(got) != 0 {
+		t.Fatalf("the cache kept the label: %v", got)
+	}
+	if err := r.svc.UndoLabelChange(r.ctx, r.a.ID, refs, work.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if ops := queued(t, store, r.a.ID); len(ops) != 0 {
+		t.Fatalf("after the undo = %+v", ops)
+	}
+	if got := r.labelsOf(r.message("INBOX", "One")); !slices.Equal(got, []string{"Work"}) {
+		t.Errorf("labels = %v, want it back", got)
+	}
+}
+
 // A label a folder keeps on this device alone goes back the same way.
 func TestUndoALabelKeptHere(t *testing.T) {
 	r, _ := newLabelRig(t, map[string]fakeKeywords{"INBOX": keepsNone}, map[string][][]byte{

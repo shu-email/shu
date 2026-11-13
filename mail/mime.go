@@ -72,7 +72,7 @@ func parseMessage(raw []byte, attachmentCap int64) (Message, int, error) {
 	m.To = addresses(h, "To")
 	m.Cc = addresses(h, "Cc")
 	m.ReplyTo = addresses(h, "Reply-To")
-	m.RawHeaders = keptHeaders(h)
+	m.SetRawHeaders(keptHeaders(h))
 
 	var text, htmlBody strings.Builder
 	// inline maps a Content-ID to the data URI its part becomes, so that

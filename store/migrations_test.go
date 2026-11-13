@@ -14,9 +14,14 @@ import (
 	"shu/mail"
 )
 
-// baselineMessageID is the Message-ID the fixture of every version carries.
-// See docs/schema-migrations.md for the checklist this file proves.
-const baselineMessageID = "baseline@example.com"
+// baselineMessageID is the Message-ID the fixture of every version carries,
+// and baselineHeaders the header lines it kept, which say of its sender and
+// its list. See docs/schema-migrations.md for the checklist this file proves.
+const (
+	baselineMessageID = "baseline@example.com"
+	baselineHeaders   = "Authentication-Results: mx.example; spf=pass; dkim=pass; dmarc=pass header.from=example.org\r\n" +
+		"List-Unsubscribe: <https://example.org/unsub?id=1>"
+)
 
 // createAtVersion writes the database an installation of an older release
 // leaves: the schema its migrations produced, one account, one folder and
@@ -79,6 +84,10 @@ func seedAtVersion(v int) []string {
 		columns += `, msg_key`
 		values += `, 'baseline@example.com'`
 	}
+	// The header lines a fetch kept, which migration v22 reads for what
+	// they say of the message's sender and its list.
+	columns += `, raw_headers`
+	values += `, '` + baselineHeaders + `'`
 	return append(stmts, fmt.Sprintf(`INSERT INTO messages (%s) VALUES (%s)`, columns, values))
 }
 
@@ -170,6 +179,15 @@ func checkUpgradedData(t *testing.T, s *Store, v int) {
 	}
 	if err := s.CheckSearchIndex(ctx); err != nil {
 		t.Errorf("v%d: %v", v, err)
+	}
+	// What the cached headers said of the message was read once the column
+	// that keeps it existed, so a read has it.
+	if msg, ok, err := s.GetMessage(ctx, "a1", "INBOX", 42); err != nil || !ok {
+		t.Errorf("v%d: the message read = %v, %v", v, ok, err)
+	} else if msg.Security == nil {
+		t.Errorf("v%d: the headers kept said nothing of the message after the migration", v)
+	} else if msg.Security.Trust.Verdict != mail.AuthPassed || msg.Security.ListUnsubscribe == "" {
+		t.Errorf("v%d: security = %+v, want a pass and its list", v, msg.Security)
 	}
 	// The address book was made from the mail already cached, once.
 	if v < 11 {

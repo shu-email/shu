@@ -131,8 +131,11 @@ type Message struct {
 	// RawHeaders is the header lines the cache keeps of the message as
 	// they came, which no other field holds: its Delivered-To, which says
 	// which of the user's addresses it reached (see DeliveredTo).
-	RawHeaders string    `json:"rawHeaders,omitempty"`
-	CachedAt   time.Time `json:"cachedAt,omitempty"`
+	RawHeaders string `json:"rawHeaders,omitempty"`
+	// Security is what those headers said of the message when they were
+	// kept (see Security), read once and not again.
+	Security *Security `json:"-"`
+	CachedAt time.Time `json:"cachedAt,omitempty"`
 	// BodyCached reports whether the body is in the cache; a summary
 	// whose body was never fetched has none.
 	BodyCached bool `json:"bodyCached,omitempty"`

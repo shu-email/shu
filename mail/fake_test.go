@@ -1108,6 +1108,9 @@ func (s *memStore) ApplySync(ctx context.Context, accountID string, b SyncBatch)
 			if old.RawHeaders == "" {
 				old.RawHeaders = m.RawHeaders
 			}
+			if old.Security == nil {
+				old.Security = m.Security
+			}
 			// A header the sync did not get keeps what the cache had.
 			if len(old.References) == 0 {
 				old.References = refs

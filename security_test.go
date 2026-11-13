@@ -64,6 +64,42 @@ func TestSecurityNoticeStates(t *testing.T) {
 	}
 }
 
+// The card reads what the cache kept of the headers, not the headers
+// themselves: a message read after a restart shows its verification and
+// its list, though its body came without a header line.
+func TestSecurityNoticeReadsThePersistedState(t *testing.T) {
+	a, fs := sampleMessageApp(t)
+	m := a.all[0]
+	fs.bodies[bodyKey("a1", m.Folder, m.UID)] = mail.Message{
+		Summary: m, BodyText: "Body", BodyCached: true,
+		Security: &mail.Security{
+			Trust: mail.Trust{
+				Verdict:  mail.AuthPassed,
+				Checks:   []mail.AuthCheck{{Method: "dmarc", Result: mail.ResultPass}},
+				Evidence: []string{"Authentication-Results: mx.example; dmarc=pass header.from=example.com"},
+			},
+			ListUnsubscribe: "<https://lists.example.org/unsubscribe?id=7>",
+		},
+	}
+	delete(a.bodies, summaryKey(m))
+	a.reloadBody()
+	tt := ui.NewTester(a.view, 1220, 800)
+	if !tt.HasText("Sender verified") {
+		t.Fatalf("the persisted verdict is not shown: %q", tt.Texts())
+	}
+	if err := tt.Click("Why?"); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"Mailing list. To unsubscribe: <https://lists.example.org/unsubscribe?id=7>",
+		"Authentication-Results: mx.example; dmarc=pass header.from=example.com",
+	} {
+		if !tt.HasText(want) {
+			t.Errorf("missing %q in %q", want, tt.Texts())
+		}
+	}
+}
+
 func TestSecurityDetailsShowTheChecks(t *testing.T) {
 	a, fs := sampleMessageApp(t)
 	loadFirst(t, fs, a, "Authentication-Results: mx.example; spf=pass; dkim=fail header.d=example.com; dmarc=fail header.from=example.com\r\n", nil)

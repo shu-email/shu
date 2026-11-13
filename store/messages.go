@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/egoist/mygo/plugins/sqlite"
+
 	"shu/mail"
 )
 
@@ -130,7 +132,7 @@ func (s *Store) ListMessages(ctx context.Context, accountID, folder, query strin
 func (s *Store) GetMessage(ctx context.Context, accountID, folder string, uid mail.UID) (mail.Message, bool, error) {
 	rows, err := s.query(ctx, `SELECT `+summaryColumns+`,
 		COALESCE(m.body_text, ''), COALESCE(m.body_html, ''), m.body_truncated,
-		COALESCE(m.raw_headers, ''), m.cached_at, m.id, COALESCE(m.calendar, '')
+		COALESCE(m.raw_headers, ''), m.cached_at, m.id, COALESCE(m.calendar, ''), COALESCE(m.security, '')
 		FROM messages m JOIN folders f ON f.id = m.folder_id
 		WHERE f.account_id = ? AND f.name = ? AND m.server_uid = ?`,
 		accountID, folder, int64(uid))
@@ -152,6 +154,7 @@ func (s *Store) GetMessage(ctx context.Context, accountID, folder string, uid ma
 		BodyHTML:      text(body[1]),
 		BodyTruncated: truth(body[2]),
 		RawHeaders:    text(body[3]),
+		Security:      decodeSecurity(text(body[7])),
 		CachedAt:      unix(body[4]),
 		BodyCached:    body[4] != nil,
 	}
@@ -221,9 +224,9 @@ func (s *Store) SaveMessage(ctx context.Context, accountID, folder string, m mai
 				folder_id, server_uid, message_id, in_reply_to, references_json,
 				from_name, from_email, to_json, cc_json, reply_to_json, recipients,
 				subject, preview, date, size, seen, flagged, has_attachments,
-				body_text, body_html, body_truncated, raw_headers, cached_at, calendar,
+				body_text, body_html, body_truncated, raw_headers, security, cached_at, calendar,
 				thread_index, thread_id, msg_key, deleted)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
 			ON CONFLICT (folder_id, server_uid) DO UPDATE SET
 				message_id=excluded.message_id, in_reply_to=excluded.in_reply_to,
 				references_json=excluded.references_json,
@@ -236,6 +239,7 @@ func (s *Store) SaveMessage(ctx context.Context, accountID, folder string, m mai
 				has_attachments=excluded.has_attachments,
 				body_text=excluded.body_text, body_html=excluded.body_html,
 				body_truncated=excluded.body_truncated, raw_headers=excluded.raw_headers,
+				security=excluded.security,
 				cached_at=excluded.cached_at, calendar=excluded.calendar,
 				thread_index=excluded.thread_index,
 				thread_id=excluded.thread_id, msg_key=excluded.msg_key, deleted=0`,
@@ -243,7 +247,7 @@ func (s *Store) SaveMessage(ctx context.Context, accountID, folder string, m mai
 			m.From.Name, m.From.Email, encodeJSON(m.To), encodeJSON(m.Cc), encodeJSON(m.ReplyTo), recipientsText(m.To, m.Cc),
 			m.Subject, m.Preview, dateColumn(m.Date), m.Size, boolInt(m.Seen), boolInt(m.Flagged),
 			boolInt(m.HasAttachments), m.BodyText, m.BodyHTML, boolInt(m.BodyTruncated),
-			m.RawHeaders, unixPtr(m.CachedAt), encodeCalendar(m.Calendar), m.ThreadIndex, plan.find(thread), mail.LabelKey(m.Summary)))
+			m.RawHeaders, encodeSecurity(m.Security), unixPtr(m.CachedAt), encodeCalendar(m.Calendar), m.ThreadIndex, plan.find(thread), mail.LabelKey(m.Summary)))
 	if m.Seen && !wasSeen {
 		stmts = append(stmts, stmt(`UPDATE folders SET unread = MAX(0, unread - 1) WHERE id = ?`, folderID))
 	}
@@ -386,8 +390,8 @@ func upsertHeader(folderID int64, m mail.Message, thread int64) stmtType {
 			folder_id, server_uid, message_id, in_reply_to, references_json,
 			from_name, from_email, to_json, cc_json, reply_to_json, recipients,
 			subject, preview, date, size, seen, flagged, has_attachments,
-			thread_index, thread_id, msg_key, raw_headers, deleted)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), 0)
+			thread_index, thread_id, msg_key, raw_headers, security, deleted)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, 0)
 		ON CONFLICT (folder_id, server_uid) DO UPDATE SET
 			message_id=excluded.message_id, in_reply_to=excluded.in_reply_to,
 			references_json=COALESCE(NULLIF(excluded.references_json, ''), messages.references_json),
@@ -399,11 +403,12 @@ func upsertHeader(folderID int64, m mail.Message, thread int64) stmtType {
 			has_attachments=excluded.has_attachments,
 			thread_index=COALESCE(NULLIF(excluded.thread_index, ''), messages.thread_index),
 			thread_id=excluded.thread_id, msg_key=excluded.msg_key,
-			raw_headers=COALESCE(messages.raw_headers, excluded.raw_headers), deleted=0`,
+			raw_headers=COALESCE(messages.raw_headers, excluded.raw_headers),
+			security=COALESCE(messages.security, excluded.security), deleted=0`,
 		folderID, int64(m.UID), m.MessageID, m.InReplyTo, encodeJSON(m.References),
 		m.From.Name, m.From.Email, encodeJSON(m.To), encodeJSON(m.Cc), encodeJSON(m.ReplyTo), recipientsText(m.To, m.Cc),
 		m.Subject, m.Preview, dateColumn(m.Date), m.Size, boolInt(m.Seen), boolInt(m.Flagged),
-		boolInt(m.HasAttachments), m.ThreadIndex, thread, mail.LabelKey(m.Summary), m.RawHeaders)
+		boolInt(m.HasAttachments), m.ThreadIndex, thread, mail.LabelKey(m.Summary), m.RawHeaders, encodeSecurity(m.Security))
 }
 
 // ApplyOlder writes messages of a folder that a sync left out, older ones
@@ -559,4 +564,57 @@ func encodeCalendar(invite *mail.CalendarInvite) any {
 		return nil
 	}
 	return string(data)
+}
+
+// encodeSecurity writes what a message's headers said of it for the
+// cache, and nothing when they said none of it.
+func encodeSecurity(sec *mail.Security) any {
+	if sec == nil {
+		return nil
+	}
+	return encodeJSON(sec)
+}
+
+// decodeSecurity reads what a message's headers said of it, nil when the
+// cache kept none of it.
+func decodeSecurity(s string) *mail.Security {
+	if s == "" {
+		return nil
+	}
+	var sec mail.Security
+	if json.Unmarshal([]byte(s), &sec) != nil {
+		return nil
+	}
+	return &sec
+}
+
+// backfillSecurity reads what the headers an older cache kept say of each
+// message, for the rows written before the column existed (see
+// mail.Security). A message whose headers say nothing of it keeps none:
+// unknown is not safe.
+func backfillSecurity(ctx context.Context, s *Store) ([]sqlite.Statement, error) {
+	var stmts []sqlite.Statement
+	for after := int64(0); ; {
+		rows, err := s.query(ctx, `SELECT id, COALESCE(raw_headers, '') FROM messages
+			WHERE id > ? ORDER BY id LIMIT ?`, after, backfillChunk)
+		if err != nil {
+			return nil, err
+		}
+		updates := make([][]any, 0, len(rows.Values))
+		for _, r := range rows.Values {
+			after = number(r[0])
+			sec := mail.ParseSecurity(text(r[1]))
+			if sec == nil {
+				continue
+			}
+			updates = append(updates, []any{after, encodeJSON(sec)})
+		}
+		if len(updates) > 0 {
+			stmts = append(stmts, stmt(`UPDATE messages SET security = j.value ->> 1 FROM json_each(?) AS j
+				WHERE messages.id = j.value ->> 0`, jsonText(updates)))
+		}
+		if len(rows.Values) < backfillChunk {
+			return stmts, nil
+		}
+	}
 }

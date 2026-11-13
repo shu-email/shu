@@ -88,6 +88,9 @@ func (a *app) securityNotice(c *ui.Context, t *ui.Theme, m mail.Summary, msg *ma
 			if len(tr.Checks) > 0 {
 				line(locales.SecurityChecks(authChecks(tr)))
 			}
+			if list, _ := msg.Unsubscribe(); list != "" {
+				line(locales.SecurityUnsubscribe(strings.Join(strings.Split(list, "\n"), ", ")))
+			}
 			for _, evidence := range tr.Evidence {
 				ui.Text(c, evidence).FontSize(10).TextColor(t.TextMuted).
 					Selectable().MaxLines(4)

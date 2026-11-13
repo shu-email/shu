@@ -62,15 +62,15 @@ type AuthCheck struct {
 
 // Trust is what a message's cached headers say about its sender.
 type Trust struct {
-	Verdict AuthVerdict
+	Verdict AuthVerdict `json:"verdict"`
 	// Checks are the results found, in the order the server reported
 	// them. A method is listed once, its first result.
-	Checks []AuthCheck
+	Checks []AuthCheck `json:"checks,omitempty"`
 	// Server is the authserv-id that reported, when the header names one.
-	Server string
+	Server string `json:"server,omitempty"`
 	// Evidence holds the raw header lines the verdict came from, for a
 	// user who wants to inspect them.
-	Evidence []string
+	Evidence []string `json:"evidence,omitempty"`
 }
 
 // Check returns the result of one method.
@@ -83,14 +83,24 @@ func (t Trust) Check(method string) (AuthResult, bool) {
 	return "", false
 }
 
-// Trust reads the sender-authentication results from the headers the
+// Trust reads the sender's verification: what the cache kept of it when
+// the headers were first read (see Security), or, for a message whose
+// headers were never kept so, what they say now.
+func (m Message) Trust() Trust {
+	if m.Security != nil {
+		return m.Security.Trust
+	}
+	return parseTrust(m.RawHeaders)
+}
+
+// parseTrust reads the sender-authentication results from the headers the
 // receiving server added. It reads the first Authentication-Results
 // header that reports any of SPF, DKIM or DMARC, which is the one added
 // last, at the user's own boundary; when there is none it falls back to
 // ARC's and to Received-SPF.
-func (m Message) Trust() Trust {
+func parseTrust(rawHeaders string) Trust {
 	var t Trust
-	for _, value := range headerValues(m.RawHeaders, authenticationResultsHeader) {
+	for _, value := range headerValues(rawHeaders, authenticationResultsHeader) {
 		server, checks := parseAuthResults(value)
 		if len(checks) == 0 {
 			continue
@@ -99,7 +109,7 @@ func (m Message) Trust() Trust {
 		break
 	}
 	if len(t.Checks) == 0 {
-		for _, value := range headerValues(m.RawHeaders, arcResultsHeader) {
+		for _, value := range headerValues(rawHeaders, arcResultsHeader) {
 			server, checks := parseAuthResults(value)
 			if len(checks) == 0 {
 				continue
@@ -109,7 +119,7 @@ func (m Message) Trust() Trust {
 		}
 	}
 	if _, ok := t.Check("spf"); !ok {
-		for _, value := range headerValues(m.RawHeaders, receivedSPFHeader) {
+		for _, value := range headerValues(rawHeaders, receivedSPFHeader) {
 			if result := firstTokenResult(value); result != "" {
 				t.Checks = append(t.Checks, AuthCheck{Method: "spf", Result: AuthResult(result)})
 				t.Evidence = append(t.Evidence, receivedSPFHeader+": "+value)
@@ -118,7 +128,7 @@ func (m Message) Trust() Trust {
 		}
 	}
 	for _, name := range []string{"DKIM-Signature"} {
-		for _, value := range headerValues(m.RawHeaders, name) {
+		for _, value := range headerValues(rawHeaders, name) {
 			t.Evidence = append(t.Evidence, name+": "+value)
 		}
 	}

@@ -1487,5 +1487,6 @@
   "aiProviderModelAdd": "按 ID 添加模型",
   "aiProviderSave": "保存",
   "aiProviderCancel": "取消",
-  "aiProviderDisabled": "已关闭"
+  "aiProviderDisabled": "已关闭",
+  "securityUnsubscribe": "邮件列表。退订方式：{options}"
 }

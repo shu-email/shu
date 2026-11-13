@@ -292,7 +292,7 @@ func (s *Service) addRuleHeaders(ctx context.Context, c *imapSession, accountID 
 	}
 	for i := range messages {
 		if raw, ok := got[messages[i].UID]; ok {
-			messages[i].RawHeaders = headerLines(raw, names)
+			messages[i].SetRawHeaders(addHeaderLines(messages[i].RawHeaders, raw, names))
 		}
 	}
 }
@@ -312,6 +312,22 @@ func (s *Service) withRuleHeaders(ctx context.Context, accountID, kept string, r
 		return kept
 	}
 	return kept + headerLines(raw, names)
+}
+
+// addHeaderLines adds to the header lines a message keeps those of a
+// header block it does not have yet: a sync's message arrived with the
+// security and threading headers, and the rules add theirs.
+func addHeaderLines(kept string, raw []byte, names []string) string {
+	var add []string
+	for _, name := range names {
+		if len(headerValues(kept, name)) == 0 {
+			add = append(add, name)
+		}
+	}
+	if len(add) == 0 {
+		return kept
+	}
+	return kept + headerLines(raw, add)
 }
 
 // headerLines writes the values the named headers have in a block of

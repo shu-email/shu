@@ -174,7 +174,7 @@ CREATE TABLE messages (
   seen INTEGER NOT NULL DEFAULT 0, flagged INTEGER NOT NULL DEFAULT 0,
   has_attachments INTEGER NOT NULL DEFAULT 0,
   body_text TEXT, body_html TEXT, body_truncated INTEGER NOT NULL DEFAULT 0,
-  raw_headers TEXT, cached_at INTEGER,
+  raw_headers TEXT, security TEXT, cached_at INTEGER, -- security: mail.Security, JSON
   deleted INTEGER NOT NULL DEFAULT 0, -- tombstone until the server confirms
   UNIQUE (folder_id, server_uid));
 
@@ -652,10 +652,15 @@ lines). Keep the original HTML for the webview.
   window, and anything else can still be opened in the default app or saved.
   **Save all** writes every file to a chosen folder, keeping duplicate names
   apart.
-- Sender authentication and phishing advice (`mail/trust.go`, `security.go`):
-  `Message.Trust` reads the `Authentication-Results` the receiving server added
-  (else `ARC-Authentication-Results`, else `Received-SPF`) from `RawHeaders`, and
-  reports passed, failed or absent; absent is never drawn as safe. The reading
+- Sender authentication and phishing advice (`mail/trust.go`,
+  `mail/security.go`, `security.go`): `Message.Trust` reads the
+  `Authentication-Results` the receiving server added (else
+  `ARC-Authentication-Results`, else `Received-SPF`) from `RawHeaders`, and
+  reports passed, failed or absent; absent is never drawn as safe. What the
+  headers said, and the `List-Unsubscribe` headers that say how the message's
+  list is left, are read once (`mail.ParseSecurity`) and kept with the cached
+  message (`messages.security`), so a read after a restart has them without
+  the headers; the reading pane reads them from there. The reading
   pane adds a written, icon-labeled notice for the verdict, an external sender
   (outside the accounts' and identities' domains) and a `Reply-To` at another
   domain, with an expandable explanation and the raw headers. Attachment names

@@ -258,6 +258,17 @@ Windows and Linux. It is written in Go with
   (`contact_terms`), and `Service.CheckRecipients` reads a recipient field
   as a send takes it and tells a broken address from a bare name, with
   the contacts that name may mean. `ai/` has no way to the book.
+- What a message's headers say of its sender and its list is read once
+  and kept with the cached message (`mail/security.go`, migration v22's
+  `messages.security`): the authentication verdict with its checks and
+  the evidence they came from (`Message.Trust`), and the
+  `List-Unsubscribe` and `List-Unsubscribe-Post` headers that say how to
+  leave the list (`Message.Unsubscribe`). A sync reads those headers for
+  every message it fetches (`threadSection`) and keeps them
+  (`Message.SetRawHeaders`), and a read of the cache has the verdict
+  without them and after a restart; a message whose headers said nothing
+  keeps none and stays unverified, never safe. Nothing looks anything up
+  on the network, and nothing unsubscribes without the user's action.
 - Labels are the user's categories of messages, an account's each
   (`mail/labels.go`, `store/labels.go`). On the server a label is an IMAP
   keyword: `mail.LabelKeyword` writes a name as one, as it is when it is

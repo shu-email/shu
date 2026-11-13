@@ -40,7 +40,9 @@ jobs:
           big=$(git ls-files -z | while IFS= read -r -d '' f; do
             [ -f "$f" ] || continue
             s=$(wc -c <"$f")
-            [ "$s" -gt 2097152 ] && printf '%s (%s bytes)\n' "$f" "$s"
+            if [ "$s" -gt 2097152 ]; then
+              printf '%s (%s bytes)\n' "$f" "$s"
+            fi
           done)
           if [ -n "$big" ]; then
             echo "::error::tracked files over 2 MiB:"

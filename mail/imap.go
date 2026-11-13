@@ -864,16 +864,6 @@ func bufFlag(buf *imapclient.FetchMessageBuffer, flag imap.Flag) bool {
 	return false
 }
 
-// storeFlags changes a flag on the server.
-func (s *Service) storeFlags(ctx context.Context, a Account, password, folder string, uid UID, flag Flag, on bool) error {
-	c, err := s.dialIMAP(ctx, a, password)
-	if err != nil {
-		return err
-	}
-	defer c.close()
-	return setFlags(c, folder, uid, flag, on)
-}
-
 func setFlags(c *imapSession, folder string, uid UID, flag Flag, on bool) error {
 	if _, err := c.client.Select(folder, &imap.SelectOptions{ReadOnly: false}).Wait(); err != nil {
 		return fmt.Errorf("imap: select %s: %w", folder, err)

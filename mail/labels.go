@@ -449,7 +449,8 @@ func (s *Service) label(ctx context.Context, accountID string, id LabelID) (Labe
 // keyword changes: nothing is moved, deleted or expunged. A folder whose
 // UIDVALIDITY is no longer the cache's is not touched, as its UIDs would
 // name other messages; when a folder fails, those before it keep their
-// change.
+// change. A change the server cannot be reached for waits in the queue
+// (see queue.go), the cache showing it meanwhile.
 func (s *Service) SetLabel(ctx context.Context, accountID string, msgs []MessageRef, id LabelID, on bool) error {
 	return s.setLabel(ctx, accountID, msgs, id, on, true)
 }
@@ -654,6 +655,12 @@ func storeKeyword(c *imapSession, folder string, uids []UID, keyword string, on 
 func (s *Service) DeleteLabel(ctx context.Context, accountID string, id LabelID) error {
 	label, err := s.label(ctx, accountID, id)
 	if err != nil {
+		return err
+	}
+	// The queued changes of the label go with it: made after the sweep
+	// below, they would put its keyword back on the server. One a worker
+	// is making now finds no label and is done.
+	if err := s.cancelLabelOperations(ctx, accountID, id); err != nil {
 		return err
 	}
 	folders, err := s.store.Folders(ctx, accountID)

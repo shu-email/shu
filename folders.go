@@ -419,9 +419,9 @@ func (a *app) moveMessagesToFolder(all []mail.Summary, dest string) {
 			}
 			if err != nil {
 				a.err = failureText(err)
-			} else if len(targets) == 1 && first.DestUID != 0 {
-				a.setUndo(&undoMove{accountID: targets[0].Account, source: targets[0].Folder,
-					dest: dest, destUID: first.DestUID, label: locales.MovedToFolder(dest)})
+			} else if len(targets) == 1 && (first.DestUID != 0 || first.Pending != 0) {
+				m := targets[0]
+				a.setUndo(undoOfMove(m.Account, m.Folder, dest, locales.MovedToFolder(dest), first))
 			}
 			a.loadMessages(g)
 			a.loadFollowUps(g)

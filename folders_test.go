@@ -222,6 +222,29 @@ func TestMoveToFolderFromTheRowMenu(t *testing.T) {
 	}
 }
 
+// A move the server could not be made for yet is offered for undo too:
+// taking it back drops the queued action, and the message never left.
+func TestUndoOfAMoveWaitingForTheServer(t *testing.T) {
+	a, fs, tt := folderApp(t)
+	fs.movePending = true
+	if len(a.all) == 0 {
+		t.Fatal("no rows")
+	}
+	m := a.all[0]
+	a.moveMessagesToFolder([]mail.Summary{m}, "Projects")
+	if a.undo == nil || len(a.undo.moved["a1"]) != 1 || a.undo.moved["a1"][0].Pending == 0 {
+		t.Fatalf("undo = %+v", a.undo)
+	}
+	a.undoLastMove()
+	tt.Frame()
+	if !slices.Contains(fs.moveBacks, "Projects->"+m.Folder) {
+		t.Errorf("the undo did not take the queued move back: %v", fs.moveBacks)
+	}
+	if a.undo != nil {
+		t.Errorf("the undo is still offered: %+v", a.undo)
+	}
+}
+
 // focusField types into the field a caption names, from its start.
 func focusField(t *testing.T, tt *ui.Tester, caption, text string) {
 	t.Helper()

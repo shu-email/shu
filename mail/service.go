@@ -561,14 +561,7 @@ func (s *Service) FetchMessage(ctx context.Context, accountID, folder string, ui
 // SetFlag changes a flag on the server and then in the cache. Callers
 // show the change optimistically and roll it back when this fails.
 func (s *Service) SetFlag(ctx context.Context, accountID, folder string, uid UID, flag Flag, on bool) error {
-	a, password, err := s.account(ctx, accountID)
-	if err != nil {
-		return err
-	}
-	if err := s.storeFlags(ctx, a, password, folder, uid, flag, on); err != nil {
-		return err
-	}
-	return s.store.SetFlag(ctx, accountID, folder, uid, flag, on)
+	return s.setFlags(ctx, accountID, []MessageRef{{Folder: folder, UID: uid}}, flag, on, true)
 }
 
 // SetFlags changes a flag on several messages, as starring a conversation
@@ -576,7 +569,9 @@ func (s *Service) SetFlag(ctx context.Context, accountID, folder string, uid UID
 // and one STORE, then the cache. Only \Seen and \Flagged change this way,
 // and nothing is moved, deleted or expunged. A folder whose UIDVALIDITY is
 // no longer the cache's is not touched: its UIDs would name other
-// messages. When a folder fails, those before it keep their change.
+// messages. When a folder fails, those before it keep their change. A
+// change the server cannot be reached for waits in the queue (see
+// queue.go), the cache showing it meanwhile.
 func (s *Service) SetFlags(ctx context.Context, accountID string, msgs []MessageRef, flag Flag, on bool) error {
 	return s.setFlags(ctx, accountID, msgs, flag, on, true)
 }
@@ -704,7 +699,9 @@ func (s *Service) MoveBack(ctx context.Context, accountID, from, to string, uid 
 // it fails. It returns a result for each message that moved, with what
 // MoveBackMessages needs; when a folder fails, the error comes with the
 // results of the folders that moved before it. Messages already in dest
-// stay where they are.
+// stay where they are. A move the server cannot be reached for waits in
+// the queue (see queue.go): the rows stay tombstones, and the result of
+// each message names the action to undo it.
 func (s *Service) MoveMessages(ctx context.Context, accountID string, msgs []MessageRef, dest string) ([]MoveResult, error) {
 	return s.moveMessages(ctx, accountID, msgs, dest, true)
 }
@@ -808,29 +805,45 @@ func (s *Service) moveMessages(ctx context.Context, accountID string, msgs []Mes
 // MoveBackMessages undoes MoveMessages: each message goes back to the
 // folder it came from, found by the UID the server gave it where it went.
 // A message the server gave no UID for cannot be found, and stays; the
-// error says so once the others are back. The caller syncs the folders
-// the messages return to, to restore their cache rows.
+// error says so once the others are back. A move still in the queue is
+// cancelled, never made: one the worker has begun already stays where it
+// went, and the error says how many. The caller syncs the folders the
+// messages return to, to restore their cache rows.
 func (s *Service) MoveBackMessages(ctx context.Context, accountID string, moved []MoveResult) error {
 	// A move the server was never told of is undone by dropping its queued
 	// action: the cache row stops being a tombstone, and the caller's sync
 	// of the folder brings it back.
 	var queued []int64
 	for _, m := range moved {
-		if m.Pending == 0 {
-			continue
+		if m.Pending != 0 {
+			queued = append(queued, m.Pending)
 		}
-		queued = append(queued, m.Pending)
-		_ = s.store.MarkDeleted(ctx, accountID, m.From, m.UID, false)
 	}
+	cancelled := map[int64]bool{}
 	if len(queued) > 0 {
-		if err := s.store.CancelOperations(ctx, queued); err != nil {
+		ids, err := s.store.CancelOperations(ctx, queued)
+		if err != nil {
 			return err
+		}
+		for _, id := range ids {
+			cancelled[id] = true
+		}
+	}
+	made, lost := 0, 0
+	for _, m := range moved {
+		if m.Pending != 0 {
+			if !cancelled[m.Pending] {
+				// The worker had the action already: the message is where
+				// it moved, and cannot be found to come back.
+				made++
+				continue
+			}
+			_ = s.store.MarkDeleted(context.WithoutCancel(ctx), accountID, m.From, m.UID, false)
 		}
 	}
 	type route struct{ from, to string }
 	var order []route
 	byRoute := map[route][]UID{}
-	lost := 0
 	for _, m := range moved {
 		if m.Pending != 0 {
 			continue
@@ -858,10 +871,15 @@ func (s *Service) MoveBackMessages(ctx context.Context, accountID string, moved 
 			}
 		}
 	}
+	var trouble error
 	if lost > 0 {
-		return fmt.Errorf("mail: the server gave no UID for %d moved messages, which stay where they are", lost)
+		trouble = fmt.Errorf("mail: the server gave no UID for %d moved messages, which stay where they are", lost)
 	}
-	return nil
+	if made > 0 {
+		trouble = errors.Join(trouble,
+			fmt.Errorf("mail: %d moves were made already, and stay where they are", made))
+	}
+	return trouble
 }
 
 // uidGroup is the UIDs of one folder, in the order first asked for.

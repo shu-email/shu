@@ -684,7 +684,7 @@ func (a *app) moveSelected(special string) {
 			}
 			if err != nil {
 				a.err = failureText(err)
-			} else if len(targets) == 1 && first.DestUID != 0 {
+			} else if len(targets) == 1 && (first.DestUID != 0 || first.Pending != 0) {
 				label := locales.Archived()
 				switch special {
 				case mail.SpecialTrash:
@@ -693,7 +693,7 @@ func (a *app) moveSelected(special string) {
 					label = locales.MovedToJunk()
 				}
 				m := targets[0]
-				a.setUndo(&undoMove{accountID: m.Account, source: m.Folder, dest: dests[m.Account], destUID: first.DestUID, label: label})
+				a.setUndo(undoOfMove(m.Account, m.Folder, dests[m.Account], label, first))
 			}
 			a.loadMessages(g)
 		})

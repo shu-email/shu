@@ -29,11 +29,14 @@ type fakeService struct {
 	bodies   map[string]mail.Message
 	pending  []mail.PendingSend
 
-	testErr  error
-	flagErr  error
-	moveErr  error
-	sendErr  error
-	sendWarn error
+	testErr error
+	flagErr error
+	moveErr error
+	// movePending makes a move wait in the queue, as a server out of reach
+	// does: the result names the action, and the message stays put.
+	movePending bool
+	sendErr     error
+	sendWarn    error
 	// retried is how many actions RetryFailedActions says it queued
 	// again, and retryErr makes the call fail.
 	retried         int
@@ -836,6 +839,9 @@ func (f *fakeService) Move(ctx context.Context, accountID, folder string, uid ma
 	if err := f.hasFolder(accountID, dest); err != nil {
 		return mail.MoveResult{}, err
 	}
+	if f.movePending {
+		return mail.MoveResult{Folder: dest, From: folder, UID: uid, Pending: 1}, nil
+	}
 	key := listKey(accountID, folder)
 	list := f.messages[key]
 	for i := range list {
@@ -1585,6 +1591,11 @@ func (f *fakeService) MoveBackMessages(ctx context.Context, accountID string, mo
 	for _, r := range moved {
 		f.moveBacks = append(f.moveBacks, r.Folder+"->"+r.From)
 		f.act(accountID, "MoveBackMessages %s/%d->%s", r.Folder, r.DestUID, r.From)
+		if r.Pending != 0 {
+			// The server never made the move: the action is dropped, and
+			// the message never left.
+			continue
+		}
 		if r.DestUID == 0 || !f.moveOne(accountID, r.Folder, r.DestUID, r.From, r.UID) {
 			lost++
 		}

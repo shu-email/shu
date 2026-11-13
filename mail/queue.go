@@ -92,6 +92,14 @@ const (
 	queueBackoffMin = 5 * time.Second
 	queueBackoffMax = 10 * time.Minute
 	queueIdleWait   = time.Minute
+	// queueClaimGrace is how long a claim is left alone before a worker
+	// takes it back: the call that made it holds it while it talks to
+	// the server, and a run that ended leaves it for good.
+	queueClaimGrace = 2 * time.Minute
+	// queueApplyTimeout bounds one action's commands, as a watcher's
+	// check is bounded: a server that answers and then stalls must not
+	// hold the queue of its account.
+	queueApplyTimeout = 2 * time.Minute
 )
 
 // queueWorker makes one account's queued actions, oldest first, off the
@@ -125,8 +133,7 @@ func (s *Service) startQueue(accountID string, report func(WatchEvent)) *queueWo
 // stopped.
 func (q *queueWorker) run() {
 	defer close(q.done)
-	// What a run that ended left claimed is this run's to make.
-	_ = q.svc.store.ReclaimOperations(q.ctx, q.accountID)
+	q.reclaim()
 	q.say()
 	for {
 		if q.ctx.Err() != nil {
@@ -141,6 +148,9 @@ func (q *queueWorker) run() {
 		}
 		if !ok {
 			// Nothing due; a nudge looks again, and so does the minute.
+			// What a run that ended left claimed comes back once its grace
+			// is over.
+			q.reclaim()
 			q.say()
 			if !q.sleep(queueIdleWait) {
 				return
@@ -154,7 +164,9 @@ func (q *queueWorker) run() {
 			like = nil
 		}
 		group := append([]PendingOperation{op}, like...)
-		err = q.svc.applyOperations(q.ctx, group)
+		applyCtx, stop := context.WithTimeout(q.ctx, queueApplyTimeout)
+		err = q.svc.applyOperations(applyCtx, group)
+		stop()
 		if q.ctx.Err() != nil {
 			// The app is quitting: the action was not made, and stays
 			// claimed for the next run to reclaim rather than fail.
@@ -180,6 +192,13 @@ func (q *queueWorker) run() {
 			q.say()
 		}
 	}
+}
+
+// reclaim gives back what a run that ended left claimed. A call is
+// holding the claims of the actions it is making itself right now, which
+// are younger than the grace.
+func (q *queueWorker) reclaim() {
+	_ = q.svc.store.ReclaimOperations(q.ctx, q.accountID, q.svc.now().Add(-queueClaimGrace))
 }
 
 // sleep waits for the next look, a nudge, or the worker's end; false
@@ -234,7 +253,11 @@ func queueBackoff(failures int) time.Duration {
 }
 
 // retryable reports whether an action may work later: the server could
-// not be reached, or the account's sign-in is gone.
+// not be reached, or the account's sign-in is gone. The rules' ruleWaits
+// also waits on a cancelled context, which for a call the window made is
+// the caller's decision, not the server's: its change is not queued, and
+// the worker that asked under a context of its own checks for the end of
+// its run before it classifies a failure.
 func retryable(err error) bool {
 	switch failureOf(err) {
 	case WatchFailNetwork, WatchFailAuth, WatchFailSignIn:
@@ -296,6 +319,11 @@ func (s *Service) applyOperations(ctx context.Context, ops []PendingOperation) e
 		return storeFlagsIn(c, first.Folder, first.Validity, uids, first.Flag, first.On)
 	case OpLabel:
 		label, err := s.label(ctx, first.AccountID, first.Label)
+		if errors.Is(err, ErrNotFound) {
+			// The label was deleted while the action waited: there is
+			// nothing to put on and nothing to take off.
+			return nil
+		}
 		if err != nil {
 			return err
 		}
@@ -309,9 +337,14 @@ func (s *Service) applyOperations(ctx context.Context, ops []PendingOperation) e
 			return err
 		}
 		if first.On && !opened.KeepsKeyword(label.Keyword) {
-			// The folder keeps no such keyword now: the label is this
-			// device's, and the syncs read the folder's own flags.
-			return nil
+			// The folder keeps no such keyword now: the label stays on this
+			// device, as SetLabel keeps one a folder cannot hold, or the
+			// next sync of the flags would drop it.
+			if _, err := s.store.SetLabel(ctx, first.AccountID, first.Label, first.Folder, uids, false, false); err != nil {
+				return err
+			}
+			_, err := s.store.SetLabel(ctx, first.AccountID, first.Label, first.Folder, uids, true, true)
+			return err
 		}
 		return storeKeyword(c, first.Folder, uids, label.Keyword, first.On)
 	}
@@ -379,6 +412,23 @@ func (s *Service) requeueOperations(ctx context.Context, accountID string, ids [
 	s.wakeQueue(accountID)
 }
 
+// cancelLabelOperations drops an account's queued changes of one label,
+// before the label goes.
+func (s *Service) cancelLabelOperations(ctx context.Context, accountID string, id LabelID) error {
+	ops, err := s.store.Operations(ctx, accountID)
+	if err != nil {
+		return err
+	}
+	var ids []int64
+	for _, op := range ops {
+		if op.Kind == OpLabel && op.Label == id {
+			ids = append(ids, op.ID)
+		}
+	}
+	_, err = s.store.CancelOperations(ctx, ids)
+	return err
+}
+
 // wakeQueue has an account's worker look at its actions now.
 func (s *Service) wakeQueue(accountID string) {
 	s.watchMu.Lock()
@@ -391,10 +441,7 @@ func (s *Service) wakeQueue(accountID string) {
 
 // dropOperations drops actions by ID, once the server made them.
 func (s *Service) dropOperations(ctx context.Context, ids []int64) {
-	bg := context.WithoutCancel(ctx)
-	for _, id := range ids {
-		_ = s.store.FinishOperation(bg, id)
-	}
+	_ = s.store.FinishOperations(context.WithoutCancel(ctx), ids)
 }
 
 // allIDs flattens the IDs of several groups.
@@ -408,10 +455,11 @@ func allIDs(groups [][]int64) []int64 {
 
 // finishOperations drops actions the server made.
 func (s *Service) finishOperations(ctx context.Context, ops []PendingOperation) {
-	bg := context.WithoutCancel(ctx)
-	for _, op := range ops {
-		_ = s.store.FinishOperation(bg, op.ID)
+	ids := make([]int64, len(ops))
+	for i, op := range ops {
+		ids[i] = op.ID
 	}
+	s.dropOperations(ctx, ids)
 }
 
 // failOperations keeps actions the server refused, with the reason, and
@@ -420,9 +468,17 @@ func (s *Service) failOperations(ctx context.Context, ops []PendingOperation, ca
 	bg := context.WithoutCancel(ctx)
 	for _, op := range ops {
 		_ = s.store.FailOperation(bg, op.ID, cause.Error())
-		if op.Kind == OpMove {
+		// The cache showed the change while it waited: it goes back.
+		switch op.Kind {
+		case OpMove:
 			// The message is where it was: its row is no tombstone.
 			_ = s.store.MarkDeleted(bg, op.AccountID, op.Folder, op.UID, false)
+		case OpFlags:
+			_ = s.store.SetFlag(bg, op.AccountID, op.Folder, op.UID, op.Flag, !op.On)
+		case OpLabel:
+			// The server's copy of the label goes; one this device keeps
+			// alone was never the server's.
+			_, _ = s.store.SetLabel(bg, op.AccountID, op.Label, op.Folder, []UID{op.UID}, !op.On, false)
 		}
 	}
 }

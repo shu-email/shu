@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -32,15 +33,22 @@ const operationColumns = `id, account_id, kind, folder, uid, dest, payload, stat
 	attempts, next_try, created_at, claimed_at, last_error`
 
 // EnqueueOperations writes what the server must still do, each with the
-// ID the store gave it.
+// ID the store gave it. A selection's actions go in one statement: what
+// an offline mark-read of many messages asks for is one round trip, not
+// one per message.
 func (s *Store) EnqueueOperations(ctx context.Context, ops []mail.PendingOperation) ([]int64, error) {
+	if len(ops) == 0 {
+		return nil, nil
+	}
+	args := make([]any, 0, len(ops)*11)
+	marks := make([]string, 0, len(ops))
 	ids := make([]int64, 0, len(ops))
-	for _, op := range ops {
+	for i, op := range ops {
 		payload, err := json.Marshal(operationPayload{
 			Flag: string(op.Flag), On: op.On, Label: int64(op.Label), Validity: op.Validity,
 		})
 		if err != nil {
-			return ids, err
+			return nil, err
 		}
 		state := op.State
 		if state == "" {
@@ -50,18 +58,28 @@ func (s *Store) EnqueueOperations(ctx context.Context, ops []mail.PendingOperati
 		if created.IsZero() {
 			created = s.now()
 		}
-		rows, err := s.query(ctx, `INSERT INTO pending_operations
-			(account_id, kind, folder, uid, dest, payload, state, attempts, next_try, created_at, claimed_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-			op.AccountID, string(op.Kind), op.Folder, int64(op.UID), op.Dest, string(payload), string(state),
-			op.Attempts, unixOf(op.NextTry), created.Unix(), unixOf(op.ClaimedAt))
-		if err != nil {
-			return ids, err
-		}
-		if len(rows.Values) > 0 {
-			ids = append(ids, int64(number(rows.Values[0][0])))
-		}
+		// Each row's ID is the table's highest plus its place in this
+		// statement, so that the statement assigns them together and the
+		// rows it returns are in the order they were written.
+		marks = append(marks, fmt.Sprintf("((SELECT COALESCE(MAX(id), 0)+%d FROM pending_operations), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", i+1))
+		args = append(args, op.AccountID, string(op.Kind), op.Folder, int64(op.UID), op.Dest,
+			string(payload), string(state), op.Attempts, unixOf(op.NextTry), created.Unix(), unixOf(op.ClaimedAt))
 	}
+	rows, err := s.query(ctx, `INSERT INTO pending_operations
+		(id, account_id, kind, folder, uid, dest, payload, state, attempts, next_try, created_at, claimed_at)
+		VALUES `+strings.Join(marks, ", ")+` RETURNING id`, args...)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows.Values {
+		ids = append(ids, int64(number(r[0])))
+	}
+	if len(ids) != len(ops) {
+		return nil, fmt.Errorf("store: queued %d actions, got %d rows back", len(ops), len(ids))
+	}
+	// The IDs grow with the place in the statement, so sorting restores it
+	// whatever order the rows came back in.
+	slices.Sort(ids)
 	return ids, nil
 }
 
@@ -87,7 +105,8 @@ func (s *Store) ClaimOperation(ctx context.Context, accountID string, now time.T
 
 // ClaimOperationsByKey claims the actions that can go in one command with
 // one just claimed: those of the same account, kind, folder, destination
-// and payload.
+// and payload. That one is no part of what it returns, as it is claimed
+// already.
 func (s *Store) ClaimOperationsByKey(ctx context.Context, op mail.PendingOperation, now time.Time) ([]mail.PendingOperation, error) {
 	rows, err := s.query(ctx, `UPDATE pending_operations SET state = ?, claimed_at = ?
 		WHERE account_id = ? AND state = ? AND kind = ? AND folder = ? AND dest = ? AND payload = ?
@@ -120,10 +139,25 @@ func operationPayloadOf(op mail.PendingOperation) string {
 	return string(payload)
 }
 
-// FinishOperation drops an action the server made.
-func (s *Store) FinishOperation(ctx context.Context, id int64) error {
-	_, err := s.exec(ctx, `DELETE FROM pending_operations WHERE id = ?`, id)
+// FinishOperations drops the actions the server made, in one statement.
+func (s *Store) FinishOperations(ctx context.Context, ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	args, marks := idList(ids)
+	_, err := s.exec(ctx, `DELETE FROM pending_operations WHERE id IN (`+marks+`)`, args...)
 	return err
+}
+
+// idList makes the arguments and the placeholders of a list of IDs.
+func idList(ids []int64) ([]any, string) {
+	args := make([]any, 0, len(ids))
+	marks := make([]string, 0, len(ids))
+	for _, id := range ids {
+		args = append(args, id)
+		marks = append(marks, "?")
+	}
+	return args, strings.Join(marks, ", ")
 }
 
 // RetryOperation puts an action back for a later try, one attempt on.
@@ -175,30 +209,36 @@ func (s *Store) Operations(ctx context.Context, accountID string) ([]mail.Pendin
 	return out, nil
 }
 
-// ReclaimOperations gives back the actions a run left claimed when it
-// ended: the next run makes them.
-func (s *Store) ReclaimOperations(ctx context.Context, accountID string) error {
+// ReclaimOperations gives back the actions a run left claimed before
+// then: the next run makes them. One a call is making now is newer, and
+// not this run's to take.
+func (s *Store) ReclaimOperations(ctx context.Context, accountID string, before time.Time) error {
 	_, err := s.exec(ctx, `UPDATE pending_operations
 		SET state = ?, claimed_at = 0
-		WHERE account_id = ? AND state = ?`,
-		string(mail.OperationPending), accountID, string(mail.OperationClaimed))
+		WHERE account_id = ? AND state = ? AND claimed_at <= ?`,
+		string(mail.OperationPending), accountID, string(mail.OperationClaimed), before.Unix())
 	return err
 }
 
-// CancelOperations drops actions before the server makes them, as an undo
-// of something still queued. What is not there is no failure.
-func (s *Store) CancelOperations(ctx context.Context, ids []int64) error {
+// CancelOperations drops the actions that have not begun, as an undo of
+// something still queued, and returns those it dropped: one a worker is
+// making, or has made, is no longer the caller's to take back.
+func (s *Store) CancelOperations(ctx context.Context, ids []int64) ([]int64, error) {
 	if len(ids) == 0 {
-		return nil
+		return nil, nil
 	}
-	args := make([]any, 0, len(ids))
-	marks := make([]string, 0, len(ids))
-	for _, id := range ids {
-		args = append(args, id)
-		marks = append(marks, "?")
+	args, marks := idList(ids)
+	rows, err := s.query(ctx, `DELETE FROM pending_operations
+		WHERE id IN (`+marks+`) AND state = ? RETURNING id`,
+		append(args, string(mail.OperationPending))...)
+	if err != nil {
+		return nil, err
 	}
-	_, err := s.exec(ctx, `DELETE FROM pending_operations WHERE id IN (`+strings.Join(marks, ", ")+`)`, args...)
-	return err
+	out := make([]int64, 0, len(rows.Values))
+	for _, r := range rows.Values {
+		out = append(out, int64(number(r[0])))
+	}
+	return out, nil
 }
 
 // unixOf is a time as the store keeps it, zero for none.

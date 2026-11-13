@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -179,7 +180,7 @@ func TestQueueFailureStaysForTheWindow(t *testing.T) {
 	if op, ok, err := s.ClaimOperation(ctx, "a1", now); err != nil || !ok || op.ID != ids[0] {
 		t.Errorf("after asking again = %+v, %v, %v", op, ok, err)
 	}
-	if err := s.FinishOperation(ctx, ids[0]); err != nil {
+	if err := s.FinishOperations(ctx, []int64{ids[0]}); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := s.Operations(ctx, "a1"); len(got) != 0 {
@@ -198,7 +199,14 @@ func TestQueueReclaimTakesBackWhatARunLeft(t *testing.T) {
 	if _, ok, _ := s.ClaimOperation(ctx, "a1", now); !ok {
 		t.Fatal("nothing claimed")
 	}
-	if err := s.ReclaimOperations(ctx, "a1"); err != nil {
+	// A claim younger than the grace is a call's, still being made.
+	if err := s.ReclaimOperations(ctx, "a1", now.Add(-time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Operations(ctx, "a1"); got[0].State != mail.OperationClaimed {
+		t.Fatalf("a live claim was taken back: %+v", got[0])
+	}
+	if err := s.ReclaimOperations(ctx, "a1", now); err != nil {
 		t.Fatal(err)
 	}
 	op, ok, err := s.ClaimOperation(ctx, "a1", now)
@@ -218,8 +226,8 @@ func TestQueueCancelDropsWhatIsNotMade(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.CancelOperations(ctx, []int64{ids[0], 9999}); err != nil {
-		t.Fatal(err)
+	if got, err := s.CancelOperations(ctx, []int64{ids[0], 9999}); err != nil || !slices.Equal(got, []int64{ids[0]}) {
+		t.Fatalf("cancel = %v, %v; want the one action", got, err)
 	}
 	got, err := s.Operations(ctx, "a1")
 	if err != nil {
@@ -230,6 +238,38 @@ func TestQueueCancelDropsWhatIsNotMade(t *testing.T) {
 	}
 	if got[0].UID != 8 {
 		t.Errorf("first = %d, want the second action", got[0].UID)
+	}
+	// One a worker is making is no longer the caller's to take back.
+	if _, ok, _ := s.ClaimOperation(ctx, "a1", time.Now()); !ok {
+		t.Fatal("nothing claimed")
+	}
+	if gone, err := s.CancelOperations(ctx, []int64{ids[1]}); err != nil || len(gone) != 0 {
+		t.Fatalf("cancel of a claim = %v, %v; want none", gone, err)
+	}
+	if got, _ := s.Operations(ctx, "a1"); len(got) != 2 {
+		t.Errorf("a claim was dropped by the undo: %+v", got)
+	}
+}
+
+// A batch is written in one statement, and each ID it gives back is its
+// action's.
+func TestQueueWritesABatchInOneGo(t *testing.T) {
+	ctx := context.Background()
+	s := openTest(t)
+	addAccount(t, s, "a1")
+	ids, err := s.EnqueueOperations(ctx, queueOps())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.FinishOperations(ctx, []int64{ids[1]}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Operations(ctx, "a1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].UID != 7 || got[1].UID != 9 {
+		t.Fatalf("after dropping the second = %+v", got)
 	}
 }
 

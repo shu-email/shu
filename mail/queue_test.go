@@ -185,6 +185,37 @@ func TestUndoOfAQueuedMoveDropsIt(t *testing.T) {
 	}
 }
 
+// An undo asked once the worker began the move cannot call it back: the
+// user hears that it was made, and the cache keeps the message moved.
+func TestUndoOfAMoveTheWorkerBeganFails(t *testing.T) {
+	ctx := context.Background()
+	svc, store, f, a := threadService(t, allCaps(), in("INBOX", "gmail-1.eml"))
+	clock := newTestClock()
+	svc.SetClock(clock.Now)
+	msgs, err := svc.CachedMessages(ctx, a.ID, "INBOX", "", 50)
+	if err != nil || len(msgs) == 0 {
+		t.Fatalf("cached = %d, %v", len(msgs), err)
+	}
+	uid := msgs[0].UID
+	f.stop()
+	moved, err := svc.MoveMessages(ctx, a.ID, []MessageRef{{"INBOX", uid}}, "Archive")
+	if err != nil || len(moved) != 1 || moved[0].Pending == 0 {
+		t.Fatalf("move with the server away = %+v, %v", moved, err)
+	}
+	// The account's worker takes the action before the undo is asked.
+	clock.advance(time.Minute)
+	if _, ok, err := store.ClaimOperation(ctx, a.ID, clock.Now()); err != nil || !ok {
+		t.Fatalf("claim = %v, %v", ok, err)
+	}
+	err = svc.MoveBackMessages(ctx, a.ID, moved)
+	if err == nil || !strings.Contains(err.Error(), "made already") {
+		t.Fatalf("undo of a move being made = %v, want the move said to be made", err)
+	}
+	if ops := queued(t, store, a.ID); len(ops) != 1 || ops[0].State != OperationClaimed {
+		t.Fatalf("actions after the undo = %+v", ops)
+	}
+}
+
 // What one run queues another one makes: the actions are in the store,
 // not in a running service.
 func TestAQueuedActionGoesWithTheNextRun(t *testing.T) {
@@ -380,6 +411,121 @@ func TestAQueuedActionUnderANewUIDVALIDITYFails(t *testing.T) {
 	})
 	if got := flaggedOn(t, f, "INBOX", imap.FlagFlagged); len(got) != 0 {
 		t.Errorf("starred in the remade inbox = %q", got)
+	}
+}
+
+// A queued label whose folder keeps no such keyword by the time it is
+// made stays on this device, as one the folder never kept: the next sync
+// of the flags would drop it otherwise.
+func TestAQueuedLabelOfAFolderThatKeptNoKeywordStaysHere(t *testing.T) {
+	r, store := newLabelRig(t, map[string]fakeKeywords{"INBOX": {listed: []string{"Work"}}}, map[string][][]byte{
+		"INBOX": {labelMail("One", "a@example.org", "one@x", 1)},
+	})
+	clock := newTestClock()
+	r.svc.SetClock(clock.Now)
+	work := r.create("Work")
+	one := r.message("INBOX", "One")
+	r.f.stop()
+	if err := r.svc.SetLabel(r.ctx, r.a.ID, []MessageRef{{"INBOX", one.UID}}, work.ID, true); err != nil {
+		t.Fatalf("a label with the server away = %v", err)
+	}
+	if ops := queued(t, store, r.a.ID); len(ops) != 1 {
+		t.Fatalf("queued = %+v", ops)
+	}
+	// Another client changed the folder's PERMANENTFLAGS meanwhile: the
+	// cache still says it keeps the keyword, the server no longer does.
+	r.f.keepKeywords("INBOX", keepsNone)
+	r.f.restart(t)
+	clock.advance(time.Minute)
+	startQueueRun(t, r.svc, r.a.ID)
+	waitFor(t, "the label", func() bool { return len(queued(t, store, r.a.ID)) == 0 })
+	if got := r.labelsOf(r.message("INBOX", "One")); !slices.Equal(got, []string{"Work (here)"}) {
+		t.Errorf("labels = %v, want the label kept on this device", got)
+	}
+	if got := keywordsOn(t, r.f, "INBOX")["One"]; len(got) != 0 {
+		t.Errorf("the server's keywords = %v, want none", got)
+	}
+}
+
+// A queued label the server refuses comes back off the cache, as one the
+// window made does.
+func TestAQueuedLabelTheServerRefusesGoesBackOffTheCache(t *testing.T) {
+	r, store := newLabelRig(t, map[string]fakeKeywords{"INBOX": {listed: []string{"Work"}, refuse: true}}, map[string][][]byte{
+		"INBOX": {labelMail("One", "a@example.org", "one@x", 1)},
+	})
+	clock := newTestClock()
+	r.svc.SetClock(clock.Now)
+	work := r.create("Work")
+	one := r.message("INBOX", "One")
+	r.f.stop()
+	if err := r.svc.SetLabel(r.ctx, r.a.ID, []MessageRef{{"INBOX", one.UID}}, work.ID, true); err != nil {
+		t.Fatalf("a label with the server away = %v", err)
+	}
+	if got := r.labelsOf(r.message("INBOX", "One")); !slices.Equal(got, []string{"Work"}) {
+		t.Fatalf("the cache did not show the label: %v", got)
+	}
+	r.f.restart(t)
+	clock.advance(time.Minute)
+	startQueueRun(t, r.svc, r.a.ID)
+	waitFor(t, "the refusal", func() bool {
+		ops := queued(t, store, r.a.ID)
+		return len(ops) == 1 && ops[0].State == OperationFailed
+	})
+	if got := r.labelsOf(r.message("INBOX", "One")); len(got) != 0 {
+		t.Errorf("the cache kept a label the server refused: %v", got)
+	}
+}
+
+// Deleting a label takes its queued changes with it, so that none puts
+// the keyword back after the sweep.
+func TestDeletingALabelTakesItsQueuedChanges(t *testing.T) {
+	r, store := newLabelRig(t, nil, map[string][][]byte{
+		"INBOX": {labelMail("One", "a@example.org", "one@x", 1)},
+	})
+	clock := newTestClock()
+	r.svc.SetClock(clock.Now)
+	work := r.create("Work")
+	one := r.message("INBOX", "One")
+	r.f.stop()
+	if err := r.svc.SetLabel(r.ctx, r.a.ID, []MessageRef{{"INBOX", one.UID}}, work.ID, true); err != nil {
+		t.Fatalf("a label with the server away = %v", err)
+	}
+	r.f.restart(t)
+	if err := r.svc.DeleteLabel(r.ctx, r.a.ID, work.ID); err != nil {
+		t.Fatal(err)
+	}
+	if ops := queued(t, store, r.a.ID); len(ops) != 0 {
+		t.Fatalf("queued after the label went = %+v", ops)
+	}
+	if got := keywordsOn(t, r.f, "INBOX")["One"]; len(got) != 0 {
+		t.Errorf("the keyword came back = %v", got)
+	}
+}
+
+// A queued label whose label is gone is done, not failed: there is
+// nothing left to put on or take off.
+func TestAQueuedLabelOfALabelGoneIsDone(t *testing.T) {
+	r, store := newLabelRig(t, nil, map[string][][]byte{
+		"INBOX": {labelMail("One", "a@example.org", "one@x", 1)},
+	})
+	clock := newTestClock()
+	r.svc.SetClock(clock.Now)
+	work := r.create("Work")
+	one := r.message("INBOX", "One")
+	r.f.stop()
+	if err := r.svc.SetLabel(r.ctx, r.a.ID, []MessageRef{{"INBOX", one.UID}}, work.ID, true); err != nil {
+		t.Fatalf("a label with the server away = %v", err)
+	}
+	// The label goes without the window's call, which cancels them.
+	if err := store.DeleteLabel(r.ctx, r.a.ID, work.ID, clock.Now()); err != nil {
+		t.Fatal(err)
+	}
+	r.f.restart(t)
+	clock.advance(time.Minute)
+	startQueueRun(t, r.svc, r.a.ID)
+	waitFor(t, "the action to be done", func() bool { return len(queued(t, store, r.a.ID)) == 0 })
+	if got := keywordsOn(t, r.f, "INBOX")["One"]; len(got) != 0 {
+		t.Errorf("a label of a deleted label reached the server: %v", got)
 	}
 }
 

@@ -202,14 +202,6 @@ func (s *memStore) ClaimOperationsByKey(ctx context.Context, op PendingOperation
 	return out, nil
 }
 
-// FinishOperation drops an action the server made.
-func (s *memStore) FinishOperation(ctx context.Context, id int64) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.dropOperation(id)
-	return nil
-}
-
 // RetryOperation puts an action back for a later try.
 func (s *memStore) RetryOperation(ctx context.Context, id int64, nextTry time.Time, reason string) error {
 	s.mu.Lock()
@@ -256,12 +248,13 @@ func (s *memStore) Operations(ctx context.Context, accountID string) ([]PendingO
 	return out, nil
 }
 
-// ReclaimOperations gives back what a run that ended left claimed.
-func (s *memStore) ReclaimOperations(ctx context.Context, accountID string) error {
+// ReclaimOperations gives back what a run that ended left claimed before
+// a time.
+func (s *memStore) ReclaimOperations(ctx context.Context, accountID string, before time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i, op := range s.pending {
-		if op.AccountID == accountID && op.State == OperationClaimed {
+		if op.AccountID == accountID && op.State == OperationClaimed && !op.ClaimedAt.After(before) {
 			s.pending[i].State = OperationPending
 			s.pending[i].ClaimedAt = time.Time{}
 		}
@@ -269,14 +262,22 @@ func (s *memStore) ReclaimOperations(ctx context.Context, accountID string) erro
 	return nil
 }
 
-// CancelOperations drops actions before the server makes them.
-func (s *memStore) CancelOperations(ctx context.Context, ids []int64) error {
+// CancelOperations drops actions before the server makes them, and
+// returns those it dropped.
+func (s *memStore) CancelOperations(ctx context.Context, ids []int64) ([]int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	var gone []int64
 	for _, id := range ids {
-		s.dropOperation(id)
+		for _, op := range s.pending {
+			if op.ID == id && op.State == OperationPending {
+				s.dropOperation(id)
+				gone = append(gone, id)
+				break
+			}
+		}
 	}
-	return nil
+	return gone, nil
 }
 
 // RetryFailedOperations puts the actions the server refused back in the
@@ -294,6 +295,16 @@ func (s *memStore) RetryFailedOperations(ctx context.Context, accountID string, 
 		}
 	}
 	return n, nil
+}
+
+// FinishOperations drops the actions the server made.
+func (s *memStore) FinishOperations(ctx context.Context, ids []int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, id := range ids {
+		s.dropOperation(id)
+	}
+	return nil
 }
 
 // dropOperation removes one action. mu is held.

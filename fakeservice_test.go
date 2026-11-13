@@ -40,6 +40,10 @@ type fakeService struct {
 	moveBacks  []string
 	flagCalls  []string
 	attachment mail.Attachment
+	// folderCalls records the folder actions taken, in order, and
+	// folderErr makes them fail.
+	folderCalls []string
+	folderErr   error
 
 	// Drafts. The fake keeps them as the engine does: saving is local,
 	// and SyncDrafts is the step that reaches the server, or fails to.
@@ -2380,4 +2384,92 @@ func (f *fakeService) unlabelFolder(accountID, folder string, id mail.LabelID) b
 		}
 	}
 	return had
+}
+
+// CreateFolder adds a folder to the fake account, as the engine does once
+// the server made it.
+func (f *fakeService) CreateFolder(ctx context.Context, accountID, name string) (mail.Folder, error) {
+	if f.folderErr != nil {
+		return mail.Folder{}, f.folderErr
+	}
+	for _, fl := range f.folders[accountID] {
+		if fl.Name == name {
+			return mail.Folder{}, mail.ErrFolderExists
+		}
+	}
+	f.folderCalls = append(f.folderCalls, "create "+name)
+	folder := mail.Folder{Name: name, Delimiter: "/", Subscribed: true}
+	f.folders[accountID] = append(f.folders[accountID], folder)
+	f.messages[listKey(accountID, name)] = nil
+	return folder, nil
+}
+
+// RenameFolder renames a folder and the folders below it, keeping their
+// mail, as the engine's store does.
+func (f *fakeService) RenameFolder(ctx context.Context, accountID, from, to string) error {
+	if f.folderErr != nil {
+		return f.folderErr
+	}
+	for _, fl := range f.folders[accountID] {
+		if fl.Name == to {
+			return mail.ErrFolderExists
+		}
+	}
+	f.folderCalls = append(f.folderCalls, "rename "+from+" "+to)
+	found := false
+	for i := range f.folders[accountID] {
+		name := f.folders[accountID][i].Name
+		if name == from || strings.HasPrefix(name, from+"/") {
+			next := to + strings.TrimPrefix(name, from)
+			if msgs, ok := f.messages[listKey(accountID, name)]; ok {
+				delete(f.messages, listKey(accountID, name))
+				f.messages[listKey(accountID, next)] = msgs
+			}
+			for j := range f.messages[listKey(accountID, next)] {
+				f.messages[listKey(accountID, next)][j].Folder = next
+			}
+			f.folders[accountID][i].Name = next
+			found = true
+		}
+	}
+	if !found {
+		return mail.ErrNotFound
+	}
+	return nil
+}
+
+func (f *fakeService) DeleteFolder(ctx context.Context, accountID, name string) error {
+	if f.folderErr != nil {
+		return f.folderErr
+	}
+	f.folderCalls = append(f.folderCalls, "delete "+name)
+	kept := f.folders[accountID][:0]
+	found := false
+	for _, fl := range f.folders[accountID] {
+		if fl.Name == name {
+			found = true
+			continue
+		}
+		kept = append(kept, fl)
+	}
+	if !found {
+		return mail.ErrNotFound
+	}
+	f.folders[accountID] = kept
+	delete(f.messages, listKey(accountID, name))
+	return nil
+}
+
+func (f *fakeService) SetFolderSubscribed(ctx context.Context, accountID, name string, on bool) error {
+	if f.folderErr != nil {
+		return f.folderErr
+	}
+	f.folderCalls = append(f.folderCalls, fmt.Sprintf("subscribe %s %v", name, on))
+	for i := range f.folders[accountID] {
+		if f.folders[accountID][i].Name == name {
+			f.folders[accountID][i].Subscribed = on
+			return nil
+		}
+	}
+	return mail.ErrNotFound
 }

@@ -224,6 +224,10 @@ type app struct {
 	// labels are each account's labels and the views that change them
 	// (labels.go).
 	labels labelState
+	// Folders (folders.go): the create/rename dialog, the delete
+	// confirmation and the note after an action.
+	folderForm folderForm
+	folderNote string
 	// rules is the rules' view, open or not (rules.go); the live checks
 	// of the rule being written take turns under ruleCheckMu, and one a
 	// later check overtook (ruleCheckSeq) does not run.
@@ -1082,8 +1086,13 @@ func (a *app) folderEntries() []folderEntry {
 		if seen[f.Name] || f.SpecialUse == mail.SpecialFlagged || f.Name == draftsFolder {
 			continue
 		}
+		// A folder the user hid stays out of the sidebar, unless it is
+		// the one on screen, so that hiding it does not close it.
+		if !f.Subscribed && f.Name != a.folder {
+			continue
+		}
 		seen[f.Name] = true
-		entries = append(entries, folderEntry{ID: f.Name, Label: f.Name, Icon: tagIcon})
+		entries = append(entries, folderEntry{ID: f.Name, Label: folderLeaf(f), Icon: tagIcon})
 	}
 	return entries
 }
@@ -1317,6 +1326,7 @@ func (a *app) mailView(c *ui.Context) {
 	a.labelAlerts(c)
 	aiReviewModal(c, &a.review)
 	a.linkDialog(c)
+	a.folderDialog(c)
 }
 
 // paneShortcuts gives the sidebar and the panes the unmodified shortcuts.
@@ -1412,6 +1422,24 @@ func (a *app) sidebar(c *ui.Context, t *ui.Theme, vibrant bool) {
 					}
 				}
 				m.Separator()
+				if m.Item(locales.NewFolder()).Chosen() {
+					a.openNewFolder("")
+				}
+				var hidden []string
+				for _, f := range a.folders {
+					if !f.Subscribed && !f.IsSystem() {
+						hidden = append(hidden, f.Name)
+					}
+				}
+				if len(hidden) > 0 {
+					m.Submenu(locales.HiddenFolders(), func(m *ui.Menu) {
+						for _, name := range hidden {
+							if m.Item(name).Chosen() {
+								a.setFolderSubscribed(name, true)
+							}
+						}
+					})
+				}
 				if m.Item(locales.AddAccount()).Chosen() {
 					a.openAccountForm(nil)
 				}
@@ -1450,6 +1478,16 @@ func (a *app) sidebar(c *ui.Context, t *ui.Theme, vibrant bool) {
 							})
 						} else {
 							a.noteCount("side/"+e.ID, n)
+						}
+					}
+					if f := a.folderByName(e.ID); f != nil {
+						name := f.Name
+						item.ContextMenu(func(m *ui.Menu) { a.folderMenu(m, name, f.IsSystem()) })
+						if _, over := ui.DragOver[*folderDrop](item); over {
+							item.Background(t.Accent.Alpha(0.16))
+						}
+						if drop, ok := ui.Drop[*folderDrop](item); ok {
+							a.dropOnFolder(drop, name)
 						}
 					}
 				}

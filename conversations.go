@@ -1009,8 +1009,16 @@ func (a *app) flagMessage(m mail.Summary, flag mail.Flag, on bool) {
 // show. The conversation stays open while its row has other messages;
 // with none left, the row goes as a conversation's does.
 func (a *app) moveMessage(m mail.Summary, special string) {
-	cv := a.conv
 	dest := a.specialFolder(m.Account, special)
+	if dest == "" {
+		return
+	}
+	a.moveMessageToFolder(m, dest)
+}
+
+// moveMessageToFolder is moveMessage for a folder named outright.
+func (a *app) moveMessageToFolder(m mail.Summary, dest string) {
+	cv := a.conv
 	if cv == nil || dest == "" || m.Folder == dest {
 		return
 	}
@@ -1033,9 +1041,11 @@ func (a *app) moveMessage(m mail.Summary, special string) {
 		a.syncRow()
 	}
 	g := a.gen
-	label := locales.Archived()
-	if special == mail.SpecialTrash {
+	label := locales.MovedToFolder(dest)
+	if dest == a.specialFolder(m.Account, mail.SpecialTrash) {
 		label = locales.Deleted()
+	} else if dest == a.specialFolder(m.Account, mail.SpecialArchive) {
+		label = locales.Archived()
 	}
 	a.run(func() {
 		ctx, cancel := a.ctx()

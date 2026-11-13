@@ -67,6 +67,10 @@ type Folder struct {
 	// up to LastUID: a sync read the folder whole, or FetchOlder reached
 	// its oldest message. A sync keeps it; a LIST says nothing of it.
 	Complete bool `json:"complete,omitempty"`
+	// Subscribed reports that the user wants the folder in the sidebar,
+	// as IMAP's subscription says. A server without LIST-EXTENDED keeps
+	// every folder subscribed.
+	Subscribed bool `json:"subscribed"`
 	// PermanentFlags is what the folder's PERMANENTFLAGS said the last
 	// time it was opened to change, which tells whether it keeps labels
 	// (KeepsKeyword): the flags it keeps, \* for any keyword. It is nil

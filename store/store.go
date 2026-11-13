@@ -430,6 +430,12 @@ var migrations = [][]string{
 			msg_key TEXT NOT NULL)`,
 		`CREATE INDEX expected_arrivals_key ON expected_arrivals (folder_id, msg_key)`,
 	},
+	// v13: folder subscriptions, as IMAP keeps them (Folder.Subscribed).
+	// A folder is subscribed until the user hides it; servers without
+	// LIST-EXTENDED never say, so they keep every folder subscribed.
+	{
+		`ALTER TABLE folders ADD COLUMN subscribed INTEGER NOT NULL DEFAULT 1`,
+	},
 }
 
 // backfills compute, from the rows of the version before, statements a

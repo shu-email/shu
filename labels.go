@@ -669,6 +669,7 @@ func (a *app) labelChecklist(c *ui.Context, t *ui.Theme, lt labelTargets) {
 // row opens once it chose the row: their labels, to put on or take off.
 func (a *app) rowMenu(m *ui.Menu) {
 	lt := a.labelTargets()
+	m.Submenu(locales.MoveToFolder(), func(m *ui.Menu) { a.moveFolderMenu(m) })
 	m.Submenu(locales.Labels(), func(m *ui.Menu) { a.labelMenuItems(m, lt) })
 	a.ruleMenuItem(m, lt)
 }

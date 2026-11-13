@@ -3188,5 +3188,130 @@
   "securityLinkOpen": "Open link",
   "securityAttachmentExecutable": "Can run a program",
   "securityAttachmentDisguised": "Name hides a program",
-  "securityAttachmentTypeMismatch": "Content does not match the name"
+  "securityAttachmentTypeMismatch": "Content does not match the name",
+  "newFolder": "New folder",
+  "newSubfolder": "New subfolder…",
+  "folderNameLabel": "Folder name",
+  "createFolder": "Create folder",
+  "renameFolder": "Rename folder…",
+  "renameFolderTitle": "Rename “{name}”",
+  "@renameFolderTitle": {
+    "description": "The title of the form that renames a folder.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Projects"
+      }
+    }
+  },
+  "deleteFolder": "Delete folder…",
+  "deleteFolderTitle": "Delete “{name}”?",
+  "@deleteFolderTitle": {
+    "description": "The title of the confirmation before a folder is deleted.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Projects"
+      }
+    }
+  },
+  "deleteFolderConfirm": "This deletes the folder “{name}” and the {count, plural, one {message} other {# messages}} in it. This cannot be undone.",
+  "@deleteFolderConfirm": {
+    "description": "Says that deleting a folder also deletes its mail.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Projects"
+      },
+      "count": {
+        "type": "int",
+        "example": "12"
+      }
+    }
+  },
+  "folderCreated": "Created “{name}”",
+  "@folderCreated": {
+    "description": "The note after a folder was created.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Projects"
+      }
+    }
+  },
+  "folderRenamed": "Renamed “{from}” to “{to}”",
+  "@folderRenamed": {
+    "description": "The note after a folder was renamed.",
+    "placeholders": {
+      "from": {
+        "type": "String",
+        "example": "Projects"
+      },
+      "to": {
+        "type": "String",
+        "example": "Work"
+      }
+    }
+  },
+  "folderDeleted": "Deleted “{name}”",
+  "@folderDeleted": {
+    "description": "The note after a folder was deleted.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Projects"
+      }
+    }
+  },
+  "folderActionFailed": "Could not change the folders: {error}",
+  "@folderActionFailed": {
+    "description": "The error after a folder action failed.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "the server refused the name"
+      }
+    }
+  },
+  "hideFromSidebar": "Hide from sidebar",
+  "showInSidebar": "Show in sidebar",
+  "folderHidden": "“{name}” is hidden from the sidebar",
+  "@folderHidden": {
+    "description": "The note after a folder was hidden.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      }
+    }
+  },
+  "folderShown": "“{name}” is in the sidebar again",
+  "@folderShown": {
+    "description": "The note after a folder was shown again.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      }
+    }
+  },
+  "moveToFolder": "Move to folder",
+  "moveToFolderEllipsis": "Move to folder…",
+  "movedToFolder": "Moved to {name}",
+  "@movedToFolder": {
+    "description": "The note after messages were moved to a folder. On the undo banner.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Projects"
+      }
+    }
+  },
+  "noOtherFolders": "No other folders",
+  "folderExists": "A folder of that name already exists.",
+  "folderBadName": "That name cannot be used: it is empty, has control characters, or starts or ends with the folder separator.",
+  "folderSystem": "The inbox and the Sent, Drafts, Archive, Junk and Trash folders cannot be renamed or deleted.",
+  "folderGone": "That folder no longer exists.",
+  "dismissFolderNote": "Dismiss this note",
+  "hiddenFolders": "Hidden folders"
 }

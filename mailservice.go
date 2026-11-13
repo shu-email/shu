@@ -28,6 +28,12 @@ type mailService interface {
 	NeedsSignIn(ctx context.Context, accountID string) (bool, error)
 
 	CachedFolders(ctx context.Context, accountID string) ([]mail.Folder, error)
+	// Folder actions reach the server first and change the cache only
+	// once it agreed; a system folder is never renamed or deleted.
+	CreateFolder(ctx context.Context, accountID, name string) (mail.Folder, error)
+	RenameFolder(ctx context.Context, accountID, from, to string) error
+	DeleteFolder(ctx context.Context, accountID, name string) error
+	SetFolderSubscribed(ctx context.Context, accountID, name string, on bool) error
 	CachedMessage(ctx context.Context, accountID, folder string, uid mail.UID) (mail.FetchResult, bool, error)
 	// The list reads the cache a page at a time, newest first, each page
 	// after the cursor the one before it ended at.

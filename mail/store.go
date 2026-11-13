@@ -41,10 +41,19 @@ type Store interface {
 	SaveIdentity(ctx context.Context, id Identity) error
 	DeleteIdentity(ctx context.Context, id string) error
 
-	// Folders.
+	// Folders. SaveFolders upserts a LIST result, each folder's
+	// Subscribed as the list said. RenameFolder moves a folder and the
+	// folders below it to their new names, keeping their messages and
+	// cursors, delimiter being the hierarchy's; DeleteFolder removes a
+	// folder and the cached messages in it; SetFolderSubscribed records
+	// whether the user wants it in the sidebar. Each is ErrNotFound for a
+	// folder the account has not.
 	Folders(ctx context.Context, accountID string) ([]Folder, error)
 	Folder(ctx context.Context, accountID, name string) (Folder, bool, error)
 	SaveFolders(ctx context.Context, accountID string, folders []Folder) error
+	RenameFolder(ctx context.Context, accountID, from, to, delimiter string) error
+	DeleteFolder(ctx context.Context, accountID, name string) error
+	SetFolderSubscribed(ctx context.Context, accountID, name string, on bool) error
 
 	// Messages.
 	ListMessages(ctx context.Context, accountID, folder, query string, limit int) ([]Summary, error)

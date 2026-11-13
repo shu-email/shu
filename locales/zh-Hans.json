@@ -874,5 +874,130 @@
   "securityLinkOpen": "打开链接",
   "securityAttachmentExecutable": "可运行程序",
   "securityAttachmentDisguised": "文件名隐藏了程序",
-  "securityAttachmentTypeMismatch": "内容与文件名不符"
+  "securityAttachmentTypeMismatch": "内容与文件名不符",
+  "newFolder": "新建文件夹",
+  "newSubfolder": "新建子文件夹…",
+  "folderNameLabel": "文件夹名称",
+  "createFolder": "创建文件夹",
+  "renameFolder": "重命名文件夹…",
+  "renameFolderTitle": "重命名“{name}”",
+  "@renameFolderTitle": {
+    "description": "The title of the form that renames a folder.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Projects"
+      }
+    }
+  },
+  "deleteFolder": "删除文件夹…",
+  "deleteFolderTitle": "删除“{name}”？",
+  "@deleteFolderTitle": {
+    "description": "The title of the confirmation before a folder is deleted.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Projects"
+      }
+    }
+  },
+  "deleteFolderConfirm": "这将删除文件夹“{name}”及其中的{count, plural, other {# 封邮件}}。此操作无法撤销。",
+  "@deleteFolderConfirm": {
+    "description": "Says that deleting a folder also deletes its mail.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Projects"
+      },
+      "count": {
+        "type": "int",
+        "example": "12"
+      }
+    }
+  },
+  "folderCreated": "已创建“{name}”",
+  "@folderCreated": {
+    "description": "The note after a folder was created.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Projects"
+      }
+    }
+  },
+  "folderRenamed": "已将“{from}”重命名为“{to}”",
+  "@folderRenamed": {
+    "description": "The note after a folder was renamed.",
+    "placeholders": {
+      "from": {
+        "type": "String",
+        "example": "Projects"
+      },
+      "to": {
+        "type": "String",
+        "example": "Work"
+      }
+    }
+  },
+  "folderDeleted": "已删除“{name}”",
+  "@folderDeleted": {
+    "description": "The note after a folder was deleted.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Projects"
+      }
+    }
+  },
+  "folderActionFailed": "无法更改文件夹：{error}",
+  "@folderActionFailed": {
+    "description": "The error after a folder action failed.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "the server refused the name"
+      }
+    }
+  },
+  "hideFromSidebar": "在侧边栏中隐藏",
+  "showInSidebar": "在侧边栏中显示",
+  "folderHidden": "“{name}”已在侧边栏中隐藏",
+  "@folderHidden": {
+    "description": "The note after a folder was hidden.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      }
+    }
+  },
+  "folderShown": "“{name}”已重新显示在侧边栏",
+  "@folderShown": {
+    "description": "The note after a folder was shown again.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Newsletters"
+      }
+    }
+  },
+  "moveToFolder": "移动到文件夹",
+  "moveToFolderEllipsis": "移动到文件夹…",
+  "movedToFolder": "已移动到{name}",
+  "@movedToFolder": {
+    "description": "The note after messages were moved to a folder. On the undo banner.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Projects"
+      }
+    }
+  },
+  "noOtherFolders": "没有其他文件夹",
+  "folderExists": "同名文件夹已存在。",
+  "folderBadName": "无法使用该名称：它为空、包含控制字符，或以文件夹分隔符开头或结尾。",
+  "folderSystem": "收件箱以及已发送、草稿、归档、垃圾邮件和回收站文件夹不能重命名或删除。",
+  "folderGone": "该文件夹已不存在。",
+  "dismissFolderNote": "关闭此提示",
+  "hiddenFolders": "隐藏的文件夹"
 }

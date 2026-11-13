@@ -452,6 +452,14 @@ func (a *app) start() {
 	a.svc.OnRuleActivity(func(accountID string) {
 		a.post(func() { a.ruleActivity(accountID) })
 	})
+	// The parsed cache is brought to this build's version, and what no row
+	// names any more goes with it: older bodies and attachment files, and
+	// the temporary files an earlier run left.
+	a.run(func() {
+		ctx, cancel := a.ctx()
+		defer cancel()
+		_ = a.svc.PrepareCache(ctx)
+	})
 	// The files of drafts that were sent or discarded without the time to
 	// collect them, as when the app quit meanwhile, go now. It is best
 	// effort: what stays is collected the next time.

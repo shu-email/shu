@@ -155,7 +155,12 @@ func (s *Service) DeleteFolder(ctx context.Context, accountID, name string) erro
 	if err := c.client.Delete(name).Wait(); err != nil {
 		return fmt.Errorf("imap: delete %s: %w", name, err)
 	}
-	return s.store.DeleteFolder(ctx, accountID, name)
+	if err := s.store.DeleteFolder(ctx, accountID, name); err != nil {
+		return err
+	}
+	// The folder's mail is gone from the cache with it.
+	_ = s.SweepCache(ctx)
+	return nil
 }
 
 // SetFolderSubscribed keeps a folder in the sidebar or hides it, on the

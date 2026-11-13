@@ -64,6 +64,13 @@ type Store interface {
 	MarkDeleted(ctx context.Context, accountID, folder string, uid UID, deleted bool) error
 	DeleteMessage(ctx context.Context, accountID, folder string, uid UID) error
 	SetAttachmentCache(ctx context.Context, accountID, folder string, uid UID, part, hash, path string) error
+	// AttachmentFileRefs lists the files the cached attachments' bytes are
+	// in, for the sweep that keeps them and removes the rest.
+	AttachmentFileRefs(ctx context.Context) ([]string, error)
+	// PrepareCache clears the parsed bodies and attachment rows when
+	// version differs from the one that wrote them, and reports whether it
+	// did. Nothing the server cannot give again is touched.
+	PrepareCache(ctx context.Context, version int) (bool, error)
 	// TakeNew returns the unread messages of a folder above its
 	// watermark, newest first, and raises the watermark over them in the
 	// same step: a message is returned once, ever. The watermark is the

@@ -29,6 +29,10 @@ type memStore struct {
 	// failFileRefs the listing of the attachment files in use.
 	failDraftSync error
 	failFileRefs  error
+	// attachmentFiles are the paths AttachmentFileRefs reports, and
+	// cacheVersion the version PrepareCache last saw.
+	attachmentFiles []string
+	cacheVersion    int
 	// kv is the settings, and marks the watermark of each folder watched:
 	// the highest UID announced, under its UIDVALIDITY.
 	kv    map[string]string
@@ -1400,4 +1404,27 @@ func (s *memSecrets) Delete(key string) error {
 	defer s.mu.Unlock()
 	delete(s.data, key)
 	return nil
+}
+
+func (s *memStore) AttachmentFileRefs(ctx context.Context) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.attachmentFiles), nil
+}
+
+func (s *memStore) PrepareCache(ctx context.Context, version int) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.cacheVersion == version {
+		return false, nil
+	}
+	s.cacheVersion = version
+	for _, byUID := range s.messages {
+		for uid, m := range byUID {
+			m.BodyText, m.BodyHTML, m.BodyTruncated = "", "", false
+			m.CachedAt, m.Attachments = time.Time{}, nil
+			byUID[uid] = m
+		}
+	}
+	return true, nil
 }

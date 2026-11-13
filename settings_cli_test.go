@@ -306,3 +306,40 @@ func TestProviderRemove(t *testing.T) {
 		t.Errorf("no note after removal: %q", tt.Texts())
 	}
 }
+
+// A tool older than the flags Shu starts it with says to update, and
+// offers the page, rather than reporting a version as if it worked.
+func TestProviderOutdated(t *testing.T) {
+	a, _, _, _ := aiMessageApp(t, true)
+	dir := t.TempDir()
+	script := filepath.Join(dir, "claude")
+	body := "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo '0.4.0'; exit 0; fi\n" +
+		"if [ \"$1\" = \"auth\" ]; then echo '{\"loggedIn\": true}'; exit 0; fi\nexit 0\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := ai.DefaultConfig()
+	cfg.Enabled = true
+	cfg.UseProvider(ai.ProviderClaudeCLI)
+	cfg.SetCLIPath(ai.ProviderClaudeCLI, script)
+	if err := a.ai.SaveConfig(context.Background(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	a.openSettings(settingsTabAI)
+	a.openProviders()
+	a.providers.selected = ai.ProviderClaudeCLI
+	tt := ui.NewTester(a.view, 1220, 900)
+	tt.Frame()
+	if !tt.HasText(locales.AiLocalToolOutdated()) {
+		t.Fatalf("no update state for an old tool: %q", tt.Texts())
+	}
+	if !tt.HasText(locales.AiLocalToolUpdate()) {
+		t.Errorf("no update page for an old tool: %q", tt.Texts())
+	}
+	if tt.HasText(locales.AiLocalToolSignInCommand()) {
+		t.Errorf("an outdated tool offers to sign in: %q", tt.Texts())
+	}
+	if !tt.HasText(locales.AiLocalToolNotOfficial()) {
+		t.Errorf("the panel does not say it is not an official integration: %q", tt.Texts())
+	}
+}

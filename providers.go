@@ -101,6 +101,8 @@ func (a *app) providerStatusLine(id ai.ProviderID) string {
 				return status.Err
 			}
 			return locales.AiLocalToolNotInstalled()
+		case status.Outdated:
+			return locales.AiLocalToolOutdated()
 		case !status.SignedIn:
 			return locales.AiLocalToolSignIn()
 		case status.Version != "":
@@ -235,6 +237,7 @@ func (a *app) providerOverview(c *ui.Context, t *ui.Theme, services ui.Services)
 		a.cliNextSteps(c, t, status, services)
 		ui.Text(c, locales.AiLocalToolIsolation()).FontSize(11).TextColor(t.TextMuted).MaxLines(5)
 		ui.Text(c, locales.AiLocalToolIntro()).FontSize(11).TextColor(t.TextMuted).MaxLines(4)
+		ui.Text(c, locales.AiLocalToolNotOfficial()).FontSize(11).TextColor(t.TextMuted).MaxLines(5)
 		a.removeProviderRow(c, t)
 		return
 	}
@@ -296,7 +299,15 @@ func (a *app) cliNextSteps(c *ui.Context, t *ui.Theme, status ai.CLIStatus, serv
 				ui.Button(c, locales.AiLocalToolInstall()).OnClick(func() { services.OpenURL(url) })
 			}
 		}
-		if status.Installed && !status.SignedIn {
+		if status.Installed && status.Outdated {
+			// An update is the one fix for an outdated tool, and it comes
+			// before sign-in: its status command may work while the flags
+			// Shu launches it with do not.
+			if url := ai.CLIInstallURL(p.selected); url != "" {
+				ui.Button(c, locales.AiLocalToolUpdate()).OnClick(func() { services.OpenURL(url) })
+			}
+		}
+		if status.Installed && !status.Outdated && !status.SignedIn {
 			if command := ai.CLISignInCommand(p.selected); command != "" {
 				ui.Button(c, locales.AiLocalToolSignInCommand()).OnClick(func() { a.copySignIn(services, command) })
 			}

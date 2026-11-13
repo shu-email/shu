@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -27,6 +28,10 @@ type CLIStatus struct {
 	SignedIn  bool
 	Path      string
 	Version   string
+	// Outdated says the version is older than the flags Shu starts the
+	// tool with, so a launch is refused with a clear error instead of
+	// failing on an argument the tool does not know.
+	Outdated bool
 	// Account is the address the tool reports it is signed in as, or ""
 	// when the tool keeps it to itself. It comes from the tool's own
 	// status command, never from its credentials.
@@ -178,6 +183,7 @@ func (s *Service) CLIStatus(ctx context.Context, id ProviderID, explicit string)
 	status := CLIStatus{Installed: true, Path: path}
 	if err == nil {
 		status.Version = cliVersion(out)
+		status.Outdated = cliOutdated(command, status.Version)
 	}
 	switch command {
 	case "claude":
@@ -203,6 +209,58 @@ func (s *Service) runCLIProbe(ctx context.Context, path string, args []string) (
 }
 
 var versionPattern = regexp.MustCompile(`\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z.-]+)?`)
+
+// cliMinimum is the oldest release of each tool that takes the flags Shu
+// launches it with: cliLaunch adds arguments an older build rejects, and
+// a rejection would otherwise read as a generic failure.
+var cliMinimum = map[string]string{
+	"claude": "1.0.0",
+	"codex":  "0.20.0",
+}
+
+// cliOutdated reports whether a reported version is older than the
+// minimum. A version that cannot be read is not called outdated: an
+// update is the user's call, and a wrong guess would refuse a tool that
+// works.
+func cliOutdated(command, version string) bool {
+	min, ok := cliMinimum[command]
+	if !ok || version == "" {
+		return false
+	}
+	have, ok := versionParts(version)
+	if !ok {
+		return false
+	}
+	want, _ := versionParts(min)
+	for i := 0; i < 3; i++ {
+		if have[i] != want[i] {
+			return have[i] < want[i]
+		}
+	}
+	return false
+}
+
+// versionParts are the three numbers of a version, zero where one is
+// missing, so "1.2" compares as "1.2.0". ok is false when the version
+// does not start with a number at all, which is no version to compare.
+func versionParts(version string) ([3]int, bool) {
+	var out [3]int
+	for i, part := range strings.SplitN(version, ".", 3) {
+		digits := part
+		if cut := strings.IndexFunc(part, func(r rune) bool { return r < '0' || r > '9' }); cut >= 0 {
+			digits = part[:cut]
+		}
+		n, err := strconv.Atoi(digits)
+		if err != nil {
+			if i == 0 {
+				return out, false
+			}
+			return out, true
+		}
+		out[i] = n
+	}
+	return out, true
+}
 
 // claudeAccount reads the address out of a sign-in status. The shape of
 // that answer has changed once already, so every place an address may sit
@@ -260,9 +318,14 @@ func (s *Service) runCLI(ctx context.Context, cfg Config, model string, req requ
 	if err != nil {
 		kind := cliError(ctx, err)
 		if e, ok := kind.(*Error); ok && e.Kind == KindCLIFailed {
-			// A failed run is often a signed-out tool: say so instead of
-			// a generic failure, using the content-free status command.
-			if status := s.CLIStatus(ctx, cfg.Provider, cfg.CLIPath(cfg.Provider)); status.Installed && !status.SignedIn {
+			// A failed run is often a signed-out or outdated tool: say
+			// so instead of a generic failure, using the content-free
+			// status command.
+			status := s.CLIStatus(ctx, cfg.Provider, cfg.CLIPath(cfg.Provider))
+			switch {
+			case status.Installed && status.Outdated:
+				return "", &Error{Kind: KindCLIOutdated}
+			case status.Installed && !status.SignedIn:
 				return "", &Error{Kind: KindCLISignIn}
 			}
 		}

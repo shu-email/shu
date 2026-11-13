@@ -10937,3 +10937,33 @@ func AiLocalToolInstall() string { return In(i18n.Locale()).AiLocalToolInstall()
 func (msgs Messages) AiLocalToolInstall() string {
 	return Catalog.Format(msgs.locale, "aiLocalToolInstall", nil)
 }
+
+// AiLocalToolOutdated says "Update required"
+// in the language the app shows.
+func AiLocalToolOutdated() string { return In(i18n.Locale()).AiLocalToolOutdated() }
+
+// AiLocalToolOutdated says "Update required"
+// in the language of msgs.
+func (msgs Messages) AiLocalToolOutdated() string {
+	return Catalog.Format(msgs.locale, "aiLocalToolOutdated", nil)
+}
+
+// AiLocalToolUpdate says "Open update page"
+// in the language the app shows.
+func AiLocalToolUpdate() string { return In(i18n.Locale()).AiLocalToolUpdate() }
+
+// AiLocalToolUpdate says "Open update page"
+// in the language of msgs.
+func (msgs Messages) AiLocalToolUpdate() string {
+	return Catalog.Format(msgs.locale, "aiLocalToolUpdate", nil)
+}
+
+// AiLocalToolNotOfficial says "Shu is not affiliated with the tools’ vendors, and this is not an official integration. Using a subscription throug…"
+// in the language the app shows.
+func AiLocalToolNotOfficial() string { return In(i18n.Locale()).AiLocalToolNotOfficial() }
+
+// AiLocalToolNotOfficial says "Shu is not affiliated with the tools’ vendors, and this is not an official integration. Using a subscription throug…"
+// in the language of msgs.
+func (msgs Messages) AiLocalToolNotOfficial() string {
+	return Catalog.Format(msgs.locale, "aiLocalToolNotOfficial", nil)
+}

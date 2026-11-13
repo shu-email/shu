@@ -41,6 +41,8 @@ const (
 	KindCLISignIn
 	KindCLIFailed
 	KindCLIOutput
+	// KindCLIOutdated is a tool older than the flags Shu starts it with.
+	KindCLIOutdated
 	// KindProviderOff is a request from a provider the user switched off.
 	KindProviderOff
 	// KindKeyEndpoint is a stored key given to another endpoint than the
@@ -99,6 +101,8 @@ func (e *Error) Error() string {
 		return "The local tool failed. Check that it is signed in and up to date."
 	case KindCLIOutput:
 		return "The local tool returned too much text."
+	case KindCLIOutdated:
+		return "The local tool is too old for this version of Shu. Update it, then try again."
 	case KindProviderOff:
 		return "This provider is switched off. Turn it on in Settings."
 	case KindKeyEndpoint:

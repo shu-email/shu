@@ -1389,5 +1389,8 @@
   "aiLocalToolAccountHide": "隐藏账号",
   "aiLocalToolSignInCommand": "复制登录命令",
   "aiLocalToolCopied": "已复制 {command}",
-  "aiLocalToolInstall": "打开安装页面"
+  "aiLocalToolInstall": "打开安装页面",
+  "aiLocalToolOutdated": "需要更新",
+  "aiLocalToolUpdate": "打开更新页面",
+  "aiLocalToolNotOfficial": "Shu 与这些工具的厂商没有关联，这也不是官方集成。通过其他应用使用订阅可能受厂商条款限制，依赖前请先确认。"
 }

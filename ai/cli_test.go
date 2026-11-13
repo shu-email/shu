@@ -362,3 +362,41 @@ func TestRemoveProvider(t *testing.T) {
 		t.Error("an unknown provider was removed")
 	}
 }
+
+// A version older than the flags Shu launches a tool with is reported as
+// outdated; one that cannot be read is not, since refusing a tool that
+// works would be worse than a generic failure.
+func TestCLIOutdated(t *testing.T) {
+	cases := []struct {
+		command, version string
+		want             bool
+	}{
+		{"claude", "1.0.0", false},
+		{"claude", "2.1.323", false},
+		{"claude", "0.9.9", true},
+		{"claude", "1.0", false},
+		{"codex", "0.19.5", true},
+		{"codex", "0.20", false},
+		{"codex", "1.2.3-beta.1", false},
+		{"claude", "", false},
+		{"claude", "unknown", false},
+		{"npm", "0.0.1", false},
+	}
+	for _, c := range cases {
+		if got := cliOutdated(c.command, c.version); got != c.want {
+			t.Errorf("cliOutdated(%q, %q) = %v, want %v", c.command, c.version, got, c.want)
+		}
+	}
+}
+
+// A status read from an old build says so, and a launch of it fails with
+// the outdated kind rather than a generic one.
+func TestCLIStatusOutdated(t *testing.T) {
+	script, _, _ := fakeCLI(t, "if [ \"$1\" = \"--version\" ]; then echo '0.4.0'; exit 0; fi\n"+
+		"if [ \"$1\" = \"auth\" ]; then echo '{\"loggedIn\": true}'; exit 0; fi\nexit 0\n")
+	s, _, _, _ := newTestService(t)
+	status := s.CLIStatus(context.Background(), ProviderClaudeCLI, script)
+	if !status.Installed || !status.SignedIn || !status.Outdated {
+		t.Fatalf("status = %+v", status)
+	}
+}

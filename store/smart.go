@@ -114,8 +114,10 @@ func (s *Store) CountUnread(ctx context.Context, q mail.ListQuery) (int, error) 
 	if len(folders) == 0 {
 		return 0, nil
 	}
-	where, args := p.inScope("m", folders, false)
-	if match, more := p.matchSQL("m", false); match != "" {
+	// A count has no rows to stop at, so each index is worth driving:
+	// the folder's, or the full-text index's.
+	where, args := p.inScope("m", folders, true)
+	if match, more := p.matchSQL("m", true); match != "" {
 		where += ` AND ` + match
 		args = append(args, more...)
 	}

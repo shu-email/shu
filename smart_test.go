@@ -107,6 +107,12 @@ func TestSmartMailboxSavedSearch(t *testing.T) {
 	if got := rowKeys(a); !reflect.DeepEqual(got, want) {
 		t.Errorf("reopened, the mailbox lists %v", got)
 	}
+	// Opening the unread row marks it read, and the badge follows the
+	// mail rather than waiting for a sync.
+	click(t, tt, "Budget notes")
+	if len(a.smarts.list) != 1 || a.smarts.list[0].Unread != 0 {
+		t.Errorf("after reading it, the mailboxes = %+v", a.smarts.list)
+	}
 }
 
 // A smart mailbox's list reads the cache a page at a time, as the search
@@ -201,6 +207,96 @@ func TestSmartMailboxEditAndDelete(t *testing.T) {
 	}
 	if len(fs.messages["a1/INBOX"]) != 2 || len(fs.messages["a1/Sent"]) != 2 {
 		t.Errorf("the mail changed: %+v", fs.messages)
+	}
+}
+
+// A smart mailbox saved from the drafts reads the drafts, and one saved
+// with no typed text is its folder's list alone, as the list on screen is.
+func TestSmartMailboxDraftsAndEmptySearch(t *testing.T) {
+	a, fs, tt := startTwo(t, false)
+	if _, err := fs.SaveDraft(context.Background(), mail.Draft{ID: "d1", AccountID: "a1",
+		To: "leo@work.example", Subject: "Offsite notes", Body: "The draft body."}); err != nil {
+		t.Fatal(err)
+	}
+	click(t, tt, locales.Drafts())
+	drafts := rowKeys(a)
+	if len(drafts) == 0 {
+		t.Fatalf("the drafts list nothing: %q", tt.Texts())
+	}
+	mb := saveSearch(t, a, tt, "", "My drafts")
+	if mb.Folder != draftsFolder || mb.Scope != mail.SmartScopeHere {
+		t.Errorf("saved %+v", mb)
+	}
+	if got := rowKeys(a); !reflect.DeepEqual(got, drafts) {
+		t.Errorf("the mailbox lists %v, the drafts did %v", got, drafts)
+	}
+	// An empty search of a folder does not widen to its account, as a
+	// typed one would: saving it keeps the folder's own list.
+	click(t, tt, locales.Inbox())
+	inbox := rowKeys(a)
+	if mb := saveSearch(t, a, tt, "", "Inbox only"); mb.Folder != "INBOX" || mb.Scope != mail.SmartScopeHere {
+		t.Errorf("saved %+v", mb)
+	}
+	if got := rowKeys(a); !reflect.DeepEqual(got, inbox) {
+		t.Errorf("the mailbox lists %v, the inbox did %v", got, inbox)
+	}
+}
+
+// Saved from the unified inbox, a smart mailbox is the unified inbox as
+// it was: every account's inbox, which the window knows it shows.
+func TestSmartMailboxFromAllInboxes(t *testing.T) {
+	a, _, tt := startTwo(t, false)
+	click(t, tt, locales.AllInboxes())
+	all := rowKeys(a)
+	if mb := saveSearch(t, a, tt, "", "Every inbox"); mb.Folder != allInboxes || mb.Scope != mail.SmartScopeHere {
+		t.Errorf("saved %+v", mb)
+	}
+	if got := rowKeys(a); !reflect.DeepEqual(got, all) {
+		t.Errorf("the mailbox lists %v, the inboxes did %v", got, all)
+	}
+	if !a.isUnified() {
+		t.Error("the mailbox is not the unified inbox")
+	}
+	click(t, tt, locales.Inbox())
+	openSmart(t, tt, "Every inbox")
+	if !a.isUnified() {
+		t.Error("reopened, the mailbox is not the unified inbox")
+	}
+	if got := rowKeys(a); !reflect.DeepEqual(got, all) {
+		t.Errorf("reopened, the mailbox lists %v", got)
+	}
+}
+
+// A saved search whose account: part keeps no account lists nothing and
+// counts nothing, rather than widening to every account.
+func TestSmartMailboxNoAccount(t *testing.T) {
+	a, _, tt := startTwo(t, false)
+	saveSearch(t, a, tt, "account:nobody budget", "Nobody")
+	if got := rowKeys(a); len(got) != 0 {
+		t.Errorf("the mailbox lists %v", got)
+	}
+	if len(a.smarts.list) != 1 || a.smarts.list[0].Unread != 0 {
+		t.Errorf("the mailboxes = %+v", a.smarts.list)
+	}
+}
+
+// Switching accounts leaves none of the other account's smart mailboxes
+// in the sidebar, and an entry left from before the switch reads no list
+// rather than the account's every folder.
+func TestSmartMailboxOtherAccount(t *testing.T) {
+	a, _, tt := startTwo(t, false)
+	mb := saveSearch(t, a, tt, "budget", "Budget")
+	a.switchAccount("a2")
+	a.loadSmarts(a.gen)
+	tt.Frame()
+	if len(a.smarts.list) != 0 || tt.HasText("Budget") {
+		t.Errorf("the other account's sidebar: %q", tt.Texts())
+	}
+	a.folder = smartEntry(mb.ID)
+	a.readList(a.gen, false, false)
+	tt.Frame()
+	if len(a.all) != 0 {
+		t.Errorf("the stale entry lists %v", rowKeys(a))
 	}
 }
 

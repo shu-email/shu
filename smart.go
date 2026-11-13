@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -45,11 +46,12 @@ func smartOf(entry string) int64 {
 type smartState struct {
 	// list are the account's, in their order, with how many unread
 	// messages each finds as the window last counted them. loaded says
-	// they were read; seq tells the reads apart, of which the one begun
-	// last is kept.
+	// they were read; seq tells the reads of the list apart, and counts
+	// those of the badges, of which the one begun last is kept.
 	list   []mail.SmartMailbox
 	loaded bool
 	seq    uint64
+	counts uint64
 	// open is whether the sidebar's section shows them, and form the
 	// dialog that saves or changes one.
 	open bool
@@ -108,7 +110,9 @@ func (a *app) smartListQuery(mb mail.SmartMailbox) listQuery {
 	q := listQuery{account: mb.Account, folder: entry, search: strings.TrimSpace(mb.Query),
 		smartFolder: mb.Folder, threaded: a.threaded()}
 	if q.search != "" {
-		q.scope = a.scopeFor(entry, scopeOfName(mb.Scope), true, mb.Query)
+		// The scope is the saved list's, not the sidebar entry's: the
+		// unified inbox's and the reminders' rules apply as they did.
+		q.scope = a.scopeFor(mb.Folder, scopeOfName(mb.Scope), true, mb.Query)
 		ids, narrowed := a.queryAccounts(parseQuery(q.search))
 		q.narrowed, q.accounts = narrowed, strings.Join(ids, "\n")
 	}
@@ -134,35 +138,48 @@ func (a *app) loadSmarts(g uint64) {
 			}
 			a.smarts.list, a.smarts.loaded = list, true
 			a.smartGone(accountID)
-			queries := make([]mail.ListQuery, len(list))
-			for i := range list {
-				queries[i] = a.smartListQuery(list[i]).read("", 1)
+			a.countSmarts(g)
+		})
+	})
+}
+
+// countSmarts reads again the unread mail each smart mailbox finds, for
+// its badge. The folder and label badges follow what the user reads,
+// stars and moves, and so must these.
+func (a *app) countSmarts(g uint64) {
+	accountID := a.active
+	if accountID == "" || !a.smarts.loaded || len(a.smarts.list) == 0 {
+		return
+	}
+	list := slices.Clone(a.smarts.list)
+	a.smarts.counts++
+	seq := a.smarts.counts
+	a.run(func() {
+		ctx, cancel := a.ctx()
+		defer cancel()
+		counts := make([]int, len(list))
+		for i := range list {
+			q := a.smartListQuery(list[i])
+			if q.none() {
+				// The search keeps no account: it lists nothing, and
+				// counting every account's would say it finds mail.
+				continue
 			}
-			if len(queries) == 0 {
+			if n, err := a.svc.CountUnread(ctx, q.read("", 1)); err == nil {
+				counts[i] = n
+			}
+		}
+		a.post(func() {
+			if a.stale(g) || a.active != accountID || seq < a.smarts.counts {
 				return
 			}
-			a.run(func() {
-				ctx, cancel := a.ctx()
-				defer cancel()
-				counts := make([]int, len(queries))
-				for i := range queries {
-					if n, err := a.svc.CountUnread(ctx, queries[i]); err == nil {
-						counts[i] = n
+			for i := range a.smarts.list {
+				for k := range list {
+					if a.smarts.list[i].ID == list[k].ID {
+						a.smarts.list[i].Unread = counts[k]
 					}
 				}
-				a.post(func() {
-					if a.stale(g) || a.active != accountID || seq < a.smarts.seq {
-						return
-					}
-					for i := range a.smarts.list {
-						for k := range list {
-							if a.smarts.list[i].ID == list[k].ID {
-								a.smarts.list[i].Unread = counts[k]
-							}
-						}
-					}
-				})
-			})
+			}
 		})
 	})
 }
@@ -322,6 +339,12 @@ func (a *app) openSmartForm(mb *mail.SmartMailbox) {
 		f.query = strings.TrimSpace(a.query)
 		f.folder = a.smartSaveFolder()
 		f.scope = scopeName(a.searchScope())
+	}
+	if strings.TrimSpace(f.query) == "" {
+		// A list with no text is its folder's: the scope control's wider
+		// scopes apply to a search, and saving one would not list what
+		// the user saw.
+		f.scope = mail.SmartScopeHere
 	}
 	a.smarts.form = f
 }

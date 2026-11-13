@@ -110,9 +110,6 @@ func (a *app) leavesOutShown(q searchQuery) bool {
 	return narrowed && !slices.Contains(ids, a.active)
 }
 
-// defaultScope is where a list's searches start (defaultScopeFor).
-func (a *app) defaultScope() searchScope { return a.defaultScopeFor(a.folder) }
-
 // defaultScopeFor is where a list's searches start. A folder's cover its
 // whole account, where what is looked for so often is: in Sent, in
 // Archive. The drafts of this device are in no folder of the server, the
@@ -126,9 +123,11 @@ func (a *app) defaultScopeFor(folder string) searchScope {
 	return scopeAccount
 }
 
-// searchScope is the scope the search on screen covers (scopeFor).
+// searchScope is the scope the search on screen covers (scopeFor), read
+// as the list it shows: a smart mailbox's is the list it was saved from,
+// not its entry in the sidebar.
 func (a *app) searchScope() searchScope {
-	return a.scopeFor(a.folder, a.scope, a.scopeSet, a.query)
+	return a.scopeFor(a.smartSaveFolder(), a.scope, a.scopeSet, a.query)
 }
 
 // scopeFor is the scope a search of a list covers: the one chosen, widened
@@ -177,11 +176,12 @@ func (a *app) scopeFor(folder string, scope searchScope, chosen bool, query stri
 
 // scopeChoices are the scopes the control offers on this list.
 func (a *app) scopeChoices() []searchScope {
+	folder := a.smartSaveFolder()
 	out := []searchScope{scopeHere}
-	if a.folder == remindersFolder || a.folder == followUpFolder {
+	if folder == remindersFolder || folder == followUpFolder {
 		return out
 	}
-	if a.folder != allInboxes {
+	if folder != allInboxes {
 		out = append(out, scopeAccount)
 	}
 	if len(a.accounts) > 1 {
@@ -195,16 +195,17 @@ func (a *app) scopeChoices() []searchScope {
 // apply, as an in: of another folder in the list's own or an account:
 // that leaves the account out, so that the field says what is searched.
 func (a *app) chooseScope(s searchScope) {
+	folder := a.smartSaveFolder()
 	q := a.query
 	if s == scopeHere {
 		switch {
-		case a.folder == draftsFolder:
+		case folder == draftsFolder:
 			q = withFilter(q, func(searchQuery) bool { return true }, "")
-		case a.folder == allInboxes || a.isServerFolder(a.folder):
+		case folder == allInboxes || a.isServerFolder(folder):
 			q = withFilter(q, func(s searchQuery) bool { return s.In != "" }, "")
 		}
 	}
-	if s != scopeAll && a.folder != allInboxes {
+	if s != scopeAll && folder != allInboxes {
 		q = withFilter(q, func(s searchQuery) bool {
 			return len(s.Accounts) > 0 && !a.namesAccount(s.Accounts[0], a.active)
 		}, "")

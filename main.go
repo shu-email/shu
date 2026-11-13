@@ -566,6 +566,10 @@ func (a *app) beginAccount() {
 	a.list = ui.ListState{}
 	a.sel.Clear()
 	a.bodies = map[string]mail.FetchResult{}
+	// Another account's smart mailboxes are not this one's, and their
+	// entries must not be clickable while its list is read.
+	a.smarts.list, a.smarts.loaded = nil, false
+	a.smarts.form, a.smarts.del = smartForm{}, smartDeletion{}
 	a.clearAI()
 	a.clearRows()
 	a.loadCache(a.gen)
@@ -759,9 +763,10 @@ func (a *app) readList(g uint64, progress, neighbour bool) {
 	if aim := a.aim; threaded && aim != nil && a.aimShown(aim) {
 		aimAt = mail.Summary{Account: aim.account, Folder: aim.folder, UID: aim.uid}
 	}
-	// A smart mailbox whose own folder is gone has no list to read: the
-	// search it saved would silently cover every folder instead.
-	if folder == "" || a.smartFolderGone() {
+	// A smart mailbox whose own folder is gone, or which the account no
+	// longer has, has no list to read: the search it saved would silently
+	// cover every folder instead.
+	if folder == "" || a.smartFolderGone() || smartOf(folder) != 0 && a.shownSmart() == nil {
 		a.all, a.convs = nil, nil
 		a.loading, a.pager.more = false, false
 		return
@@ -1058,6 +1063,11 @@ func (a *app) updateBadge() {
 		if folders := a.foldersFor(acc.ID); folders != nil {
 			a.inboxes[acc.ID] = inboxUnread(folders)
 		}
+	}
+	// A smart mailbox's badge is of the same cache, and follows the same
+	// reads and moves.
+	if a.smarts.loaded {
+		a.countSmarts(a.gen)
 	}
 	if a.setBadge == nil {
 		return

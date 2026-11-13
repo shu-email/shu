@@ -66,8 +66,15 @@ func (q listQuery) isFolder() bool {
 }
 
 // drafts reports whether the list is of the drafts, which their own read
-// lists rather than a page of the cache.
-func (q listQuery) drafts() bool { return q.folder == draftsFolder && q.scope == scopeHere }
+// lists rather than a page of the cache: the drafts' list, or a smart
+// mailbox saved from it as it was.
+func (q listQuery) drafts() bool {
+	folder := q.folder
+	if smartOf(folder) != 0 {
+		folder = q.smartFolder
+	}
+	return folder == draftsFolder && q.scope == scopeHere
+}
 
 // mailScope is the part of the cache the list reads: that of its scope,
 // in the accounts the search's account: parts keep.

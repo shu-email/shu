@@ -237,7 +237,9 @@ func proxyBypassed(list, host string, port int) bool {
 func (s *Service) dialNetwork(ctx context.Context, host string, port int) (net.Conn, error) {
 	set, err := s.networkSettings(ctx)
 	if err != nil {
-		return nil, err
+		// A settings read that failed is no reason to stay offline: the
+		// system's defaults apply.
+		set = DefaultNetworkSettings()
 	}
 	password := ""
 	if set.ProxyUsername != "" || set.Mode == ProxyManual {
@@ -390,7 +392,9 @@ func (s *Service) tlsConfigFor(ctx context.Context, host string) *tls.Config {
 func (s *Service) HTTPClient(ctx context.Context) (*http.Client, error) {
 	set, err := s.networkSettings(ctx)
 	if err != nil {
-		return nil, err
+		// A settings read that failed is no reason to stay offline: the
+		// system's defaults apply.
+		set = DefaultNetworkSettings()
 	}
 	password := ""
 	if data, err := s.secrets.Get(ProxyPasswordKey()); err == nil {

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -19,8 +20,11 @@ type Service struct {
 	store   Store
 	secrets Secrets
 	client  *http.Client
-	timeout time.Duration
-	now     func() time.Time
+	// clientMu guards the client, which the window may replace when the
+	// network settings change while a request is in flight.
+	clientMu sync.RWMutex
+	timeout  time.Duration
+	now      func() time.Time
 }
 
 // NewService wires the settings store and the keychain.
@@ -40,9 +44,12 @@ func NewService(store Store, secrets Secrets) *Service {
 
 // SetHTTPClient replaces the HTTP client, for tests that count requests.
 func (s *Service) SetHTTPClient(c *http.Client) {
-	if c != nil {
-		s.client = c
+	if c == nil {
+		return
 	}
+	s.clientMu.Lock()
+	s.client = c
+	s.clientMu.Unlock()
 }
 
 // SetTimeout bounds one request, for tests.
@@ -257,7 +264,10 @@ func (s *Service) post(ctx context.Context, cfg Config, model, key string, req r
 	for k, v := range headers {
 		httpReq.Header.Set(k, v)
 	}
-	resp, err := s.client.Do(httpReq)
+	s.clientMu.RLock()
+	client := s.client
+	s.clientMu.RUnlock()
+	resp, err := client.Do(httpReq)
 	if err != nil {
 		return "", transportError(ctx, err)
 	}

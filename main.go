@@ -228,6 +228,8 @@ type app struct {
 	// confirmation and the note after an action.
 	folderForm folderForm
 	folderNote string
+	// networkForm is the Network tab's editable state (network.go).
+	networkForm networkForm
 	// rules is the rules' view, open or not (rules.go); the live checks
 	// of the rule being written take turns under ruleCheckMu, and one a
 	// later check overtook (ruleCheckSeq) does not run.
@@ -1645,6 +1647,11 @@ func main() {
 		}
 		a := newApp(svc)
 		a.ai = ai.NewService(db, aiKeychain{})
+		// The AI layer sends through the same proxy and certificate
+		// authority as mail.
+		if client, err := svc.HTTPClient(ctx); err == nil {
+			a.ai.SetHTTPClient(client)
+		}
 		win := mygo.NewWindow(mygo.WindowOptions{
 			Title:           locales.AppName(),
 			Width:           1220,

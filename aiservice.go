@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"net/http"
 
 	"github.com/egoist/mygo"
 
@@ -13,6 +14,7 @@ import (
 // *ai.Service; tests pass a fake that answers at once. It has no method
 // that returns a key: the windows can only learn whether one is stored.
 type aiService interface {
+	SetHTTPClient(c *http.Client)
 	Config(ctx context.Context) (ai.Config, error)
 	SaveConfig(ctx context.Context, cfg ai.Config) error
 	KeyStored(id ai.ProviderID) (bool, error)

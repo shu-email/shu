@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -455,10 +456,51 @@ func cliError(ctx context.Context, err error) error {
 	return &Error{Kind: KindCLIFailed}
 }
 
+// cliTempPrefix names a run's private directory. The process ID that
+// follows it lets a later start tell a directory left by a crash from one
+// a running instance is still using.
+const cliTempPrefix = "shu-cli-"
+
+// sweepCLIDirs removes the private directories of runs that no longer
+// exist: a process killed before its defer ran leaves one behind, and
+// nothing else knows to remove it. Directories of this process and of
+// one still alive are left alone, and so are those a live process does
+// not own but wrote a moment ago.
+func sweepCLIDirs() {
+	root := os.TempDir()
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return
+	}
+	alive := map[int]bool{}
+	for _, entry := range entries {
+		name := entry.Name()
+		if !entry.IsDir() || !strings.HasPrefix(name, cliTempPrefix) {
+			continue
+		}
+		rest := strings.TrimPrefix(name, cliTempPrefix)
+		dash := strings.Index(rest, "-")
+		if dash <= 0 {
+			continue
+		}
+		pid, err := strconv.Atoi(rest[:dash])
+		if err != nil || pid == os.Getpid() {
+			continue
+		}
+		if running, ok := alive[pid]; ok && running {
+			continue
+		}
+		if alive[pid] = processAlive(pid); alive[pid] {
+			continue
+		}
+		_ = os.RemoveAll(filepath.Join(root, name))
+	}
+}
+
 // runProcess runs one command in a private working directory, with stdio
 // bounded and the process group killed when ctx ends.
 func runProcess(ctx context.Context, path string, args []string, stdin string, env map[string]string, maxOutput int) (string, error) {
-	dir, err := os.MkdirTemp("", "shu-cli-*")
+	dir, err := os.MkdirTemp("", fmt.Sprintf("%s%d-*", cliTempPrefix, os.Getpid()))
 	if err != nil {
 		return "", err
 	}

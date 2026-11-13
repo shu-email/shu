@@ -5,6 +5,7 @@ package ai
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -398,5 +399,30 @@ func TestCLIStatusOutdated(t *testing.T) {
 	status := s.CLIStatus(context.Background(), ProviderClaudeCLI, script)
 	if !status.Installed || !status.SignedIn || !status.Outdated {
 		t.Fatalf("status = %+v", status)
+	}
+}
+
+// A directory a killed run left behind is removed at the next start,
+// while the one a live process owns is left alone.
+func TestSweepCLIDirs(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("TMPDIR", root)
+	gone := filepath.Join(root, "shu-cli-999999-1")
+	live := filepath.Join(root, fmt.Sprintf("shu-cli-%d-1", os.Getpid()))
+	other := filepath.Join(root, "shu-cli-notapid-1")
+	for _, dir := range []string{gone, live, other} {
+		if err := os.Mkdir(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sweepCLIDirs()
+	if _, err := os.Stat(gone); !os.IsNotExist(err) {
+		t.Errorf("a dead run's directory was kept: %v", err)
+	}
+	if _, err := os.Stat(live); err != nil {
+		t.Errorf("this process's directory went away: %v", err)
+	}
+	if _, err := os.Stat(other); err != nil {
+		t.Errorf("a directory that names no process went away: %v", err)
 	}
 }

@@ -40,7 +40,10 @@ before the first request rather than after.
 - **A private empty folder.** Each run gets a new temporary directory with
   0700 permissions, as its working directory, removed when the run ends.
   There is no repository, no `.claude` or `.codex` project file and no
-  mail in it.
+  mail in it. A run killed before it could clean up leaves its directory
+  behind, so the directory is named after the process that owns it and Shu
+  removes the ones whose process is gone as it starts: nothing a request
+  wrote outlives a crash.
 - **Tools, plugins and hooks off.** The launch line turns off what would
   let the model act rather than answer: `claude -p` with `--tools ""` and
   `--disallowedTools "*"`, no slash commands, no session persistence, one

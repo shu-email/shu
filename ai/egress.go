@@ -29,6 +29,9 @@ type Service struct {
 
 // NewService wires the settings store and the keychain.
 func NewService(store Store, secrets Secrets) *Service {
+	// A run killed before its cleanup leaves a private directory behind;
+	// a start is the one moment nothing else is using them.
+	sweepCLIDirs()
 	return &Service{
 		store:   store,
 		secrets: secrets,

@@ -3,6 +3,7 @@
 package ai
 
 import (
+	"errors"
 	"os/exec"
 	"syscall"
 )
@@ -20,4 +21,12 @@ func killCommand(cmd *exec.Cmd) {
 	if err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL); err != nil {
 		_ = cmd.Process.Kill()
 	}
+}
+
+// processAlive reports whether a process is still running. Signal 0 asks
+// the kernel without touching the process. A process this user may not
+// signal is treated as alive, so its directory is left alone.
+func processAlive(pid int) bool {
+	err := syscall.Kill(pid, 0)
+	return err == nil || errors.Is(err, syscall.EPERM)
 }

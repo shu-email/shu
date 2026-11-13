@@ -1240,6 +1240,7 @@ func (cs *composeState) send() {
 				app.err = cs.note
 			}
 			app.loadMessages(app.gen)
+			app.loadFollowUps(app.gen)
 			app.loadPending(app.gen)
 			cs.close()
 		})

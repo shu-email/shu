@@ -111,6 +111,9 @@ type app struct {
 	reminders    []mail.Reminder
 	remindForm   reminderForm
 	reminderLoop bool
+	// followUps is how many of the active account's conversations wait for
+	// a reply (followup.go).
+	followUps int
 
 	showAccounts  bool
 	showSettings  bool
@@ -599,6 +602,7 @@ func (a *app) loadCache(g uint64) {
 				a.loadImagePolicy()
 			}
 			a.loadReminders(g)
+			a.loadFollowUps(g)
 			a.loadMessages(g)
 			a.syncAccount(g)
 		})
@@ -632,6 +636,7 @@ func (a *app) syncAccount(g uint64) {
 			}
 			a.loadMessages(g)
 			a.loadReminders(g)
+			a.loadFollowUps(g)
 			a.syncFolder(g)
 			a.syncSent(g)
 			a.loadPending(g)
@@ -651,8 +656,9 @@ func (a *app) syncAccount(g uint64) {
 // mail.
 func (a *app) syncFolder(g uint64) {
 	accountID, folder := a.active, a.folder
-	// Starred, a label's list and the reminders read the cache alone.
-	if folder == "" || folder == "starred" || folder == remindersFolder || labelOf(folder) != 0 {
+	// Starred, a label's list, the reminders and the follow-ups read the
+	// cache alone.
+	if folder == "" || folder == "starred" || folder == remindersFolder || folder == followUpFolder || labelOf(folder) != 0 {
 		return
 	}
 	if folder == allInboxes {
@@ -694,6 +700,7 @@ func (a *app) syncFolder(g uint64) {
 			}
 			a.loadMessages(g)
 			a.loadReminders(g)
+			a.loadFollowUps(g)
 		})
 	})
 }
@@ -714,6 +721,7 @@ func (a *app) syncSent(g uint64) {
 		a.post(func() {
 			if err == nil && !a.stale(g) && a.threaded() {
 				a.loadReminders(g)
+				a.loadFollowUps(g)
 				a.readList(g, false, false)
 			}
 		})
@@ -1198,7 +1206,7 @@ func (a *app) ensureFolder() {
 }
 
 func (a *app) folderExists(id string) bool {
-	if id == "starred" || id == draftsFolder || id == remindersFolder || id == allInboxes && len(a.accounts) > 1 {
+	if id == "starred" || id == draftsFolder || id == remindersFolder || id == followUpFolder || id == allInboxes && len(a.accounts) > 1 {
 		return true
 	}
 	if label := labelOf(id); label != 0 {
@@ -1256,6 +1264,8 @@ func (a *app) folderLabelOf(account, id string) string {
 		return locales.Drafts()
 	case remindersFolder:
 		return locales.Reminders()
+	case followUpFolder:
+		return locales.FollowUp()
 	case allInboxes:
 		return locales.AllInboxes()
 	}
@@ -1297,12 +1307,19 @@ func (a *app) folderUnread(id string) int {
 	return 0
 }
 
-// rowTime is the timestamp at the end of a list row: the message's, or in
-// the reminders' list the time the reminder is due.
+// rowTime is the timestamp at the end of a list row: the message's; in
+// the reminders' list the time the reminder is due, and in the
+// follow-ups' one how long the conversation has waited for a reply.
 func (a *app) rowTime(c *ui.Context, m mail.Summary) string {
 	if a.folder == remindersFolder {
 		if r := a.reminderFor(m.Account, m.Thread); r != nil {
 			return a.messageTime(c, r.RemindAt.In(c.Now().Location()))
+		}
+	}
+	if a.folder == followUpFolder {
+		if days, ok := mail.FollowUpAge(c.Now(), m.Date); ok {
+			return i18n.FormatRelativeTime(c.Locale(), -float64(days), i18n.RelativeDay,
+				i18n.RelativeTimeOptions{Style: i18n.RelativeShort})
 		}
 	}
 	return a.messageTime(c, m.Date)
@@ -1594,6 +1611,13 @@ func (a *app) sidebar(c *ui.Context, t *ui.Theme, vibrant bool) {
 				})
 			} else {
 				a.noteCount("side/"+remindersFolder, 0)
+			}
+			if item := ui.SidebarItem(c, followUpFolder, replyIcon, locales.FollowUp()); a.followUps > 0 {
+				item.Children(func() {
+					a.sidebarCount(c, "side/"+followUpFolder, a.followUps)
+				})
+			} else {
+				a.noteCount("side/"+followUpFolder, 0)
 			}
 			ui.SidebarSection(c, locales.Mailboxes(), &a.mailboxesOpen, func() {
 				for _, e := range entries {

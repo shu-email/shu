@@ -55,7 +55,7 @@ func (a *app) listQuery() listQuery {
 // older mail can be fetched.
 func (q listQuery) isFolder() bool {
 	return q.folder != "" && q.folder != "starred" && q.folder != draftsFolder && q.folder != remindersFolder &&
-		q.folder != allInboxes && labelOf(q.folder) == 0 && q.scope == scopeHere
+		q.folder != followUpFolder && q.folder != allInboxes && labelOf(q.folder) == 0 && q.scope == scopeHere
 }
 
 // drafts reports whether the list is of the drafts, which their own read
@@ -74,6 +74,9 @@ func (q listQuery) mailScope() mail.Scope {
 		sc = mail.AllInboxes()
 	case q.folder == remindersFolder:
 		sc = mail.RemindersScope(q.account)
+	case q.folder == followUpFolder:
+		// The store's clock decides what waits for a reply now.
+		sc = mail.FollowUpScope(q.account, time.Time{})
 	case labelOf(q.folder) != 0:
 		sc = mail.LabelScope(q.account, labelOf(q.folder))
 	default:

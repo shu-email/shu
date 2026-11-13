@@ -100,6 +100,7 @@ func (a *app) scheduledSent(p mail.PendingSend, result mail.SendResult, err erro
 			a.tellSending(locales.SentCopyWarning(), true)
 		}
 		a.loadMessages(a.gen)
+		a.loadFollowUps(a.gen)
 		a.loadPending(a.gen)
 	}
 }
@@ -246,6 +247,7 @@ func (a *app) deliveredWaiting(results []mail.ScheduledResult, err error) {
 	}
 	if len(results) > 0 {
 		a.loadMessages(a.gen)
+		a.loadFollowUps(a.gen)
 		a.loadPending(a.gen)
 	}
 }

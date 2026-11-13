@@ -672,13 +672,22 @@ func (a *app) rowMenu(m *ui.Menu) {
 	m.Submenu(locales.MoveToFolder(), func(m *ui.Menu) { a.moveFolderMenu(m) })
 	m.Submenu(locales.Labels(), func(m *ui.Menu) { a.labelMenuItems(m, lt) })
 	a.ruleMenuItem(m, lt)
+	targets := a.threadTargets()
 	// A reminded conversation can have its reminder taken off, leaving the
 	// mail where it is; setting one is the toolbar's, which knows the time.
-	if targets := a.threadTargets(); len(targets) == 1 {
-		if a.reminderFor(targets[0].Account, targets[0].Thread) != nil {
-			m.Separator()
-			if m.Item(locales.RemoveReminder()).Chosen() {
-				a.removeReminder(targets[0].Account, targets[0].Thread)
+	if len(targets) == 1 && a.reminderFor(targets[0].Account, targets[0].Thread) != nil {
+		m.Separator()
+		if m.Item(locales.RemoveReminder()).Chosen() {
+			a.removeReminder(targets[0].Account, targets[0].Thread)
+		}
+	}
+	// A conversation that waits for a reply can be taken off the follow-up
+	// list, which the cache keeps off until a newer message arrives.
+	if a.folder == followUpFolder && len(targets) > 0 {
+		m.Separator()
+		if m.Item(locales.DismissFollowUp()).Chosen() {
+			for _, t := range targets {
+				a.dismissFollowUp(t.Account, t.Thread)
 			}
 		}
 	}

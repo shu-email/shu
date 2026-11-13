@@ -128,6 +128,14 @@ type fakeService struct {
 	reminderErr error
 	reminderSet []string
 
+	// Follow-ups, computed from the mail as the engine computes them:
+	// dismissed holds each account's dismissed conversations with the time
+	// they were, dismissedThreads records the calls, and followUpErr fails
+	// the reads and the dismissal.
+	dismissed        map[string]map[mail.ThreadID]time.Time
+	dismissedThreads []string
+	followUpErr      error
+
 	// Pages. cursors are the rows the cursors handed out end at;
 	// pageReads counts the page reads, onPage runs as each begins, and
 	// pageErr fails them. syncCalls records each SyncFolder with its
@@ -537,6 +545,8 @@ func (f *fakeService) inScope(sc mail.Scope, m mail.Summary) bool {
 	switch {
 	case sc.Reminded:
 		return f.reminded(m.Account, m.Thread) && f.inLabelScope(m.Account, m.Folder)
+	case sc.FollowUp:
+		return f.followUpThreads(sc)[m.Thread] && f.inLabelScope(m.Account, m.Folder)
 	case sc.Starred:
 		return m.Flagged
 	case sc.Label != 0:
@@ -2705,6 +2715,80 @@ func (f *fakeService) RestoreReminder(ctx context.Context, r mail.Reminder) (mai
 	r.ID = f.reminderSeq
 	f.reminders = append(f.reminders, r)
 	return r, nil
+}
+
+// followUpThreads are the conversations of the scope's accounts that wait
+// for a reply at the scope's time, as the engine computes them from the
+// cache: the newest message outside the drafts, junk and trash is one
+// three days to a month old that the user sent, the conversation has no
+// message in junk or trash, and it was not dismissed since that message.
+func (f *fakeService) followUpThreads(sc mail.Scope) map[mail.ThreadID]bool {
+	now := sc.FollowUpNow
+	if now.IsZero() {
+		now = time.Now()
+	}
+	out := map[mail.ThreadID]bool{}
+	for _, accountID := range f.scopeAccounts(sc) {
+		newest := map[mail.ThreadID]mail.Summary{}
+		aside := map[mail.ThreadID]bool{}
+		for _, m := range f.everyMessage(accountID) {
+			fl, ok := f.fakeFolder(accountID, m.Folder)
+			if !ok {
+				continue
+			}
+			switch fl.SpecialUse {
+			case mail.SpecialJunk, mail.SpecialTrash:
+				aside[m.Thread] = true
+				continue
+			case mail.SpecialDrafts:
+				continue
+			}
+			if cur, ok := newest[m.Thread]; !ok || newer(m, cur) {
+				newest[m.Thread] = m
+			}
+		}
+		for thread, m := range newest {
+			if aside[thread] {
+				continue
+			}
+			if fl, _ := f.fakeFolder(accountID, m.Folder); fl.SpecialUse != mail.SpecialSent {
+				continue
+			}
+			if _, ok := mail.FollowUpAge(now, m.Date); !ok {
+				continue
+			}
+			if at, ok := f.dismissed[accountID][thread]; ok && !at.Before(m.Date) {
+				continue
+			}
+			out[thread] = true
+		}
+	}
+	return out
+}
+
+// FollowUpCount counts the account's conversations that wait for a reply.
+func (f *fakeService) FollowUpCount(ctx context.Context, accountID string) (int, error) {
+	if f.followUpErr != nil {
+		return 0, f.followUpErr
+	}
+	return len(f.followUpThreads(mail.FollowUpScope(accountID, time.Time{}))), nil
+}
+
+// DismissFollowUp takes a conversation off the list until a newer message
+// of it is there.
+func (f *fakeService) DismissFollowUp(ctx context.Context, accountID string, thread mail.ThreadID) error {
+	if f.followUpErr != nil {
+		return f.followUpErr
+	}
+	if f.dismissed == nil {
+		f.dismissed = map[string]map[mail.ThreadID]time.Time{}
+	}
+	if f.dismissed[accountID] == nil {
+		f.dismissed[accountID] = map[mail.ThreadID]time.Time{}
+	}
+	f.dismissed[accountID][thread] = time.Now()
+	f.dismissedThreads = append(f.dismissedThreads, fmt.Sprintf("%s/%d", accountID, thread))
+	return nil
 }
 
 // DeliverReminders brings back those due now, as the engine's clock would.

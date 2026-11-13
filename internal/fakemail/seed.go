@@ -75,6 +75,12 @@ func Seed(s *IMAP, now time.Time) error {
 		inReplyTo: "offsite-1", refs: []string{"offsite-1"},
 	}, "Booked the room on the third floor."), imap.FlagFlagged)
 
+	// A message the user sent that no one answered: the follow-up list
+	// finds it.
+	put("Sent", plain(header{
+		from: me, to: leo, subject: "Contract for the Q4 campaign", date: ago(8 * 24 * time.Hour), id: "contract-1",
+	}, "Leo,\n\nCould you send the signed copy of the contract when you have a moment?\n\nThanks!"), imap.FlagSeen)
+
 	// HTML whose images are remote, which the reading pane blocks.
 	put("INBOX", alternative(header{
 		from: "Acme Weekly <news@acme.example.com>", to: me, subject: "This week at Acme", date: ago(5 * time.Hour), id: "news-1",

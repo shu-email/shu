@@ -229,6 +229,12 @@ type Store interface {
 	DueReminders(ctx context.Context, at time.Time) ([]Reminder, error)
 	SaveReminder(ctx context.Context, r Reminder) (Reminder, error)
 	DeleteReminder(ctx context.Context, accountID string, thread ThreadID) error
+	// CountFollowUps counts the conversations a follow-up scope reads (see
+	// FollowUpScope), and DismissFollowUp notes at a time that the user
+	// put one off, which keeps it out until a newer message of it is
+	// cached. Both are the cache's own; no server hears of them.
+	CountFollowUps(ctx context.Context, q ListQuery) (int, error)
+	DismissFollowUp(ctx context.Context, accountID string, thread ThreadID, at time.Time) error
 
 	// MessageHeaders reads cached messages of a folder without their
 	// bodies, each with its labels and RawHeaders: those of uids, or every

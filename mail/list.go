@@ -1,6 +1,9 @@
 package mail
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 // DefaultPageSize is how many rows a page has when the caller does not
 // say.
@@ -19,13 +22,16 @@ type Scope struct {
 	// use (SpecialInbox and the like), Starred to the flagged messages of
 	// every folder, Label to the messages with that label, of its account,
 	// in every folder Folder.InLabelScope keeps (LabelScope), Reminded to
-	// the conversations an account has a reminder for, in every folder
+	// the conversations an account has a reminder for, FollowUp to those
+	// that wait for a reply (FollowUpScope), both in every folder
 	// InLabelScope keeps. With none, every folder is read.
-	Folder   string  `json:"folder,omitempty"`
-	Special  string  `json:"special,omitempty"`
-	Starred  bool    `json:"starred,omitempty"`
-	Label    LabelID `json:"label,omitempty"`
-	Reminded bool    `json:"reminded,omitempty"`
+	Folder      string    `json:"folder,omitempty"`
+	Special     string    `json:"special,omitempty"`
+	Starred     bool      `json:"starred,omitempty"`
+	Label       LabelID   `json:"label,omitempty"`
+	Reminded    bool      `json:"reminded,omitempty"`
+	FollowUp    bool      `json:"followUp,omitempty"`
+	FollowUpNow time.Time `json:"followUpNow,omitempty"`
 }
 
 // AccountScope is the scope of the reads that take an account and a
@@ -52,13 +58,22 @@ func RemindersScope(accountID string) Scope {
 	return Scope{Accounts: []string{accountID}, Reminded: true}
 }
 
+// FollowUpScope is an account's conversations that wait for a reply at
+// now, in every folder Folder.InLabelScope keeps: the newest message that
+// is neither a draft nor junk or trash is one it sent, between
+// FollowUpMinAge and FollowUpMaxAge old, the conversation is not
+// dismissed since, and it has no message in Junk or Trash.
+func FollowUpScope(accountID string, now time.Time) Scope {
+	return Scope{Accounts: []string{accountID}, FollowUp: true, FollowUpNow: now}
+}
+
 // ErrBadScope is a scope that narrows its folders in more than one way.
-var ErrBadScope = errors.New("mail: a scope narrows to a folder, a special use, the starred messages, a label or the reminders, not to several")
+var ErrBadScope = errors.New("mail: a scope narrows to a folder, a special use, the starred messages, a label, the reminders or the follow-ups, not to several")
 
 // Check reports a scope the reads refuse.
 func (sc Scope) Check() error {
 	narrowed := 0
-	for _, set := range []bool{sc.Folder != "", sc.Special != "", sc.Starred, sc.Label != 0, sc.Reminded} {
+	for _, set := range []bool{sc.Folder != "", sc.Special != "", sc.Starred, sc.Label != 0, sc.Reminded, sc.FollowUp} {
 		if set {
 			narrowed++
 		}

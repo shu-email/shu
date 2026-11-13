@@ -313,6 +313,7 @@ func (a *app) watchEvent(ev mail.WatchEvent) {
 	a.updateBadge()
 	if len(ev.New) > 0 {
 		a.loadReminders(a.gen)
+		a.loadFollowUps(a.gen)
 	}
 	// Whether to notify depends on what the window shows now, before
 	// the list changes under it.

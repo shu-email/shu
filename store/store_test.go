@@ -79,6 +79,7 @@ func TestMigrationsFromEmpty(t *testing.T) {
 		"labels", "labels_name", "labels_keyword", "message_labels", "message_labels_label",
 		"local_labels", "local_labels_key", "messages_key",
 		"reminders", "reminders_account", "reminders_due",
+		"follow_up_dismissals", "follow_up_dismissals_thread",
 		"rules", "rules_account", "rule_log", "rule_log_rule", "rule_log_account", "rule_log_message",
 		"expected_arrivals", "expected_arrivals_key",
 	} {

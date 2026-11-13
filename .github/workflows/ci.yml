@@ -83,6 +83,28 @@ jobs:
           SHU_REQUIRE_SQLITE: "1"
         run: go test ./...
 
+  # The local tool providers launch a process, and Windows does that
+  # differently: a batch file, its own extensions and its own way of
+  # killing a tree. That test file cannot run elsewhere, so the suite runs
+  # once here as well.
+  test-windows:
+    name: Test (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Test
+        env:
+          CGO_ENABLED: "0"
+          SHU_REQUIRE_SQLITE: "1"
+        run: go test ./...
+
   build:
     name: Build (${{ matrix.name }})
     runs-on: ${{ matrix.os }}

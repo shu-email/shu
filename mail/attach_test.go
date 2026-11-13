@@ -19,7 +19,6 @@ import (
 	"runtime"
 	"slices"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1371,13 +1370,14 @@ func TestCancelUnblocksAStalledSend(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	var sent atomic.Int64
-	ctx = WithSendProgress(ctx, func(n, _ int64) { sent.Store(n) })
 	done := make(chan error, 1)
 	go func() {
 		_, err := env.svc.Send(ctx, env.a.ID, out)
 		done <- err
 	}()
+	// The wait in the write is what says the send began: how much of the
+	// message it has told of by then depends on the sockets' buffers, and
+	// a wait that begins before the first report is still a stall.
 	for !sendWaitsOnNetwork() {
 		select {
 		case err := <-done:
@@ -1385,9 +1385,6 @@ func TestCancelUnblocksAStalledSend(t *testing.T) {
 		default:
 			runtime.Gosched()
 		}
-	}
-	if n := sent.Load(); n <= 0 {
-		t.Fatalf("the send waits with %d bytes sent", n)
 	}
 	cancel()
 	if err := <-done; !errors.Is(err, context.Canceled) || !errors.Is(err, ErrDeliveryUnknown) {

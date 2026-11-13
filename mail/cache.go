@@ -119,6 +119,9 @@ func (s *Service) sweepAttachmentFiles(ctx context.Context) (int, error) {
 
 // sweepPreviewFiles removes the temporary files of earlier runs. One this
 // run wrote is younger than the service and stays: it may be open.
+// A filesystem's clock can lag the wall clock, so a file written just
+// after the service began may carry a time a moment before it; the sweep
+// gives that up rather than remove a file of this run.
 func (s *Service) sweepPreviewFiles(ctx context.Context) (int, error) {
 	dir := filepath.Join(s.cacheDir, previewCacheDir)
 	entries, err := os.ReadDir(dir)
@@ -139,7 +142,7 @@ func (s *Service) sweepPreviewFiles(ctx context.Context) (int, error) {
 			continue
 		}
 		info, err := e.Info()
-		if err != nil || !info.ModTime().Before(s.started) {
+		if err != nil || !info.ModTime().Before(s.started.Add(-time.Second)) {
 			continue
 		}
 		if err := os.Remove(filepath.Join(dir, e.Name())); err != nil {

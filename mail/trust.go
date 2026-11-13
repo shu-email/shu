@@ -1,7 +1,6 @@
 package mail
 
 import (
-	"net/mail"
 	"path/filepath"
 	"strings"
 )
@@ -367,13 +366,4 @@ func executableContentType(contentType string) bool {
 		return true
 	}
 	return false
-}
-
-// MailFrom parses just enough of a From value to compare its domain,
-// for callers that hold no Message.
-func MailFrom(value string) Address {
-	if a, err := mail.ParseAddress(strings.TrimSpace(value)); err == nil {
-		return Address{Name: a.Name, Email: a.Address}
-	}
-	return Address{}
 }

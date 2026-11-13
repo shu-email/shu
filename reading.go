@@ -434,7 +434,7 @@ func (a *app) attachments(c *ui.Context, t *ui.Theme, m mail.Summary, list []mai
 					ui.Text(c, fmt.Sprintf("%s · %s", att.ContentType, formatSize(att.Size))).
 						FontSize(11).TextColor(t.TextMuted).SingleLine()
 					if warning, icon := attachmentWarning(att); warning != "" {
-						ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
+						ui.Row(c).Gap(4).AlignItems(ui.Center).Label(warning).Children(func() {
 							ui.Icon(c, icon).FontSize(10).TextColor(t.Warning)
 							ui.Text(c, warning).FontSize(10).TextColor(t.Warning).SingleLine()
 						})

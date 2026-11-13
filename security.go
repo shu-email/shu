@@ -51,12 +51,12 @@ func (a *app) securityNotice(c *ui.Context, t *ui.Theme, m mail.Summary, msg *ma
 
 	ui.Column(c).Gap(4).Children(func() {
 		ui.Row(c).Wrap().Gap(6).AlignItems(ui.Center).Children(func() {
-			a.securityChip(c, t, securityVerdictLabel(tr), securityVerdictIcon(tr), securityVerdictColor(t, tr))
+			a.securityChip(c, securityVerdictLabel(tr), securityVerdictIcon(tr), securityVerdictColor(t, tr))
 			if external {
-				a.securityChip(c, t, locales.SecurityExternal(), shieldQuestionIcon, t.Warning)
+				a.securityChip(c, locales.SecurityExternal(), shieldQuestionIcon, t.Warning)
 			}
 			if replyMismatch {
-				a.securityChip(c, t, locales.SecurityReplyMismatch(), alertIcon, t.Warning)
+				a.securityChip(c, locales.SecurityReplyMismatch(), alertIcon, t.Warning)
 			}
 			label := locales.SecurityShowDetails()
 			if open {
@@ -98,7 +98,7 @@ func (a *app) securityNotice(c *ui.Context, t *ui.Theme, m mail.Summary, msg *ma
 
 // securityChip is one label with its icon: state is written, never shown
 // by color alone.
-func (a *app) securityChip(c *ui.Context, t *ui.Theme, label string, icon *ui.SVG, color ui.Color) {
+func (a *app) securityChip(c *ui.Context, label string, icon *ui.SVG, color ui.Color) {
 	ui.Row(c).Shrink(0).Gap(5).Padding(3, 8).Radius(20).AlignItems(ui.Center).
 		Background(color.Alpha(0.10)).Children(func() {
 		ui.Icon(c, icon).FontSize(12).TextColor(color)
@@ -169,7 +169,7 @@ func (a *app) askOpenLink(url string) {
 
 // linkDialog asks before a link leaves the isolated view: the user sees
 // exactly where it goes, and no page can start a navigation by itself.
-func (a *app) linkDialog(c *ui.Context, t *ui.Theme) {
+func (a *app) linkDialog(c *ui.Context) {
 	if a.linkURL == "" {
 		return
 	}

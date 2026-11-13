@@ -30,6 +30,10 @@ const (
 	ProviderLocal ProviderID = "local"
 	// ProviderCustom is any OpenAI-compatible server the user names.
 	ProviderCustom ProviderID = "custom"
+	// ProviderClaudeCLI and ProviderCodexCLI are the user's installed,
+	// already signed-in command-line tools.
+	ProviderClaudeCLI ProviderID = "claude-code"
+	ProviderCodexCLI  ProviderID = "codex"
 )
 
 // Provider is a preset of a provider's endpoint.
@@ -49,6 +53,8 @@ type Provider struct {
 	// Messages selects Anthropic's Messages API over the OpenAI-compatible
 	// chat completions every other provider speaks.
 	Messages bool
+	// CLI is the command of a local tool provider, "" for an HTTP one.
+	CLI string
 }
 
 // Providers are the presets, in the order the settings list them.
@@ -58,6 +64,8 @@ var Providers = []Provider{
 	{ID: ProviderDeepSeek, Name: "DeepSeek", BaseURL: "https://api.deepseek.com/v1", Model: "deepseek-chat", NeedsKey: true},
 	{ID: ProviderLocal, BaseURL: "http://localhost:11434/v1", Model: "llama3.2", EditableURL: true},
 	{ID: ProviderCustom, EditableURL: true},
+	{ID: ProviderClaudeCLI, Name: "Claude Code", Model: "sonnet", CLI: "claude"},
+	{ID: ProviderCodexCLI, Name: "Codex", Model: "gpt-5-codex", CLI: "codex"},
 }
 
 // ProviderByID returns a preset.
@@ -105,6 +113,10 @@ type Config struct {
 	// Reviewed records the capabilities whose payload the user has
 	// inspected and approved once.
 	Reviewed map[Feature]bool `json:"reviewed,omitempty"`
+	// CLIPaths are the explicit executable paths of local command-line
+	// providers, by provider. Empty finds the command the way a Terminal
+	// would.
+	CLIPaths map[ProviderID]string `json:"cliPaths,omitempty"`
 }
 
 // DefaultConfig is what a new install starts with: AI off.
@@ -120,6 +132,18 @@ func (c Config) Clone() Config {
 	out.Off = cloneMap(c.Off)
 	out.Models = cloneMap(c.Models)
 	out.Reviewed = cloneMap(c.Reviewed)
+	out.CLIPaths = cloneProviderMap(c.CLIPaths)
+	return out
+}
+
+func cloneProviderMap(m map[ProviderID]string) map[ProviderID]string {
+	if m == nil {
+		return nil
+	}
+	out := make(map[ProviderID]string, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
 	return out
 }
 

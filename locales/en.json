@@ -3622,5 +3622,25 @@
       }
     }
   },
-  "inviteNoReply": "This invitation has no organizer to answer."
+  "inviteNoReply": "This invitation has no organizer to answer.",
+  "aiLocalTool": "Local tool",
+  "aiLocalToolIntro": "Use a Claude Code or Codex command already signed in on this Mac. Shu never reads or stores its credentials; the mail text is sent by that tool to its vendor under their terms.",
+  "aiLocalToolReady": "Ready",
+  "aiLocalToolSignIn": "Sign in required",
+  "aiLocalToolNotInstalled": "Not installed",
+  "aiLocalToolCheck": "Check again",
+  "aiLocalToolChecking": "Checking…",
+  "aiLocalToolPath": "Command path",
+  "aiLocalToolPathHint": "Empty finds the command the way Terminal does. A set path that does not run is an error, never a fallback.",
+  "aiLocalToolVersion": "Version {version}",
+  "@aiLocalToolVersion": {
+    "description": "The version of an installed local AI command.",
+    "placeholders": {
+      "version": {
+        "type": "String",
+        "example": "2.1.323"
+      }
+    }
+  },
+  "aiLocalToolIsolation": "Runs in a private empty folder, with tools, plugins and hooks off where the tool allows it. The prompt goes in on standard input, never on the command line."
 }

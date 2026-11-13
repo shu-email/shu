@@ -1308,5 +1308,25 @@
       }
     }
   },
-  "inviteNoReply": "此邀请没有可回复的组织者。"
+  "inviteNoReply": "此邀请没有可回复的组织者。",
+  "aiLocalTool": "本地工具",
+  "aiLocalToolIntro": "使用这台电脑上已登录的 Claude Code 或 Codex 命令。Shu 不会读取或保存它的凭据；邮件文本会由该工具按其厂商条款发送。",
+  "aiLocalToolReady": "已就绪",
+  "aiLocalToolSignIn": "需要登录",
+  "aiLocalToolNotInstalled": "未安装",
+  "aiLocalToolCheck": "重新检查",
+  "aiLocalToolChecking": "检查中…",
+  "aiLocalToolPath": "命令路径",
+  "aiLocalToolPathHint": "留空时按终端的方式查找命令。设置了但无法运行的路径会报错，不会回退到其他副本。",
+  "aiLocalToolVersion": "版本 {version}",
+  "@aiLocalToolVersion": {
+    "description": "The version of an installed local AI command.",
+    "placeholders": {
+      "version": {
+        "type": "String",
+        "example": "2.1.323"
+      }
+    }
+  },
+  "aiLocalToolIsolation": "在私有的空目录中运行，并在工具允许时关闭工具、插件与钩子。提示词通过标准输入传入，不会出现在命令行上。"
 }

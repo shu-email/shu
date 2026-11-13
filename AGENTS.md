@@ -234,7 +234,11 @@ Windows and Linux. It is written in Go with
   single egress point every model
   request passes through. It imports neither the UI nor `mail/`; views
   reach it through the `aiService` value. Its settings and the summary
-  cache live in `store/`; its keys live only in `mygo.Secrets`. It
+  cache live in `store/`; its keys live only in `mygo.Secrets`. Local
+  Claude Code and Codex providers run the user's already signed-in
+  command in a private temporary folder with tools off where the tool
+  allows it, the prompt on standard input and a bounded, cancellable
+  process (`ai/cli.go`); their credentials are never read or stored. It
   returns text and suggestions, and has no way to change the mailbox.
 - `locales/` holds the catalogs and their generated accessors. Every
   user-visible string comes from there, in en and zh-Hans together.

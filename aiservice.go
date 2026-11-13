@@ -15,6 +15,9 @@ import (
 // that returns a key: the windows can only learn whether one is stored.
 type aiService interface {
 	SetHTTPClient(c *http.Client)
+	// CLIStatus checks a local tool with its version and sign-in commands
+	// only, without a model request.
+	CLIStatus(ctx context.Context, id ai.ProviderID, path string) ai.CLIStatus
 	Config(ctx context.Context) (ai.Config, error)
 	SaveConfig(ctx context.Context, cfg ai.Config) error
 	KeyStored(id ai.ProviderID) (bool, error)

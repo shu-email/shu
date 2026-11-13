@@ -117,6 +117,11 @@ func (s *Service) usable(cfg Config, model, typedKey string) (string, error) {
 	if strings.TrimSpace(model) == "" {
 		return "", &Error{Kind: KindNoModel}
 	}
+	if p.CLI != "" {
+		// A local tool signs in itself; there is no key, endpoint or
+		// transport policy to check.
+		return "", nil
+	}
 	if _, err := checkEndpoint(cfg); err != nil {
 		return "", err
 	}
@@ -140,8 +145,19 @@ func (s *Service) Check(ctx context.Context, f Feature) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.ready(cfg, f)
-	return err
+	if _, err := s.ready(cfg, f); err != nil {
+		return err
+	}
+	if CLIProvider(cfg.Provider) {
+		status := s.CLIStatus(ctx, cfg.Provider, cfg.CLIPath(cfg.Provider))
+		switch {
+		case !status.Installed:
+			return &Error{Kind: KindCLINotInstalled}
+		case !status.SignedIn:
+			return &Error{Kind: KindCLISignIn}
+		}
+	}
+	return nil
 }
 
 // checkEndpoint parses the endpoint and applies the transport policy:
@@ -205,6 +221,9 @@ func (s *Service) post(ctx context.Context, cfg Config, model, key string, req r
 		req.user = string([]rune(req.user)[:payloadLimit])
 	}
 	p, _ := ProviderByID(cfg.Provider)
+	if p.CLI != "" {
+		return s.runCLI(ctx, cfg, model, req)
+	}
 	endpoint, err := checkEndpoint(cfg)
 	if err != nil {
 		return "", err
@@ -389,6 +408,18 @@ func answerText(messages bool, data []byte) (string, bool) {
 // and works before AI is switched on, so a setup can be verified first.
 // A typed key is used without being stored.
 func (s *Service) Test(ctx context.Context, cfg Config, typedKey string) error {
+	if CLIProvider(cfg.Provider) {
+		// A local tool is checked by its own status commands: no prompt,
+		// and so no model quota.
+		status := s.CLIStatus(ctx, cfg.Provider, cfg.CLIPath(cfg.Provider))
+		switch {
+		case !status.Installed:
+			return &Error{Kind: KindCLINotInstalled}
+		case !status.SignedIn:
+			return &Error{Kind: KindCLISignIn}
+		}
+		return nil
+	}
 	key, err := s.usable(cfg, cfg.Model, typedKey)
 	if err != nil {
 		return err
@@ -403,7 +434,9 @@ func (s *Service) Test(ctx context.Context, cfg Config, typedKey string) error {
 // payload describes a request for inspection.
 func payload(cfg Config, req request, limit, messages int, e Excerpt) Payload {
 	host := ""
-	if u, err := url.Parse(cfg.Endpoint()); err == nil {
+	if CLIProvider(cfg.Provider) {
+		host = "This computer"
+	} else if u, err := url.Parse(cfg.Endpoint()); err == nil {
 		host = u.Host
 	}
 	return Payload{

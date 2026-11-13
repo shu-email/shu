@@ -10363,3 +10363,117 @@ func InviteNoReply() string { return In(i18n.Locale()).InviteNoReply() }
 func (msgs Messages) InviteNoReply() string {
 	return Catalog.Format(msgs.locale, "inviteNoReply", nil)
 }
+
+// AiLocalTool says "Local tool"
+// in the language the app shows.
+func AiLocalTool() string { return In(i18n.Locale()).AiLocalTool() }
+
+// AiLocalTool says "Local tool"
+// in the language of msgs.
+func (msgs Messages) AiLocalTool() string {
+	return Catalog.Format(msgs.locale, "aiLocalTool", nil)
+}
+
+// AiLocalToolIntro says "Use a Claude Code or Codex command already signed in on this Mac. Shu never reads or stores its credentials; the mail…"
+// in the language the app shows.
+func AiLocalToolIntro() string { return In(i18n.Locale()).AiLocalToolIntro() }
+
+// AiLocalToolIntro says "Use a Claude Code or Codex command already signed in on this Mac. Shu never reads or stores its credentials; the mail…"
+// in the language of msgs.
+func (msgs Messages) AiLocalToolIntro() string {
+	return Catalog.Format(msgs.locale, "aiLocalToolIntro", nil)
+}
+
+// AiLocalToolReady says "Ready"
+// in the language the app shows.
+func AiLocalToolReady() string { return In(i18n.Locale()).AiLocalToolReady() }
+
+// AiLocalToolReady says "Ready"
+// in the language of msgs.
+func (msgs Messages) AiLocalToolReady() string {
+	return Catalog.Format(msgs.locale, "aiLocalToolReady", nil)
+}
+
+// AiLocalToolSignIn says "Sign in required"
+// in the language the app shows.
+func AiLocalToolSignIn() string { return In(i18n.Locale()).AiLocalToolSignIn() }
+
+// AiLocalToolSignIn says "Sign in required"
+// in the language of msgs.
+func (msgs Messages) AiLocalToolSignIn() string {
+	return Catalog.Format(msgs.locale, "aiLocalToolSignIn", nil)
+}
+
+// AiLocalToolNotInstalled says "Not installed"
+// in the language the app shows.
+func AiLocalToolNotInstalled() string { return In(i18n.Locale()).AiLocalToolNotInstalled() }
+
+// AiLocalToolNotInstalled says "Not installed"
+// in the language of msgs.
+func (msgs Messages) AiLocalToolNotInstalled() string {
+	return Catalog.Format(msgs.locale, "aiLocalToolNotInstalled", nil)
+}
+
+// AiLocalToolCheck says "Check again"
+// in the language the app shows.
+func AiLocalToolCheck() string { return In(i18n.Locale()).AiLocalToolCheck() }
+
+// AiLocalToolCheck says "Check again"
+// in the language of msgs.
+func (msgs Messages) AiLocalToolCheck() string {
+	return Catalog.Format(msgs.locale, "aiLocalToolCheck", nil)
+}
+
+// AiLocalToolChecking says "Checking…"
+// in the language the app shows.
+func AiLocalToolChecking() string { return In(i18n.Locale()).AiLocalToolChecking() }
+
+// AiLocalToolChecking says "Checking…"
+// in the language of msgs.
+func (msgs Messages) AiLocalToolChecking() string {
+	return Catalog.Format(msgs.locale, "aiLocalToolChecking", nil)
+}
+
+// AiLocalToolPath says "Command path"
+// in the language the app shows.
+func AiLocalToolPath() string { return In(i18n.Locale()).AiLocalToolPath() }
+
+// AiLocalToolPath says "Command path"
+// in the language of msgs.
+func (msgs Messages) AiLocalToolPath() string {
+	return Catalog.Format(msgs.locale, "aiLocalToolPath", nil)
+}
+
+// AiLocalToolPathHint says "Empty finds the command the way Terminal does. A set path that does not run is an error, never a fallback."
+// in the language the app shows.
+func AiLocalToolPathHint() string { return In(i18n.Locale()).AiLocalToolPathHint() }
+
+// AiLocalToolPathHint says "Empty finds the command the way Terminal does. A set path that does not run is an error, never a fallback."
+// in the language of msgs.
+func (msgs Messages) AiLocalToolPathHint() string {
+	return Catalog.Format(msgs.locale, "aiLocalToolPathHint", nil)
+}
+
+// AiLocalToolVersion says "Version {version}"
+// in the language the app shows.
+//
+// The version of an installed local AI command.
+func AiLocalToolVersion(version string) string { return In(i18n.Locale()).AiLocalToolVersion(version) }
+
+// AiLocalToolVersion says "Version {version}"
+// in the language of msgs.
+//
+// The version of an installed local AI command.
+func (msgs Messages) AiLocalToolVersion(version string) string {
+	return Catalog.Format(msgs.locale, "aiLocalToolVersion", map[string]any{"version": version})
+}
+
+// AiLocalToolIsolation says "Runs in a private empty folder, with tools, plugins and hooks off where the tool allows it. The prompt goes in on sta…"
+// in the language the app shows.
+func AiLocalToolIsolation() string { return In(i18n.Locale()).AiLocalToolIsolation() }
+
+// AiLocalToolIsolation says "Runs in a private empty folder, with tools, plugins and hooks off where the tool allows it. The prompt goes in on sta…"
+// in the language of msgs.
+func (msgs Messages) AiLocalToolIsolation() string {
+	return Catalog.Format(msgs.locale, "aiLocalToolIsolation", nil)
+}

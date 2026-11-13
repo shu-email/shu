@@ -945,6 +945,33 @@ the engine's actions, `mail.ActionKinds`, and no others.
   **Add to calendar** writes the event to a temporary `.ics` and hands it to the
   system calendar; it never creates duplicates in the cache.
 
+### Local AI command-line tools (added since)
+
+- `ai/cli.go` adds Claude Code and Codex as providers beside the HTTP ones. A
+  request to one runs the user's already signed-in command; Shu never reads or
+  stores its credentials. The prompt goes in on standard input, never argv, and
+  the working directory is a fresh `0700` folder under the system temporary
+  directory, removed when the run ends.
+- Claude runs `-p --output-format text --no-session-persistence
+  --disable-slash-commands --tools "" --no-chrome --disallowedTools "*"
+  --max-turns 1 --strict-mcp-config --mcp-config {"mcpServers":{}}` with a
+  safety system prompt and `CLAUDE_CODE_SKIP_PROMPT_HISTORY=1`,
+  `ENABLE_CLAUDEAI_MCP_SERVERS=false`; `--bare` is deliberately not used, as it
+  would refuse the OAuth sign-in this route reuses.
+- Codex runs `codex exec --sandbox read-only --ephemeral --ignore-user-config
+  --skip-git-repo-check --color never`, with the feature flags that turn off
+  apps, plugins, hooks, shell, browser, computer use, multi-agent and memories.
+- The child gets only what it needs (`PATH`, home, user, locale, `NO_COLOR`), not
+  the app's API keys or proxy secrets. Output is capped, ANSI is stripped, and a
+  cancel kills the whole process group (`Setpgid` on Unix, `taskkill /T` on
+  Windows). Errors are classified and never quote the prompt or tool output.
+- `Service.CLIStatus` checks a tool with `--version` and its own sign-in command
+  (`claude auth status --json`, `codex login status`): no prompt and no quota. A
+  set command path that does not run is an error, never a fallback. The AI
+  settings tab shows the status, version, path, model and the isolation note.
+- Not yet in this slice: the model list an installed tool reports, the separate
+  Providers management panel, and removal of stored tool environment variables.
+
 ## Testing discipline
 
 Tests are part of each change, not a later phase:

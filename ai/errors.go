@@ -34,6 +34,13 @@ const (
 	// KindEmpty is a message with nothing left to send after the excerpt.
 	KindEmpty
 	KindKeychain
+	// Local command-line providers: not installed, a path that does not
+	// run, signed out, a failed launch, too much output.
+	KindCLINotInstalled
+	KindCLIBadPath
+	KindCLISignIn
+	KindCLIFailed
+	KindCLIOutput
 )
 
 // Error is every failure this package returns. It carries the kind and
@@ -77,6 +84,16 @@ func (e *Error) Error() string {
 		text += "the request was cancelled"
 	case KindEmpty:
 		text += "the message has no text to send"
+	case KindCLINotInstalled:
+		return "The local tool is not installed."
+	case KindCLIBadPath:
+		return "The command path does not run. Check it in Settings."
+	case KindCLISignIn:
+		return "Sign in to the local tool first."
+	case KindCLIFailed:
+		return "The local tool failed. Check that it is signed in and up to date."
+	case KindCLIOutput:
+		return "The local tool returned too much text."
 	case KindKeychain:
 		text += "the system keychain is not available"
 	default:

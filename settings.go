@@ -34,6 +34,12 @@ type aiSettings struct {
 	busy      bool
 	note      string
 	err       string
+
+	// Local command-line providers: the explicit path, the check in
+	// flight and its result, without a model request.
+	cliPath   string
+	cliBusy   bool
+	cliStatus ai.CLIStatus
 }
 
 // settingsWindowOptions is the settings window: its own, as a system
@@ -122,6 +128,8 @@ func (f *aiSettings) setConfig(cfg ai.Config) {
 		f.features[i] = cfg.FeatureOn(feature)
 		f.models[i] = cfg.Models[feature]
 	}
+	f.cliPath = cfg.CLIPath(cfg.Provider)
+	f.cliStatus = ai.CLIStatus{}
 }
 
 // config reads the form back into settings to save.
@@ -154,6 +162,9 @@ func (a *app) loadAISettings() {
 			f.err = ""
 			if err != nil {
 				f.err, _ = aiErrorText(err)
+			}
+			if ai.CLIProvider(f.cfg.Provider) {
+				a.loadCLIStatus()
 			}
 		})
 	})
@@ -200,7 +211,12 @@ func (a *app) chooseAIProvider() {
 		f.models = [3]string{}
 		f.key, f.note, f.err = "", "", ""
 		f.keyStored = false
+		f.cliPath = f.cfg.CLIPath(p.ID)
+		f.cliStatus = ai.CLIStatus{}
 		a.saveAI()
+		if ai.CLIProvider(p.ID) {
+			a.loadCLIStatus()
+		}
 		id := p.ID
 		a.run(func() {
 			stored, err := a.ai.KeyStored(id)
@@ -392,6 +408,10 @@ func (a *app) aiSettingsView(c *ui.Context, t *ui.Theme) {
 	a.section(c, locales.Provider(), func() {
 		ui.Select(c, &f.provider, aiProviderNames()).FillWidth().Label(locales.Provider()).
 			OnChange(a.chooseAIProvider)
+		if ai.CLIProvider(f.cfg.Provider) {
+			a.aiLocalToolSection(c, t)
+			return
+		}
 		if provider.EditableURL {
 			a.field(c, locales.AiBaseURL(), func() ui.Element {
 				return ui.TextInput(c, &f.cfg.BaseURL).Label(locales.AiBaseURL()).
@@ -485,4 +505,74 @@ func (a *app) aiSettingsView(c *ui.Context, t *ui.Theme) {
 		}
 		ui.Text(c, locales.AiNeverSent()).FontSize(11).TextColor(t.TextMuted)
 	})
+}
+
+// loadCLIStatus checks the selected local tool with its own version and
+// sign-in commands: no prompt, no model request.
+func (a *app) loadCLIStatus() {
+	f := &a.aiForm
+	id := f.cfg.Provider
+	path := f.cfg.CLIPath(id)
+	f.cliBusy, f.cliStatus = true, ai.CLIStatus{}
+	a.run(func() {
+		ctx, cancel := a.ctx()
+		defer cancel()
+		status := a.ai.CLIStatus(ctx, id, path)
+		a.post(func() {
+			if f.cfg.Provider != id {
+				return
+			}
+			f.cliBusy = false
+			f.cliStatus = status
+		})
+	})
+}
+
+// aiLocalToolSection shows the selected tool's status, its command path
+// and how it is kept from acting.
+func (a *app) aiLocalToolSection(c *ui.Context, t *ui.Theme) {
+	f := &a.aiForm
+	p, _ := ai.ProviderByID(f.cfg.Provider)
+	ui.Text(c, locales.AiLocalToolIntro()).FontSize(11).TextColor(t.TextMuted).MaxLines(4).Role(ui.RoleStatus)
+	ui.Column(c).Gap(4).Children(func() {
+		caption := ui.Text(c, locales.AiLocalToolPath()).FontSize(11).Bold().TextColor(t.TextMuted)
+		ui.TextInput(c, &f.cliPath).LabelledBy(caption).Placeholder(locales.AiLocalToolPathHint()).
+			FillWidth().OnChange(func() {
+			f.cfg.SetCLIPath(p.ID, f.cliPath)
+			a.saveAI()
+		})
+	})
+	ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+		if f.cliBusy {
+			ui.Spinner(c).Size(14, 14)
+			ui.Text(c, locales.AiLocalToolChecking()).FontSize(12).TextColor(t.TextMuted).Grow(1)
+		} else {
+			status, icon, color := cliStatusText(f.cliStatus, p, t)
+			ui.Icon(c, icon).FontSize(14).TextColor(color)
+			ui.Text(c, status).FontSize(12).TextColor(t.Text).Grow(1).MinWidth(0).MaxLines(2)
+			ui.Button(c, locales.AiLocalToolCheck()).Disabled(f.cliBusy).OnClick(a.loadCLIStatus)
+		}
+	})
+	if f.cliStatus.Path != "" {
+		ui.Text(c, f.cliStatus.Path).FontSize(10).TextColor(t.TextMuted).Selectable().SingleLine()
+	}
+	ui.Text(c, locales.AiLocalToolIsolation()).FontSize(11).TextColor(t.TextMuted).MaxLines(4)
+}
+
+// cliStatusText is the one line a tool's check shows.
+func cliStatusText(status ai.CLIStatus, p ai.Provider, t *ui.Theme) (string, *ui.SVG, ui.Color) {
+	if !status.Installed {
+		if status.Err != "" {
+			return status.Err, alertIcon, t.Warning
+		}
+		return locales.AiLocalToolNotInstalled(), alertIcon, t.Warning
+	}
+	if !status.SignedIn {
+		return locales.AiLocalToolSignIn(), alertIcon, t.Warning
+	}
+	text := locales.AiLocalToolReady()
+	if status.Version != "" {
+		text = locales.AiLocalToolVersion(status.Version)
+	}
+	return text, checkIcon, t.Success
 }

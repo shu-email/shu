@@ -1159,8 +1159,11 @@ func TestDraftsAtMinimumSizeAndDark(t *testing.T) {
 		if n := len(openComposes(a)); n != 1 {
 			t.Fatalf("dark=%v: Edit draft opened %d windows", dark, n)
 		}
-		// The toolbar's discard is on screen, not in its overflow menu.
-		click(t, main, locales.DiscardDraft())
+		// The narrow bar puts discard in its move menu, and it works.
+		click(t, main, locales.MoveActions())
+		if err := main.ChooseMenuItem(locales.DiscardDraft()); err != nil {
+			t.Fatalf("dark=%v: %v", dark, err)
+		}
 		if len(fs.drafts) != 0 || len(a.all) != 0 {
 			t.Errorf("dark=%v: discard at the minimum size left %+v", dark, fs.drafts)
 		}

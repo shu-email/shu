@@ -39,6 +39,18 @@ const barPad = 8
 // leaves the actions their room and shows only while in use.
 const compactReading float32 = 600
 
+// readingCompact reports whether the reading pane is too narrow to show
+// every group of actions beside the search.
+func (a *app) readingCompact() bool {
+	return a.readingWidth > 0 && a.readingWidth < compactReading
+}
+
+// readingSearchShown reports whether the bar shows the search field
+// itself, rather than the magnifier that opens it.
+func (a *app) readingSearchShown() bool {
+	return !a.readingCompact() || a.searchOpen || strings.TrimSpace(a.query) != ""
+}
+
 // barPalette is the glass of a capsule: its tint, its hairline and its
 // shadow. Its values are the one place to tune them.
 type barPalette struct {
@@ -109,6 +121,13 @@ func (a *app) barCapsule(c *ui.Context, fn func() ui.Element) ui.Element {
 	}).Padding(0).Gap(0).Shrink(0))
 }
 
+// barMenuButton is a bar button that opens menu: in a narrow pane a
+// group of actions folds into it, rather than out of the bar.
+func (a *app) barMenuButton(c *ui.Context, svg *ui.SVG, label, tip string, menu func(*ui.Menu)) ui.Element {
+	return ui.Button(c, "").Label(label).Tooltip(tip).Padding(barPad, barPad).Radius(barButton).
+		PopoverMenuButton(menu).Children(func() { ui.Icon(c, svg).FontSize(16) })
+}
+
 // readingBar floats over the top of the reading pane: the groups of
 // actions fn builds, then the search field. It takes no pointer between
 // them, which reaches what is read under it. Where the pane is too narrow
@@ -117,8 +136,7 @@ func (a *app) barCapsule(c *ui.Context, fn func() ui.Element) ui.Element {
 // or Cmd+K until a message is chosen with the field empty, or Escape.
 func (a *app) readingBar(c *ui.Context, label string, fn func()) {
 	t := c.Theme()
-	compact := a.readingWidth > 0 && a.readingWidth < compactReading
-	field := !compact || a.searchOpen || strings.TrimSpace(a.query) != ""
+	compact, field := a.readingCompact(), a.readingSearchShown()
 	// The bar ends clear of the window controls, which sit at the right
 	// of this, the rightmost pane, on Linux and Windows.
 	ui.Themed(c, barTheme(t)).Background(ui.Transparent).Absolute().Top(8).Left(12).
@@ -135,7 +153,12 @@ func (a *app) readingBar(c *ui.Context, label string, fn func()) {
 			// Closed, the field is only its magnifier, which opens it:
 			// the same field, so that a click on it gives it the keys at
 			// once.
+			// A narrow bar keeps the field short enough for the replies
+			// beside it and the filter at its end.
 			width, placeholder := float32(240), a.searchPlaceholder()
+			if compact {
+				width = 200
+			}
 			if !field {
 				width, placeholder = 30, ""
 			}

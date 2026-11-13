@@ -916,8 +916,7 @@ func TestConversationsAtMinimumSize(t *testing.T) {
 	for _, dark := range []bool{false, true} {
 		a, _, _, _ := aiAppOf(t, true, convApp)
 		tt := ui.NewTesterWith(a.view, 1000, 640, ui.TesterOptions{Dark: dark})
-		for _, label := range []string{locales.ArchiveConversations(1), locales.DeleteConversations(1),
-			locales.JunkConversations(1), locales.StarConversations(1), locales.MarkConversationsUnread(1),
+		for _, label := range []string{locales.MoveActions(), locales.MarkActions(),
 			locales.Reply(), locales.ReplyAll(), locales.Forward(), locales.SummarizeConversation(), locales.GroupByConversation(),
 			locales.ForMessage(locales.MoreActions(), 3, 3)} {
 			r, ok := tt.Find(label)
@@ -925,6 +924,19 @@ func TestConversationsAtMinimumSize(t *testing.T) {
 				t.Errorf("dark=%v: %q is off screen: %+v", dark, label, r)
 			}
 		}
+		// The moves and marks the narrow bar folded away are in its menus.
+		click(t, tt, locales.MoveActions())
+		if got := strings.Join(tt.Menu(), ","); !strings.Contains(got, locales.ArchiveConversations(1)) ||
+			!strings.Contains(got, locales.DeleteConversations(1)) || !strings.Contains(got, locales.JunkConversations(1)) {
+			t.Errorf("dark=%v: the move menu holds %q", dark, got)
+		}
+		tt.CloseMenu()
+		click(t, tt, locales.MarkActions())
+		if got := strings.Join(tt.Menu(), ","); !strings.Contains(got, locales.StarConversations(1)) ||
+			!strings.Contains(got, locales.MarkConversationsUnread(1)) {
+			t.Errorf("dark=%v: the mark menu holds %q", dark, got)
+		}
+		tt.CloseMenu()
 		click(t, tt, locales.SummarizeConversation())
 		if a.review == nil {
 			t.Errorf("dark=%v: Summarize did not open the review", dark)

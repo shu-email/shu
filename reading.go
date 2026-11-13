@@ -131,7 +131,9 @@ func (a *app) readingToolbar(c *ui.Context, t *ui.Theme) {
 	onlyDrafts := has && drafts == len(targets)
 	has = has && drafts == 0
 	lt := a.labelTargets()
+	compact, field := a.readingCompact(), a.readingSearchShown()
 	var labels ui.Element
+	hasLabels := false
 	a.readingBar(c, locales.MessageActions(), func() {
 		a.glassGroup(c, locales.ReplyActions(), func() {
 			for _, all := range a.replyOrder() {
@@ -140,44 +142,41 @@ func (a *app) readingToolbar(c *ui.Context, t *ui.Theme) {
 			}
 			a.toolButton(c, forwardIcon, locales.Forward(), has, func() { a.forward() })
 		})
-		a.glassGroup(c, locales.MoveActions(), func() {
-			a.toolButton(c, archiveIcon, locales.ArchiveMessage(), has && archive, func() {
-				a.moveSelected(mail.SpecialArchive)
+		// A narrow bar folds its groups into menus, and gives the search
+		// in use the rest of its room.
+		if compact {
+			if field {
+				return
+			}
+			a.compactMessageMoves(c, has, onlyDrafts, archive, trash, junk)
+			labels, hasLabels = a.compactMessageMarks(c, has, allFlagged, allSeen, lt)
+		} else {
+			a.glassGroup(c, locales.MoveActions(), func() {
+				a.messageMoveButtons(c, has, onlyDrafts, archive, trash, junk)
 			})
-			if onlyDrafts {
-				// Deleting a draft is discarding it, which asks first.
-				a.toolButton(c, trashIcon, locales.DiscardDraft(), true, a.discardSelected)
-			} else {
-				a.toolButton(c, trashIcon, locales.DeleteMessage(), has && trash, func() {
-					a.moveSelected(mail.SpecialTrash)
+			a.glassGroup(c, locales.MarkActions(), func() {
+				starLabel, star := locales.StarMessage(), starIcon
+				starColor := t.Text
+				if allFlagged {
+					starLabel, star = locales.UnstarMessage(), starFilledIcon
+					starColor = t.Warning
+				}
+				starButton := ui.Button(c, "").Label(starLabel).Tooltip(starLabel).Disabled(!has).
+					Padding(barPad, barPad).Radius(barButton)
+				if has {
+					starButton = starButton.OnClick(func() { a.toggleStar() })
+				}
+				starButton.Children(func() {
+					ui.Icon(c, star).FontSize(16).TextColor(starColor).ContentTransition(swapIcon)
 				})
-			}
-			a.toolButton(c, spamIcon, locales.JunkMessage(), has && junk, func() {
-				a.moveSelected(mail.SpecialJunk)
+				readLabel, readIcon := locales.MarkRead(), mailOpenIcon
+				if allSeen {
+					readLabel, readIcon = locales.MarkUnread(), mailIcon
+				}
+				a.toolButton(c, readIcon, readLabel, has, func() { a.toggleRead() })
+				labels, hasLabels = a.labelButton(c, lt), true
 			})
-		})
-		a.glassGroup(c, locales.MarkActions(), func() {
-			starLabel, star := locales.StarMessage(), starIcon
-			starColor := t.Text
-			if allFlagged {
-				starLabel, star = locales.UnstarMessage(), starFilledIcon
-				starColor = t.Warning
-			}
-			starButton := ui.Button(c, "").Label(starLabel).Tooltip(starLabel).Disabled(!has).
-				Padding(barPad, barPad).Radius(barButton)
-			if has {
-				starButton = starButton.OnClick(func() { a.toggleStar() })
-			}
-			starButton.Children(func() {
-				ui.Icon(c, star).FontSize(16).TextColor(starColor).ContentTransition(swapIcon)
-			})
-			readLabel, readIcon := locales.MarkRead(), mailOpenIcon
-			if allSeen {
-				readLabel, readIcon = locales.MarkUnread(), mailIcon
-			}
-			a.toolButton(c, readIcon, readLabel, has, func() { a.toggleRead() })
-			labels = a.labelButton(c, lt)
-		})
+		}
 		if a.ai != nil {
 			// A summary is of the one message open, once its body is here.
 			_, msg := a.current()
@@ -186,7 +185,80 @@ func (a *app) readingToolbar(c *ui.Context, t *ui.Theme) {
 			})
 		}
 	})
-	a.labelPicker(c, t, labels, lt)
+	if hasLabels {
+		a.labelPicker(c, t, labels, lt)
+	}
+}
+
+// messageMoveButtons are a message toolbar's archive, delete and junk.
+func (a *app) messageMoveButtons(c *ui.Context, has, onlyDrafts, archive, trash, junk bool) {
+	a.toolButton(c, archiveIcon, locales.ArchiveMessage(), has && archive, func() {
+		a.moveSelected(mail.SpecialArchive)
+	})
+	if onlyDrafts {
+		// Deleting a draft is discarding it, which asks first.
+		a.toolButton(c, trashIcon, locales.DiscardDraft(), true, a.discardSelected)
+	} else {
+		a.toolButton(c, trashIcon, locales.DeleteMessage(), has && trash, func() {
+			a.moveSelected(mail.SpecialTrash)
+		})
+	}
+	a.toolButton(c, spamIcon, locales.JunkMessage(), has && junk, func() {
+		a.moveSelected(mail.SpecialJunk)
+	})
+}
+
+// compactMessageMoves folds the move actions into the menu of one button.
+func (a *app) compactMessageMoves(c *ui.Context, has, onlyDrafts, archive, trash, junk bool) {
+	a.glassGroup(c, "", func() {
+		a.barMenuButton(c, archiveIcon, locales.MoveActions(), locales.MoveActions(), func(m *ui.Menu) {
+			if m.Item(locales.ArchiveMessage()).Disabled(!has || !archive).Chosen() {
+				a.moveSelected(mail.SpecialArchive)
+			}
+			if onlyDrafts {
+				if m.Item(locales.DiscardDraft()).Chosen() {
+					a.discardSelected()
+				}
+			} else if m.Item(locales.DeleteMessage()).Disabled(!has || !trash).Chosen() {
+				a.moveSelected(mail.SpecialTrash)
+			}
+			if m.Item(locales.JunkMessage()).Disabled(!has || !junk).Chosen() {
+				a.moveSelected(mail.SpecialJunk)
+			}
+		})
+	})
+}
+
+// compactMessageMarks folds star, read and labels into one button's menu.
+// While the checklist of labels is open it returns the button it hangs
+// from, which the capsule then holds.
+func (a *app) compactMessageMarks(c *ui.Context, has, allFlagged, allSeen bool, lt labelTargets) (ui.Element, bool) {
+	starLabel, star := locales.StarMessage(), starIcon
+	if allFlagged {
+		starLabel, star = locales.UnstarMessage(), starFilledIcon
+	}
+	readLabel := locales.MarkRead()
+	if allSeen {
+		readLabel = locales.MarkUnread()
+	}
+	var anchor ui.Element
+	picker := false
+	a.glassGroup(c, "", func() {
+		anchor = a.barMenuButton(c, star, locales.MarkActions(), locales.MarkActions(), func(m *ui.Menu) {
+			if m.Item(starLabel).Disabled(!has).Chosen() {
+				a.toggleStar()
+			}
+			if m.Item(readLabel).Disabled(!has).Chosen() {
+				a.toggleRead()
+			}
+			m.Separator()
+			m.Submenu(locales.Labels(), func(m *ui.Menu) { a.labelMenuItems(m, lt) })
+		})
+		if a.labels.picker {
+			anchor, picker = a.labelButton(c, lt), true
+		}
+	})
+	return anchor, picker
 }
 
 // toggleHTML switches between the plain text and the isolated web view.

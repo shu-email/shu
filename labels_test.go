@@ -123,7 +123,14 @@ func openLabel(t *testing.T, tt *ui.Tester, name string) {
 // openPicker opens the toolbar's checklist of labels.
 func openPicker(t *testing.T, a *app, tt *ui.Tester) {
 	t.Helper()
-	click(t, tt, locales.ChangeLabels())
+	// A narrow bar folds the label button into the mark menu; L reaches
+	// the checklist there, as it does when the bar shows the button.
+	if _, ok := tt.Find(locales.ChangeLabels()); ok {
+		click(t, tt, locales.ChangeLabels())
+	} else {
+		tt.Key(0, ui.KeyL)
+		tt.Frame()
+	}
 	if !a.labels.picker {
 		t.Fatalf("the checklist did not open: %q", tt.Texts())
 	}
@@ -989,7 +996,7 @@ func TestLabelsAtMinimumSize(t *testing.T) {
 		fs.addLabel("a1", "Projects", mail.LabelBlue)
 		a.loadLabels("a1")
 		tt := ui.NewTesterWith(a.view, 1000, 640, ui.TesterOptions{Dark: dark})
-		for _, name := range []string{locales.Summarize(), locales.ChangeLabels()} {
+		for _, name := range []string{locales.Summarize(), locales.MarkActions()} {
 			if b, ok := tt.Find(name); !ok || b.W == 0 || b.X+b.W > 1000 {
 				t.Errorf("dark=%v: %q at %v", dark, name, b)
 			}

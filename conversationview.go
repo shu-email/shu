@@ -47,10 +47,12 @@ func (a *app) threadToolbar(c *ui.Context, t *ui.Theme) {
 	trash := a.canMove(places, mail.SpecialTrash)
 	junk := a.canMove(places, mail.SpecialJunk)
 	newest, _ := a.newestShown()
+	compact, field := a.readingCompact(), a.readingSearchShown()
 	lt := a.labelTargets()
 	var labels ui.Element
+	hasLabels := false
 	a.readingBar(c, locales.ConversationActions(), func() {
-		a.glassGroup(c, locales.ReplyActions(), func() {
+		replies := func() {
 			reply := has && newest != nil
 			for _, all := range a.replyOrder() {
 				icon, label := replyLook(all)
@@ -61,42 +63,109 @@ func (a *app) threadToolbar(c *ui.Context, t *ui.Theme) {
 				a.toolButtonTip(c, icon, label, tip, reply, func() { a.reply(all) })
 			}
 			a.toolButtonTip(c, forwardIcon, locales.Forward(), locales.ForwardNewest(), reply, func() { a.forward() })
-		})
-		a.glassGroup(c, locales.MoveActions(), func() {
-			a.toolButton(c, archiveIcon, locales.ArchiveConversations(n), has && archive, func() {
-				a.moveThreads(mail.SpecialArchive)
-			})
-			a.toolButton(c, trashIcon, locales.DeleteConversations(n), has && trash, func() {
-				a.moveThreads(mail.SpecialTrash)
-			})
-			a.toolButton(c, spamIcon, locales.JunkConversations(n), has && junk, func() {
-				a.moveThreads(mail.SpecialJunk)
-			})
-		})
-		a.glassGroup(c, locales.MarkActions(), func() {
-			starLabel, star, starColor := locales.StarConversations(n), starIcon, t.Text
-			if allFlagged {
-				starLabel, star, starColor = locales.UnstarConversations(n), starFilledIcon, t.Warning
+		}
+		a.glassGroup(c, locales.ReplyActions(), replies)
+		// A narrow bar folds its groups into menus, and gives the search
+		// in use the rest of its room.
+		if compact {
+			if field {
+				return
 			}
-			starButton := ui.Button(c, "").Label(starLabel).Tooltip(starLabel).Disabled(!has).Padding(barPad, barPad).Radius(barButton)
-			if has {
-				starButton = starButton.OnClick(a.toggleThreadStar)
-			}
-			starButton.Children(func() { ui.Icon(c, star).FontSize(16).TextColor(starColor).ContentTransition(swapIcon) })
-			readLabel, readIcon := locales.MarkConversationsRead(n), mailOpenIcon
-			if allSeen {
-				readLabel, readIcon = locales.MarkConversationsUnread(n), mailIcon
-			}
-			a.toolButton(c, readIcon, readLabel, has, a.toggleThreadRead)
-			labels = a.labelButton(c, lt)
-		})
+			a.compactThreadMoves(c, n, has, archive, trash, junk)
+			labels, hasLabels = a.compactThreadMarks(c, n, has, allFlagged, allSeen, lt)
+		} else {
+			a.glassGroup(c, locales.MoveActions(), func() {
+				a.threadMoveButtons(c, n, has, archive, trash, junk)
+			})
+			a.glassGroup(c, locales.MarkActions(), func() {
+				starLabel, star, starColor := locales.StarConversations(n), starIcon, t.Text
+				if allFlagged {
+					starLabel, star, starColor = locales.UnstarConversations(n), starFilledIcon, t.Warning
+				}
+				starButton := ui.Button(c, "").Label(starLabel).Tooltip(starLabel).Disabled(!has).Padding(barPad, barPad).Radius(barButton)
+				if has {
+					starButton = starButton.OnClick(a.toggleThreadStar)
+				}
+				starButton.Children(func() { ui.Icon(c, star).FontSize(16).TextColor(starColor).ContentTransition(swapIcon) })
+				readLabel, readIcon := locales.MarkConversationsRead(n), mailOpenIcon
+				if allSeen {
+					readLabel, readIcon = locales.MarkConversationsUnread(n), mailIcon
+				}
+				a.toolButton(c, readIcon, readLabel, has, a.toggleThreadRead)
+				labels, hasLabels = a.labelButton(c, lt), true
+			})
+		}
 		if a.ai != nil {
 			a.barCapsule(c, func() ui.Element {
 				return a.toolButton(c, sparklesIcon, locales.SummarizeConversation(), n == 1 && newest != nil, a.summarize)
 			})
 		}
 	})
-	a.labelPicker(c, t, labels, lt)
+	if hasLabels {
+		a.labelPicker(c, t, labels, lt)
+	}
+}
+
+// threadMoveButtons are a conversation toolbar's archive, delete and junk.
+func (a *app) threadMoveButtons(c *ui.Context, n int, has, archive, trash, junk bool) {
+	a.toolButton(c, archiveIcon, locales.ArchiveConversations(n), has && archive, func() {
+		a.moveThreads(mail.SpecialArchive)
+	})
+	a.toolButton(c, trashIcon, locales.DeleteConversations(n), has && trash, func() {
+		a.moveThreads(mail.SpecialTrash)
+	})
+	a.toolButton(c, spamIcon, locales.JunkConversations(n), has && junk, func() {
+		a.moveThreads(mail.SpecialJunk)
+	})
+}
+
+// compactThreadMoves folds the move actions into the menu of one button.
+func (a *app) compactThreadMoves(c *ui.Context, n int, has, archive, trash, junk bool) {
+	a.glassGroup(c, "", func() {
+		a.barMenuButton(c, archiveIcon, locales.MoveActions(), locales.MoveActions(), func(m *ui.Menu) {
+			if m.Item(locales.ArchiveConversations(n)).Disabled(!has || !archive).Chosen() {
+				a.moveThreads(mail.SpecialArchive)
+			}
+			if m.Item(locales.DeleteConversations(n)).Disabled(!has || !trash).Chosen() {
+				a.moveThreads(mail.SpecialTrash)
+			}
+			if m.Item(locales.JunkConversations(n)).Disabled(!has || !junk).Chosen() {
+				a.moveThreads(mail.SpecialJunk)
+			}
+		})
+	})
+}
+
+// compactThreadMarks folds star, read and labels into one button's menu.
+// While the checklist of labels is open it returns the button it hangs
+// from, which the capsule then holds.
+func (a *app) compactThreadMarks(c *ui.Context, n int, has, allFlagged, allSeen bool, lt labelTargets) (ui.Element, bool) {
+	starLabel, star := locales.StarConversations(n), starIcon
+	if allFlagged {
+		starLabel, star = locales.UnstarConversations(n), starFilledIcon
+	}
+	readLabel := locales.MarkConversationsRead(n)
+	if allSeen {
+		readLabel = locales.MarkConversationsUnread(n)
+	}
+	var anchor ui.Element
+	picker := false
+	a.glassGroup(c, "", func() {
+		anchor = a.barMenuButton(c, star, locales.MarkActions(), locales.MarkActions(), func(m *ui.Menu) {
+			if m.Item(starLabel).Disabled(!has).Chosen() {
+				a.toggleThreadStar()
+			}
+			if m.Item(readLabel).Disabled(!has).Chosen() {
+				a.toggleThreadRead()
+			}
+			m.Separator()
+			m.Submenu(locales.Labels(), func(m *ui.Menu) { a.labelMenuItems(m, lt) })
+		})
+		if a.labels.picker {
+			anchor, picker = a.labelButton(c, lt), true
+		}
+	})
+	return anchor, picker
 }
 
 // conversationPane is the reading pane in conversation view: the chosen

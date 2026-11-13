@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -176,19 +177,26 @@ func TestCountBadgeDirection(t *testing.T) {
 // starts below it, at the window's minimum size too.
 func TestFloatingToolbar(t *testing.T) {
 	a, _ := sampleMessageApp(t)
-	for _, dark := range []bool{false, true} {
-		tt := ui.NewTesterWith(a.view, 1000, 640, ui.TesterOptions{Dark: dark})
+	tt := ui.NewTester(a.view, 1000, 640)
+	aboveBar := func(tt *ui.Tester) {
 		bar := findText(t, tt, locales.MessageActions())
 		subject := findText(t, tt, "Body of Design review — Thursday at 10")
 		if subject.Y < bar.Y+bar.H {
-			t.Errorf("dark=%v: the message starts at %v, under the toolbar ending at %v", dark, subject.Y, bar.Y+bar.H)
+			t.Errorf("the message starts at %v, under the toolbar ending at %v", subject.Y, bar.Y+bar.H)
 		}
 	}
-	tt := ui.NewTester(a.view, 1000, 640)
-	click(t, tt, locales.ArchiveMessage())
+	aboveBar(tt)
+	// The pane is narrow at this size, so the moves are in their menu.
+	click(t, tt, locales.MoveActions())
+	if err := tt.ChooseMenuItem(locales.ArchiveMessage()); err != nil {
+		t.Fatal(err)
+	}
 	if a.undo == nil {
 		t.Error("archive from the floating toolbar did nothing")
 	}
+	// The dark appearance lays the pane out the same way.
+	d, _ := sampleMessageApp(t)
+	aboveBar(ui.NewTesterWith(d.view, 1000, 640, ui.TesterOptions{Dark: true}))
 }
 
 // Where the reading pane is too narrow for the search field beside the
@@ -219,7 +227,7 @@ func TestCompactSearch(t *testing.T) {
 		t.Error("the empty field stays open after it lost the focus")
 	}
 	// The actions are all there again.
-	for _, s := range []string{locales.ArchiveMessage(), locales.Forward()} {
+	for _, s := range []string{locales.MoveActions(), locales.MarkActions(), locales.Forward()} {
 		if r, ok := tt.Find(s); !ok || r.W == 0 {
 			t.Errorf("%q not shown with the search closed", s)
 		}
@@ -232,5 +240,61 @@ func TestCompactSearch(t *testing.T) {
 	tt.Key(ui.Cmd, ui.KeyComma)
 	if !a.showSettings {
 		t.Error("Cmd+, did not open the settings")
+	}
+}
+
+// A narrow reading bar folds its moves, marks and labels into menus, with
+// every action still at hand, and shows them again as the pane widens.
+func TestCompactFoldsGroups(t *testing.T) {
+	a, _ := sampleMessageApp(t)
+	tt := ui.NewTester(a.view, 1000, 640)
+	tt.Frame()
+	if !a.readingCompact() {
+		t.Fatal("1000x640 did not make the pane narrow")
+	}
+	for _, s := range []string{locales.MoveActions(), locales.MarkActions()} {
+		if r, ok := tt.Find(s); !ok || r.W == 0 || r.X+r.W > 1000 {
+			t.Errorf("the %q menu at %v", s, r)
+		}
+	}
+	for _, s := range []string{locales.ArchiveMessage(), locales.JunkMessage(), locales.StarMessage(),
+		locales.MarkRead(), locales.ChangeLabels()} {
+		if r, ok := tt.Find(s); ok && r.W > 0 {
+			t.Errorf("%q shows beside its menu", s)
+		}
+	}
+	click(t, tt, locales.MoveActions())
+	got := strings.Join(tt.Menu(), ",")
+	for _, s := range []string{locales.ArchiveMessage(), locales.DeleteMessage(), locales.JunkMessage()} {
+		if !strings.Contains(got, s) {
+			t.Errorf("the move menu holds %q, not %q", got, s)
+		}
+	}
+	if err := tt.ChooseMenuItem(locales.ArchiveMessage()); err != nil {
+		t.Fatal(err)
+	}
+	if a.undo == nil {
+		t.Error("archive from the move menu did nothing")
+	}
+
+	// The search in use leaves the replies their room and hides the rest.
+	tt.Key(ui.Cmd, ui.KeyK)
+	tt.Frame()
+	if _, ok := tt.Find(locales.MoveActions()); ok {
+		t.Error("the move menu stays beside the search in use")
+	}
+	if _, ok := tt.Find(locales.Forward()); !ok {
+		t.Error("the search in use hides the replies")
+	}
+	tt.Key(0, ui.KeyEscape)
+	tt.Frame()
+
+	b, _ := sampleMessageApp(t)
+	wide := ui.NewTester(b.view, 1220, 800)
+	wide.Frame()
+	for _, s := range []string{locales.ArchiveMessage(), locales.StarMessage(), locales.ChangeLabels(), locales.MarkUnread()} {
+		if r, ok := wide.Find(s); !ok || r.W == 0 {
+			t.Errorf("%q not shown in a wide pane", s)
+		}
 	}
 }

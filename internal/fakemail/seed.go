@@ -97,6 +97,17 @@ func Seed(s *IMAP, now time.Time) error {
 		from: wang, to: me, subject: "周五团队聚餐安排", date: ago(7 * time.Hour), id: "dinner-1",
 	}, "大家好，\n\n周五晚上七点在公司楼下的餐厅聚餐，请回复是否参加。\n\n小明"))
 
+	// A meeting invitation, to walk the RSVP card.
+	ics := "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nMETHOD:REQUEST\r\n" +
+		"BEGIN:VEVENT\r\nUID:offsite-plan@example.com\r\nSEQUENCE:0\r\n" +
+		"SUMMARY:Offsite planning\r\nDTSTART:20261120T100000Z\r\nDTEND:20261120T110000Z\r\n" +
+		"LOCATION:Room 4\r\nORGANIZER;CN=Leo Park:mailto:leo@example.com\r\n" +
+		"ATTENDEE;CN=Dev Seed;PARTSTAT=NEEDS-ACTION:mailto:dev@example.com\r\n" +
+		"END:VEVENT\r\nEND:VCALENDAR\r\n"
+	put("INBOX", invite(header{
+		from: leo, to: me, subject: "Invitation: Offsite planning", date: ago(90 * time.Minute), id: "invite-1",
+	}, "Here is the invitation for the offsite planning.", ics))
+
 	// A long message, to scroll the reading pane.
 	var long strings.Builder
 	for i := 1; i <= 60; i++ {
@@ -208,6 +219,18 @@ func alternative(h header, text, html string) []byte {
 	fmt.Fprintf(&b, "Content-Type: multipart/alternative; boundary=%q\r\n\r\n", boundary)
 	fmt.Fprintf(&b, "--%s\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n%s\r\n", boundary, crlf(text))
 	fmt.Fprintf(&b, "--%s\r\nContent-Type: text/html; charset=utf-8\r\n\r\n%s\r\n", boundary, html)
+	fmt.Fprintf(&b, "--%s--\r\n", boundary)
+	return []byte(b.String())
+}
+
+// invite builds a message with a plain text body and a calendar part.
+func invite(h header, text, ics string) []byte {
+	const boundary = "seed-invite"
+	var b strings.Builder
+	h.write(&b)
+	fmt.Fprintf(&b, "Content-Type: multipart/mixed; boundary=%q\r\n\r\n", boundary)
+	fmt.Fprintf(&b, "--%s\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n%s\r\n", boundary, crlf(text))
+	fmt.Fprintf(&b, "--%s\r\nContent-Type: text/calendar; method=REQUEST; charset=utf-8\r\n\r\n%s\r\n", boundary, ics)
 	fmt.Fprintf(&b, "--%s--\r\n", boundary)
 	return []byte(b.String())
 }

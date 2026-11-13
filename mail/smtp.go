@@ -503,6 +503,9 @@ func (s *Service) newMessage(a Account, out Outgoing, now time.Time) (*gomail.Ms
 		}
 		msg.SetGenHeader(gomail.HeaderReferences, strings.Join(refs, " "))
 	}
+	if out.Calendar != "" {
+		msg.AddAlternativeString(gomail.ContentType("text/calendar; method=REPLY"), out.Calendar)
+	}
 	if len(out.Attachments) > 0 {
 		files := make([]*gomail.File, 0, len(out.Attachments))
 		for _, att := range out.Attachments {

@@ -136,6 +136,11 @@ type Message struct {
 	// BodyCached reports whether the body is in the cache; a summary
 	// whose body was never fetched has none.
 	BodyCached bool `json:"bodyCached,omitempty"`
+	// Calendar is the meeting invitation the message carries, when it
+	// has one; CalendarRaw is its part as it came, whether it parsed or
+	// not, so an unreadable invitation can say so.
+	Calendar    *CalendarInvite `json:"calendar,omitempty"`
+	CalendarRaw string          `json:"-"`
 	// Keywords are the flags of the user's that a fetch read of the
 	// message on the server, which the cache keeps as its labels; nil
 	// when it read none, as a message not fetched from a server.
@@ -209,6 +214,9 @@ type Outgoing struct {
 	// go into the message. The outbox keeps these few fields of each, and
 	// never the bytes.
 	Attachments []Attachment `json:"attachments,omitempty"`
+	// Calendar is the iMIP body a reply to an invitation carries, as
+	// text/calendar; it is no part of the envelope.
+	Calendar string `json:"-"`
 	// DraftID names the draft the message was written as. Send removes
 	// that draft once the server took the message. It is no part of the
 	// envelope, so the outbox does not keep it.

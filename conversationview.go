@@ -306,6 +306,7 @@ func (a *app) threadMessage(c *ui.Context, t *ui.Theme, cv *convView, i int, m m
 			if loaded {
 				a.securityNotice(c, t, m, &body.Message)
 				a.imageNotice(c, t, m, &body.Message)
+				a.calendarCard(c, t, m, &body.Message)
 			}
 			if loaded && len(body.Message.Attachments) > 0 {
 				a.attachments(c, t, m, body.Message.Attachments)

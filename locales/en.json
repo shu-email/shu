@@ -3524,5 +3524,103 @@
   "shortcutSync": "Sync mail",
   "shortcutSettings": "Settings",
   "shortcutShortcuts": "Keyboard shortcuts",
-  "shortcutClose": "Close a dialog or cancel"
+  "shortcutClose": "Close a dialog or cancel",
+  "inviteTitle": "Meeting invitation",
+  "inviteCanceled": "This meeting was canceled",
+  "inviteUpdated": "This is an update to the invitation",
+  "inviteAllDay": "All day",
+  "inviteWhen": "{start} – {end}",
+  "@inviteWhen": {
+    "description": "The time range of a meeting.",
+    "placeholders": {
+      "start": {
+        "type": "String",
+        "example": "Thu, Mar 5, 10:00"
+      },
+      "end": {
+        "type": "String",
+        "example": "11:00"
+      }
+    }
+  },
+  "inviteOrganizer": "Organizer: {name}",
+  "@inviteOrganizer": {
+    "description": "The organizer of a meeting.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Maya Chen"
+      }
+    }
+  },
+  "inviteLocation": "Where: {location}",
+  "@inviteLocation": {
+    "description": "Where a meeting is.",
+    "placeholders": {
+      "location": {
+        "type": "String",
+        "example": "Room 4"
+      }
+    }
+  },
+  "inviteAttendees": "{count, plural, one {# attendee} other {# attendees}}",
+  "@inviteAttendees": {
+    "description": "How many people are invited.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "4"
+      }
+    }
+  },
+  "inviteYourResponse": "Your answer: {response}",
+  "@inviteYourResponse": {
+    "description": "The user's response to an invitation.",
+    "placeholders": {
+      "response": {
+        "type": "String",
+        "example": "Accepted"
+      }
+    }
+  },
+  "inviteAccept": "Accept",
+  "inviteTentative": "Maybe",
+  "inviteDecline": "Decline",
+  "inviteAddToCalendar": "Add to calendar",
+  "inviteAccepted": "Accepted",
+  "inviteMaybe": "Tentative",
+  "inviteDeclined": "Declined",
+  "inviteReplySent": "Your answer was sent to {organizer}",
+  "@inviteReplySent": {
+    "description": "The note after an RSVP was sent.",
+    "placeholders": {
+      "organizer": {
+        "type": "String",
+        "example": "Maya Chen"
+      }
+    }
+  },
+  "inviteReplyFailed": "Could not send your answer: {error}",
+  "@inviteReplyFailed": {
+    "description": "The error after an RSVP failed.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "the server refused the message"
+      }
+    }
+  },
+  "inviteUnreadable": "This message has a meeting invitation Shu cannot read.",
+  "inviteAddOpened": "Opened the event in your calendar app",
+  "inviteAddFailed": "Could not open the event: {error}",
+  "@inviteAddFailed": {
+    "description": "The error after opening an event failed.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "no calendar app is set"
+      }
+    }
+  },
+  "inviteNoReply": "This invitation has no organizer to answer."
 }

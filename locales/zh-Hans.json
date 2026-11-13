@@ -1210,5 +1210,103 @@
   "shortcutSync": "同步邮件",
   "shortcutSettings": "设置",
   "shortcutShortcuts": "键盘快捷键",
-  "shortcutClose": "关闭对话框或取消"
+  "shortcutClose": "关闭对话框或取消",
+  "inviteTitle": "会议邀请",
+  "inviteCanceled": "此会议已取消",
+  "inviteUpdated": "这是邀请的更新版本",
+  "inviteAllDay": "全天",
+  "inviteWhen": "{start} – {end}",
+  "@inviteWhen": {
+    "description": "The time range of a meeting.",
+    "placeholders": {
+      "start": {
+        "type": "String",
+        "example": "Thu, Mar 5, 10:00"
+      },
+      "end": {
+        "type": "String",
+        "example": "11:00"
+      }
+    }
+  },
+  "inviteOrganizer": "组织者：{name}",
+  "@inviteOrganizer": {
+    "description": "The organizer of a meeting.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Maya Chen"
+      }
+    }
+  },
+  "inviteLocation": "地点：{location}",
+  "@inviteLocation": {
+    "description": "Where a meeting is.",
+    "placeholders": {
+      "location": {
+        "type": "String",
+        "example": "Room 4"
+      }
+    }
+  },
+  "inviteAttendees": "{count, plural, other {# 位参与者}}",
+  "@inviteAttendees": {
+    "description": "How many people are invited.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "4"
+      }
+    }
+  },
+  "inviteYourResponse": "你的答复：{response}",
+  "@inviteYourResponse": {
+    "description": "The user's response to an invitation.",
+    "placeholders": {
+      "response": {
+        "type": "String",
+        "example": "Accepted"
+      }
+    }
+  },
+  "inviteAccept": "接受",
+  "inviteTentative": "也许",
+  "inviteDecline": "拒绝",
+  "inviteAddToCalendar": "添加到日历",
+  "inviteAccepted": "已接受",
+  "inviteMaybe": "暂定",
+  "inviteDeclined": "已拒绝",
+  "inviteReplySent": "答复已发送给 {organizer}",
+  "@inviteReplySent": {
+    "description": "The note after an RSVP was sent.",
+    "placeholders": {
+      "organizer": {
+        "type": "String",
+        "example": "Maya Chen"
+      }
+    }
+  },
+  "inviteReplyFailed": "无法发送你的答复：{error}",
+  "@inviteReplyFailed": {
+    "description": "The error after an RSVP failed.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "the server refused the message"
+      }
+    }
+  },
+  "inviteUnreadable": "此邮件包含 Shu 无法读取的会议邀请。",
+  "inviteAddOpened": "已在日历应用中打开该事件",
+  "inviteAddFailed": "无法打开该事件：{error}",
+  "@inviteAddFailed": {
+    "description": "The error after opening an event failed.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "no calendar app is set"
+      }
+    }
+  },
+  "inviteNoReply": "此邀请没有可回复的组织者。"
 }

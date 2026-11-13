@@ -436,6 +436,11 @@ var migrations = [][]string{
 	{
 		`ALTER TABLE folders ADD COLUMN subscribed INTEGER NOT NULL DEFAULT 1`,
 	},
+	// v14: the invitation a message carries, as JSON (mail.CalendarInvite),
+	// so the reading pane shows it from the cache too.
+	{
+		`ALTER TABLE messages ADD COLUMN calendar TEXT`,
+	},
 }
 
 // backfills compute, from the rows of the version before, statements a

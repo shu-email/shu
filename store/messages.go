@@ -130,7 +130,7 @@ func (s *Store) ListMessages(ctx context.Context, accountID, folder, query strin
 func (s *Store) GetMessage(ctx context.Context, accountID, folder string, uid mail.UID) (mail.Message, bool, error) {
 	rows, err := s.query(ctx, `SELECT `+summaryColumns+`,
 		COALESCE(m.body_text, ''), COALESCE(m.body_html, ''), m.body_truncated,
-		COALESCE(m.raw_headers, ''), m.cached_at, m.id
+		COALESCE(m.raw_headers, ''), m.cached_at, m.id, COALESCE(m.calendar, '')
 		FROM messages m JOIN folders f ON f.id = m.folder_id
 		WHERE f.account_id = ? AND f.name = ? AND m.server_uid = ?`,
 		accountID, folder, int64(uid))
@@ -154,6 +154,12 @@ func (s *Store) GetMessage(ctx context.Context, accountID, folder string, uid ma
 		RawHeaders:    text(body[3]),
 		CachedAt:      unix(body[4]),
 		BodyCached:    body[4] != nil,
+	}
+	if raw := text(body[6]); raw != "" {
+		var invite mail.CalendarInvite
+		if err := json.Unmarshal([]byte(raw), &invite); err == nil {
+			msg.Calendar = &invite
+		}
 	}
 	messageID := number(body[5])
 	attachments, err := s.attachments(ctx, messageID)
@@ -215,9 +221,9 @@ func (s *Store) SaveMessage(ctx context.Context, accountID, folder string, m mai
 				folder_id, server_uid, message_id, in_reply_to, references_json,
 				from_name, from_email, to_json, cc_json, reply_to_json, recipients,
 				subject, preview, date, size, seen, flagged, has_attachments,
-				body_text, body_html, body_truncated, raw_headers, cached_at,
+				body_text, body_html, body_truncated, raw_headers, cached_at, calendar,
 				thread_index, thread_id, msg_key, deleted)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
 			ON CONFLICT (folder_id, server_uid) DO UPDATE SET
 				message_id=excluded.message_id, in_reply_to=excluded.in_reply_to,
 				references_json=excluded.references_json,
@@ -230,13 +236,14 @@ func (s *Store) SaveMessage(ctx context.Context, accountID, folder string, m mai
 				has_attachments=excluded.has_attachments,
 				body_text=excluded.body_text, body_html=excluded.body_html,
 				body_truncated=excluded.body_truncated, raw_headers=excluded.raw_headers,
-				cached_at=excluded.cached_at, thread_index=excluded.thread_index,
+				cached_at=excluded.cached_at, calendar=excluded.calendar,
+				thread_index=excluded.thread_index,
 				thread_id=excluded.thread_id, msg_key=excluded.msg_key, deleted=0`,
 			folderID, int64(m.UID), m.MessageID, m.InReplyTo, encodeJSON(m.References),
 			m.From.Name, m.From.Email, encodeJSON(m.To), encodeJSON(m.Cc), encodeJSON(m.ReplyTo), recipientsText(m.To, m.Cc),
 			m.Subject, m.Preview, dateColumn(m.Date), m.Size, boolInt(m.Seen), boolInt(m.Flagged),
 			boolInt(m.HasAttachments), m.BodyText, m.BodyHTML, boolInt(m.BodyTruncated),
-			m.RawHeaders, unixPtr(m.CachedAt), m.ThreadIndex, plan.find(thread), mail.LabelKey(m.Summary)))
+			m.RawHeaders, unixPtr(m.CachedAt), encodeCalendar(m.Calendar), m.ThreadIndex, plan.find(thread), mail.LabelKey(m.Summary)))
 	if m.Seen && !wasSeen {
 		stmts = append(stmts, stmt(`UPDATE folders SET unread = MAX(0, unread - 1) WHERE id = ?`, folderID))
 	}
@@ -539,4 +546,17 @@ func boolInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+// encodeCalendar writes an invitation for the cache, and nothing when the
+// message has none.
+func encodeCalendar(invite *mail.CalendarInvite) any {
+	if invite == nil {
+		return nil
+	}
+	data, err := json.Marshal(invite)
+	if err != nil {
+		return nil
+	}
+	return string(data)
 }

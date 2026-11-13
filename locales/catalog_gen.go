@@ -10109,3 +10109,257 @@ func ShortcutClose() string { return In(i18n.Locale()).ShortcutClose() }
 func (msgs Messages) ShortcutClose() string {
 	return Catalog.Format(msgs.locale, "shortcutClose", nil)
 }
+
+// InviteTitle says "Meeting invitation"
+// in the language the app shows.
+func InviteTitle() string { return In(i18n.Locale()).InviteTitle() }
+
+// InviteTitle says "Meeting invitation"
+// in the language of msgs.
+func (msgs Messages) InviteTitle() string {
+	return Catalog.Format(msgs.locale, "inviteTitle", nil)
+}
+
+// InviteCanceled says "This meeting was canceled"
+// in the language the app shows.
+func InviteCanceled() string { return In(i18n.Locale()).InviteCanceled() }
+
+// InviteCanceled says "This meeting was canceled"
+// in the language of msgs.
+func (msgs Messages) InviteCanceled() string {
+	return Catalog.Format(msgs.locale, "inviteCanceled", nil)
+}
+
+// InviteUpdated says "This is an update to the invitation"
+// in the language the app shows.
+func InviteUpdated() string { return In(i18n.Locale()).InviteUpdated() }
+
+// InviteUpdated says "This is an update to the invitation"
+// in the language of msgs.
+func (msgs Messages) InviteUpdated() string {
+	return Catalog.Format(msgs.locale, "inviteUpdated", nil)
+}
+
+// InviteAllDay says "All day"
+// in the language the app shows.
+func InviteAllDay() string { return In(i18n.Locale()).InviteAllDay() }
+
+// InviteAllDay says "All day"
+// in the language of msgs.
+func (msgs Messages) InviteAllDay() string {
+	return Catalog.Format(msgs.locale, "inviteAllDay", nil)
+}
+
+// InviteWhen says "{start} – {end}"
+// in the language the app shows.
+//
+// The time range of a meeting.
+func InviteWhen(start string, end string) string { return In(i18n.Locale()).InviteWhen(start, end) }
+
+// InviteWhen says "{start} – {end}"
+// in the language of msgs.
+//
+// The time range of a meeting.
+func (msgs Messages) InviteWhen(start string, end string) string {
+	return Catalog.Format(msgs.locale, "inviteWhen", map[string]any{"start": start, "end": end})
+}
+
+// InviteOrganizer says "Organizer: {name}"
+// in the language the app shows.
+//
+// The organizer of a meeting.
+func InviteOrganizer(name string) string { return In(i18n.Locale()).InviteOrganizer(name) }
+
+// InviteOrganizer says "Organizer: {name}"
+// in the language of msgs.
+//
+// The organizer of a meeting.
+func (msgs Messages) InviteOrganizer(name string) string {
+	return Catalog.Format(msgs.locale, "inviteOrganizer", map[string]any{"name": name})
+}
+
+// InviteLocation says "Where: {location}"
+// in the language the app shows.
+//
+// Where a meeting is.
+func InviteLocation(location string) string { return In(i18n.Locale()).InviteLocation(location) }
+
+// InviteLocation says "Where: {location}"
+// in the language of msgs.
+//
+// Where a meeting is.
+func (msgs Messages) InviteLocation(location string) string {
+	return Catalog.Format(msgs.locale, "inviteLocation", map[string]any{"location": location})
+}
+
+// InviteAttendees says "{count, plural, one {# attendee} other {# attendees}}"
+// in the language the app shows.
+//
+// How many people are invited.
+func InviteAttendees(count int) string { return In(i18n.Locale()).InviteAttendees(count) }
+
+// InviteAttendees says "{count, plural, one {# attendee} other {# attendees}}"
+// in the language of msgs.
+//
+// How many people are invited.
+func (msgs Messages) InviteAttendees(count int) string {
+	return Catalog.Format(msgs.locale, "inviteAttendees", map[string]any{"count": count})
+}
+
+// InviteYourResponse says "Your answer: {response}"
+// in the language the app shows.
+//
+// The user's response to an invitation.
+func InviteYourResponse(response string) string {
+	return In(i18n.Locale()).InviteYourResponse(response)
+}
+
+// InviteYourResponse says "Your answer: {response}"
+// in the language of msgs.
+//
+// The user's response to an invitation.
+func (msgs Messages) InviteYourResponse(response string) string {
+	return Catalog.Format(msgs.locale, "inviteYourResponse", map[string]any{"response": response})
+}
+
+// InviteAccept says "Accept"
+// in the language the app shows.
+func InviteAccept() string { return In(i18n.Locale()).InviteAccept() }
+
+// InviteAccept says "Accept"
+// in the language of msgs.
+func (msgs Messages) InviteAccept() string {
+	return Catalog.Format(msgs.locale, "inviteAccept", nil)
+}
+
+// InviteTentative says "Maybe"
+// in the language the app shows.
+func InviteTentative() string { return In(i18n.Locale()).InviteTentative() }
+
+// InviteTentative says "Maybe"
+// in the language of msgs.
+func (msgs Messages) InviteTentative() string {
+	return Catalog.Format(msgs.locale, "inviteTentative", nil)
+}
+
+// InviteDecline says "Decline"
+// in the language the app shows.
+func InviteDecline() string { return In(i18n.Locale()).InviteDecline() }
+
+// InviteDecline says "Decline"
+// in the language of msgs.
+func (msgs Messages) InviteDecline() string {
+	return Catalog.Format(msgs.locale, "inviteDecline", nil)
+}
+
+// InviteAddToCalendar says "Add to calendar"
+// in the language the app shows.
+func InviteAddToCalendar() string { return In(i18n.Locale()).InviteAddToCalendar() }
+
+// InviteAddToCalendar says "Add to calendar"
+// in the language of msgs.
+func (msgs Messages) InviteAddToCalendar() string {
+	return Catalog.Format(msgs.locale, "inviteAddToCalendar", nil)
+}
+
+// InviteAccepted says "Accepted"
+// in the language the app shows.
+func InviteAccepted() string { return In(i18n.Locale()).InviteAccepted() }
+
+// InviteAccepted says "Accepted"
+// in the language of msgs.
+func (msgs Messages) InviteAccepted() string {
+	return Catalog.Format(msgs.locale, "inviteAccepted", nil)
+}
+
+// InviteMaybe says "Tentative"
+// in the language the app shows.
+func InviteMaybe() string { return In(i18n.Locale()).InviteMaybe() }
+
+// InviteMaybe says "Tentative"
+// in the language of msgs.
+func (msgs Messages) InviteMaybe() string {
+	return Catalog.Format(msgs.locale, "inviteMaybe", nil)
+}
+
+// InviteDeclined says "Declined"
+// in the language the app shows.
+func InviteDeclined() string { return In(i18n.Locale()).InviteDeclined() }
+
+// InviteDeclined says "Declined"
+// in the language of msgs.
+func (msgs Messages) InviteDeclined() string {
+	return Catalog.Format(msgs.locale, "inviteDeclined", nil)
+}
+
+// InviteReplySent says "Your answer was sent to {organizer}"
+// in the language the app shows.
+//
+// The note after an RSVP was sent.
+func InviteReplySent(organizer string) string { return In(i18n.Locale()).InviteReplySent(organizer) }
+
+// InviteReplySent says "Your answer was sent to {organizer}"
+// in the language of msgs.
+//
+// The note after an RSVP was sent.
+func (msgs Messages) InviteReplySent(organizer string) string {
+	return Catalog.Format(msgs.locale, "inviteReplySent", map[string]any{"organizer": organizer})
+}
+
+// InviteReplyFailed says "Could not send your answer: {error}"
+// in the language the app shows.
+//
+// The error after an RSVP failed.
+func InviteReplyFailed(error string) string { return In(i18n.Locale()).InviteReplyFailed(error) }
+
+// InviteReplyFailed says "Could not send your answer: {error}"
+// in the language of msgs.
+//
+// The error after an RSVP failed.
+func (msgs Messages) InviteReplyFailed(error string) string {
+	return Catalog.Format(msgs.locale, "inviteReplyFailed", map[string]any{"error": error})
+}
+
+// InviteUnreadable says "This message has a meeting invitation Shu cannot read."
+// in the language the app shows.
+func InviteUnreadable() string { return In(i18n.Locale()).InviteUnreadable() }
+
+// InviteUnreadable says "This message has a meeting invitation Shu cannot read."
+// in the language of msgs.
+func (msgs Messages) InviteUnreadable() string {
+	return Catalog.Format(msgs.locale, "inviteUnreadable", nil)
+}
+
+// InviteAddOpened says "Opened the event in your calendar app"
+// in the language the app shows.
+func InviteAddOpened() string { return In(i18n.Locale()).InviteAddOpened() }
+
+// InviteAddOpened says "Opened the event in your calendar app"
+// in the language of msgs.
+func (msgs Messages) InviteAddOpened() string {
+	return Catalog.Format(msgs.locale, "inviteAddOpened", nil)
+}
+
+// InviteAddFailed says "Could not open the event: {error}"
+// in the language the app shows.
+//
+// The error after opening an event failed.
+func InviteAddFailed(error string) string { return In(i18n.Locale()).InviteAddFailed(error) }
+
+// InviteAddFailed says "Could not open the event: {error}"
+// in the language of msgs.
+//
+// The error after opening an event failed.
+func (msgs Messages) InviteAddFailed(error string) string {
+	return Catalog.Format(msgs.locale, "inviteAddFailed", map[string]any{"error": error})
+}
+
+// InviteNoReply says "This invitation has no organizer to answer."
+// in the language the app shows.
+func InviteNoReply() string { return In(i18n.Locale()).InviteNoReply() }
+
+// InviteNoReply says "This invitation has no organizer to answer."
+// in the language of msgs.
+func (msgs Messages) InviteNoReply() string {
+	return Catalog.Format(msgs.locale, "inviteNoReply", nil)
+}

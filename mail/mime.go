@@ -94,6 +94,15 @@ func parseMessage(raw []byte, attachmentCap int64) (Message, int, error) {
 		}
 		part++
 		contentType, params := partContentType(p.Header)
+		if strings.HasPrefix(contentType, "text/calendar") {
+			data, cut := readCapped(p.Body, maxBodyPart)
+			truncated = truncated || cut
+			m.CalendarRaw = data
+			if invite, err := ParseCalendar(data); err == nil {
+				m.Calendar = invite
+			}
+			continue
+		}
 		if bodyText(p.Header, contentType) {
 			data, cut := readCapped(p.Body, maxBodyPart)
 			truncated = truncated || cut
@@ -144,6 +153,12 @@ func parseMessage(raw []byte, attachmentCap int64) (Message, int, error) {
 			ContentHash: hex.EncodeToString(sum[:]),
 			Data:        data,
 		})
+		if m.Calendar == nil && strings.HasSuffix(strings.ToLower(name), ".ics") {
+			if invite, err := ParseCalendar(string(data)); err == nil {
+				m.Calendar = invite
+				m.CalendarRaw = string(data)
+			}
+		}
 	}
 	m.BodyText = normalizeText(text.String())
 	m.BodyHTML = embedInline(strings.TrimSpace(htmlBody.String()), inline)

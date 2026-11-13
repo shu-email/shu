@@ -15,6 +15,7 @@ const (
 	settingsTabGeneral = iota
 	settingsTabNetwork
 	settingsTabAI
+	settingsTabPrivacy
 )
 
 // aiSettings is the AI tab's editable state. Changes apply at once, as
@@ -69,6 +70,9 @@ func (a *app) openSettings(tab int) {
 	a.loadAISettings()
 	if tab == settingsTabNetwork {
 		a.loadNetworkSettings()
+	}
+	if tab == settingsTabPrivacy {
+		a.loadBlocks()
 	}
 	if a.showSettings && a.settingsWin != nil {
 		a.settingsWin.Show()
@@ -356,6 +360,10 @@ func (a *app) settingsView(c *ui.Context) {
 					a.loadAISettings()
 				})
 			}
+			a.settingsTabButton(c, t, shieldIcon, locales.PrivacyTab(), a.settingsTab == settingsTabPrivacy, func() {
+				a.settingsTab = settingsTabPrivacy
+				a.loadBlocks()
+			})
 			ui.Spacer(c)
 		})
 		ui.Divider(c)
@@ -366,6 +374,8 @@ func (a *app) settingsView(c *ui.Context) {
 					a.aiSettingsView(c, t)
 				case a.settingsTab == settingsTabNetwork:
 					a.networkSettingsView(c, t)
+				case a.settingsTab == settingsTabPrivacy:
+					a.privacySettingsView(c, t)
 				default:
 					ui.Text(c, locales.Language()).FontSize(12).Bold().TextColor(t.TextMuted)
 					a.languageChoice(c).Width(320)

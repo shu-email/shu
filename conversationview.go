@@ -492,6 +492,19 @@ func (a *app) messageMenu(menu *ui.Menu, key string) {
 	})
 	menu.Submenu(locales.Labels(), func(menu *ui.Menu) { a.labelMenuItems(menu, oneMessage(m)) })
 	a.ruleMenuItem(menu, oneMessage(m))
+	var offer mail.UnsubscribeOffer
+	if body, ok := a.bodies[summaryKey(m)]; ok {
+		offer = offerOf(&body.Message)
+	}
+	if !a.ownAddress(m.From.Email) && (!offer.Empty() || m.From.Email != "") {
+		menu.Separator()
+		if !offer.Empty() && menu.Item(locales.Unsubscribe()).Chosen() {
+			a.openUnsubscribe(m, offer)
+		}
+		if m.From.Email != "" && menu.Item(locales.BlockSender()).Chosen() {
+			a.openBlockSender(m)
+		}
+	}
 }
 
 // messageFields are the raw sender and recipient fields of a message.

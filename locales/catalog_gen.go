@@ -11939,3 +11939,323 @@ func SecurityUnsubscribe(options string) string {
 func (msgs Messages) SecurityUnsubscribe(options string) string {
 	return Catalog.Format(msgs.locale, "securityUnsubscribe", map[string]any{"options": options})
 }
+
+// Unsubscribe says "Unsubscribe…"
+// in the language the app shows.
+func Unsubscribe() string { return In(i18n.Locale()).Unsubscribe() }
+
+// Unsubscribe says "Unsubscribe…"
+// in the language of msgs.
+func (msgs Messages) Unsubscribe() string {
+	return Catalog.Format(msgs.locale, "unsubscribe", nil)
+}
+
+// UnsubscribeTitle says "Leave this mailing list?"
+// in the language the app shows.
+func UnsubscribeTitle() string { return In(i18n.Locale()).UnsubscribeTitle() }
+
+// UnsubscribeTitle says "Leave this mailing list?"
+// in the language of msgs.
+func (msgs Messages) UnsubscribeTitle() string {
+	return Catalog.Format(msgs.locale, "unsubscribeTitle", nil)
+}
+
+// UnsubscribeOneClick says "Shu sends one one-click request (RFC 8058) to:\n{destination}\nThe list's server handles it; nothing else leaves this d…"
+// in the language the app shows.
+//
+// Confirms a one-click unsubscribe and names the exact URL the request goes
+// to.
+func UnsubscribeOneClick(destination string) string {
+	return In(i18n.Locale()).UnsubscribeOneClick(destination)
+}
+
+// UnsubscribeOneClick says "Shu sends one one-click request (RFC 8058) to:\n{destination}\nThe list's server handles it; nothing else leaves this d…"
+// in the language of msgs.
+//
+// Confirms a one-click unsubscribe and names the exact URL the request goes
+// to.
+func (msgs Messages) UnsubscribeOneClick(destination string) string {
+	return Catalog.Format(msgs.locale, "unsubscribeOneClick", map[string]any{"destination": destination})
+}
+
+// UnsubscribeEmail says "Shu sends an unsubscribe email from this account to:\n{destination}\nNo other message is sent."
+// in the language the app shows.
+//
+// Confirms an unsubscribe sent as an email from the account, naming the
+// exact address.
+func UnsubscribeEmail(destination string) string {
+	return In(i18n.Locale()).UnsubscribeEmail(destination)
+}
+
+// UnsubscribeEmail says "Shu sends an unsubscribe email from this account to:\n{destination}\nNo other message is sent."
+// in the language of msgs.
+//
+// Confirms an unsubscribe sent as an email from the account, naming the
+// exact address.
+func (msgs Messages) UnsubscribeEmail(destination string) string {
+	return Catalog.Format(msgs.locale, "unsubscribeEmail", map[string]any{"destination": destination})
+}
+
+// UnsubscribePage says "Shu opens the list's page in your browser:\n{destination}\nNothing is sent until you act on that page."
+// in the language the app shows.
+//
+// Confirms that the list's page opens in the browser, naming the exact URL.
+func UnsubscribePage(destination string) string {
+	return In(i18n.Locale()).UnsubscribePage(destination)
+}
+
+// UnsubscribePage says "Shu opens the list's page in your browser:\n{destination}\nNothing is sent until you act on that page."
+// in the language of msgs.
+//
+// Confirms that the list's page opens in the browser, naming the exact URL.
+func (msgs Messages) UnsubscribePage(destination string) string {
+	return Catalog.Format(msgs.locale, "unsubscribePage", map[string]any{"destination": destination})
+}
+
+// UnsubscribeConfirm says "Unsubscribe"
+// in the language the app shows.
+func UnsubscribeConfirm() string { return In(i18n.Locale()).UnsubscribeConfirm() }
+
+// UnsubscribeConfirm says "Unsubscribe"
+// in the language of msgs.
+func (msgs Messages) UnsubscribeConfirm() string {
+	return Catalog.Format(msgs.locale, "unsubscribeConfirm", nil)
+}
+
+// UnsubscribeOpenPage says "Open Page"
+// in the language the app shows.
+func UnsubscribeOpenPage() string { return In(i18n.Locale()).UnsubscribeOpenPage() }
+
+// UnsubscribeOpenPage says "Open Page"
+// in the language of msgs.
+func (msgs Messages) UnsubscribeOpenPage() string {
+	return Catalog.Format(msgs.locale, "unsubscribeOpenPage", nil)
+}
+
+// UnsubscribeFailed says "Could not unsubscribe: {error}"
+// in the language the app shows.
+//
+// Says that leaving a mailing list failed and why.
+func UnsubscribeFailed(error string) string { return In(i18n.Locale()).UnsubscribeFailed(error) }
+
+// UnsubscribeFailed says "Could not unsubscribe: {error}"
+// in the language of msgs.
+//
+// Says that leaving a mailing list failed and why.
+func (msgs Messages) UnsubscribeFailed(error string) string {
+	return Catalog.Format(msgs.locale, "unsubscribeFailed", map[string]any{"error": error})
+}
+
+// UnsubscribedOn says "You unsubscribed from this list on {date}."
+// in the language the app shows.
+//
+// Says when the user left this sender's mailing list.
+func UnsubscribedOn(date string) string { return In(i18n.Locale()).UnsubscribedOn(date) }
+
+// UnsubscribedOn says "You unsubscribed from this list on {date}."
+// in the language of msgs.
+//
+// Says when the user left this sender's mailing list.
+func (msgs Messages) UnsubscribedOn(date string) string {
+	return Catalog.Format(msgs.locale, "unsubscribedOn", map[string]any{"date": date})
+}
+
+// BlockSender says "Block Sender…"
+// in the language the app shows.
+func BlockSender() string { return In(i18n.Locale()).BlockSender() }
+
+// BlockSender says "Block Sender…"
+// in the language of msgs.
+func (msgs Messages) BlockSender() string {
+	return Catalog.Format(msgs.locale, "blockSender", nil)
+}
+
+// BlockSenderTitle says "Block this sender?"
+// in the language the app shows.
+func BlockSenderTitle() string { return In(i18n.Locale()).BlockSenderTitle() }
+
+// BlockSenderTitle says "Block this sender?"
+// in the language of msgs.
+func (msgs Messages) BlockSenderTitle() string {
+	return Catalog.Format(msgs.locale, "blockSenderTitle", nil)
+}
+
+// BlockSenderBody says "Mail from {sender} that arrives from now on goes to the folder you choose. Mail already in your mailbox stays where i…"
+// in the language the app shows.
+//
+// Explains what blocking a sender does before the user confirms it.
+func BlockSenderBody(sender string) string { return In(i18n.Locale()).BlockSenderBody(sender) }
+
+// BlockSenderBody says "Mail from {sender} that arrives from now on goes to the folder you choose. Mail already in your mailbox stays where i…"
+// in the language of msgs.
+//
+// Explains what blocking a sender does before the user confirms it.
+func (msgs Messages) BlockSenderBody(sender string) string {
+	return Catalog.Format(msgs.locale, "blockSenderBody", map[string]any{"sender": sender})
+}
+
+// BlockWholeDomain says "Block the whole domain @{domain}"
+// in the language the app shows.
+//
+// Offers to block every sender of the sender's domain.
+func BlockWholeDomain(domain string) string { return In(i18n.Locale()).BlockWholeDomain(domain) }
+
+// BlockWholeDomain says "Block the whole domain @{domain}"
+// in the language of msgs.
+//
+// Offers to block every sender of the sender's domain.
+func (msgs Messages) BlockWholeDomain(domain string) string {
+	return Catalog.Format(msgs.locale, "blockWholeDomain", map[string]any{"domain": domain})
+}
+
+// BlockFolderCaption says "Send the sender's new mail to"
+// in the language the app shows.
+func BlockFolderCaption() string { return In(i18n.Locale()).BlockFolderCaption() }
+
+// BlockFolderCaption says "Send the sender's new mail to"
+// in the language of msgs.
+func (msgs Messages) BlockFolderCaption() string {
+	return Catalog.Format(msgs.locale, "blockFolderCaption", nil)
+}
+
+// BlockToJunk says "Move new mail to Junk"
+// in the language the app shows.
+func BlockToJunk() string { return In(i18n.Locale()).BlockToJunk() }
+
+// BlockToJunk says "Move new mail to Junk"
+// in the language of msgs.
+func (msgs Messages) BlockToJunk() string {
+	return Catalog.Format(msgs.locale, "blockToJunk", nil)
+}
+
+// BlockToTrash says "Move new mail to Trash"
+// in the language the app shows.
+func BlockToTrash() string { return In(i18n.Locale()).BlockToTrash() }
+
+// BlockToTrash says "Move new mail to Trash"
+// in the language of msgs.
+func (msgs Messages) BlockToTrash() string {
+	return Catalog.Format(msgs.locale, "blockToTrash", nil)
+}
+
+// BlockConfirm says "Block"
+// in the language the app shows.
+func BlockConfirm() string { return In(i18n.Locale()).BlockConfirm() }
+
+// BlockConfirm says "Block"
+// in the language of msgs.
+func (msgs Messages) BlockConfirm() string {
+	return Catalog.Format(msgs.locale, "blockConfirm", nil)
+}
+
+// BlockFailed says "Could not block the sender: {error}"
+// in the language the app shows.
+//
+// Says that blocking a sender failed and why.
+func BlockFailed(error string) string { return In(i18n.Locale()).BlockFailed(error) }
+
+// BlockFailed says "Could not block the sender: {error}"
+// in the language of msgs.
+//
+// Says that blocking a sender failed and why.
+func (msgs Messages) BlockFailed(error string) string {
+	return Catalog.Format(msgs.locale, "blockFailed", map[string]any{"error": error})
+}
+
+// BlockNoFolder says "This account has no Junk or Trash folder to file the sender's mail in."
+// in the language the app shows.
+func BlockNoFolder() string { return In(i18n.Locale()).BlockNoFolder() }
+
+// BlockNoFolder says "This account has no Junk or Trash folder to file the sender's mail in."
+// in the language of msgs.
+func (msgs Messages) BlockNoFolder() string {
+	return Catalog.Format(msgs.locale, "blockNoFolder", nil)
+}
+
+// SenderBlocked says "Sender blocked"
+// in the language the app shows.
+func SenderBlocked() string { return In(i18n.Locale()).SenderBlocked() }
+
+// SenderBlocked says "Sender blocked"
+// in the language of msgs.
+func (msgs Messages) SenderBlocked() string {
+	return Catalog.Format(msgs.locale, "senderBlocked", nil)
+}
+
+// PrivacyTab says "Privacy"
+// in the language the app shows.
+func PrivacyTab() string { return In(i18n.Locale()).PrivacyTab() }
+
+// PrivacyTab says "Privacy"
+// in the language of msgs.
+func (msgs Messages) PrivacyTab() string {
+	return Catalog.Format(msgs.locale, "privacyTab", nil)
+}
+
+// BlockedSenders says "Blocked senders"
+// in the language the app shows.
+func BlockedSenders() string { return In(i18n.Locale()).BlockedSenders() }
+
+// BlockedSenders says "Blocked senders"
+// in the language of msgs.
+func (msgs Messages) BlockedSenders() string {
+	return Catalog.Format(msgs.locale, "blockedSenders", nil)
+}
+
+// BlockedSendersHint says "Mail from these senders is filed away as it arrives, on this device only: nothing is deleted and no server hears of it."
+// in the language the app shows.
+func BlockedSendersHint() string { return In(i18n.Locale()).BlockedSendersHint() }
+
+// BlockedSendersHint says "Mail from these senders is filed away as it arrives, on this device only: nothing is deleted and no server hears of it."
+// in the language of msgs.
+func (msgs Messages) BlockedSendersHint() string {
+	return Catalog.Format(msgs.locale, "blockedSendersHint", nil)
+}
+
+// BlockedFiledTo says "New mail goes to {folder}"
+// in the language the app shows.
+//
+// Says where a blocked sender's new mail is filed.
+func BlockedFiledTo(folder string) string { return In(i18n.Locale()).BlockedFiledTo(folder) }
+
+// BlockedFiledTo says "New mail goes to {folder}"
+// in the language of msgs.
+//
+// Says where a blocked sender's new mail is filed.
+func (msgs Messages) BlockedFiledTo(folder string) string {
+	return Catalog.Format(msgs.locale, "blockedFiledTo", map[string]any{"folder": folder})
+}
+
+// NoBlockedSenders says "No blocked senders."
+// in the language the app shows.
+func NoBlockedSenders() string { return In(i18n.Locale()).NoBlockedSenders() }
+
+// NoBlockedSenders says "No blocked senders."
+// in the language of msgs.
+func (msgs Messages) NoBlockedSenders() string {
+	return Catalog.Format(msgs.locale, "noBlockedSenders", nil)
+}
+
+// Unblock says "Unblock"
+// in the language the app shows.
+func Unblock() string { return In(i18n.Locale()).Unblock() }
+
+// Unblock says "Unblock"
+// in the language of msgs.
+func (msgs Messages) Unblock() string {
+	return Catalog.Format(msgs.locale, "unblock", nil)
+}
+
+// UnblockFailed says "Could not unblock the sender: {error}"
+// in the language the app shows.
+//
+// Says that unblocking a sender failed and why.
+func UnblockFailed(error string) string { return In(i18n.Locale()).UnblockFailed(error) }
+
+// UnblockFailed says "Could not unblock the sender: {error}"
+// in the language of msgs.
+//
+// Says that unblocking a sender failed and why.
+func (msgs Messages) UnblockFailed(error string) string {
+	return Catalog.Format(msgs.locale, "unblockFailed", map[string]any{"error": error})
+}

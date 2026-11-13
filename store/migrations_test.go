@@ -88,6 +88,12 @@ func seedAtVersion(v int) []string {
 	// they say of the message's sender and its list.
 	columns += `, raw_headers`
 	values += `, '` + baselineHeaders + `'`
+	if v >= 22 {
+		// What v22's backfill read of them, as an installation of that
+		// version holds it.
+		columns += `, security`
+		values += `, '` + encodeJSON(mail.ParseSecurity(baselineHeaders)) + `'`
+	}
 	return append(stmts, fmt.Sprintf(`INSERT INTO messages (%s) VALUES (%s)`, columns, values))
 }
 

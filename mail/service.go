@@ -99,8 +99,12 @@ type Service struct {
 	// most, with whether it is asked for another round, ruleIdle
 	// signalled as one ends, the context that ends them all as the app
 	// quits, and the window's hook.
-	arrivalMu   sync.Mutex
-	movedIn     map[string]map[UID]bool
+	arrivalMu sync.Mutex
+	movedIn   map[string]map[UID]bool
+	// heldBack is the mail a block took out of a folder as a check found
+	// it, by account and folder, which the watcher announces none of
+	// (see fileBlocked).
+	heldBack    map[string]map[UID]bool
 	ruleMu      sync.Mutex
 	ruleLocks   map[string]*sync.Mutex
 	ruleRunning map[string]bool
@@ -138,6 +142,7 @@ func NewService(store Store, secrets SecretStore, cacheDir string) *Service {
 		httpClient:     newOAuthClient(),
 		tokens:         map[string]*oauthToken{},
 		movedIn:        map[string]map[UID]bool{},
+		heldBack:       map[string]map[UID]bool{},
 		ruleLocks:      map[string]*sync.Mutex{},
 		ruleRunning:    map[string]bool{},
 		ruleAgain:      map[string]bool{},

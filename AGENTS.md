@@ -124,6 +124,20 @@ Windows and Linux. It is written in Go with
   reports `WatchSignIn` and waits) until `SignInAgain`, which takes only
   the account's own address; its cache and settings are never touched.
   Client IDs are set at build time (`-X shu/mail.GoogleClientID=…`).
+- The account form finds a domain's servers before the user types them
+  (`mail/discover.go`, `store/discover.go`, `accounts.go`): the entry
+  the user made for the domain, a provider's preset
+  (`mail.ProviderFor`), what an earlier lookup kept, then Thunderbird's
+  autoconfig at `autoconfig.<domain>` and its well-known path,
+  Microsoft's autodiscover, and DNS SRV (`_imaps`/`_imap`,
+  `_submissions`/`_submission`). Only the address leaves, never a
+  password or token; each request is bounded in time, size and
+  redirects, the whole lookup is cancelled when the form closes or the
+  address changes, and nothing is sent elsewhere. A complete finding is
+  kept in `discoveries` (migration v20); the servers the user enters win
+  over a preset and every later lookup. A lookup that finds only one
+  server, or none, returns what it found with a `*mail.DiscoveryError`
+  naming the sources that failed, and the manual form stays either way.
 - Conversations are the cache's own. `store/` puts every message in one
   (`thread_id`) as it writes it, by the keys of `mail.ThreadKeys`: its
   Message-ID, In-Reply-To and References, and the conversation part of an

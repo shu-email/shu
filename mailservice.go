@@ -166,6 +166,14 @@ type mailService interface {
 	DeleteSmartMailbox(ctx context.Context, accountID string, id int64) error
 	CountUnread(ctx context.Context, q mail.ListQuery) (int, error)
 
+	// Discovery finds the servers of an address's domain for the account
+	// form: what the user entered for it, a preset, what an earlier
+	// lookup kept, and then the configuration endpoints and DNS, with no
+	// password sent and every step bounded. RememberDiscovery keeps the
+	// servers the user entered, which then win over later lookups.
+	Discover(ctx context.Context, email string) (mail.Discovery, error)
+	RememberDiscovery(ctx context.Context, email string, imap, smtp mail.Server) error
+
 	// Rules, which sort the mail that arrives, in order, from the cache.
 	// CheckRule says what SaveRule would refuse, as a *mail.RuleError that
 	// names the condition or action at fault; saving touches no mail.

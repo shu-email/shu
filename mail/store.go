@@ -248,6 +248,12 @@ type Store interface {
 	DeleteSmartMailbox(ctx context.Context, accountID string, id int64) error
 	CountUnread(ctx context.Context, q ListQuery) (int, error)
 
+	// Discovery reads the servers found or entered for a domain (see
+	// Service.Discover), or reports that it has none; SaveDiscovery keeps
+	// one, replacing what the domain had. Both are this device's.
+	Discovery(ctx context.Context, domain string) (Discovery, bool, error)
+	SaveDiscovery(ctx context.Context, d Discovery) error
+
 	// MessageHeaders reads cached messages of a folder without their
 	// bodies, each with its labels and RawHeaders: those of uids, or every
 	// one when uids is nil, tombstones left out.

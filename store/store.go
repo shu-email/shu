@@ -490,6 +490,21 @@ var migrations = [][]string{
 			UNIQUE (account_id, name_key))`,
 		`CREATE INDEX smart_mailboxes_account ON smart_mailboxes (account_id, position)`,
 	},
+	// v20: the servers found or entered for a domain (see
+	// Service.Discover). They are this device's, need no account, and a
+	// domain has one: a later lookup or entry replaces it.
+	{
+		`CREATE TABLE discoveries (
+			domain TEXT PRIMARY KEY,
+			imap_host TEXT NOT NULL,
+			imap_port INTEGER NOT NULL,
+			imap_tls TEXT NOT NULL,
+			smtp_host TEXT NOT NULL,
+			smtp_port INTEGER NOT NULL,
+			smtp_tls TEXT NOT NULL,
+			source TEXT NOT NULL,
+			found_at INTEGER NOT NULL)`,
+	},
 }
 
 // backfills compute, from the rows of the version before, statements a

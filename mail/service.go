@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -102,6 +103,15 @@ type Service struct {
 	ruleCtx     context.Context
 	ruleStop    context.CancelFunc
 	ruleReport  func(accountID string)
+
+	// Finding a domain's servers from an address (discover.go): the
+	// client the configuration endpoints are read with, the resolver the
+	// DNS records come from, and how long a lookup and each request may
+	// take. Tests replace them with fixtures and no real network.
+	discoverClient         func(context.Context) (*http.Client, error)
+	lookupSRV              func(ctx context.Context, service, proto, name string) (string, []*net.SRV, error)
+	discoverTimeout        time.Duration
+	discoverRequestTimeout time.Duration
 }
 
 // NewService wires the cache, the keychain and the attachment cache
@@ -126,6 +136,10 @@ func NewService(store Store, secrets SecretStore, cacheDir string) *Service {
 	}
 	s.ruleIdle = sync.NewCond(&s.ruleMu)
 	s.ruleCtx, s.ruleStop = context.WithCancel(context.Background())
+	s.discoverClient = s.HTTPClient
+	s.lookupSRV = net.DefaultResolver.LookupSRV
+	s.discoverTimeout = discoverTimeout
+	s.discoverRequestTimeout = discoverRequestTimeout
 	return s
 }
 

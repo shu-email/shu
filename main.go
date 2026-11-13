@@ -236,8 +236,10 @@ type app struct {
 	// book is the address book's view, open or not (contacts.go).
 	book addressBook
 	// labels are each account's labels and the views that change them
-	// (labels.go).
+	// (labels.go), and smarts the account on screen's saved searches
+	// (smart.go).
 	labels labelState
+	smarts smartState
 	// Folders (folders.go): the create/rename dialog, the delete
 	// confirmation and the note after an action.
 	folderForm folderForm
@@ -340,6 +342,7 @@ func newApp(svc mailService) *app {
 		signatures:    map[string]mail.Signature{},
 		aliases:       map[string][]mail.Identity{},
 		labels:        newLabelState(),
+		smarts:        newSmartState(),
 		images:        map[string]bool{},
 		imagesShown:   map[string]bool{},
 		securityOpen:  map[string]bool{},
@@ -563,6 +566,10 @@ func (a *app) beginAccount() {
 	a.list = ui.ListState{}
 	a.sel.Clear()
 	a.bodies = map[string]mail.FetchResult{}
+	// Another account's smart mailboxes are not this one's, and their
+	// entries must not be clickable while its list is read.
+	a.smarts.list, a.smarts.loaded = nil, false
+	a.smarts.form, a.smarts.del = smartForm{}, smartDeletion{}
 	a.clearAI()
 	a.clearRows()
 	a.loadCache(a.gen)
@@ -603,6 +610,7 @@ func (a *app) loadCache(g uint64) {
 			}
 			a.loadReminders(g)
 			a.loadFollowUps(g)
+			a.loadSmarts(g)
 			a.loadMessages(g)
 			a.syncAccount(g)
 		})
@@ -637,6 +645,7 @@ func (a *app) syncAccount(g uint64) {
 			a.loadMessages(g)
 			a.loadReminders(g)
 			a.loadFollowUps(g)
+			a.loadSmarts(g)
 			a.syncFolder(g)
 			a.syncSent(g)
 			a.loadPending(g)
@@ -658,7 +667,8 @@ func (a *app) syncFolder(g uint64) {
 	accountID, folder := a.active, a.folder
 	// Starred, a label's list, the reminders and the follow-ups read the
 	// cache alone.
-	if folder == "" || folder == "starred" || folder == remindersFolder || folder == followUpFolder || labelOf(folder) != 0 {
+	if folder == "" || folder == "starred" || folder == remindersFolder || folder == followUpFolder ||
+		labelOf(folder) != 0 || smartOf(folder) != 0 {
 		return
 	}
 	if folder == allInboxes {
@@ -701,6 +711,7 @@ func (a *app) syncFolder(g uint64) {
 			a.loadMessages(g)
 			a.loadReminders(g)
 			a.loadFollowUps(g)
+			a.loadSmarts(g)
 		})
 	})
 }
@@ -752,9 +763,12 @@ func (a *app) readList(g uint64, progress, neighbour bool) {
 	if aim := a.aim; threaded && aim != nil && a.aimShown(aim) {
 		aimAt = mail.Summary{Account: aim.account, Folder: aim.folder, UID: aim.uid}
 	}
-	if folder == "" {
+	// A smart mailbox whose own folder is gone, or which the account no
+	// longer has, has no list to read: the search it saved would silently
+	// cover every folder instead.
+	if folder == "" || a.smartFolderGone() || smartOf(folder) != 0 && a.shownSmart() == nil {
 		a.all, a.convs = nil, nil
-		a.loading = false
+		a.loading, a.pager.more = false, false
 		return
 	}
 	p := &a.pager
@@ -1050,6 +1064,11 @@ func (a *app) updateBadge() {
 			a.inboxes[acc.ID] = inboxUnread(folders)
 		}
 	}
+	// A smart mailbox's badge is of the same cache, and follows the same
+	// reads and moves.
+	if a.smarts.loaded {
+		a.countSmarts(a.gen)
+	}
 	if a.setBadge == nil {
 		return
 	}
@@ -1119,6 +1138,10 @@ func (a *app) selectFolder() {
 	a.clearRows()
 	a.query = ""
 	a.scopeSet = false
+	if mb := a.shownSmart(); mb != nil {
+		// A smart mailbox opens the search it saved, as it was saved.
+		a.query, a.scope, a.scopeSet = mb.Query, scopeOfName(mb.Scope), true
+	}
 	a.loadMessages(a.gen)
 	a.syncFolder(a.gen)
 }
@@ -1213,6 +1236,9 @@ func (a *app) folderExists(id string) bool {
 	if id == "starred" || id == draftsFolder || id == remindersFolder || id == followUpFolder || id == allInboxes && len(a.accounts) > 1 {
 		return true
 	}
+	if smart := smartOf(id); smart != 0 {
+		return a.smartByID(smart) != nil
+	}
 	if label := labelOf(id); label != 0 {
 		return a.findLabel(a.active, label) != nil
 	}
@@ -1272,6 +1298,12 @@ func (a *app) folderLabelOf(account, id string) string {
 		return locales.FollowUp()
 	case allInboxes:
 		return locales.AllInboxes()
+	}
+	if smart := smartOf(id); smart != 0 {
+		if mb := a.smartByID(smart); mb != nil {
+			return mb.Name
+		}
+		return ""
 	}
 	if label := labelOf(id); label != 0 {
 		if l := a.findLabel(account, label); l != nil {
@@ -1445,6 +1477,8 @@ func (a *app) mailView(c *ui.Context) {
 	a.accountModal(c)
 	a.labelDialog(c)
 	a.labelAlerts(c)
+	a.smartDialog(c)
+	a.smartAlerts(c)
 	aiReviewModal(c, &a.review)
 	a.linkDialog(c)
 	a.folderDialog(c)
@@ -1648,6 +1682,7 @@ func (a *app) sidebar(c *ui.Context, t *ui.Theme, vibrant bool) {
 				}
 			})
 			a.labelsSection(c, t)
+			a.smartSection(c, t)
 		}).Grow(1).Label(locales.Mailboxes())
 		if vibrant {
 			changed.Background(ui.Transparent)

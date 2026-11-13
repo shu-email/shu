@@ -39,9 +39,11 @@ func (a *app) threaded() bool {
 }
 
 // draftsList reports whether the list is the Drafts entry's drafts, and
-// not a search of it that reaches further.
+// not a search of it that reaches further: its own, or a smart mailbox
+// saved from it as it was.
 func (a *app) draftsList() bool {
-	return a.folder == draftsFolder && (strings.TrimSpace(a.query) == "" || a.searchScope() == scopeHere)
+	return a.smartSaveFolder() == draftsFolder &&
+		(strings.TrimSpace(a.query) == "" || a.searchScope() == scopeHere)
 }
 
 // rowKey is the identity of row i of the list: its conversation's in

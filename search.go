@@ -110,57 +110,65 @@ func (a *app) leavesOutShown(q searchQuery) bool {
 	return narrowed && !slices.Contains(ids, a.active)
 }
 
-// defaultScope is where a list's searches start. A folder's cover its
+// defaultScopeFor is where a list's searches start. A folder's cover its
 // whole account, where what is looked for so often is: in Sent, in
 // Archive. The drafts of this device are in no folder of the server, the
 // unified inbox is already a list of every account, and a label's list
 // of every folder of its own.
-func (a *app) defaultScope() searchScope {
-	if a.folder == draftsFolder || a.folder == remindersFolder || a.folder == followUpFolder ||
-		a.folder == allInboxes || labelOf(a.folder) != 0 {
+func (a *app) defaultScopeFor(folder string) searchScope {
+	if folder == draftsFolder || folder == remindersFolder || folder == followUpFolder ||
+		folder == allInboxes || labelOf(folder) != 0 {
 		return scopeHere
 	}
 	return scopeAccount
 }
 
-// searchScope is the scope the search on screen covers: the one chosen,
-// widened where the list's own cannot apply what is typed. A folder, or
-// the inboxes, and an in: that names another folder would find nothing
-// together, as would the account on screen and an account: that leaves it
-// out; the drafts' search knows their text alone.
+// searchScope is the scope the search on screen covers (scopeFor), read
+// as the list it shows: a smart mailbox's is the list it was saved from,
+// not its entry in the sidebar.
 func (a *app) searchScope() searchScope {
+	return a.scopeFor(a.smartSaveFolder(), a.scope, a.scopeSet, a.query)
+}
+
+// scopeFor is the scope a search of a list covers: the one chosen, widened
+// where the list's own cannot apply what is typed. A folder, or the
+// inboxes, and an in: that names another folder would find nothing
+// together, as would the account on screen and an account: that leaves it
+// out; the drafts' search knows their text alone. A smart mailbox reads
+// its list by the same rules, though it is not that list.
+func (a *app) scopeFor(folder string, scope searchScope, chosen bool, query string) searchScope {
 	// The reminders' and follow-ups' lists are their own scope: no other
 	// widens them.
-	if a.folder == remindersFolder || a.folder == followUpFolder {
+	if folder == remindersFolder || folder == followUpFolder {
 		return scopeHere
 	}
-	s := a.defaultScope()
-	if a.scopeSet {
-		s = a.scope
+	s := a.defaultScopeFor(folder)
+	if chosen {
+		s = scope
 	}
 	if s == scopeAll && len(a.accounts) < 2 {
 		s = scopeAccount
 	}
-	if s == scopeAccount && a.folder == allInboxes {
+	if s == scopeAccount && folder == allInboxes {
 		s = scopeHere
 	}
-	if s == scopeAll || strings.TrimSpace(a.query) == "" {
+	if s == scopeAll || strings.TrimSpace(query) == "" {
 		return s
 	}
-	q := a.parsedQuery()
-	if a.folder != allInboxes && len(a.accounts) > 1 && a.leavesOutShown(q) {
+	q := parseQuery(query)
+	if folder != allInboxes && len(a.accounts) > 1 && a.leavesOutShown(q) {
 		return scopeAll
 	}
 	if s != scopeHere {
 		return s
 	}
 	switch {
-	case a.folder == draftsFolder && hasFilters(q):
+	case folder == draftsFolder && hasFilters(q):
 		return scopeAccount
 	case q.In == "":
-	case a.folder == allInboxes:
+	case folder == allInboxes:
 		return scopeAll
-	case a.isServerFolder(a.folder):
+	case a.isServerFolder(folder):
 		return scopeAccount
 	}
 	return s
@@ -168,11 +176,12 @@ func (a *app) searchScope() searchScope {
 
 // scopeChoices are the scopes the control offers on this list.
 func (a *app) scopeChoices() []searchScope {
+	folder := a.smartSaveFolder()
 	out := []searchScope{scopeHere}
-	if a.folder == remindersFolder || a.folder == followUpFolder {
+	if folder == remindersFolder || folder == followUpFolder {
 		return out
 	}
-	if a.folder != allInboxes {
+	if folder != allInboxes {
 		out = append(out, scopeAccount)
 	}
 	if len(a.accounts) > 1 {
@@ -186,16 +195,17 @@ func (a *app) scopeChoices() []searchScope {
 // apply, as an in: of another folder in the list's own or an account:
 // that leaves the account out, so that the field says what is searched.
 func (a *app) chooseScope(s searchScope) {
+	folder := a.smartSaveFolder()
 	q := a.query
 	if s == scopeHere {
 		switch {
-		case a.folder == draftsFolder:
+		case folder == draftsFolder:
 			q = withFilter(q, func(searchQuery) bool { return true }, "")
-		case a.folder == allInboxes || a.isServerFolder(a.folder):
+		case folder == allInboxes || a.isServerFolder(folder):
 			q = withFilter(q, func(s searchQuery) bool { return s.In != "" }, "")
 		}
 	}
-	if s != scopeAll && a.folder != allInboxes {
+	if s != scopeAll && folder != allInboxes {
 		q = withFilter(q, func(s searchQuery) bool {
 			return len(s.Accounts) > 0 && !a.namesAccount(s.Accounts[0], a.active)
 		}, "")
@@ -215,14 +225,34 @@ func (a *app) spansAccounts() bool {
 		return false
 	}
 	q := a.listQuery()
-	return q.folder == allInboxes || q.search != "" && q.scope == scopeAll
+	if q.folder == allInboxes {
+		return true
+	}
+	if smartOf(q.folder) != 0 {
+		return q.smartFolder == allInboxes || q.search != "" && q.scope == scopeAll
+	}
+	return q.search != "" && q.scope == scopeAll
 }
 
 // spansFolders reports whether the list's rows may be of several folders
-// of an account: a search of every folder, or of every account, and a
-// label's list.
+// of an account: a search of every folder, or of every account, a label's
+// list, and a smart mailbox saved from one of these.
 func (a *app) spansFolders() bool {
 	q := a.listQuery()
+	if smartOf(q.folder) != 0 {
+		if q.scope != scopeHere {
+			return true
+		}
+		switch {
+		case q.smartFolder == "starred", q.smartFolder == draftsFolder:
+			// As the starred list and the drafts' own, which one folder
+			// stands for.
+			return false
+		case a.isServerFolder(q.smartFolder):
+			return false
+		}
+		return true
+	}
 	return q.search != "" && q.scope != scopeHere || labelOf(q.folder) != 0 ||
 		q.folder == remindersFolder || q.folder == followUpFolder
 }

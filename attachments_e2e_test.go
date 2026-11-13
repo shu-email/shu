@@ -98,7 +98,9 @@ func TestAttachmentsEndToEnd(t *testing.T) {
 	// The user's files: one with a name in Chinese, one a PDF by its
 	// bytes, one to add later.
 	files := t.TempDir()
-	pdf := append([]byte("%PDF-1.7\n"), bytes.Repeat([]byte{0, 1, 2, 3, 250, 251, 252, 253}, 40<<10)...)
+	// Large enough that the database, which grows with the schema, stays
+	// clearly smaller than the attachment it must not hold.
+	pdf := append([]byte("%PDF-1.7\n"), bytes.Repeat([]byte{0, 1, 2, 3, 250, 251, 252, 253}, 80<<10)...)
 	plan := []byte("第一季度计划：按时发布。\r\nline two\n")
 	notes := []byte("notes, added after the restart")
 	const planName, pdfName, notesName = "季度计划 第一版.txt", "report.pdf", "notes; v2.txt"

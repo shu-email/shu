@@ -16,7 +16,15 @@ import (
 const allInboxes = "all-inboxes"
 
 // isUnified reports whether the list is the unified inbox.
-func (a *app) isUnified() bool { return a.folder == allInboxes }
+// isUnified reports whether the list is of every account's inbox: the
+// unified inbox, or a smart mailbox saved from it as it was.
+func (a *app) isUnified() bool {
+	if a.folder == allInboxes {
+		return true
+	}
+	mb := a.shownSmart()
+	return mb != nil && mb.Folder == allInboxes && a.searchScope() == scopeHere
+}
 
 // unifiedUnread is the unread count of every account's inbox together.
 func (a *app) unifiedUnread() int {
@@ -161,6 +169,7 @@ func (a *app) syncMovedBack(g uint64, account, folder string) {
 			}
 			a.loadMessages(g)
 			a.loadFollowUps(g)
+			a.loadSmarts(g)
 		})
 	})
 }

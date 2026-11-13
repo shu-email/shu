@@ -385,6 +385,8 @@ func (a *app) scopeLabel(s searchScope) string {
 		return locales.AllAccounts()
 	case a.isUnified():
 		return locales.ScopeInboxes()
+	case smartOf(a.folder) != 0:
+		return locales.ThisSearch()
 	case labelOf(a.folder) != 0:
 		return locales.ThisLabel()
 	}

@@ -136,6 +136,12 @@ type fakeService struct {
 	dismissedThreads []string
 	followUpErr      error
 
+	// Smart mailboxes, the searches the user saved, by account and in
+	// their order. smartErr fails the saves and the deletions.
+	smarts   map[string][]mail.SmartMailbox
+	smartSeq int64
+	smartErr error
+
 	// Pages. cursors are the rows the cursors handed out end at;
 	// pageReads counts the page reads, onPage runs as each begins, and
 	// pageErr fails them. syncCalls records each SyncFolder with its
@@ -324,6 +330,7 @@ func newFakeService() *fakeService {
 		ownThreads: map[string]mail.ThreadID{},
 		cursors:    map[mail.Cursor]mail.Summary{},
 		older:      map[string][]mail.Summary{},
+		smarts:     map[string][]mail.SmartMailbox{},
 
 		oauth:      map[string]bool{},
 		newAddress: "ann@gmail.com",
@@ -2789,6 +2796,89 @@ func (f *fakeService) DismissFollowUp(ctx context.Context, accountID string, thr
 	f.dismissed[accountID][thread] = time.Now()
 	f.dismissedThreads = append(f.dismissedThreads, fmt.Sprintf("%s/%d", accountID, thread))
 	return nil
+}
+
+// SmartMailboxes lists an account's saved searches in their order.
+func (f *fakeService) SmartMailboxes(ctx context.Context, accountID string) ([]mail.SmartMailbox, error) {
+	return append([]mail.SmartMailbox(nil), f.smarts[accountID]...), nil
+}
+
+// SaveSmartMailbox adds a saved search after the account's others, or
+// changes one there is, as the engine does.
+func (f *fakeService) SaveSmartMailbox(ctx context.Context, m mail.SmartMailbox) (mail.SmartMailbox, error) {
+	if f.smartErr != nil {
+		return mail.SmartMailbox{}, f.smartErr
+	}
+	name, err := mail.CleanSmartName(m.Name)
+	if err != nil {
+		return mail.SmartMailbox{}, err
+	}
+	m.Name = name
+	m.Query = strings.TrimSpace(m.Query)
+	if m.Scope == "" {
+		m.Scope = mail.SmartScopeHere
+	}
+	if f.smarts == nil {
+		f.smarts = map[string][]mail.SmartMailbox{}
+	}
+	key := mail.SmartNameKey(m.Name)
+	for _, have := range f.smarts[m.Account] {
+		if have.ID != m.ID && mail.SmartNameKey(have.Name) == key {
+			return mail.SmartMailbox{}, mail.ErrSmartExists
+		}
+	}
+	if m.ID == 0 {
+		f.smartSeq++
+		m.ID = f.smartSeq
+		f.smarts[m.Account] = append(f.smarts[m.Account], m)
+		return m, nil
+	}
+	for i := range f.smarts[m.Account] {
+		if f.smarts[m.Account][i].ID == m.ID {
+			m.Folder = f.smarts[m.Account][i].Folder
+			f.smarts[m.Account][i] = m
+			return m, nil
+		}
+	}
+	return mail.SmartMailbox{}, mail.ErrNotFound
+}
+
+// DeleteSmartMailbox drops a saved search.
+func (f *fakeService) DeleteSmartMailbox(ctx context.Context, accountID string, id int64) error {
+	if f.smartErr != nil {
+		return f.smartErr
+	}
+	for i, have := range f.smarts[accountID] {
+		if have.ID == id {
+			f.smarts[accountID] = append(f.smarts[accountID][:i], f.smarts[accountID][i+1:]...)
+			return nil
+		}
+	}
+	return mail.ErrNotFound
+}
+
+// CountUnread counts the unread messages a list query reads.
+func (f *fakeService) CountUnread(ctx context.Context, q mail.ListQuery) (int, error) {
+	if f.smartErr != nil {
+		return 0, f.smartErr
+	}
+	if err := q.Scope.Check(); err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, accountID := range f.scopeAccounts(q.Scope) {
+		for _, m := range f.everyMessage(accountID) {
+			m.Account = accountID
+			m = f.withLabels(accountID, m)
+			if m.Seen || !f.inScope(q.Scope, m) {
+				continue
+			}
+			if _, ok := f.found(accountID, m, q.Search); ok {
+				n++
+			}
+		}
+	}
+	return n, nil
 }
 
 // DeliverReminders brings back those due now, as the engine's clock would.

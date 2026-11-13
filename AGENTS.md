@@ -185,6 +185,20 @@ Windows and Linux. It is written in Go with
   top for as many rows as it shows, and calls `FetchOlder` only when the
   user asks. Its keys of rows, bodies and summaries include the account,
   and an action takes the account from the row it acts on.
+- A smart mailbox is a named search this device keeps (`mail/smart.go`,
+  `store/smart.go`, `smart.go`): a name, the list it was saved from (an
+  account's folder, a label, Starred, or the folder of a special use),
+  the search text and the scope it covered, from `mail.SmartScope*`.
+  `Service.SaveSmartMailbox` trims and checks them and a name is one per
+  account whatever its case; a change keeps the saved list, and
+  `Service.DeleteSmartMailbox` drops only the entry. Opening one puts its
+  folder, query and scope on the window and the ordinary list read does
+  the rest, so its pages, cursor and rows are a search's, with no search
+  engine of its own, from the cache alone. `Service.CountUnread` counts
+  the unread mail the same scope and search read, for the entry's badge;
+  the window keeps those counts in `smartState` and refreshes them as
+  mail and syncs move the cache. A saved folder that is gone lists
+  nothing and says so, rather than widen the search to every folder.
 - The address book is the cache's own too, and never leaves the device.
   `store/` keeps a contact per address, whatever its case, across the
   accounts (`contacts`), by the rules of `mail.ContactState`. It counts,

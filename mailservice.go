@@ -156,6 +156,16 @@ type mailService interface {
 	SetLabel(ctx context.Context, accountID string, msgs []mail.MessageRef, id mail.LabelID, on bool) error
 	DeleteLabel(ctx context.Context, accountID string, id mail.LabelID) error
 
+	// Smart mailboxes, searches the user saved. SmartMailboxes reads an
+	// account's from the cache; SaveSmartMailbox adds or changes one, and
+	// DeleteSmartMailbox drops one, touching no mail. CountUnread counts
+	// the unread messages a list query reads, which a mailbox's badge
+	// shows.
+	SmartMailboxes(ctx context.Context, accountID string) ([]mail.SmartMailbox, error)
+	SaveSmartMailbox(ctx context.Context, m mail.SmartMailbox) (mail.SmartMailbox, error)
+	DeleteSmartMailbox(ctx context.Context, accountID string, id int64) error
+	CountUnread(ctx context.Context, q mail.ListQuery) (int, error)
+
 	// Rules, which sort the mail that arrives, in order, from the cache.
 	// CheckRule says what SaveRule would refuse, as a *mail.RuleError that
 	// names the condition or action at fault; saving touches no mail.

@@ -32,6 +32,9 @@ const (
 // or not, in a scope, by conversation or by message.
 type listQuery struct {
 	account, folder, search string
+	// smartFolder is the list a smart mailbox on show was saved from,
+	// which its scope reads, "" for any other list.
+	smartFolder string
 	// scope is the search's, scopeHere when there is none.
 	scope searchScope
 	// narrowed is set when the search's account: parts keep only some
@@ -43,6 +46,9 @@ type listQuery struct {
 
 func (a *app) listQuery() listQuery {
 	q := listQuery{account: a.active, folder: a.folder, search: strings.TrimSpace(a.query), threaded: a.threaded()}
+	if mb := a.shownSmart(); mb != nil {
+		q.smartFolder = mb.Folder
+	}
 	if q.search != "" {
 		q.scope = a.searchScope()
 		ids, narrowed := a.queryAccounts(a.parsedQuery())
@@ -55,12 +61,20 @@ func (a *app) listQuery() listQuery {
 // older mail can be fetched.
 func (q listQuery) isFolder() bool {
 	return q.folder != "" && q.folder != "starred" && q.folder != draftsFolder && q.folder != remindersFolder &&
-		q.folder != followUpFolder && q.folder != allInboxes && labelOf(q.folder) == 0 && q.scope == scopeHere
+		q.folder != followUpFolder && q.folder != allInboxes && labelOf(q.folder) == 0 &&
+		smartOf(q.folder) == 0 && q.scope == scopeHere
 }
 
 // drafts reports whether the list is of the drafts, which their own read
-// lists rather than a page of the cache.
-func (q listQuery) drafts() bool { return q.folder == draftsFolder && q.scope == scopeHere }
+// lists rather than a page of the cache: the drafts' list, or a smart
+// mailbox saved from it as it was.
+func (q listQuery) drafts() bool {
+	folder := q.folder
+	if smartOf(folder) != 0 {
+		folder = q.smartFolder
+	}
+	return folder == draftsFolder && q.scope == scopeHere
+}
 
 // mailScope is the part of the cache the list reads: that of its scope,
 // in the accounts the search's account: parts keep.
@@ -70,17 +84,11 @@ func (q listQuery) mailScope() mail.Scope {
 	case q.scope == scopeAll:
 	case q.scope == scopeAccount:
 		sc = mail.AccountScope(q.account, "")
-	case q.folder == allInboxes:
-		sc = mail.AllInboxes()
-	case q.folder == remindersFolder:
-		sc = mail.RemindersScope(q.account)
-	case q.folder == followUpFolder:
-		// The store's clock decides what waits for a reply now.
-		sc = mail.FollowUpScope(q.account, time.Time{})
-	case labelOf(q.folder) != 0:
-		sc = mail.LabelScope(q.account, labelOf(q.folder))
+	case smartOf(q.folder) != 0:
+		// A smart mailbox reads the list it was saved from.
+		sc = folderScope(q.account, q.smartFolder)
 	default:
-		sc = mail.AccountScope(q.account, q.folder)
+		sc = folderScope(q.account, q.folder)
 	}
 	if q.narrowed {
 		var keep []string
@@ -92,6 +100,24 @@ func (q listQuery) mailScope() mail.Scope {
 		sc.Accounts = keep
 	}
 	return sc
+}
+
+// folderScope is the part of the cache a list of an account's folder
+// reads: the folder's, the unified inbox's, a label's, the reminders' or
+// the follow-ups', or every folder of the account for "".
+func folderScope(account, folder string) mail.Scope {
+	switch {
+	case folder == allInboxes:
+		return mail.AllInboxes()
+	case folder == remindersFolder:
+		return mail.RemindersScope(account)
+	case folder == followUpFolder:
+		// The store's clock decides what waits for a reply now.
+		return mail.FollowUpScope(account, time.Time{})
+	case labelOf(folder) != 0:
+		return mail.LabelScope(account, labelOf(folder))
+	}
+	return mail.AccountScope(account, folder)
 }
 
 // none reports whether the search's account: parts keep none of the

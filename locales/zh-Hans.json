@@ -1328,5 +1328,31 @@
       }
     }
   },
-  "aiLocalToolIsolation": "在私有的空目录中运行，并在工具允许时关闭工具、插件与钩子。提示词通过标准输入传入，不会出现在命令行上。"
+  "aiLocalToolIsolation": "在私有的空目录中运行，并在工具允许时关闭工具、插件与钩子。提示词通过标准输入传入，不会出现在命令行上。",
+  "aiCliEnv": "环境变量",
+  "aiCliEnvHint": "仅对此工具生效，每次启动时设置。值保存在登录钥匙串中。",
+  "aiCliEnvName": "名称",
+  "aiCliEnvValue": "值",
+  "aiCliEnvAdd": "添加变量",
+  "aiCliEnvRemove": "移除 {name}",
+  "@aiCliEnvRemove": {
+    "description": "The button that removes one environment variable.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "ANTHROPIC_API_KEY"
+      }
+    }
+  },
+  "aiCliEnvReserved": "Shu 会自行设置该名称，因此自定义值不会生效。",
+  "aiCliEnvFailed": "无法保存变量：{error}",
+  "@aiCliEnvFailed": {
+    "description": "The error after saving a tool's environment failed.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "the keychain refused the value"
+      }
+    }
+  }
 }

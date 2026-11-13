@@ -52,6 +52,16 @@ func TestAISettingsLocalToolStatus(t *testing.T) {
 	if !tt.HasText(locales.AiModel()) {
 		t.Errorf("the model field is missing: %q", tt.Texts())
 	}
+	// A tool's own value is added by name and kept out of the visible
+	// text, then listed as a variable.
+	a.aiForm.envName, a.aiForm.envValue = "MY_TOKEN", "env-secret"
+	a.addCLIEnv()
+	if len(a.aiForm.cliEnv) != 1 || a.aiForm.cliEnv[0].Name != "MY_TOKEN" {
+		t.Errorf("env = %+v", a.aiForm.cliEnv)
+	}
+	if tt.HasText("env-secret") {
+		t.Errorf("the value is visible: %q", tt.Texts())
+	}
 }
 
 // A set command path is saved with the settings, and a broken one is

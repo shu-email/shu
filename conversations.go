@@ -944,6 +944,19 @@ func (a *app) undoThreadMove(u *undoMove) {
 				}
 			}
 		}
+		// A reminder the move was for goes with it: the mail is back, and
+		// is not to be reminded away again. The one it replaced, if any,
+		// comes back instead.
+		if u.reminder != nil {
+			if e := a.svc.RemoveReminder(ctx, u.reminder.Account, u.reminder.Thread); e != nil && err == nil {
+				err = e
+			}
+		}
+		if u.prevReminder != nil {
+			if _, e := a.svc.RestoreReminder(ctx, *u.prevReminder); e != nil && err == nil {
+				err = e
+			}
+		}
 		lists := map[string][]mail.Folder{}
 		for _, id := range accounts {
 			if list, err := a.svc.CachedFolders(ctx, id); err == nil {
@@ -966,6 +979,9 @@ func (a *app) undoThreadMove(u *undoMove) {
 				}
 			}
 			a.updateBadge()
+			if u.reminder != nil {
+				a.loadReminders(g)
+			}
 			a.loadMessages(g)
 		})
 	})

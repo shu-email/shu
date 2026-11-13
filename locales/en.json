@@ -10,6 +10,40 @@
   "mailboxes": "Mailboxes",
   "inbox": "Inbox",
   "starred": "Starred",
+  "reminders": "Reminders",
+  "remindMe": "Remind me…",
+  "remindLaterToday": "Later today",
+  "remindTomorrow": "Tomorrow",
+  "remindThisWeekend": "This weekend",
+  "remindNextWeek": "Next week",
+  "remindCustomEllipsis": "Custom…",
+  "remindCustomTitle": "Remind me",
+  "remindCustomLabel": "When (YYYY-MM-DD HH:MM)",
+  "remindCustomSave": "Set reminder",
+  "remindCustomCancelLabel": "Close without setting the reminder",
+  "removeReminder": "Remove reminder",
+  "reminderBadTime": "Type a date and time, as 2026-11-20 09:00.",
+  "reminderTimePast": "That time has passed. Choose one ahead.",
+  "reminderDue": "A reminder is due",
+  "reminderSet": "Reminder set for {when}",
+  "reminderNoArchive": "This account has no Archive folder, so the reminder can't take the conversation out of the inbox.",
+  "reminderSyncFailed": "The reminder is set, but the archive could not be read: {error}",
+  "@reminderSet": {
+    "placeholders": {
+      "when": {
+        "type": "String",
+        "example": "Tomorrow at 9:00"
+      }
+    }
+  },
+  "@reminderSyncFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "connection refused"
+      }
+    }
+  },
   "sent": "Sent",
   "drafts": "Drafts",
   "archive": "Archive",

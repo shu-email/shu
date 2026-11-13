@@ -219,6 +219,17 @@ type Store interface {
 	AddRuleActivity(ctx context.Context, entries []RuleActivity) ([]RuleActivity, error)
 	RuleActivity(ctx context.Context, q ActivityQuery) (ActivityPage, error)
 	UpdateRuleActivity(ctx context.Context, entries []RuleActivity) error
+	// Reminders (see Reminder), which go with their account and their
+	// conversation. Reminders lists an account's, the soonest due first;
+	// DueReminders lists every account's those due at a time, in the same
+	// order. SaveReminder writes one, replacing the due time and subject
+	// of the account's reminder for its conversation when it has one, and
+	// keeping the ID; DeleteReminder takes one off.
+	Reminders(ctx context.Context, accountID string) ([]Reminder, error)
+	DueReminders(ctx context.Context, at time.Time) ([]Reminder, error)
+	SaveReminder(ctx context.Context, r Reminder) (Reminder, error)
+	DeleteReminder(ctx context.Context, accountID string, thread ThreadID) error
+
 	// MessageHeaders reads cached messages of a folder without their
 	// bodies, each with its labels and RawHeaders: those of uids, or every
 	// one when uids is nil, tombstones left out.

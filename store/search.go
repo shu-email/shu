@@ -70,10 +70,12 @@ func columnsOf(fields mail.Field) []string {
 // listPlan is a list read put in the terms of the SQL that answers it.
 type listPlan struct {
 	// folders are the scope's, and starred narrows them to the flagged
-	// messages, label to those with the label.
-	folders []int64
-	starred bool
-	label   int64
+	// messages, label to those with the label, reminded to the
+	// conversations an account has a reminder for.
+	folders  []int64
+	starred  bool
+	reminded bool
+	label    int64
 	// in are the folders the search's In names, nil when it names none.
 	in []int64
 	// labels are, for each label the search names, the labels of that
@@ -98,8 +100,9 @@ func (s *Store) plan(ctx context.Context, q mail.ListQuery, criteria []criterion
 	if err != nil {
 		return nil, err
 	}
-	p := &listPlan{starred: q.Scope.Starred, label: int64(q.Scope.Label), criteria: criteria, search: q.Search, after: after, limit: q.Limit,
-		whole: q.Scope.Folder == "" && q.Scope.Special == "" && !q.Scope.Starred && q.Scope.Label == 0}
+	p := &listPlan{starred: q.Scope.Starred, reminded: q.Scope.Reminded, label: int64(q.Scope.Label),
+		criteria: criteria, search: q.Search, after: after, limit: q.Limit,
+		whole: q.Scope.Folder == "" && q.Scope.Special == "" && !q.Scope.Starred && q.Scope.Label == 0 && !q.Scope.Reminded}
 	if p.limit <= 0 {
 		p.limit = mail.DefaultPageSize
 	}
@@ -173,6 +176,9 @@ func (p *listPlan) inScope(m string, folders []int64, drive bool) (string, []any
 	if p.label != 0 {
 		labelled, more := labelledSQL(m, []int64{p.label})
 		cond, args = cond+` AND `+labelled, append(args, more...)
+	}
+	if p.reminded {
+		cond += ` AND ` + m + `.thread_id IN (SELECT thread_id FROM reminders)`
 	}
 	return cond, args
 }

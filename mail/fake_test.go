@@ -82,6 +82,10 @@ type memStore struct {
 	ruleLog   []RuleActivity
 	logNext   ActivityID
 	expected  []memExpected
+	// reminders is an account's reminders, by conversation; reminderNext
+	// gives the IDs.
+	reminders    map[string]map[ThreadID]Reminder
+	reminderNext int64
 }
 
 // memMark is a folder's watermark.
@@ -107,6 +111,7 @@ func newMemStore() *memStore {
 		msgLabels:  map[string]map[LabelID]bool{},
 		keptLabels: map[string]map[LabelID]bool{},
 		labelsGone: map[string]time.Time{},
+		reminders:  map[string]map[ThreadID]Reminder{},
 	}
 }
 
@@ -647,12 +652,14 @@ func (s *memStore) pageLocked(sc Scope, each func(f Folder, m Message, row memRo
 				if s.tombs[tombKey(accountID, f.Name, uid)] {
 					continue
 				}
+				thread := threads[MessageRef{f.Name, uid}]
 				inScope := (sc.Folder == "" || f.Name == sc.Folder) &&
 					(sc.Special == "" || f.SpecialUse == sc.Special) && (!sc.Starred || m.Flagged) &&
-					(sc.Label == 0 || f.InLabelScope() && s.hasLabelLocked(accountID, f.Name, m, sc.Label))
+					(sc.Label == 0 || f.InLabelScope() && s.hasLabelLocked(accountID, f.Name, m, sc.Label)) &&
+					(!sc.Reminded || s.remindedLocked(accountID, thread))
 				summary := s.labelledLocked(m.Summary, accountID, f, m)
 				summary.Account, summary.Folder, summary.UID = accountID, f.Name, uid
-				summary.Thread = threads[MessageRef{f.Name, uid}]
+				summary.Thread = thread
 				each(f, m, memRow{summary, memRowKey(summary)}, inScope)
 			}
 		}
@@ -1427,4 +1434,70 @@ func (s *memStore) PrepareCache(ctx context.Context, version int) (bool, error) 
 		}
 	}
 	return true, nil
+}
+
+// remindedLocked reports whether an account's conversation has a
+// reminder.
+func (s *memStore) remindedLocked(accountID string, thread ThreadID) bool {
+	_, ok := s.reminders[accountID][thread]
+	return ok
+}
+
+func (s *memStore) Reminders(ctx context.Context, accountID string) ([]Reminder, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []Reminder
+	for _, r := range s.reminders[accountID] {
+		out = append(out, r)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].RemindAt.Equal(out[j].RemindAt) {
+			return out[i].RemindAt.Before(out[j].RemindAt)
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out, nil
+}
+
+func (s *memStore) DueReminders(ctx context.Context, at time.Time) ([]Reminder, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []Reminder
+	for _, byThread := range s.reminders {
+		for _, r := range byThread {
+			if !r.RemindAt.After(at) {
+				out = append(out, r)
+			}
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].RemindAt.Equal(out[j].RemindAt) {
+			return out[i].RemindAt.Before(out[j].RemindAt)
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out, nil
+}
+
+func (s *memStore) SaveReminder(ctx context.Context, r Reminder) (Reminder, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.reminders[r.Account] == nil {
+		s.reminders[r.Account] = map[ThreadID]Reminder{}
+	}
+	if old, ok := s.reminders[r.Account][r.Thread]; ok {
+		r.ID, r.CreatedAt = old.ID, old.CreatedAt
+	} else {
+		s.reminderNext++
+		r.ID = s.reminderNext
+	}
+	s.reminders[r.Account][r.Thread] = r
+	return r, nil
+}
+
+func (s *memStore) DeleteReminder(ctx context.Context, accountID string, thread ThreadID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.reminders[accountID], thread)
+	return nil
 }

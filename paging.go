@@ -72,6 +72,8 @@ func (q listQuery) mailScope() mail.Scope {
 		sc = mail.AccountScope(q.account, "")
 	case q.folder == allInboxes:
 		sc = mail.AllInboxes()
+	case q.folder == remindersFolder:
+		sc = mail.RemindersScope(q.account)
 	case labelOf(q.folder) != 0:
 		sc = mail.LabelScope(q.account, labelOf(q.folder))
 	default:

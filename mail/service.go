@@ -418,6 +418,9 @@ func (s *Service) ScopedConversation(ctx context.Context, accountID string, scop
 			return !in[m.Folder]
 		case scope.Label != 0:
 			return !in[m.Folder] || !m.HasLabel(scope.Label)
+		case scope.Reminded:
+			// The caller names a conversation the list of reminders has,
+			// and every folder of it is in that list.
 		}
 		return false
 	}), nil

@@ -134,6 +134,186 @@ func (msgs Messages) Starred() string {
 	return Catalog.Format(msgs.locale, "starred", nil)
 }
 
+// Reminders says "Reminders"
+// in the language the app shows.
+func Reminders() string { return In(i18n.Locale()).Reminders() }
+
+// Reminders says "Reminders"
+// in the language of msgs.
+func (msgs Messages) Reminders() string {
+	return Catalog.Format(msgs.locale, "reminders", nil)
+}
+
+// RemindMe says "Remind me…"
+// in the language the app shows.
+func RemindMe() string { return In(i18n.Locale()).RemindMe() }
+
+// RemindMe says "Remind me…"
+// in the language of msgs.
+func (msgs Messages) RemindMe() string {
+	return Catalog.Format(msgs.locale, "remindMe", nil)
+}
+
+// RemindLaterToday says "Later today"
+// in the language the app shows.
+func RemindLaterToday() string { return In(i18n.Locale()).RemindLaterToday() }
+
+// RemindLaterToday says "Later today"
+// in the language of msgs.
+func (msgs Messages) RemindLaterToday() string {
+	return Catalog.Format(msgs.locale, "remindLaterToday", nil)
+}
+
+// RemindTomorrow says "Tomorrow"
+// in the language the app shows.
+func RemindTomorrow() string { return In(i18n.Locale()).RemindTomorrow() }
+
+// RemindTomorrow says "Tomorrow"
+// in the language of msgs.
+func (msgs Messages) RemindTomorrow() string {
+	return Catalog.Format(msgs.locale, "remindTomorrow", nil)
+}
+
+// RemindThisWeekend says "This weekend"
+// in the language the app shows.
+func RemindThisWeekend() string { return In(i18n.Locale()).RemindThisWeekend() }
+
+// RemindThisWeekend says "This weekend"
+// in the language of msgs.
+func (msgs Messages) RemindThisWeekend() string {
+	return Catalog.Format(msgs.locale, "remindThisWeekend", nil)
+}
+
+// RemindNextWeek says "Next week"
+// in the language the app shows.
+func RemindNextWeek() string { return In(i18n.Locale()).RemindNextWeek() }
+
+// RemindNextWeek says "Next week"
+// in the language of msgs.
+func (msgs Messages) RemindNextWeek() string {
+	return Catalog.Format(msgs.locale, "remindNextWeek", nil)
+}
+
+// RemindCustomEllipsis says "Custom…"
+// in the language the app shows.
+func RemindCustomEllipsis() string { return In(i18n.Locale()).RemindCustomEllipsis() }
+
+// RemindCustomEllipsis says "Custom…"
+// in the language of msgs.
+func (msgs Messages) RemindCustomEllipsis() string {
+	return Catalog.Format(msgs.locale, "remindCustomEllipsis", nil)
+}
+
+// RemindCustomTitle says "Remind me"
+// in the language the app shows.
+func RemindCustomTitle() string { return In(i18n.Locale()).RemindCustomTitle() }
+
+// RemindCustomTitle says "Remind me"
+// in the language of msgs.
+func (msgs Messages) RemindCustomTitle() string {
+	return Catalog.Format(msgs.locale, "remindCustomTitle", nil)
+}
+
+// RemindCustomLabel says "When (YYYY-MM-DD HH:MM)"
+// in the language the app shows.
+func RemindCustomLabel() string { return In(i18n.Locale()).RemindCustomLabel() }
+
+// RemindCustomLabel says "When (YYYY-MM-DD HH:MM)"
+// in the language of msgs.
+func (msgs Messages) RemindCustomLabel() string {
+	return Catalog.Format(msgs.locale, "remindCustomLabel", nil)
+}
+
+// RemindCustomSave says "Set reminder"
+// in the language the app shows.
+func RemindCustomSave() string { return In(i18n.Locale()).RemindCustomSave() }
+
+// RemindCustomSave says "Set reminder"
+// in the language of msgs.
+func (msgs Messages) RemindCustomSave() string {
+	return Catalog.Format(msgs.locale, "remindCustomSave", nil)
+}
+
+// RemindCustomCancelLabel says "Close without setting the reminder"
+// in the language the app shows.
+func RemindCustomCancelLabel() string { return In(i18n.Locale()).RemindCustomCancelLabel() }
+
+// RemindCustomCancelLabel says "Close without setting the reminder"
+// in the language of msgs.
+func (msgs Messages) RemindCustomCancelLabel() string {
+	return Catalog.Format(msgs.locale, "remindCustomCancelLabel", nil)
+}
+
+// RemoveReminder says "Remove reminder"
+// in the language the app shows.
+func RemoveReminder() string { return In(i18n.Locale()).RemoveReminder() }
+
+// RemoveReminder says "Remove reminder"
+// in the language of msgs.
+func (msgs Messages) RemoveReminder() string {
+	return Catalog.Format(msgs.locale, "removeReminder", nil)
+}
+
+// ReminderBadTime says "Type a date and time, as 2026-11-20 09:00."
+// in the language the app shows.
+func ReminderBadTime() string { return In(i18n.Locale()).ReminderBadTime() }
+
+// ReminderBadTime says "Type a date and time, as 2026-11-20 09:00."
+// in the language of msgs.
+func (msgs Messages) ReminderBadTime() string {
+	return Catalog.Format(msgs.locale, "reminderBadTime", nil)
+}
+
+// ReminderTimePast says "That time has passed. Choose one ahead."
+// in the language the app shows.
+func ReminderTimePast() string { return In(i18n.Locale()).ReminderTimePast() }
+
+// ReminderTimePast says "That time has passed. Choose one ahead."
+// in the language of msgs.
+func (msgs Messages) ReminderTimePast() string {
+	return Catalog.Format(msgs.locale, "reminderTimePast", nil)
+}
+
+// ReminderDue says "A reminder is due"
+// in the language the app shows.
+func ReminderDue() string { return In(i18n.Locale()).ReminderDue() }
+
+// ReminderDue says "A reminder is due"
+// in the language of msgs.
+func (msgs Messages) ReminderDue() string {
+	return Catalog.Format(msgs.locale, "reminderDue", nil)
+}
+
+// ReminderSet says "Reminder set for {when}"
+// in the language the app shows.
+func ReminderSet(when string) string { return In(i18n.Locale()).ReminderSet(when) }
+
+// ReminderSet says "Reminder set for {when}"
+// in the language of msgs.
+func (msgs Messages) ReminderSet(when string) string {
+	return Catalog.Format(msgs.locale, "reminderSet", map[string]any{"when": when})
+}
+
+// ReminderNoArchive says "This account has no Archive folder, so the reminder can't take the conversation out of the inbox."
+// in the language the app shows.
+func ReminderNoArchive() string { return In(i18n.Locale()).ReminderNoArchive() }
+
+// ReminderNoArchive says "This account has no Archive folder, so the reminder can't take the conversation out of the inbox."
+// in the language of msgs.
+func (msgs Messages) ReminderNoArchive() string {
+	return Catalog.Format(msgs.locale, "reminderNoArchive", nil)
+}
+
+// ReminderSyncFailed says "The reminder is set, but the archive could not be read: {error}"
+// in the language the app shows.
+func ReminderSyncFailed(error string) string { return In(i18n.Locale()).ReminderSyncFailed(error) }
+
+// ReminderSyncFailed says "The reminder is set, but the archive could not be read: {error}"
+// in the language of msgs.
+func (msgs Messages) ReminderSyncFailed(error string) string {
+	return Catalog.Format(msgs.locale, "reminderSyncFailed", map[string]any{"error": error})
+}
+
 // Sent says "Sent"
 // in the language the app shows.
 func Sent() string { return In(i18n.Locale()).Sent() }

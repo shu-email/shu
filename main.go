@@ -36,6 +36,11 @@ type undoMove struct {
 	// account they are in, which MoveBackMessages takes back; accountID,
 	// source, dest and destUID are then not used.
 	moved map[string][]mail.MoveResult
+	// reminder is the reminder the move was set for, which the undo takes
+	// off as it takes the mail back, and prevReminder the one it replaced,
+	// which the undo puts back.
+	reminder     *mail.Reminder
+	prevReminder *mail.Reminder
 }
 
 type app struct {
@@ -100,6 +105,12 @@ type app struct {
 	pendingDismissed bool
 	undo             *undoMove
 	undoTimer        *time.Timer
+	// reminders are the active account's, the soonest due first, and
+	// remindForm the dialog of a time typed (reminders.go). reminderLoop
+	// says the due check is waiting to run again.
+	reminders    []mail.Reminder
+	remindForm   reminderForm
+	reminderLoop bool
 
 	showAccounts  bool
 	showSettings  bool
@@ -514,6 +525,10 @@ func (a *app) start() {
 			}
 			a.accountsChanged()
 			a.beginAccount()
+			// Reminders due while the app was closed come back now, and
+			// the check runs again while it does.
+			a.deliverReminders()
+			a.startReminderLoop()
 			if id := a.clicked; id != "" {
 				a.clicked = ""
 				a.openNotification(id)
@@ -585,6 +600,7 @@ func (a *app) loadCache(g uint64) {
 			if !a.imagesLoaded {
 				a.loadImagePolicy()
 			}
+			a.loadReminders(g)
 			a.loadMessages(g)
 			a.syncAccount(g)
 		})
@@ -636,8 +652,8 @@ func (a *app) syncAccount(g uint64) {
 // mail.
 func (a *app) syncFolder(g uint64) {
 	accountID, folder := a.active, a.folder
-	// Starred and a label's list read every folder from the cache.
-	if folder == "" || folder == "starred" || labelOf(folder) != 0 {
+	// Starred, a label's list and the reminders read the cache alone.
+	if folder == "" || folder == "starred" || folder == remindersFolder || labelOf(folder) != 0 {
 		return
 	}
 	if folder == allInboxes {
@@ -1181,7 +1197,7 @@ func (a *app) ensureFolder() {
 }
 
 func (a *app) folderExists(id string) bool {
-	if id == "starred" || id == draftsFolder || id == allInboxes && len(a.accounts) > 1 {
+	if id == "starred" || id == draftsFolder || id == remindersFolder || id == allInboxes && len(a.accounts) > 1 {
 		return true
 	}
 	if label := labelOf(id); label != 0 {
@@ -1237,6 +1253,8 @@ func (a *app) folderLabelOf(account, id string) string {
 		return locales.Starred()
 	case draftsFolder:
 		return locales.Drafts()
+	case remindersFolder:
+		return locales.Reminders()
 	case allInboxes:
 		return locales.AllInboxes()
 	}
@@ -1276,6 +1294,17 @@ func (a *app) folderUnread(id string) int {
 		}
 	}
 	return 0
+}
+
+// rowTime is the timestamp at the end of a list row: the message's, or in
+// the reminders' list the time the reminder is due.
+func (a *app) rowTime(c *ui.Context, m mail.Summary) string {
+	if a.folder == remindersFolder {
+		if r := a.reminderFor(m.Account, m.Thread); r != nil {
+			return a.messageTime(c, r.RemindAt.In(c.Now().Location()))
+		}
+	}
+	return a.messageTime(c, m.Date)
 }
 
 // messageTime writes a list timestamp the way mail clients do: a time
@@ -1397,6 +1426,7 @@ func (a *app) mailView(c *ui.Context) {
 	aiReviewModal(c, &a.review)
 	a.linkDialog(c)
 	a.folderDialog(c)
+	a.reminderDialog(c)
 	a.attachmentPreviewDialog(c)
 }
 
@@ -1556,6 +1586,13 @@ func (a *app) sidebar(c *ui.Context, t *ui.Theme, vibrant bool) {
 				} else {
 					a.noteCount("side/"+allInboxes, n)
 				}
+			}
+			if item := ui.SidebarItem(c, remindersFolder, clockIcon, locales.Reminders()); len(a.reminders) > 0 {
+				item.Children(func() {
+					a.sidebarCount(c, "side/"+remindersFolder, len(a.reminders))
+				})
+			} else {
+				a.noteCount("side/"+remindersFolder, 0)
 			}
 			ui.SidebarSection(c, locales.Mailboxes(), &a.mailboxesOpen, func() {
 				for _, e := range entries {

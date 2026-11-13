@@ -235,6 +235,9 @@ type app struct {
 	transfer transferState
 	// shortcutsOpen shows the keyboard reference (shortcuts.go).
 	shortcutsOpen bool
+	// settingsWin is the settings window, when it is a window of its own;
+	// nil in tests, where the settings show in the main view.
+	settingsWin *mygo.Window
 	// inviteResponses, inviteBusy and inviteNote hold the user's RSVP
 	// answers by event UID, the send in flight and its result
 	// (calendar.go).
@@ -1290,7 +1293,7 @@ func (a *app) view(c *ui.Context) {
 	c.OnShortcut(ui.Cmd, ui.KeySlash, func() { a.shortcutsOpen = true })
 	a.shortcutsDialog(c)
 	switch {
-	case a.showSettings:
+	case a.showSettings && a.settingsWin == nil:
 		a.settingsView(c)
 	case a.showAccounts || len(a.accounts) == 0:
 		a.accountsView(c)

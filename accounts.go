@@ -96,7 +96,7 @@ func (f accountForm) account() (mail.Account, error) {
 // openAccountForm shows the account form in a floating panel over the
 // mail window, or the full-window onboarding view when no account exists.
 func (a *app) openAccountForm(acc *mail.Account) {
-	a.showSettings = false
+	a.closeSettings()
 	a.accountErr = ""
 	a.accountNote = ""
 	a.signOutOpen = false

@@ -467,7 +467,8 @@ func (a *app) showTarget(target noteTarget) {
 	if a.showWindow != nil {
 		a.showWindow()
 	}
-	a.showSettings, a.showAccounts = false, false
+	a.closeSettings()
+	a.showAccounts = false
 	a.closeAccountForm()
 	a.aim = &noteAim{account: target.account, folder: target.folder}
 	if target.message {

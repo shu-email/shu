@@ -32,6 +32,21 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+      # A built app or another large file must never be committed: it is
+      # what a clone pays for, and removing it later means rewriting the
+      # history every clone has.
+      - name: Check no large file is tracked
+        run: |
+          big=$(git ls-files -z | while IFS= read -r -d '' f; do
+            [ -f "$f" ] || continue
+            s=$(wc -c <"$f")
+            [ "$s" -gt 2097152 ] && printf '%s (%s bytes)\n' "$f" "$s"
+          done)
+          if [ -n "$big" ]; then
+            echo "::error::tracked files over 2 MiB:"
+            echo "$big"
+            exit 1
+          fi
       - name: Check formatting
         run: |
           unformatted=$(gofmt -l .)

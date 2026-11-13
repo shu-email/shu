@@ -10967,3 +10967,197 @@ func AiLocalToolNotOfficial() string { return In(i18n.Locale()).AiLocalToolNotOf
 func (msgs Messages) AiLocalToolNotOfficial() string {
 	return Catalog.Format(msgs.locale, "aiLocalToolNotOfficial", nil)
 }
+
+// AiProviderNeedsURL says "Server URL needed"
+// in the language the app shows.
+func AiProviderNeedsURL() string { return In(i18n.Locale()).AiProviderNeedsURL() }
+
+// AiProviderNeedsURL says "Server URL needed"
+// in the language of msgs.
+func (msgs Messages) AiProviderNeedsURL() string {
+	return Catalog.Format(msgs.locale, "aiProviderNeedsURL", nil)
+}
+
+// AiProviderNoConnection says "No provider selected"
+// in the language the app shows.
+func AiProviderNoConnection() string { return In(i18n.Locale()).AiProviderNoConnection() }
+
+// AiProviderNoConnection says "No provider selected"
+// in the language of msgs.
+func (msgs Messages) AiProviderNoConnection() string {
+	return Catalog.Format(msgs.locale, "aiProviderNoConnection", nil)
+}
+
+// AiProviderAdd says "Add API connection"
+// in the language the app shows.
+func AiProviderAdd() string { return In(i18n.Locale()).AiProviderAdd() }
+
+// AiProviderAdd says "Add API connection"
+// in the language of msgs.
+func (msgs Messages) AiProviderAdd() string {
+	return Catalog.Format(msgs.locale, "aiProviderAdd", nil)
+}
+
+// AiProviderEdit says "Edit…"
+// in the language the app shows.
+func AiProviderEdit() string { return In(i18n.Locale()).AiProviderEdit() }
+
+// AiProviderEdit says "Edit…"
+// in the language of msgs.
+func (msgs Messages) AiProviderEdit() string {
+	return Catalog.Format(msgs.locale, "aiProviderEdit", nil)
+}
+
+// AiProviderDelete says "Remove connection"
+// in the language the app shows.
+func AiProviderDelete() string { return In(i18n.Locale()).AiProviderDelete() }
+
+// AiProviderDelete says "Remove connection"
+// in the language of msgs.
+func (msgs Messages) AiProviderDelete() string {
+	return Catalog.Format(msgs.locale, "aiProviderDelete", nil)
+}
+
+// AiProviderFetchModels says "Fetch models"
+// in the language the app shows.
+func AiProviderFetchModels() string { return In(i18n.Locale()).AiProviderFetchModels() }
+
+// AiProviderFetchModels says "Fetch models"
+// in the language of msgs.
+func (msgs Messages) AiProviderFetchModels() string {
+	return Catalog.Format(msgs.locale, "aiProviderFetchModels", nil)
+}
+
+// AiProviderFetching says "Fetching models…"
+// in the language the app shows.
+func AiProviderFetching() string { return In(i18n.Locale()).AiProviderFetching() }
+
+// AiProviderFetching says "Fetching models…"
+// in the language of msgs.
+func (msgs Messages) AiProviderFetching() string {
+	return Catalog.Format(msgs.locale, "aiProviderFetching", nil)
+}
+
+// AiProviderModelsCount says "{count, plural, one {# model} other {# models}}"
+// in the language the app shows.
+//
+// How many models a connection offers.
+func AiProviderModelsCount(count int) string { return In(i18n.Locale()).AiProviderModelsCount(count) }
+
+// AiProviderModelsCount says "{count, plural, one {# model} other {# models}}"
+// in the language of msgs.
+//
+// How many models a connection offers.
+func (msgs Messages) AiProviderModelsCount(count int) string {
+	return Catalog.Format(msgs.locale, "aiProviderModelsCount", map[string]any{"count": count})
+}
+
+// AiProviderName says "Name"
+// in the language the app shows.
+func AiProviderName() string { return In(i18n.Locale()).AiProviderName() }
+
+// AiProviderName says "Name"
+// in the language of msgs.
+func (msgs Messages) AiProviderName() string {
+	return Catalog.Format(msgs.locale, "aiProviderName", nil)
+}
+
+// AiProviderNameHint says "Optional note"
+// in the language the app shows.
+func AiProviderNameHint() string { return In(i18n.Locale()).AiProviderNameHint() }
+
+// AiProviderNameHint says "Optional note"
+// in the language of msgs.
+func (msgs Messages) AiProviderNameHint() string {
+	return Catalog.Format(msgs.locale, "aiProviderNameHint", nil)
+}
+
+// AiProviderBaseURL says "Base URL"
+// in the language the app shows.
+func AiProviderBaseURL() string { return In(i18n.Locale()).AiProviderBaseURL() }
+
+// AiProviderBaseURL says "Base URL"
+// in the language of msgs.
+func (msgs Messages) AiProviderBaseURL() string {
+	return Catalog.Format(msgs.locale, "aiProviderBaseURL", nil)
+}
+
+// AiProviderAPIKey says "API key"
+// in the language the app shows.
+func AiProviderAPIKey() string { return In(i18n.Locale()).AiProviderAPIKey() }
+
+// AiProviderAPIKey says "API key"
+// in the language of msgs.
+func (msgs Messages) AiProviderAPIKey() string {
+	return Catalog.Format(msgs.locale, "aiProviderAPIKey", nil)
+}
+
+// AiProviderAPIKeyHint says "Paste API key"
+// in the language the app shows.
+func AiProviderAPIKeyHint() string { return In(i18n.Locale()).AiProviderAPIKeyHint() }
+
+// AiProviderAPIKeyHint says "Paste API key"
+// in the language of msgs.
+func (msgs Messages) AiProviderAPIKeyHint() string {
+	return Catalog.Format(msgs.locale, "aiProviderAPIKeyHint", nil)
+}
+
+// AiProviderModelsHint says "Choose the models this connection offers."
+// in the language the app shows.
+func AiProviderModelsHint() string { return In(i18n.Locale()).AiProviderModelsHint() }
+
+// AiProviderModelsHint says "Choose the models this connection offers."
+// in the language of msgs.
+func (msgs Messages) AiProviderModelsHint() string {
+	return Catalog.Format(msgs.locale, "aiProviderModelsHint", nil)
+}
+
+// AiProviderNoModelsYet says "No models yet — fetch or add one by ID."
+// in the language the app shows.
+func AiProviderNoModelsYet() string { return In(i18n.Locale()).AiProviderNoModelsYet() }
+
+// AiProviderNoModelsYet says "No models yet — fetch or add one by ID."
+// in the language of msgs.
+func (msgs Messages) AiProviderNoModelsYet() string {
+	return Catalog.Format(msgs.locale, "aiProviderNoModelsYet", nil)
+}
+
+// AiProviderModelAdd says "Add model by ID"
+// in the language the app shows.
+func AiProviderModelAdd() string { return In(i18n.Locale()).AiProviderModelAdd() }
+
+// AiProviderModelAdd says "Add model by ID"
+// in the language of msgs.
+func (msgs Messages) AiProviderModelAdd() string {
+	return Catalog.Format(msgs.locale, "aiProviderModelAdd", nil)
+}
+
+// AiProviderSave says "Save"
+// in the language the app shows.
+func AiProviderSave() string { return In(i18n.Locale()).AiProviderSave() }
+
+// AiProviderSave says "Save"
+// in the language of msgs.
+func (msgs Messages) AiProviderSave() string {
+	return Catalog.Format(msgs.locale, "aiProviderSave", nil)
+}
+
+// AiProviderCancel says "Cancel"
+// in the language the app shows.
+func AiProviderCancel() string { return In(i18n.Locale()).AiProviderCancel() }
+
+// AiProviderCancel says "Cancel"
+// in the language of msgs.
+func (msgs Messages) AiProviderCancel() string {
+	return Catalog.Format(msgs.locale, "aiProviderCancel", nil)
+}
+
+// AiProviderDisabled says "Off"
+// in the language the app shows.
+func AiProviderDisabled() string { return In(i18n.Locale()).AiProviderDisabled() }
+
+// AiProviderDisabled says "Off"
+// in the language of msgs.
+func (msgs Messages) AiProviderDisabled() string {
+	return Catalog.Format(msgs.locale, "aiProviderDisabled", nil)
+}

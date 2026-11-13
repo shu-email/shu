@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -9,16 +11,18 @@ import (
 	"shu/locales"
 )
 
-// The providers panel: a list of API connections and installed tools on
-// the left, and the chosen provider's Overview, Models and Advanced on
-// the right, in the shape of a system settings panel.
+// The providers panel: the user's API connections and the installed
+// tools on the left, and the chosen provider's Overview, Models and
+// Advanced on the right. An API connection is created, edited and
+// removed here; its models are fetched from its endpoint.
 
 type providersPanel struct {
 	open     bool
 	tab      int
-	selected ai.ProviderID
-	// statuses is what each installed tool reported, and keys whether a
-	// stored API key exists, by provider.
+	selected ai.ProviderID // an installed tool
+	conn     string        // an API connection
+	editing  bool
+	form     connectionForm
 	statuses map[ai.ProviderID]ai.CLIStatus
 	keys     map[ai.ProviderID]bool
 	loaded   bool
@@ -32,18 +36,48 @@ type providersPanel struct {
 	note         string
 }
 
-// openProviders shows the panel on the active provider.
+// connectionForm is the add/edit overlay.
+type connectionForm struct {
+	id       string
+	name     string
+	preset   int
+	baseURL  string
+	key      string
+	models   []string
+	selected map[string]bool
+	newModel string
+	fetching bool
+	err      string
+	isNew    bool
+}
+
+// apiPresets are the presets an API connection may use.
+func apiPresets() []ai.Provider {
+	var out []ai.Provider
+	for _, p := range ai.Providers {
+		if !ai.CLIProvider(p.ID) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 func (a *app) openProviders() {
 	p := &a.providers
 	p.open = true
 	p.tab = 0
-	p.selected = a.aiForm.cfg.Provider
+	p.editing = false
+	p.conn = a.aiForm.cfg.Active
+	p.selected = ""
+	if p.conn == "" && ai.CLIProvider(a.aiForm.cfg.Provider) {
+		p.selected = a.aiForm.cfg.Provider
+	}
 	p.loaded = false
 	a.loadProviderStates()
 }
 
-// loadProviderStates checks every installed tool and API key without any
-// model request.
+// loadProviderStates checks installed tools and whether each connection's
+// key is stored. No model request is made.
 func (a *app) loadProviderStates() {
 	p := &a.providers
 	cfg := a.aiForm.cfg.Clone()
@@ -55,12 +89,11 @@ func (a *app) loadProviderStates() {
 		for _, preset := range ai.Providers {
 			if ai.CLIProvider(preset.ID) {
 				statuses[preset.ID] = a.ai.CLIStatus(ctx, preset.ID, cfg.CLIPath(preset.ID))
-				continue
 			}
-			if preset.NeedsKey {
-				stored, _ := a.ai.KeyStored(preset.ID)
-				keys[preset.ID] = stored
-			}
+		}
+		for _, conn := range cfg.Connections {
+			stored, _ := a.ai.KeyStored(ai.ConnectionKeyID(conn))
+			keys[ai.ConnectionKeyID(conn)] = stored
 		}
 		a.post(func() {
 			p.statuses, p.keys, p.loaded = statuses, keys, true
@@ -71,63 +104,150 @@ func (a *app) loadProviderStates() {
 // providersSummary is the AI tab's single row into the panel.
 func (a *app) providersSummary(c *ui.Context, t *ui.Theme) {
 	f := &a.aiForm
-	p, _ := ai.ProviderByID(f.cfg.Provider)
+	name, status := locales.AiProviderNoConnection(), ""
+	if conn, ok := f.cfg.ActiveConnection(); ok {
+		name, status = conn.Name, a.connectionStatusLine(conn)
+	} else if ai.CLIProvider(f.cfg.Provider) {
+		preset, _ := ai.ProviderByID(f.cfg.Provider)
+		name, status = aiProviderName(preset), a.providerStatusLine(f.cfg.Provider)
+	}
 	ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
 		ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
-			ui.Text(c, aiProviderName(p)).FontSize(13).Bold()
-			ui.Text(c, a.providerStatusLine(f.cfg.Provider)).FontSize(11).TextColor(t.TextMuted).MaxLines(2)
+			ui.Text(c, name).FontSize(13).Bold()
+			if status != "" {
+				ui.Text(c, status).FontSize(11).TextColor(t.TextMuted).MaxLines(2)
+			}
 		})
 		ui.Button(c, locales.AiManageProviders()).OnClick(a.openProviders)
 	})
 }
 
-// providerStatusLine says a provider's state in one line.
+func (a *app) connectionStatusLine(conn ai.AIConnection) string {
+	if !conn.Enabled {
+		return locales.AiProviderDisabled()
+	}
+	return locales.AiProviderModelsCount(len(conn.Models))
+}
+
+// providerStatusLine says an installed tool's state.
 func (a *app) providerStatusLine(id ai.ProviderID) string {
 	preset, ok := ai.ProviderByID(id)
 	if !ok {
 		return ""
 	}
-	if a.aiForm.cfg.ProviderOff(id) {
-		return locales.AiProviderOff()
+	status := a.providers.statuses[id]
+	if !a.providers.loaded {
+		return locales.AiLocalToolChecking()
 	}
-	if ai.CLIProvider(id) {
-		status := a.providers.statuses[id]
-		if !a.providers.loaded {
-			return locales.AiLocalToolChecking()
+	switch {
+	case !status.Installed:
+		if status.Err != "" {
+			return status.Err
 		}
-		switch {
-		case !status.Installed:
-			if status.Err != "" {
-				return status.Err
-			}
-			return locales.AiLocalToolNotInstalled()
-		case status.Outdated:
-			return locales.AiLocalToolOutdated()
-		case !status.SignedIn:
-			return locales.AiLocalToolSignIn()
-		case status.Version != "":
-			return locales.AiLocalToolVersion(status.Version)
-		}
-		return locales.AiLocalToolReady()
+		return locales.AiLocalToolNotInstalled()
+	case status.Outdated:
+		return locales.AiLocalToolOutdated()
+	case !status.SignedIn:
+		return locales.AiLocalToolSignIn()
+	case status.Version != "":
+		return locales.AiLocalToolVersion(status.Version)
 	}
-	if preset.NeedsKey && !a.providers.keys[id] {
-		return locales.AiKeyMissing()
-	}
-	if preset.ID == ai.ProviderLocal {
-		return locales.AiProviderApi()
-	}
-	return preset.BaseURL
+	_ = preset
+	return locales.AiLocalToolReady()
 }
 
-// selectProvider makes a provider the active one and loads its state.
+// selectProvider makes an installed tool the active one.
 func (a *app) selectProvider(id ai.ProviderID) {
-	a.providers.selected = id
+	a.providers.selected, a.providers.conn = id, ""
 	preset, ok := ai.ProviderByID(id)
 	if !ok {
 		return
 	}
+	a.aiForm.cfg.Active = ""
 	a.aiForm.provider = aiProviderName(preset)
 	a.chooseAIProvider()
+}
+
+// selectConnection makes an API connection the active one.
+func (a *app) selectConnection(conn ai.AIConnection) {
+	f := &a.aiForm
+	p := &a.providers
+	p.conn, p.selected, p.editing = conn.ID, "", false
+	f.cfg.Active = conn.ID
+	f.cfg.UseProvider(conn.Preset)
+	f.cfg.BaseURL = conn.BaseURL
+	if conn.Model != "" {
+		f.cfg.Model = conn.Model
+	} else if len(conn.Models) > 0 {
+		f.cfg.Model = conn.Models[0]
+	}
+	f.provider = aiProviderName(mustPreset(conn.Preset))
+	a.saveAI()
+	f.keyStored, _ = a.ai.KeyStored(ai.ConnectionKeyID(conn))
+	a.loadCLIStatus()
+	a.loadProviderStates()
+}
+
+func mustPreset(id ai.ProviderID) ai.Provider {
+	p, _ := ai.ProviderByID(id)
+	return p
+}
+
+// startAddConnection opens the overlay for a new connection.
+func (a *app) startAddConnection() {
+	presets := apiPresets()
+	p := &a.providers
+	p.editing, p.conn, p.selected = true, "", ""
+	p.form = connectionForm{
+		id: fmt.Sprintf("conn-%d", time.Now().UnixNano()), preset: 0,
+		baseURL: presets[0].BaseURL, selected: map[string]bool{}, isNew: true,
+	}
+}
+
+func (a *app) startEditConnection(conn ai.AIConnection) {
+	p := &a.providers
+	presets := apiPresets()
+	idx := 0
+	for i, preset := range presets {
+		if preset.ID == conn.Preset {
+			idx = i
+		}
+	}
+	sel := map[string]bool{}
+	for _, m := range conn.Models {
+		sel[m] = true
+	}
+	p.editing = true
+	p.form = connectionForm{id: conn.ID, name: conn.Name, preset: idx, baseURL: conn.BaseURL,
+		models: append([]string(nil), conn.Models...), selected: sel, isNew: false}
+}
+
+// removeConnection deletes the selected connection and its key.
+func (a *app) removeConnection() {
+	p := &a.providers
+	conn, ok := a.aiForm.cfg.Connection(p.conn)
+	if !ok {
+		return
+	}
+	f := &a.aiForm
+	cfg := f.cfg
+	cfg.RemoveConnection(conn.ID)
+	if cfg.Active == conn.ID {
+		cfg.Active = ""
+	}
+	_ = a.ai.DeleteKey(ai.ConnectionKeyID(conn))
+	if len(cfg.Connections) > 0 {
+		next := cfg.Connections[0]
+		cfg.Active = next.ID
+		cfg.UseProvider(next.Preset)
+		cfg.BaseURL = next.BaseURL
+		cfg.Model = next.Model
+		p.conn = next.ID
+	} else {
+		p.conn = ""
+	}
+	f.cfg = cfg
+	a.saveAI()
 	a.loadProviderStates()
 }
 
@@ -138,40 +258,42 @@ func (a *app) providersDialog(c *ui.Context) {
 		return
 	}
 	t := c.Theme()
-	// The panel may be drawn in either window; its clipboard and URL
-	// actions take the services of the frame that drew it.
-	services := c.Services()
 	ui.Modal(c, &p.open, func() {
-		ui.Column(c).Width(880).Gap(12).Children(func() {
+		ui.Column(c).Width(700).Gap(10).Children(func() {
 			ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, locales.AiProvidersTitle()).FontSize(17).Bold().Grow(1)
 				ui.Button(c, locales.Done()).OnClick(func() { p.open = false })
 			})
 			ui.Text(c, locales.AiProvidersIntro()).FontSize(11).TextColor(t.TextMuted).MaxLines(2)
 			ui.Divider(c)
-			ui.Row(c).Height(540).Gap(0).AlignItems(ui.Stretch).Children(func() {
-				ui.Column(c).Width(290).Shrink(0).Children(func() {
+			ui.Row(c).Height(440).Gap(0).AlignItems(ui.Stretch).Children(func() {
+				ui.Column(c).Width(220).Shrink(0).Children(func() {
 					ui.Scroll(c).Grow(1).Children(func() {
-						ui.Column(c).Padding(2, 2).Gap(2).Children(func() {
-							a.providerGroup(c, t, locales.AiProviderApi(), false)
-							a.providerGroup(c, t, locales.AiLocalTool(), true)
-						})
+						ui.Column(c).Padding(2, 2).Gap(2).Children(func() { a.providerList(c, t) })
+					})
+					ui.Divider(c)
+					ui.Row(c).Shrink(0).Gap(2).Padding(4, 6).Children(func() {
+						ui.Button(c, "+").Label(locales.AiProviderAdd()).Tooltip(locales.AiProviderAdd()).
+							Disabled(p.editing).OnClick(a.startAddConnection)
+						ui.Button(c, "−").Label(locales.AiProviderDelete()).Tooltip(locales.AiProviderDelete()).
+							Disabled(p.editing || p.conn == "").OnClick(a.removeConnection)
 					})
 				})
 				ui.Box(c).Width(1).Shrink(0).Background(t.Border)
 				ui.Column(c).Grow(1).MinWidth(0).Padding(14, 18).Gap(10).Children(func() {
-					ui.Tabs(c, &p.tab, locales.AiProviderOverview(), locales.AiProviderModels(), locales.AiProviderAdvanced()).Label(locales.AiProvidersTitle())
-					switch p.tab {
-					case 1:
-						a.providerModels(c, t)
-					case 2:
-						a.providerAdvanced(c, t)
+					switch {
+					case p.editing:
+						a.connectionEditor(c, t)
+					case p.conn != "":
+						a.connectionDetail(c, t)
+					case p.selected != "":
+						a.toolDetail(c, t)
 					default:
-						a.providerOverview(c, t, services)
+						a.providerOverview(c, t, c.Services())
 					}
 				})
 			})
-			if !p.loaded {
+			if !p.loaded && !p.editing {
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 					ui.Spinner(c).Size(12, 12)
 					ui.Text(c, locales.AiLocalToolChecking()).FontSize(11).TextColor(t.TextMuted)
@@ -182,29 +304,53 @@ func (a *app) providersDialog(c *ui.Context) {
 	a.removeProviderAlert(c)
 }
 
-// providerGroup lists the providers of one kind.
-func (a *app) providerGroup(c *ui.Context, t *ui.Theme, title string, cli bool) {
+// providerList lists the connections and then the installed tools.
+func (a *app) providerList(c *ui.Context, t *ui.Theme) {
 	p := &a.providers
-	ui.Text(c, title).FontSize(11).Bold().TextColor(t.TextMuted).Padding(8, 8)
-	for _, preset := range ai.Providers {
-		if ai.CLIProvider(preset.ID) != cli {
-			continue
-		}
-		preset := preset
-		selected := p.selected == preset.ID
+	f := &a.aiForm
+	ui.Text(c, locales.AiProviderApi()).FontSize(11).Bold().TextColor(t.TextMuted).Padding(8, 8)
+	if len(f.cfg.Connections) == 0 {
+		ui.Text(c, locales.AiProviderNoConnection()).FontSize(11).TextColor(t.TextMuted).Padding(6, 8)
+	}
+	for _, conn := range f.cfg.Connections {
+		conn := conn
+		selected := p.conn == conn.ID && !p.editing
 		bg := ui.Transparent
 		if selected {
 			bg = t.Accent.Alpha(0.12)
 		}
-		ui.ButtonBase(c).Label(aiProviderName(preset)).Width(280).Padding(7, 8).Radius(8).
+		ui.ButtonBase(c).Label(conn.Name).Width(206).Padding(7, 9).Radius(8).
+			Background(bg).OnClick(func() { a.selectConnection(conn) }).Children(func() {
+			ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Column(c).Grow(1).MinWidth(0).Gap(1).AlignItems(ui.Start).Children(func() {
+					ui.Text(c, conn.Name).FontSize(12).Bold().SingleLine()
+					ui.Text(c, a.connectionStatusLine(conn)).FontSize(10).TextColor(t.TextMuted).SingleLine()
+				})
+				if f.cfg.Active == conn.ID {
+					ui.Icon(c, checkIcon).FontSize(12).TextColor(t.Accent)
+				}
+			})
+		})
+	}
+	ui.Text(c, locales.AiLocalTool()).FontSize(11).Bold().TextColor(t.TextMuted).Padding(8, 8)
+	for _, preset := range ai.Providers {
+		if !ai.CLIProvider(preset.ID) {
+			continue
+		}
+		preset := preset
+		selected := p.selected == preset.ID && p.conn == "" && !p.editing
+		bg := ui.Transparent
+		if selected {
+			bg = t.Accent.Alpha(0.12)
+		}
+		ui.ButtonBase(c).Label(aiProviderName(preset)).Width(206).Padding(7, 9).Radius(8).
 			Background(bg).OnClick(func() { a.selectProvider(preset.ID) }).Children(func() {
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
-					name := aiProviderName(preset)
-					ui.Text(c, name).FontSize(12).Bold().SingleLine()
+			ui.Row(c).FillWidth().Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.Column(c).Grow(1).MinWidth(0).Gap(1).AlignItems(ui.Start).Children(func() {
+					ui.Text(c, aiProviderName(preset)).FontSize(12).Bold().SingleLine()
 					ui.Text(c, a.providerStatusLine(preset.ID)).FontSize(10).TextColor(t.TextMuted).SingleLine()
 				})
-				if preset.ID == a.aiForm.cfg.Provider {
+				if f.cfg.Provider == preset.ID && f.cfg.Active == "" {
 					ui.Icon(c, checkIcon).FontSize(12).TextColor(t.Accent)
 				}
 			})
@@ -212,8 +358,260 @@ func (a *app) providerGroup(c *ui.Context, t *ui.Theme, title string, cli bool) 
 	}
 }
 
-// providerOverview is the provider's status, command or endpoint, and the
-// action that makes it the active one.
+// connectionDetail shows the chosen connection's Overview and Models.
+func (a *app) connectionDetail(c *ui.Context, t *ui.Theme) {
+	p := &a.providers
+	f := &a.aiForm
+	conn, ok := f.cfg.Connection(p.conn)
+	if !ok {
+		return
+	}
+	preset := mustPreset(conn.Preset)
+	ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+		ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
+			ui.Text(c, conn.Name).FontSize(15).Bold().SingleLine()
+			ui.Text(c, aiProviderName(preset)+" · "+locales.AiProviderModelsCount(len(conn.Models))).
+				FontSize(11).TextColor(t.TextMuted)
+		})
+		ui.Button(c, locales.AiProviderEdit()).OnClick(func() { a.startEditConnection(conn) })
+		enabled := conn.Enabled
+		ui.Switch(c, &enabled).Label(locales.AiProviderEnabled()).OnChange(func() {
+			conn.Enabled = enabled
+			f.cfg.SetConnection(conn)
+			a.saveAI()
+		})
+	})
+	if f.cfg.Active == conn.ID {
+		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+			ui.Icon(c, checkIcon).FontSize(12).TextColor(t.Accent)
+			ui.Text(c, locales.AiProviderInUse()).FontSize(11).TextColor(t.Accent)
+		})
+	} else {
+		ui.Button(c, locales.AiProviderUse()).OnClick(func() { a.selectConnection(conn) })
+	}
+	ui.Divider(c)
+	ui.Text(c, locales.AiProviderBaseURL()).FontSize(12).Bold().TextColor(t.TextMuted)
+	ui.Text(c, conn.BaseURL).FontSize(12).Selectable().SingleLine()
+	if p.keys[ai.ConnectionKeyID(conn)] {
+		ui.Text(c, locales.AiKeyStored()).FontSize(11).TextColor(t.TextMuted)
+	} else {
+		ui.Text(c, locales.AiKeyMissing()).FontSize(11).TextColor(t.Warning)
+	}
+	a.aiAPIKeyFields(c, t)
+	if ai.NeedsHTTPOptIn(f.cfg) {
+		ui.Switch(c, &f.cfg.AllowHTTP).Label(locales.AiAllowHTTP()).OnChange(a.saveAI)
+	}
+	a.aiTestRow(c, t)
+	ui.Divider(c)
+	ui.Text(c, locales.AiProviderModelsCount(len(conn.Models))).FontSize(12).Bold().TextColor(t.TextMuted)
+	if len(conn.Models) == 0 {
+		ui.Text(c, locales.AiProviderNoModelsYet()).FontSize(11).TextColor(t.TextMuted)
+	}
+	for _, model := range conn.Models {
+		ui.Text(c, model).FontSize(12).SingleLine()
+	}
+}
+
+// connectionEditor is the add/edit overlay: name, preset, endpoint, key,
+// and the models fetched from the endpoint.
+func (a *app) connectionEditor(c *ui.Context, t *ui.Theme) {
+	f := &a.aiForm
+	p := &a.providers
+	form := &p.form
+	presets := apiPresets()
+	title := locales.AiProviderAdd()
+	if !form.isNew {
+		title = locales.AiProviderEdit()
+	}
+	ui.Text(c, title).FontSize(15).Bold()
+	ui.Scroll(c).Grow(1).Children(func() {
+		ui.Column(c).Gap(10).PaddingEnd(8).Children(func() {
+			ui.TextInput(c, &form.name).Label(locales.AiProviderName()).
+				Placeholder(locales.AiProviderNameHint()).FillWidth()
+			names := make([]string, 0, len(presets))
+			for _, preset := range presets {
+				names = append(names, aiProviderName(preset))
+			}
+			choice := ""
+			if form.preset >= 0 && form.preset < len(names) {
+				choice = names[form.preset]
+			}
+			ui.Select(c, &choice, names).Label(locales.Provider()).FillWidth().OnChange(func() {
+				for i, name := range names {
+					if name == choice {
+						form.preset = i
+					}
+				}
+				if form.baseURL == "" || form.baseURL == presets[0].BaseURL {
+					form.baseURL = presets[form.preset].BaseURL
+				}
+			})
+			ui.TextInput(c, &form.baseURL).Label(locales.AiProviderBaseURL()).
+				Placeholder(presets[form.preset].BaseURL).FillWidth()
+			ui.TextInput(c, &form.key).Password().Label(locales.AiProviderAPIKey()).
+				Placeholder(locales.AiProviderAPIKeyHint()).FillWidth()
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				label := locales.AiProviderFetchModels()
+				if form.fetching {
+					label = locales.AiProviderFetching()
+				}
+				ui.Button(c, label).Disabled(form.fetching).OnClick(a.fetchConnectionModels)
+				if form.err != "" {
+					ui.Icon(c, alertIcon).FontSize(13).TextColor(t.Warning)
+					ui.Text(c, form.err).FontSize(11).TextColor(t.Warning).Grow(1).MaxLines(2)
+				}
+			})
+			ui.Divider(c)
+			ui.Text(c, locales.AiProviderModelsHint()).FontSize(11).TextColor(t.TextMuted)
+			if len(form.models) == 0 {
+				ui.Text(c, locales.AiProviderNoModelsYet()).FontSize(11).TextColor(t.TextMuted)
+			}
+			for _, model := range form.models {
+				model := model
+				on := form.selected[model]
+				ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+					ui.Text(c, model).FontSize(12).Grow(1).MinWidth(0).SingleLine()
+					value := on
+					ui.Switch(c, &value).Label(model).OnChange(func() { form.selected[model] = value })
+				})
+			}
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				ui.TextInput(c, &form.newModel).Label(locales.AiProviderModelAdd()).
+					Placeholder("model-id").Grow(1)
+				ui.Button(c, locales.AiProviderModelAdd()).Disabled(strings.TrimSpace(form.newModel) == "").
+					OnClick(func() {
+						model := strings.TrimSpace(form.newModel)
+						if model != "" && !containsString(form.models, model) {
+							form.models = append(form.models, model)
+							form.selected[model] = true
+							form.newModel = ""
+						}
+					})
+			})
+		})
+	})
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Spacer(c)
+		ui.Button(c, locales.AiProviderCancel()).OnClick(func() { p.editing = false })
+		ui.PrimaryButton(c, locales.AiProviderSave()).Disabled(form.fetching).OnClick(func() {
+			a.saveConnection()
+		})
+	})
+	_ = f
+}
+
+func containsString(list []string, value string) bool {
+	for _, item := range list {
+		if item == value {
+			return true
+		}
+	}
+	return false
+}
+
+// fetchConnectionModels asks the endpoint for the models it offers.
+func (a *app) fetchConnectionModels() {
+	form := &a.providers.form
+	if form.fetching {
+		return
+	}
+	presets := apiPresets()
+	preset := presets[form.preset]
+	key := form.key
+	form.fetching, form.err = true, ""
+	a.run(func() {
+		ctx, cancel := a.ctx()
+		defer cancel()
+		if key == "" {
+			if conn, ok := a.aiForm.cfg.Connection(form.id); ok {
+				if data, err := a.ai.Secret(ai.ConnectionKeyID(conn)); err == nil {
+					key = data
+				}
+			}
+		}
+		models, err := a.ai.ListModels(ctx, preset.ID, form.baseURL, key)
+		a.post(func() {
+			form.fetching = false
+			if err != nil {
+				form.err, _ = aiErrorText(err)
+				return
+			}
+			form.models = models
+			form.selected = map[string]bool{}
+			for _, m := range models {
+				form.selected[m] = true
+			}
+		})
+	})
+}
+
+// saveConnection validates the form and keeps the connection, its models
+// and its key.
+func (a *app) saveConnection() {
+	p := &a.providers
+	form := &p.form
+	presets := apiPresets()
+	preset := presets[form.preset]
+	name := strings.TrimSpace(form.name)
+	if name == "" {
+		name = preset.Name
+	}
+	base := strings.TrimSpace(form.baseURL)
+	if base == "" {
+		base = preset.BaseURL
+	}
+	var models []string
+	for _, m := range form.models {
+		if form.selected[m] {
+			models = append(models, m)
+		}
+	}
+	conn := ai.AIConnection{ID: form.id, Name: name, Preset: preset.ID, BaseURL: base,
+		Model: "", Models: models, Enabled: true}
+	if len(models) > 0 {
+		conn.Model = models[0]
+	}
+	f := &a.aiForm
+	cfg := f.cfg
+	cfg.SetConnection(conn)
+	cfg.Active = conn.ID
+	cfg.UseProvider(preset.ID)
+	cfg.BaseURL = base
+	if conn.Model != "" {
+		cfg.Model = conn.Model
+	} else {
+		cfg.Model = preset.Model
+	}
+	f.cfg = cfg
+	f.provider = aiProviderName(preset)
+	f.keyStored, _ = a.ai.KeyStored(ai.ConnectionKeyID(conn))
+	if form.key != "" {
+		ctx, cancel := a.ctx()
+		_ = a.ai.SetKey(ctx, ai.ConnectionKeyID(conn), form.key)
+		cancel()
+	}
+	a.saveAI()
+	p.conn, p.editing, p.selected = conn.ID, false, ""
+	a.loadProviderStates()
+}
+
+// toolDetail is the installed tool's Overview/Models/Advanced, as before.
+func (a *app) toolDetail(c *ui.Context, t *ui.Theme) {
+	p := &a.providers
+	ui.Tabs(c, &p.tab, locales.AiProviderOverview(), locales.AiProviderModels(), locales.AiProviderAdvanced()).Label(locales.AiProvidersTitle())
+	ui.Scroll(c).Grow(1).Children(func() {
+		ui.Column(c).Gap(10).PaddingEnd(8).Children(func() {
+			switch p.tab {
+			case 1:
+				a.providerModels(c, t)
+			case 2:
+				a.providerAdvanced(c, t)
+			default:
+				a.providerOverview(c, t, c.Services())
+			}
+		})
+	})
+}
 func (a *app) providerOverview(c *ui.Context, t *ui.Theme, services ui.Services) {
 	p := &a.providers
 	preset, _ := ai.ProviderByID(p.selected)
@@ -415,12 +813,22 @@ func (a *app) providerModels(c *ui.Context, t *ui.Theme) {
 		return
 	}
 	preset, _ := ai.ProviderByID(p.selected)
-	suggestions := a.visibleCLIModels()
-	ui.Column(c).Gap(4).Children(func() {
-		caption := ui.Text(c, locales.AiModel()).FontSize(11).Bold().TextColor(t.TextMuted)
-		ui.Autocomplete(c, &f.cfg.Model, suggestions).LabelledBy(caption).
-			Placeholder(preset.Model).FillWidth().OnChange(a.saveAI)
-	})
+	choices := a.visibleCLIModels()
+	if f.cfg.Model != "" && !containsString(choices, f.cfg.Model) {
+		choices = append([]string{f.cfg.Model}, choices...)
+	}
+	if len(choices) > 0 {
+		ui.Column(c).Gap(4).Children(func() {
+			caption := ui.Text(c, locales.AiModel()).FontSize(11).Bold().TextColor(t.TextMuted)
+			ui.Select(c, &f.cfg.Model, choices).LabelledBy(caption).FillWidth().OnChange(a.saveAI)
+		})
+	} else {
+		ui.Column(c).Gap(4).Children(func() {
+			caption := ui.Text(c, locales.AiModel()).FontSize(11).Bold().TextColor(t.TextMuted)
+			ui.Autocomplete(c, &f.cfg.Model, choices).LabelledBy(caption).
+				Placeholder(preset.Model).FillWidth().OnChange(a.saveAI)
+		})
+	}
 	if !ai.CLIProvider(p.selected) {
 		ui.Text(c, locales.AiProviderModelHint()).FontSize(11).TextColor(t.TextMuted)
 		return

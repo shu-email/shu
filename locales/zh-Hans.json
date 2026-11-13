@@ -1392,5 +1392,33 @@
   "aiLocalToolInstall": "打开安装页面",
   "aiLocalToolOutdated": "需要更新",
   "aiLocalToolUpdate": "打开更新页面",
-  "aiLocalToolNotOfficial": "Shu 与这些工具的厂商没有关联，这也不是官方集成。通过其他应用使用订阅可能受厂商条款限制，依赖前请先确认。"
+  "aiLocalToolNotOfficial": "Shu 与这些工具的厂商没有关联，这也不是官方集成。通过其他应用使用订阅可能受厂商条款限制，依赖前请先确认。",
+  "aiProviderNeedsURL": "需要服务器地址",
+  "aiProviderNoConnection": "未选择服务商",
+  "aiProviderAdd": "添加 API 连接",
+  "aiProviderEdit": "编辑…",
+  "aiProviderDelete": "删除连接",
+  "aiProviderFetchModels": "拉取模型",
+  "aiProviderFetching": "正在拉取模型…",
+  "aiProviderModelsCount": "{count, plural, other {# 个模型}}",
+  "@aiProviderModelsCount": {
+    "description": "How many models a connection offers.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "aiProviderName": "名称",
+  "aiProviderNameHint": "可选备注",
+  "aiProviderBaseURL": "基础 URL",
+  "aiProviderAPIKey": "API 密钥",
+  "aiProviderAPIKeyHint": "粘贴 API 密钥",
+  "aiProviderModelsHint": "选择这条连接提供的模型。",
+  "aiProviderNoModelsYet": "还没有模型——先拉取，或按 ID 添加。",
+  "aiProviderModelAdd": "按 ID 添加模型",
+  "aiProviderSave": "保存",
+  "aiProviderCancel": "取消",
+  "aiProviderDisabled": "已关闭"
 }

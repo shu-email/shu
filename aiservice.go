@@ -21,9 +21,17 @@ type aiService interface {
 	// CLIModels asks an installed tool which models it reports, without a
 	// model request; nil leaves the field free text.
 	CLIModels(ctx context.Context, id ai.ProviderID, path string) ([]string, error)
+	// CodexModels asks the Codex app-server which models it offers, with
+	// no thread and no model request.
+	CodexModels(ctx context.Context, path string) ([]string, error)
 	// CLIEnv reads and writes the values kept for one local tool; values
 	// live only in the keychain.
 	CLIEnv(id ai.ProviderID) ([]ai.CLIEnvVar, error)
+	// Secret returns a stored secret, for a connection's models fetch.
+	Secret(id ai.ProviderID) (string, error)
+	// ListModels asks an API endpoint which models it offers, with no
+	// mail and no model request.
+	ListModels(ctx context.Context, preset ai.ProviderID, baseURL, key string) ([]string, error)
 	SaveCLIEnv(ctx context.Context, id ai.ProviderID, list []ai.CLIEnvVar) error
 	Config(ctx context.Context) (ai.Config, error)
 	SaveConfig(ctx context.Context, cfg ai.Config) error

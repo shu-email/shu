@@ -3751,5 +3751,33 @@
   "aiLocalToolInstall": "Open install page",
   "aiLocalToolOutdated": "Update required",
   "aiLocalToolUpdate": "Open update page",
-  "aiLocalToolNotOfficial": "Shu is not affiliated with the tools’ vendors, and this is not an official integration. Using a subscription through another app may be restricted by the vendor’s terms; check them before relying on it."
+  "aiLocalToolNotOfficial": "Shu is not affiliated with the tools’ vendors, and this is not an official integration. Using a subscription through another app may be restricted by the vendor’s terms; check them before relying on it.",
+  "aiProviderNeedsURL": "Server URL needed",
+  "aiProviderNoConnection": "No provider selected",
+  "aiProviderAdd": "Add API connection",
+  "aiProviderEdit": "Edit…",
+  "aiProviderDelete": "Remove connection",
+  "aiProviderFetchModels": "Fetch models",
+  "aiProviderFetching": "Fetching models…",
+  "aiProviderModelsCount": "{count, plural, one {# model} other {# models}}",
+  "@aiProviderModelsCount": {
+    "description": "How many models a connection offers.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "aiProviderName": "Name",
+  "aiProviderNameHint": "Optional note",
+  "aiProviderBaseURL": "Base URL",
+  "aiProviderAPIKey": "API key",
+  "aiProviderAPIKeyHint": "Paste API key",
+  "aiProviderModelsHint": "Choose the models this connection offers.",
+  "aiProviderNoModelsYet": "No models yet — fetch or add one by ID.",
+  "aiProviderModelAdd": "Add model by ID",
+  "aiProviderSave": "Save",
+  "aiProviderCancel": "Cancel",
+  "aiProviderDisabled": "Off"
 }

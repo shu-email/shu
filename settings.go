@@ -157,7 +157,11 @@ func (a *app) loadAISettings() {
 		cfg, err := a.ai.Config(ctx)
 		stored := false
 		if err == nil {
-			stored, err = a.ai.KeyStored(cfg.Provider)
+			keyID := cfg.Provider
+			if conn, ok := cfg.ActiveConnection(); ok {
+				keyID = ai.ConnectionKeyID(conn)
+			}
+			stored, err = a.ai.KeyStored(keyID)
 		}
 		a.post(func() {
 			f := &a.aiForm
@@ -170,6 +174,9 @@ func (a *app) loadAISettings() {
 			}
 			if ai.CLIProvider(f.cfg.Provider) {
 				a.loadCLIStatus()
+			}
+			if !a.providers.loaded {
+				a.loadProviderStates()
 			}
 		})
 	})
@@ -216,6 +223,7 @@ func (a *app) chooseAIProvider() {
 		f.models = [3]string{}
 		f.key, f.note, f.err = "", "", ""
 		f.keyStored = false
+		f.cfg.Active = ""
 		f.cliPath = f.cfg.CLIPath(p.ID)
 		f.cliStatus = ai.CLIStatus{}
 		f.cliModels = nil
@@ -241,9 +249,18 @@ func (a *app) chooseAIProvider() {
 }
 
 // saveAIKey moves the typed key into the keychain and forgets it.
+// aiKeyID is the keychain key of the active provider: a connection's own
+// key, or the preset's for an installed tool/legacy provider.
+func (a *app) aiKeyID() ai.ProviderID {
+	if conn, ok := a.aiForm.cfg.ActiveConnection(); ok {
+		return ai.ConnectionKeyID(conn)
+	}
+	return a.aiForm.cfg.Provider
+}
+
 func (a *app) saveAIKey() {
 	f := &a.aiForm
-	key, id := strings.TrimSpace(f.key), f.cfg.Provider
+	key, id := strings.TrimSpace(f.key), a.aiKeyID()
 	if key == "" {
 		return
 	}
@@ -253,7 +270,7 @@ func (a *app) saveAIKey() {
 		defer cancel()
 		err := a.ai.SetKey(ctx, id, key)
 		a.post(func() {
-			if f.cfg.Provider != id {
+			if a.aiKeyID() != id {
 				return
 			}
 			if err != nil {
@@ -263,6 +280,7 @@ func (a *app) saveAIKey() {
 			}
 			f.keyStored = true
 			f.err, f.note = "", locales.AiKeySaved()
+			a.loadProviderStates()
 		})
 	})
 }
@@ -270,7 +288,7 @@ func (a *app) saveAIKey() {
 // deleteAIKey removes the provider's key from the keychain.
 func (a *app) deleteAIKey() {
 	f := &a.aiForm
-	id := f.cfg.Provider
+	id := a.aiKeyID()
 	a.run(func() {
 		err := a.ai.DeleteKey(id)
 		a.post(func() {
@@ -455,7 +473,11 @@ func (a *app) loadCLIStatus() {
 		status := a.ai.CLIStatus(ctx, id, path)
 		var models []string
 		if status.Installed && status.SignedIn {
-			models, _ = a.ai.CLIModels(ctx, id, path)
+			if id == ai.ProviderCodexCLI {
+				models, _ = a.ai.CodexModels(ctx, path)
+			} else {
+				models, _ = a.ai.CLIModels(ctx, id, path)
+			}
 		}
 		env, _ := a.ai.CLIEnv(id)
 		a.post(func() {

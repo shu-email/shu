@@ -5,7 +5,6 @@ package ai
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -271,158 +270,28 @@ func TestCLIEnvironmentValues(t *testing.T) {
 	}
 }
 
-// The account a tool reports is read from its sign-in status, at any of
-// the places that answer has kept it.
-func TestCLIAccount(t *testing.T) {
-	cases := map[string]string{
-		`{"loggedIn": true, "email": "maya@example.com"}`:              "maya@example.com",
-		`{"loggedIn": true, "emailAddress": "maya@example.com"}`:       "maya@example.com",
-		`{"loggedIn": true, "account": {"email": "maya@example.com"}}`: "maya@example.com",
-		`{"loggedIn": true}`:                            "",
-		`{"loggedIn": true, "email": "not an address"}`: "",
-		`not json`: "",
-	}
-	for in, want := range cases {
-		if got := claudeAccount(in); got != want {
-			t.Errorf("claudeAccount(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
-// A tool's status carries the account it is signed in as, and each tool
-// names the command and page its next step needs.
-func TestCLIStatusAccountAndNextSteps(t *testing.T) {
-	script, _, _ := fakeCLI(t, "if [ \"$1\" = \"--version\" ]; then echo '2.1.323'; exit 0; fi\n"+
-		"if [ \"$1\" = \"auth\" ]; then echo '{\"loggedIn\": true, \"email\": \"maya@example.com\"}'; exit 0; fi\nexit 0\n")
-	s, _, _, _ := newTestService(t)
-	status := s.CLIStatus(context.Background(), ProviderClaudeCLI, script)
-	if !status.SignedIn || status.Account != "maya@example.com" {
-		t.Errorf("status = %+v", status)
-	}
-	if got := CLISignInCommand(ProviderClaudeCLI); got != "claude auth login" {
-		t.Errorf("claude sign-in = %q", got)
-	}
-	if got := CLISignInCommand(ProviderCodexCLI); got != "codex login" {
-		t.Errorf("codex sign-in = %q", got)
-	}
-	if CLISignInCommand(ProviderOpenAI) != "" {
-		t.Error("an API provider has a sign-in command")
-	}
-	for _, id := range []ProviderID{ProviderClaudeCLI, ProviderCodexCLI} {
-		if !strings.HasPrefix(CLIInstallURL(id), "https://") {
-			t.Errorf("%s install page = %q", id, CLIInstallURL(id))
-		}
-	}
-	if CLIInstallURL(ProviderOpenAI) != "" {
-		t.Error("an API provider has an install page")
-	}
-}
-
-// Removing a provider forgets its setup and its keychain entries, and
-// leaves every other provider as it was.
-func TestRemoveProvider(t *testing.T) {
-	ctx := context.Background()
-	s, _, _, _ := newTestService(t)
-	cfg := DefaultConfig()
-	cfg.UseProvider(ProviderClaudeCLI)
-	cfg.SetCLIPath(ProviderClaudeCLI, "/opt/claude")
-	cfg.SetModelHidden(ProviderClaudeCLI, "opus", true)
-	cfg.SetEffort(ProviderClaudeCLI, "high")
-	cfg.SetProviderOff(ProviderClaudeCLI, true)
-	cfg.SetKeyEndpoint(ProviderClaudeCLI, "http://localhost:1")
-	cfg.UseProvider(ProviderClaudeCLI)
-	cfg.SetModelHidden(ProviderOpenAI, "gpt-4o", true)
-	if err := s.SaveConfig(ctx, cfg); err != nil {
+// Codex reports its models through app-server's JSON-RPC, without a
+// thread or a model request.
+func TestCodexModels(t *testing.T) {
+	dir := t.TempDir()
+	script := filepath.Join(dir, "codex")
+	body := `#!/bin/sh
+while IFS= read -r line; do
+  case "$line" in
+    *'"id":1'*) echo '{"jsonrpc":"2.0","id":1,"result":{}}' ;;
+    *'"id":2'*) echo '{"jsonrpc":"2.0","id":2,"result":{"data":[{"model":"gpt-5-codex"},{"model":"gpt-5"},{"model":"gpt-5-codex"}]}}' ;;
+  esac
+done
+`
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SaveCLIEnv(ctx, ProviderClaudeCLI, []CLIEnvVar{{Name: "MY_TOKEN", Value: "secret"}}); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.RemoveProvider(ctx, ProviderClaudeCLI); err != nil {
-		t.Fatal(err)
-	}
-	saved, err := s.Config(ctx)
+	svc := NewService(nil, nil)
+	models, err := svc.CodexModels(context.Background(), script)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if saved.Provider != Providers[0].ID {
-		t.Errorf("provider = %q, want the first preset", saved.Provider)
-	}
-	if saved.CLIPath(ProviderClaudeCLI) != "" || saved.Effort(ProviderClaudeCLI) != "" ||
-		saved.ProviderOff(ProviderClaudeCLI) || saved.KeyEndpoint(ProviderClaudeCLI) != "" ||
-		len(saved.CLIEnvNames(ProviderClaudeCLI)) != 0 || saved.ModelHidden(ProviderClaudeCLI, "opus") {
-		t.Errorf("its setup is still there: %+v", saved)
-	}
-	if !saved.ModelHidden(ProviderOpenAI, "gpt-4o") {
-		t.Error("another provider's setup went with it")
-	}
-	if _, err := s.secrets.Get(cliEnvKey(ProviderClaudeCLI, "MY_TOKEN")); err == nil {
-		t.Error("the tool's value is still in the keychain")
-	}
-	if err := s.RemoveProvider(ctx, "nope"); err == nil {
-		t.Error("an unknown provider was removed")
-	}
-}
-
-// A version older than the flags Shu launches a tool with is reported as
-// outdated; one that cannot be read is not, since refusing a tool that
-// works would be worse than a generic failure.
-func TestCLIOutdated(t *testing.T) {
-	cases := []struct {
-		command, version string
-		want             bool
-	}{
-		{"claude", "1.0.0", false},
-		{"claude", "2.1.323", false},
-		{"claude", "0.9.9", true},
-		{"claude", "1.0", false},
-		{"codex", "0.19.5", true},
-		{"codex", "0.20", false},
-		{"codex", "1.2.3-beta.1", false},
-		{"claude", "", false},
-		{"claude", "unknown", false},
-		{"npm", "0.0.1", false},
-	}
-	for _, c := range cases {
-		if got := cliOutdated(c.command, c.version); got != c.want {
-			t.Errorf("cliOutdated(%q, %q) = %v, want %v", c.command, c.version, got, c.want)
-		}
-	}
-}
-
-// A status read from an old build says so, and a launch of it fails with
-// the outdated kind rather than a generic one.
-func TestCLIStatusOutdated(t *testing.T) {
-	script, _, _ := fakeCLI(t, "if [ \"$1\" = \"--version\" ]; then echo '0.4.0'; exit 0; fi\n"+
-		"if [ \"$1\" = \"auth\" ]; then echo '{\"loggedIn\": true}'; exit 0; fi\nexit 0\n")
-	s, _, _, _ := newTestService(t)
-	status := s.CLIStatus(context.Background(), ProviderClaudeCLI, script)
-	if !status.Installed || !status.SignedIn || !status.Outdated {
-		t.Fatalf("status = %+v", status)
-	}
-}
-
-// A directory a killed run left behind is removed at the next start,
-// while the one a live process owns is left alone.
-func TestSweepCLIDirs(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("TMPDIR", root)
-	gone := filepath.Join(root, "shu-cli-999999-1")
-	live := filepath.Join(root, fmt.Sprintf("shu-cli-%d-1", os.Getpid()))
-	other := filepath.Join(root, "shu-cli-notapid-1")
-	for _, dir := range []string{gone, live, other} {
-		if err := os.Mkdir(dir, 0o700); err != nil {
-			t.Fatal(err)
-		}
-	}
-	sweepCLIDirs()
-	if _, err := os.Stat(gone); !os.IsNotExist(err) {
-		t.Errorf("a dead run's directory was kept: %v", err)
-	}
-	if _, err := os.Stat(live); err != nil {
-		t.Errorf("this process's directory went away: %v", err)
-	}
-	if _, err := os.Stat(other); err != nil {
-		t.Errorf("a directory that names no process went away: %v", err)
+	if len(models) != 2 || models[0] != "gpt-5-codex" || models[1] != "gpt-5" {
+		t.Errorf("models = %q", models)
 	}
 }

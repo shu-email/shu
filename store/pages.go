@@ -141,20 +141,18 @@ func (s *Store) conversationPage(ctx context.Context, q mail.ListQuery, criteria
 	if len(threads) == 0 {
 		return page, nil
 	}
-	scope, scopeArgs := p.inScope("m", p.folders, false)
-	sums, err := s.query(ctx, `SELECT m.thread_id, COUNT(*), MAX(m.seen = 0), MAX(m.flagged), MAX(m.has_attachments)
-		FROM messages m
-		WHERE m.thread_id IN (SELECT value FROM json_each(?)) AND `+scope+` AND m.deleted = 0
-		GROUP BY m.thread_id`, append([]any{jsonText(threads)}, scopeArgs...)...)
+	counts, err := s.conversationCounts(ctx, p, threads)
 	if err != nil {
 		return page, err
 	}
-	for _, r := range sums.Values {
-		c := &page.Conversations[index[mail.ThreadID(number(r[0]))]]
-		c.Count, c.Unread, c.Flagged, c.HasAttachments = int(number(r[1])), truth(r[2]), truth(r[3]), truth(r[4])
+	for i := range page.Conversations {
+		c := &page.Conversations[i]
+		n := counts[int64(c.Thread)]
+		c.Count, c.Unread, c.Flagged, c.HasAttachments = n.count, n.unread, n.flagged, n.attached
 	}
 	// The labels of the scope's messages, each once, in the account's
 	// order.
+	scope, scopeArgs := p.inScope("m", p.folders, false)
 	labels, err := s.query(ctx, `SELECT DISTINCT thread_id, label_id, position FROM (
 			SELECT m.thread_id, l.id AS label_id, l.position FROM messages m
 				JOIN message_labels ml ON ml.message_id = m.id JOIN labels l ON l.id = ml.label_id
@@ -208,6 +206,54 @@ func (s *Store) conversationPage(ctx context.Context, q mail.ListQuery, criteria
 		}
 	}
 	return page, nil
+}
+
+// conversationScopeCounts is what a row of a list of conversations says
+// of the messages in the list's scope.
+type conversationScopeCounts struct {
+	count    int
+	unread   bool
+	flagged  bool
+	attached bool
+}
+
+// conversationCounts reads the counts and flags of a page's conversations
+// from the aggregates the store keeps: a conversation's own for a scope of
+// every folder of its account, one row per folder for a scope narrowed to
+// folders. A scope narrowed to a flag or a label counts the messages
+// themselves, as no aggregate keeps a conversation's flagged or labelled
+// messages alone.
+func (s *Store) conversationCounts(ctx context.Context, p *listPlan, threads []int64) (map[int64]conversationScopeCounts, error) {
+	counts := map[int64]conversationScopeCounts{}
+	read := func(query string, args ...any) error {
+		rows, err := s.query(ctx, query, args...)
+		if err != nil {
+			return err
+		}
+		for _, r := range rows.Values {
+			counts[number(r[0])] = conversationScopeCounts{
+				count: int(number(r[1])), unread: truth(r[2]), flagged: truth(r[3]), attached: truth(r[4]),
+			}
+		}
+		return nil
+	}
+	switch {
+	case p.whole:
+		return counts, read(`SELECT id, message_count, unread_count > 0, starred_count > 0, attachment_count > 0
+			FROM threads WHERE id IN (SELECT value FROM json_each(?))`, jsonText(threads))
+	case !p.starred && p.label == 0:
+		return counts, read(`SELECT thread_id, SUM(message_count), MAX(unread_count > 0),
+				MAX(starred_count > 0), MAX(attachment_count > 0)
+			FROM thread_folders
+			WHERE thread_id IN (SELECT value FROM json_each(?))
+				AND folder_id IN (SELECT value FROM json_each(?))
+			GROUP BY thread_id`, jsonText(threads), jsonText(p.folders))
+	}
+	scope, scopeArgs := p.inScope("m", p.folders, false)
+	return counts, read(`SELECT m.thread_id, COUNT(*), MAX(m.seen = 0), MAX(m.flagged), MAX(m.has_attachments)
+		FROM messages m
+		WHERE m.thread_id IN (SELECT value FROM json_each(?)) AND `+scope+` AND m.deleted = 0
+		GROUP BY m.thread_id`, append([]any{jsonText(threads)}, scopeArgs...)...)
 }
 
 // conversationSQL is the query of the rows of a page of conversations,

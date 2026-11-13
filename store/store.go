@@ -430,17 +430,20 @@ var migrations = [][]string{
 			msg_key TEXT NOT NULL)`,
 		`CREATE INDEX expected_arrivals_key ON expected_arrivals (folder_id, msg_key)`,
 	},
-	// v13: folder subscriptions, as IMAP keeps them (Folder.Subscribed).
+	// v14: folder subscriptions, as IMAP keeps them (Folder.Subscribed).
 	// A folder is subscribed until the user hides it; servers without
 	// LIST-EXTENDED never say, so they keep every folder subscribed.
 	{
 		`ALTER TABLE folders ADD COLUMN subscribed INTEGER NOT NULL DEFAULT 1`,
 	},
-	// v14: the invitation a message carries, as JSON (mail.CalendarInvite),
+	// v15: the invitation a message carries, as JSON (mail.CalendarInvite),
 	// so the reading pane shows it from the cache too.
 	{
 		`ALTER TABLE messages ADD COLUMN calendar TEXT`,
 	},
+	// v16: the aggregates of a conversation, so that a list reads one row
+	// per conversation instead of its messages (see thread_aggregates.go).
+	threadAggregateMigration(),
 }
 
 // backfills compute, from the rows of the version before, statements a

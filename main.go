@@ -71,7 +71,13 @@ type app struct {
 	list        ui.ListState
 	sel         ui.Selection[string]
 	searchField ui.Handle
-	focusList   bool
+	// searchOpen shows the search field where the reading pane is too
+	// narrow for it beside the actions and offers it as a button
+	// (readingBar), and searchFocus gives it the keys as it is next built;
+	// readingWidth is the reading pane's last width.
+	searchOpen, searchFocus bool
+	readingWidth            float32
+	focusList               bool
 	// scope is the scope chosen for the list's searches, when scopeSet;
 	// scopeSeg is the scope control's choice as it draws it. filters is
 	// the filter control beside the search field.
@@ -116,6 +122,11 @@ type app struct {
 	signInName  string
 	needSignIn  map[string]bool
 	signOutOpen bool
+
+	// counts is the last value each count badge showed (countBadge), and
+	// rows what the list's rows did as they last showed (rowMotion).
+	counts map[string]countSeen
+	rows   rowMotion
 
 	htmlOn   bool
 	webview  *mygo.WebView
@@ -253,6 +264,7 @@ func newApp(svc mailService) *app {
 		bodies:        map[string]mail.FetchResult{},
 		older:         map[string]*olderMail{},
 		summaries:     map[string]*aiJob{},
+		counts:        map[string]countSeen{},
 		draftSyncs:    map[string]*draftSync{},
 		watches:       true,
 		watched:       map[string]mail.Account{},
@@ -1238,8 +1250,11 @@ func (a *app) view(c *ui.Context) {
 func (a *app) mailView(c *ui.Context) {
 	t := c.Theme()
 	bar := c.TitleBar()
-	top := max(bar.Bottom, 52)
-	c.OnShortcut(ui.Cmd, ui.KeyK, func() { a.searchField.Focus(c) })
+	// There is no bar across the window: each column's top is its own,
+	// as tall as the window controls need, and the window drags by it.
+	head := max(bar.Bottom, headHeight)
+	c.OnShortcut(ui.Cmd, ui.KeyK, a.openSearch)
+	c.OnShortcut(ui.Cmd, ui.KeyComma, func() { a.openSettings(settingsTabGeneral) })
 	c.OnShortcut(ui.Cmd, ui.KeyN, func() { a.openCompose(nil) })
 	c.OnShortcut(ui.Cmd, ui.KeyR, func() { a.refresh() })
 	if s := a.signIn; s != nil && s.account != "" && a.onScreen(s.account) {
@@ -1253,7 +1268,10 @@ func (a *app) mailView(c *ui.Context) {
 	if vibrant {
 		c.Root().Background(ui.Transparent)
 	}
-	ui.Row(c).Fill().AlignItems(ui.Stretch).Children(func() {
+	// Keyed, so that the mail view is new as it first shows, after the
+	// onboarding or the loading, and its sidebar shows at once there
+	// rather than opening as it does when the user shows it.
+	ui.Row(c.Key("mail-view")).Fill().AlignItems(ui.Stretch).Children(func() {
 		// The sidebar runs the window's full height, under the window
 		// controls, as a native sidebar does. The panes are keyed, so that
 		// they keep their identity, and their transitions, as it comes and
@@ -1266,7 +1284,7 @@ func (a *app) mailView(c *ui.Context) {
 			}
 			side.Children(func() {
 				ui.Column(c).Width(222).Shrink(0).Children(func() {
-					ui.Box(c).Height(top).Shrink(0).DragWindow()
+					a.sidebarHead(c, head)
 					a.sidebar(c, t, vibrant)
 				})
 				ui.Box(c).Width(1).Shrink(0).Background(t.Border)
@@ -1275,14 +1293,13 @@ func (a *app) mailView(c *ui.Context) {
 		}
 		ui.Column(c.Key("content")).Grow(1).MinWidth(0).Background(t.Background).
 			Transition(paneMotion).Children(func() {
-			a.titleBar(c, t, bar, top)
 			panes := ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
 				ui.Row(c.Key("list-pane")).Shrink(0).AlignItems(ui.Stretch).Children(func() {
-					a.messageList(c, t)
+					a.messageList(c, t, bar, head)
 					ui.Box(c).Width(1).Shrink(0).Background(t.Border)
 				})
 				ui.Row(c.Key("reading-pane")).Grow(1).MinWidth(0).AlignItems(ui.Stretch).Children(func() {
-					a.readingPane(c, t)
+					a.readingPane(c, t, head)
 				})
 			})
 			a.paneShortcuts(panes)
@@ -1311,50 +1328,43 @@ func (a *app) paneShortcuts(panes ui.Element) {
 	panes.OnShortcut(0, ui.KeyL, a.openLabelPicker)
 }
 
-// titleBar draws the search field, sync and compose over the panes. The
-// window controls on the left sit over the sidebar; with it hidden, the
-// bar makes room for them, in step with the sidebar folding.
-func (a *app) titleBar(c *ui.Context, t *ui.Theme, bar ui.TitleBar, height float32) {
-	left := float32(0)
-	if !a.sidebarOpen {
-		left = max(bar.Left, 0)
-	}
-	row := ui.Row(c.Key("title-bar"))
-	left = row.AnimateTo("inset", left, paneSpring)
-	row.Height(height).Shrink(0).AlignItems(ui.Center).Gap(10).
-		Padding(0, max(bar.Right, 0)+14, 0, left+14).
-		BorderWidth(0, 0, 1, 0).BorderColor(t.Border).
+// sidebarHead is the top of the sidebar, under the window controls:
+// sync, contacts, settings and the button that hides the sidebar. They are
+// flat, as a sidebar's are: glass there would show the window's material
+// through it, which it cannot see.
+func (a *app) sidebarHead(c *ui.Context, head float32) {
+	ui.Row(c).Height(head).Shrink(0).AlignItems(ui.Center).Padding(0, 8, 0, 8).
 		DragWindow().Children(func() {
-		label := locales.HideSidebar()
-		if !a.sidebarOpen {
-			label = locales.ShowSidebar()
-		}
-		a.iconButton(c, panelLeftIcon, label, label).
-			OnClick(func() { a.sidebarOpen = !a.sidebarOpen })
 		ui.Spacer(c)
-		ui.SearchField(c, &a.query).Width(300).
-			Placeholder(a.searchPlaceholder()).
-			Label(locales.SearchMailLabel()).Bind(&a.searchField).
-			OnClick(func() { a.focusList = false }).
-			OnChange(func() { a.search() })
-		a.filterButton(c, t)
-		if a.loading {
-			ui.Spinner(c).Size(14, 14)
-		}
-		a.iconButton(c, refreshIcon, locales.Sync(), locales.SyncMail()).
-			OnClick(func() { a.refresh() })
-		a.iconButton(c, bookUserIcon, locales.Contacts(), locales.Contacts()).
-			OnClick(a.openContacts)
-		a.iconButton(c, listFilterIcon, locales.Rules(), locales.RulesTip()).
-			OnClick(func() { a.openRules(rulesTabList) })
-		a.iconButton(c, settingsIcon, locales.Settings(), locales.Settings()).
-			OnClick(func() { a.openSettings(settingsTabGeneral) })
-		ui.PrimaryButton(c, "").Children(func() {
-			ui.Icon(c, composeIcon).FontSize(14)
-			ui.Text(c, locales.Compose())
-		}).Label(locales.Compose()).Tooltip(locales.NewMessage()).
-			OnClick(func() { a.openCompose(nil) })
+		ui.Themed(c, barTheme(c.Theme())).Background(ui.Transparent).Shrink(0).Children(func() {
+			ui.Toolbar(c, func() {
+				a.iconButton(c, refreshIcon, locales.Sync(), locales.SyncMail()).
+					OnClick(func() { a.refresh() })
+				a.iconButton(c, bookUserIcon, locales.Contacts(), locales.Contacts()).OnClick(a.openContacts)
+				a.iconButton(c, listFilterIcon, locales.Rules(), locales.RulesTip()).
+					OnClick(func() { a.openRules(rulesTabList) })
+				a.iconButton(c, settingsIcon, locales.Settings(), locales.Settings()).
+					OnClick(func() { a.openSettings(settingsTabGeneral) })
+				a.sidebarToggleButton(c)
+			}).Gap(1).Padding(0).Label(locales.MailboxActions())
+		})
 	})
+}
+
+// sidebarToggle shows the sidebar, from the top of the list while it is
+// hidden.
+func (a *app) sidebarToggle(c *ui.Context) {
+	a.barCapsule(c, func() ui.Element { return a.sidebarToggleButton(c) })
+}
+
+// sidebarToggleButton hides the sidebar or shows it.
+func (a *app) sidebarToggleButton(c *ui.Context) ui.Element {
+	label := locales.HideSidebar()
+	if !a.sidebarOpen {
+		label = locales.ShowSidebar()
+	}
+	return a.iconButton(c, panelLeftIcon, label, label).
+		OnClick(func() { a.sidebarOpen = !a.sidebarOpen })
 }
 
 // sidebar draws the account switcher and the folders.
@@ -1416,8 +1426,10 @@ func (a *app) sidebar(c *ui.Context, t *ui.Theme, vibrant bool) {
 				item := ui.SidebarItem(c, allInboxes, mailsIcon, locales.AllInboxes())
 				if n := a.unifiedUnread(); n > 0 {
 					item.Children(func() {
-						ui.Badge(c, fmt.Sprint(n)).Background(t.Accent).TextColor(t.AccentText)
+						a.sidebarCount(c, "side/"+allInboxes, n)
 					})
+				} else {
+					a.noteCount("side/"+allInboxes, n)
 				}
 			}
 			ui.SidebarSection(c, locales.Mailboxes(), &a.mailboxesOpen, func() {
@@ -1426,8 +1438,10 @@ func (a *app) sidebar(c *ui.Context, t *ui.Theme, vibrant bool) {
 					if e.ID != "starred" && e.ID != draftsFolder {
 						if n := a.folderUnread(e.ID); n > 0 {
 							item.Children(func() {
-								ui.Badge(c, fmt.Sprint(n)).Background(t.Accent).TextColor(t.AccentText)
+								a.sidebarCount(c, "side/"+e.ID, n)
 							})
+						} else {
+							a.noteCount("side/"+e.ID, n)
 						}
 					}
 				}
@@ -1480,7 +1494,7 @@ func (a *app) sidebarTotals() (unread, total int) {
 
 // iconButton is an icon-only button named for assistive technology.
 func (a *app) iconButton(c *ui.Context, svg *ui.SVG, label, tip string) ui.Element {
-	return ui.Button(c, "").Label(label).Tooltip(tip).Padding(6, 8).
+	return ui.Button(c, "").Label(label).Tooltip(tip).Padding(barPad, barPad).Radius(barButton).
 		Children(func() { ui.Icon(c, svg).FontSize(16) })
 }
 
@@ -1488,17 +1502,17 @@ func (a *app) iconButton(c *ui.Context, svg *ui.SVG, label, tip string) ui.Eleme
 // is the icon buttons', which lets the whole toolbar fit the reading pane
 // at the window's minimum width.
 func (a *app) toolButton(c *ui.Context, svg *ui.SVG, label string, on bool, fn func()) ui.Element {
-	b := ui.Button(c, "").Label(label).Tooltip(label).Disabled(!on).Padding(6, 8)
+	return a.toolButtonTip(c, svg, label, label, on, fn)
+}
+
+// toolButtonTip is a toolbar button whose tooltip says more than its
+// label.
+func (a *app) toolButtonTip(c *ui.Context, svg *ui.SVG, label, tip string, on bool, fn func()) ui.Element {
+	b := ui.Button(c, "").Label(label).Tooltip(tip).Disabled(!on).Padding(barPad, barPad).Radius(barButton)
 	if on && fn != nil {
 		b = b.OnClick(fn)
 	}
 	return b.Children(func() { ui.Icon(c, svg).FontSize(16) })
-}
-
-// toolDivider separates groups of toolbar buttons. Its margins are narrow
-// enough for the reading toolbar to fit at the window's minimum width.
-func (a *app) toolDivider(c *ui.Context) {
-	ui.Box(c).Width(1).Height(18).Shrink(0).Margin(0, 2).Background(c.Theme().Border)
 }
 
 // keychain adapts mygo.Secrets to the engine's SecretStore.

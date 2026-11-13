@@ -308,6 +308,46 @@ func (msgs Messages) MessageActions() string {
 	return Catalog.Format(msgs.locale, "messageActions", nil)
 }
 
+// MailboxActions says "Mailbox actions"
+// in the language the app shows.
+func MailboxActions() string { return In(i18n.Locale()).MailboxActions() }
+
+// MailboxActions says "Mailbox actions"
+// in the language of msgs.
+func (msgs Messages) MailboxActions() string {
+	return Catalog.Format(msgs.locale, "mailboxActions", nil)
+}
+
+// ReplyActions says "Reply and forward"
+// in the language the app shows.
+func ReplyActions() string { return In(i18n.Locale()).ReplyActions() }
+
+// ReplyActions says "Reply and forward"
+// in the language of msgs.
+func (msgs Messages) ReplyActions() string {
+	return Catalog.Format(msgs.locale, "replyActions", nil)
+}
+
+// MoveActions says "Archive, delete and junk"
+// in the language the app shows.
+func MoveActions() string { return In(i18n.Locale()).MoveActions() }
+
+// MoveActions says "Archive, delete and junk"
+// in the language of msgs.
+func (msgs Messages) MoveActions() string {
+	return Catalog.Format(msgs.locale, "moveActions", nil)
+}
+
+// MarkActions says "Star and read"
+// in the language the app shows.
+func MarkActions() string { return In(i18n.Locale()).MarkActions() }
+
+// MarkActions says "Star and read"
+// in the language of msgs.
+func (msgs Messages) MarkActions() string {
+	return Catalog.Format(msgs.locale, "markActions", nil)
+}
+
 // Delete says "Delete"
 // in the language the app shows.
 func Delete() string { return In(i18n.Locale()).Delete() }

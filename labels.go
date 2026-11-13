@@ -469,8 +469,8 @@ func (a *app) labelActions(m *ui.Menu, l mail.Label) {
 // header, where the keyboard reaches it.
 func (a *app) labelHeaderMenu(c *ui.Context, l mail.Label) {
 	label := locales.LabelActions(l.Name)
-	ui.Button(c, "").Label(label).Tooltip(label).Padding(4, 6).
-		Children(func() { ui.Icon(c, moreIcon).FontSize(15) }).
+	ui.Button(c, "").Label(label).Tooltip(label).Padding(barPad, barPad).Radius(barButton).
+		Children(func() { ui.Icon(c, moreIcon).FontSize(16) }).
 		PopoverMenuButton(func(m *ui.Menu) { a.labelActions(m, l) })
 }
 
@@ -589,7 +589,7 @@ func (a *app) openLabelPicker() {
 func (a *app) labelButton(c *ui.Context, lt labelTargets) ui.Element {
 	on := a.labelsOffered(lt)
 	b := ui.Button(c, "").Label(locales.ChangeLabels()).Tooltip(locales.ChangeLabelsTip()).Disabled(!on).
-		Padding(6, 8).HasPopup(ui.PopupDialog).Expanded(a.labels.picker)
+		Padding(barPad, barPad).Radius(barButton).HasPopup(ui.PopupDialog).Expanded(a.labels.picker)
 	if on {
 		b = b.OnClick(func() { a.labels.picker = !a.labels.picker })
 	}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/i18n"
+	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
 
 	"shu/locales"
@@ -15,49 +16,73 @@ import (
 )
 
 // readingPane draws the toolbar, the header, attachments and the body.
-func (a *app) readingPane(c *ui.Context, t *ui.Theme) {
+func (a *app) readingPane(c *ui.Context, t *ui.Theme, head float32) {
 	a.services = c.Services()
 	ui.Column(c).Grow(1).MinWidth(0).Background(t.Background).Children(func() {
-		a.readingToolbar(c, t)
-		if a.threaded() {
-			a.conversationPane(c, t)
-			return
-		}
-		m, msg := a.current()
-		if m == nil {
-			ui.Column(c).Fill().Center().Gap(8).Children(func() {
-				ui.Icon(c, mailOpenIcon).FontSize(36).TextColor(t.TextMuted)
-				ui.Text(c, locales.NoMessageSelected()).FontSize(15).TextColor(t.TextMuted)
-				ui.Text(c, locales.ShortcutsHint()).FontSize(11).TextColor(t.TextMuted.Alpha(0.7)).TextAlign(ui.Center)
-			})
-			return
-		}
-		subject := m.Subject
-		if a.draftsList() {
-			a.draftBanner(c, t, *m)
-			if strings.TrimSpace(subject) == "" {
-				subject = locales.NoSubject()
+		// The toolbar floats on glass over what is read, which scrolls
+		// under it and fades out at its edge.
+		pane := ui.Box(c).Grow(1).MinHeight(0)
+		// The pane's width as the last frame laid it out decides whether
+		// the search field fits beside the actions.
+		a.readingWidth = pane.LayoutBounds().W
+		pane.Children(func() {
+			if a.threaded() {
+				a.conversationPane(c, t)
+			} else {
+				a.messagePane(c, t)
 			}
+			ui.Box(c).Absolute().Top(0).Left(0).Right(0).Height(readingInset + 10).
+				PassThrough().Material(glass.ScrollEdge{Hard: true})
+			// The top of the pane, between the bar's groups, drags the
+			// window, as the top of the list does.
+			ui.Box(c).Absolute().Top(0).Left(0).Right(0).Height(head).DragWindow()
+			a.readingToolbar(c, t)
+		})
+	})
+}
+
+// messagePane is the reading pane of one message.
+func (a *app) messagePane(c *ui.Context, t *ui.Theme) {
+	m, msg := a.current()
+	if m == nil {
+		ui.Column(c).Fill().Center().Gap(8).Children(func() {
+			ui.Icon(c, mailOpenIcon).FontSize(36).TextColor(t.TextMuted)
+			ui.Text(c, locales.NoMessageSelected()).FontSize(15).TextColor(t.TextMuted)
+			ui.Text(c, locales.ShortcutsHint()).FontSize(11).TextColor(t.TextMuted.Alpha(0.7)).TextAlign(ui.Center)
+		})
+		return
+	}
+	subject := m.Subject
+	inset := readingInset
+	if a.draftsList() {
+		// The draft's banner sits under the toolbar, and what is read
+		// scrolls under the banner.
+		ui.Column(c).Shrink(0).Padding(readingInset, 0, 0, 0).Children(func() {
+			a.draftBanner(c, t, *m)
+		})
+		inset = 0
+		if strings.TrimSpace(subject) == "" {
+			subject = locales.NoSubject()
 		}
-		ui.Scroll(c.Key(summaryKey(*m))).Grow(1).Transition(readingMotion).Children(func() {
-			ui.Column(c).Padding(24, 30, 24, 30).Gap(16).MinWidth(0).Children(func() {
-				ui.Column(c).Gap(4).MinWidth(0).Children(func() {
-					ui.Text(c, subject).FontSize(21).Bold().Balance()
-					if place := a.placeLine(*m); place != "" {
-						ui.Text(c, place).FontSize(12).TextColor(t.TextMuted).SingleLine()
-					}
-					a.messageLabels(c, t, *m)
-				})
-				a.senderHeader(c, t, *m)
-				if msg != nil && len(msg.Attachments) > 0 {
-					a.attachments(c, t, *m, msg.Attachments)
+	}
+	ui.Scroll(c.Key(summaryKey(*m))).Grow(1).ScrollbarInsets(inset, 0, 0).Transition(readingMotion).Children(func() {
+		ui.Column(c).Padding(24+inset, 30, 24, 30).Gap(16).MinWidth(0).Children(func() {
+			ui.Column(c).Gap(4).MinWidth(0).Children(func() {
+				ui.Text(c, subject).FontSize(21).Bold().Balance()
+				if place := a.placeLine(*m); place != "" {
+					ui.Text(c, place).FontSize(12).TextColor(t.TextMuted).SingleLine()
 				}
-				if job := a.summaries[summaryKey(*m)]; job != nil {
-					a.summaryCard(c, t, summaryKey(*m), job)
-				}
-				ui.Divider(c)
-				a.body(c, t, m, msg)
+				a.messageLabels(c, t, *m)
 			})
+			a.senderHeader(c, t, *m)
+			if msg != nil && len(msg.Attachments) > 0 {
+				a.attachments(c, t, *m, msg.Attachments)
+			}
+			if job := a.summaries[summaryKey(*m)]; job != nil {
+				a.summaryCard(c, t, summaryKey(*m), job)
+			}
+			ui.Divider(c)
+			a.body(c, t, m, msg)
 		})
 	})
 }
@@ -107,55 +132,60 @@ func (a *app) readingToolbar(c *ui.Context, t *ui.Theme) {
 	has = has && drafts == 0
 	lt := a.labelTargets()
 	var labels ui.Element
-	ui.Toolbar(c, func() {
-		a.toolButton(c, archiveIcon, locales.ArchiveMessage(), has && archive, func() {
-			a.moveSelected(mail.SpecialArchive)
+	a.readingBar(c, locales.MessageActions(), func() {
+		a.glassGroup(c, locales.ReplyActions(), func() {
+			for _, all := range a.replyOrder() {
+				icon, label := replyLook(all)
+				a.toolButton(c, icon, label, has, func() { a.reply(all) })
+			}
+			a.toolButton(c, forwardIcon, locales.Forward(), has, func() { a.forward() })
 		})
-		if onlyDrafts {
-			// Deleting a draft is discarding it, which asks first.
-			a.toolButton(c, trashIcon, locales.DiscardDraft(), true, a.discardSelected)
-		} else {
-			a.toolButton(c, trashIcon, locales.DeleteMessage(), has && trash, func() {
-				a.moveSelected(mail.SpecialTrash)
+		a.glassGroup(c, locales.MoveActions(), func() {
+			a.toolButton(c, archiveIcon, locales.ArchiveMessage(), has && archive, func() {
+				a.moveSelected(mail.SpecialArchive)
 			})
-		}
-		a.toolButton(c, spamIcon, locales.JunkMessage(), has && junk, func() {
-			a.moveSelected(mail.SpecialJunk)
+			if onlyDrafts {
+				// Deleting a draft is discarding it, which asks first.
+				a.toolButton(c, trashIcon, locales.DiscardDraft(), true, a.discardSelected)
+			} else {
+				a.toolButton(c, trashIcon, locales.DeleteMessage(), has && trash, func() {
+					a.moveSelected(mail.SpecialTrash)
+				})
+			}
+			a.toolButton(c, spamIcon, locales.JunkMessage(), has && junk, func() {
+				a.moveSelected(mail.SpecialJunk)
+			})
 		})
-		starLabel, star := locales.StarMessage(), starIcon
-		starColor := t.Text
-		if allFlagged {
-			starLabel, star = locales.UnstarMessage(), starFilledIcon
-			starColor = t.Warning
-		}
-		starButton := ui.Button(c, "").Label(starLabel).Tooltip(starLabel).Disabled(!has).
-			Padding(6, 8)
-		if has {
-			starButton = starButton.OnClick(func() { a.toggleStar() })
-		}
-		starButton.Children(func() {
-			ui.Icon(c, star).FontSize(16).TextColor(starColor).ContentTransition(swapIcon)
+		a.glassGroup(c, locales.MarkActions(), func() {
+			starLabel, star := locales.StarMessage(), starIcon
+			starColor := t.Text
+			if allFlagged {
+				starLabel, star = locales.UnstarMessage(), starFilledIcon
+				starColor = t.Warning
+			}
+			starButton := ui.Button(c, "").Label(starLabel).Tooltip(starLabel).Disabled(!has).
+				Padding(barPad, barPad).Radius(barButton)
+			if has {
+				starButton = starButton.OnClick(func() { a.toggleStar() })
+			}
+			starButton.Children(func() {
+				ui.Icon(c, star).FontSize(16).TextColor(starColor).ContentTransition(swapIcon)
+			})
+			readLabel, readIcon := locales.MarkRead(), mailOpenIcon
+			if allSeen {
+				readLabel, readIcon = locales.MarkUnread(), mailIcon
+			}
+			a.toolButton(c, readIcon, readLabel, has, func() { a.toggleRead() })
+			labels = a.labelButton(c, lt)
 		})
-		readLabel, readIcon := locales.MarkRead(), mailOpenIcon
-		if allSeen {
-			readLabel, readIcon = locales.MarkUnread(), mailIcon
-		}
-		a.toolButton(c, readIcon, readLabel, has, func() { a.toggleRead() })
-		labels = a.labelButton(c, lt)
-		a.toolDivider(c)
-		for _, all := range a.replyOrder() {
-			icon, label := replyLook(all)
-			a.toolButton(c, icon, label, has, func() { a.reply(all) })
-		}
-		a.toolButton(c, forwardIcon, locales.Forward(), has, func() { a.forward() })
 		if a.ai != nil {
 			// A summary is of the one message open, once its body is here.
 			_, msg := a.current()
-			a.toolDivider(c)
-			a.toolButton(c, sparklesIcon, locales.Summarize(), msg != nil && len(targets) == 1 && has, a.summarize)
+			a.barCapsule(c, func() ui.Element {
+				return a.toolButton(c, sparklesIcon, locales.Summarize(), msg != nil && len(targets) == 1 && has, a.summarize)
+			})
 		}
-	}).Height(48).Padding(6, 8).Label(locales.MessageActions()).
-		BorderWidth(0, 0, 1, 0).BorderColor(t.Border)
+	})
 	a.labelPicker(c, t, labels, lt)
 }
 

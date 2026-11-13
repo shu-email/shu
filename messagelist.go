@@ -12,13 +12,9 @@ import (
 
 // messageList draws the header, the search field, the banners and the
 // virtual message list.
-func (a *app) messageList(c *ui.Context, t *ui.Theme) {
+func (a *app) messageList(c *ui.Context, t *ui.Theme, bar ui.TitleBar, head float32) {
 	ui.Column(c).Width(384).Shrink(0).MinWidth(0).Background(t.Background).Children(func() {
-		ui.Column(c).Height(64).Shrink(0).Padding(8, 14, 10, 14).Gap(1).
-			Justify(ui.Center).
-			BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
-			a.listHeader(c, t)
-		})
+		a.listHead(c, t, bar, head)
 		searching := strings.TrimSpace(a.query) != ""
 		if searching {
 			a.searchBar(c, t)
@@ -81,6 +77,11 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 		if end != endNone {
 			rows++
 		}
+		keys := make([]string, n)
+		for i := range keys {
+			keys[i] = a.rowKey(i)
+		}
+		a.rows.update(a.listQuery(), keys, c.Now())
 		a.list.Key = func(i int) any {
 			if i >= n {
 				return endKey
@@ -120,6 +121,11 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme) {
 		// once they are built.
 		ui.List(c.Key("messages"), &a.list, rows).Grow(1).Transition(listMotion).
 			OnChange(func() {
+				// Choosing mail closes a search field opened and left
+				// empty in a narrow pane.
+				if strings.TrimSpace(a.query) == "" {
+					a.searchOpen = false
+				}
 				if a.sel.Len() == 0 {
 					a.selected = -1
 				}
@@ -166,8 +172,8 @@ func (a *app) listHeader(c *ui.Context, t *ui.Theme) {
 	case query != "":
 		title = locales.SearchResults()
 	}
-	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, title).FontSize(17).Bold().SingleLine()
+	ui.Row(c).Gap(6).AlignItems(ui.Center).MinWidth(0).Children(func() {
+		ui.Text(c, title).FontSize(17).Bold().SingleLine().Shrink(1).MinWidth(0)
 		switch {
 		case chosen > 1:
 		case query != "":
@@ -175,7 +181,7 @@ func (a *app) listHeader(c *ui.Context, t *ui.Theme) {
 			if a.pager.more {
 				found += "+"
 			}
-			ui.Badge(c, found).Background(t.Surface).TextColor(t.TextMuted)
+			a.countBadge(c, "found", found, len(a.all)).Background(t.Surface).TextColor(t.TextMuted)
 		default:
 			// A folder's badge is its unread count as the server keeps it,
 			// the number the sidebar shows: the rows read so far are only
@@ -194,28 +200,64 @@ func (a *app) listHeader(c *ui.Context, t *ui.Theme) {
 				if more {
 					label += "+"
 				}
-				ui.Badge(c, label).Background(t.Accent).TextColor(t.AccentText)
+				a.countBadge(c, "unread/"+a.folder, label, n).Background(t.Accent).TextColor(t.AccentText)
+			} else {
+				// A count that shows no badge still went to zero.
+				a.noteCount("unread/"+a.folder, n)
 			}
-		}
-		ui.Spacer(c)
-		if a.loading {
-			ui.Spinner(c).Size(14, 14)
-		}
-		a.viewToggle(c)
-		if l := a.shownLabel(); l != nil && chosen <= 1 {
-			a.labelHeaderMenu(c, *l)
-		}
-		if chosen > 1 {
-			ui.Button(c, locales.ClearSelection()).OnClick(func() { a.clearSelection() })
-		} else if a.ai != nil {
-			// Drafts are the user's own unsent text: there is nothing in
-			// them to triage, and no reason to send them to a model.
-			ui.Button(c, "").Label(locales.TriageInbox()).Tooltip(locales.TriageInbox()).Padding(4, 6).
-				Disabled(len(a.all) == 0 || a.draftsList()).OnClick(a.triageList).
-				Children(func() { ui.Icon(c, sparklesIcon).FontSize(15) })
 		}
 	})
 	ui.Text(c, a.listSummary()).FontSize(11).TextColor(t.TextMuted).SingleLine()
+}
+
+// listHead is the top of the list, under the window controls when the
+// sidebar is hidden: what the list shows, and its own actions on glass,
+// as the mail apps of the system have them. The window drags by it.
+func (a *app) listHead(c *ui.Context, t *ui.Theme, bar ui.TitleBar, head float32) {
+	ui.Themed(c, barTheme(t)).Background(ui.Transparent).Shrink(0).Children(func() {
+		inset := float32(0)
+		if !a.sidebarOpen {
+			inset = max(bar.Left, 0)
+		}
+		row := ui.Row(c.Key("list-head"))
+		inset = row.AnimateTo("inset", inset, paneSpring)
+		chosen := a.sel.Len()
+		row.Height(head).Shrink(0).AlignItems(ui.Center).Gap(8).Padding(0, 12, 0, 14+inset).
+			BorderWidth(0, 0, 1, 0).BorderColor(t.Border).DragWindow().Children(func() {
+			if !a.sidebarOpen {
+				a.sidebarToggle(c)
+			}
+			ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() { a.listHeader(c, t) })
+			if a.loading {
+				ui.Spinner(c).Size(14, 14)
+			}
+			if chosen > 1 {
+				a.glassGroup(c, "", func() {
+					ui.Button(c, locales.ClearSelection()).Padding(barPad, 12).
+						Radius(barButton).OnClick(func() { a.clearSelection() })
+				}).Shrink(0)
+				return
+			}
+			a.glassGroup(c, "", func() {
+				if l := a.shownLabel(); l != nil {
+					a.labelHeaderMenu(c, *l)
+				}
+				a.viewToggle(c)
+				if a.ai != nil {
+					// Drafts are the user's own unsent text: there is
+					// nothing in them to triage, and no reason to send
+					// them to a model.
+					ui.Button(c, "").Label(locales.TriageInbox()).Tooltip(locales.TriageInbox()).Padding(barPad, barPad).Radius(barButton).
+						Disabled(len(a.all) == 0 || a.draftsList()).OnClick(a.triageList).
+						Children(func() { ui.Icon(c, sparklesIcon).FontSize(16) })
+				}
+			}).Shrink(0)
+			a.barCapsule(c, func() ui.Element {
+				return a.iconButton(c, composeIcon, locales.Compose(), locales.NewMessage()).
+					OnClick(func() { a.openCompose(nil) })
+			})
+		})
+	})
 }
 
 // isServerFolder reports whether id names one of the account's folders,
@@ -417,7 +459,9 @@ func (a *app) messageRow(row ui.ListRow) {
 	}
 	account, meta := a.rowPlace(m)
 	who, title := a.rowHeading(m)
-	ui.Box(c).Padding(9, 14).BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
+	box := ui.Box(c).Padding(9, 14).BorderWidth(0, 0, 1, 0).BorderColor(t.Border)
+	a.rows.row(box, a.rowKey(row.Index), chosen, c.Now())
+	box.Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Start).Children(func() {
 			dot := ui.Box(c).Size(7, 7).Radius(3.5).Shrink(0).Margin(6, 0, 0, 0)
 			if unread {

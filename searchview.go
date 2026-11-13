@@ -56,7 +56,7 @@ func (a *app) filterButton(c *ui.Context, t *ui.Theme) {
 	n := filterCount(a.query)
 	now := c.Now()
 	label := locales.SearchFilters()
-	b := ui.Button(c, "").Label(label).Tooltip(label).Padding(6, 8).Expanded(a.filters.open).
+	b := ui.Button(c, "").Label(label).Tooltip(label).Padding(barPad, barPad).Radius(barButton).Expanded(a.filters.open).
 		OnClick(func() { a.toggleFilters(now) })
 	if n > 0 {
 		b.Background(t.Accent.Alpha(0.14))

@@ -18,7 +18,7 @@ func (a *app) viewToggle(c *ui.Context) {
 		return
 	}
 	label := locales.GroupByConversation()
-	ui.Toggle(c, &a.convToggle, "").Label(label).Tooltip(label).Padding(4, 6).
+	ui.Toggle(c, &a.convToggle, "").Label(label).Tooltip(label).Padding(barPad, barPad).Radius(barButton).
 		OnChange(func() { a.setView(a.convToggle) }).
 		Children(func() { ui.Icon(c, conversationsIcon).FontSize(15) })
 }
@@ -27,16 +27,6 @@ func (a *app) viewToggle(c *ui.Context) {
 func countBadge(c *ui.Context, n int, color ui.Color) {
 	ui.Text(c, fmt.Sprint(n)).FontSize(10).Bold().TextColor(color).Shrink(0).
 		Padding(0, 5).Radius(7).Border(1, color.Alpha(0.55)).Label(locales.MessageCount(n))
-}
-
-// toolButtonTip is a toolbar button whose tooltip says more than its
-// label.
-func (a *app) toolButtonTip(c *ui.Context, svg *ui.SVG, label, tip string, on bool, fn func()) ui.Element {
-	b := ui.Button(c, "").Label(label).Tooltip(tip).Disabled(!on).Padding(6, 8)
-	if on && fn != nil {
-		b = b.OnClick(fn)
-	}
-	return b.Children(func() { ui.Icon(c, svg).FontSize(16) })
 }
 
 // threadToolbar is the reading toolbar in conversation view. Its actions
@@ -59,48 +49,53 @@ func (a *app) threadToolbar(c *ui.Context, t *ui.Theme) {
 	newest, _ := a.newestShown()
 	lt := a.labelTargets()
 	var labels ui.Element
-	ui.Toolbar(c, func() {
-		a.toolButton(c, archiveIcon, locales.ArchiveConversations(n), has && archive, func() {
-			a.moveThreads(mail.SpecialArchive)
-		})
-		a.toolButton(c, trashIcon, locales.DeleteConversations(n), has && trash, func() {
-			a.moveThreads(mail.SpecialTrash)
-		})
-		a.toolButton(c, spamIcon, locales.JunkConversations(n), has && junk, func() {
-			a.moveThreads(mail.SpecialJunk)
-		})
-		starLabel, star, starColor := locales.StarConversations(n), starIcon, t.Text
-		if allFlagged {
-			starLabel, star, starColor = locales.UnstarConversations(n), starFilledIcon, t.Warning
-		}
-		starButton := ui.Button(c, "").Label(starLabel).Tooltip(starLabel).Disabled(!has).Padding(6, 8)
-		if has {
-			starButton = starButton.OnClick(a.toggleThreadStar)
-		}
-		starButton.Children(func() { ui.Icon(c, star).FontSize(16).TextColor(starColor).ContentTransition(swapIcon) })
-		readLabel, readIcon := locales.MarkConversationsRead(n), mailOpenIcon
-		if allSeen {
-			readLabel, readIcon = locales.MarkConversationsUnread(n), mailIcon
-		}
-		a.toolButton(c, readIcon, readLabel, has, a.toggleThreadRead)
-		labels = a.labelButton(c, lt)
-		a.toolDivider(c)
-		reply := has && newest != nil
-		for _, all := range a.replyOrder() {
-			icon, label := replyLook(all)
-			tip := locales.ReplyNewest()
-			if all {
-				tip = locales.ReplyAllNewest()
+	a.readingBar(c, locales.ConversationActions(), func() {
+		a.glassGroup(c, locales.ReplyActions(), func() {
+			reply := has && newest != nil
+			for _, all := range a.replyOrder() {
+				icon, label := replyLook(all)
+				tip := locales.ReplyNewest()
+				if all {
+					tip = locales.ReplyAllNewest()
+				}
+				a.toolButtonTip(c, icon, label, tip, reply, func() { a.reply(all) })
 			}
-			a.toolButtonTip(c, icon, label, tip, reply, func() { a.reply(all) })
-		}
-		a.toolButtonTip(c, forwardIcon, locales.Forward(), locales.ForwardNewest(), reply, func() { a.forward() })
+			a.toolButtonTip(c, forwardIcon, locales.Forward(), locales.ForwardNewest(), reply, func() { a.forward() })
+		})
+		a.glassGroup(c, locales.MoveActions(), func() {
+			a.toolButton(c, archiveIcon, locales.ArchiveConversations(n), has && archive, func() {
+				a.moveThreads(mail.SpecialArchive)
+			})
+			a.toolButton(c, trashIcon, locales.DeleteConversations(n), has && trash, func() {
+				a.moveThreads(mail.SpecialTrash)
+			})
+			a.toolButton(c, spamIcon, locales.JunkConversations(n), has && junk, func() {
+				a.moveThreads(mail.SpecialJunk)
+			})
+		})
+		a.glassGroup(c, locales.MarkActions(), func() {
+			starLabel, star, starColor := locales.StarConversations(n), starIcon, t.Text
+			if allFlagged {
+				starLabel, star, starColor = locales.UnstarConversations(n), starFilledIcon, t.Warning
+			}
+			starButton := ui.Button(c, "").Label(starLabel).Tooltip(starLabel).Disabled(!has).Padding(barPad, barPad).Radius(barButton)
+			if has {
+				starButton = starButton.OnClick(a.toggleThreadStar)
+			}
+			starButton.Children(func() { ui.Icon(c, star).FontSize(16).TextColor(starColor).ContentTransition(swapIcon) })
+			readLabel, readIcon := locales.MarkConversationsRead(n), mailOpenIcon
+			if allSeen {
+				readLabel, readIcon = locales.MarkConversationsUnread(n), mailIcon
+			}
+			a.toolButton(c, readIcon, readLabel, has, a.toggleThreadRead)
+			labels = a.labelButton(c, lt)
+		})
 		if a.ai != nil {
-			a.toolDivider(c)
-			a.toolButton(c, sparklesIcon, locales.SummarizeConversation(), n == 1 && newest != nil, a.summarize)
+			a.barCapsule(c, func() ui.Element {
+				return a.toolButton(c, sparklesIcon, locales.SummarizeConversation(), n == 1 && newest != nil, a.summarize)
+			})
 		}
-	}).Height(48).Padding(6, 8).Label(locales.ConversationActions()).
-		BorderWidth(0, 0, 1, 0).BorderColor(t.Border)
+	})
 	a.labelPicker(c, t, labels, lt)
 }
 
@@ -118,13 +113,13 @@ func (a *app) conversationPane(c *ui.Context, t *ui.Theme) {
 		})
 		return
 	case cv == nil || cv.ref() != refOf(*row):
-		ui.Row(c).Padding(24, 24).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Padding(24+readingInset, 24, 24, 24).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Spinner(c).Size(14, 14)
 			ui.Text(c, locales.Loading()).FontSize(13).TextColor(t.TextMuted)
 		})
 		return
 	case cv.err != "":
-		ui.Column(c).Padding(24, 24).Gap(8).Children(func() {
+		ui.Column(c).Padding(24+readingInset, 24, 24, 24).Gap(8).Children(func() {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Icon(c, alertIcon).FontSize(14).TextColor(t.Warning)
 				ui.Text(c, cv.err).FontSize(12).Grow(1).MinWidth(0).MaxLines(3)
@@ -146,8 +141,8 @@ func (a *app) conversationPane(c *ui.Context, t *ui.Theme) {
 		subject = locales.NoSubject()
 	}
 	key := threadKey(cv.account, cv.thread)
-	ui.Scroll(c.Key(key)).Grow(1).Transition(readingMotion).Children(func() {
-		ui.Column(c).Padding(20, 20, 24, 20).Gap(10).MinWidth(0).Children(func() {
+	ui.Scroll(c.Key(key)).Grow(1).ScrollbarInsets(readingInset, 0, 0).Transition(readingMotion).Children(func() {
+		ui.Column(c).Padding(20+readingInset, 20, 24, 20).Gap(10).MinWidth(0).Children(func() {
 			ui.Text(c, subject).FontSize(21).Bold().Balance()
 			ui.Text(c, a.scopeLine(cv)).FontSize(12).TextColor(t.TextMuted)
 			// The conversation's labels, as its row has them.
@@ -325,7 +320,7 @@ func (a *app) threadActions(c *ui.Context, t *ui.Theme, cv *convView, n, total i
 		a.iconButton(c, forwardIcon, locales.ForMessage(locales.Forward(), n, total), locales.ForwardThis()).
 			OnClick(func() { a.forwardShown(key) })
 		ui.Button(c, "").Label(locales.ForMessage(locales.MoreActions(), n, total)).Tooltip(locales.MoreActionsThis()).
-			Padding(6, 8).Children(func() { ui.Icon(c, moreIcon).FontSize(16) }).
+			Padding(8, 8).Radius(999).Children(func() { ui.Icon(c, moreIcon).FontSize(16) }).
 			PopoverMenuButton(func(menu *ui.Menu) { a.messageMenu(menu, key) })
 		ui.Spacer(c)
 		if b, ok := a.bodies[key]; ok && msgHasHTML(b.Message) {

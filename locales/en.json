@@ -4036,5 +4036,15 @@
   "aiProviderModelAdd": "Add model by ID",
   "aiProviderSave": "Save",
   "aiProviderCancel": "Cancel",
-  "aiProviderDisabled": "Off"
+  "aiProviderDisabled": "Off",
+  "securityUnsubscribe": "Mailing list. To unsubscribe: {options}",
+  "@securityUnsubscribe": {
+    "description": "Says a message is from a mailing list and shows how to leave it.",
+    "placeholders": {
+      "options": {
+        "type": "String",
+        "example": "<https://shop.example/unsub?id=1>, <mailto:leave@shop.example>"
+      }
+    }
+  }
 }

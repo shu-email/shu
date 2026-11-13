@@ -11923,3 +11923,19 @@ func AiProviderDisabled() string { return In(i18n.Locale()).AiProviderDisabled()
 func (msgs Messages) AiProviderDisabled() string {
 	return Catalog.Format(msgs.locale, "aiProviderDisabled", nil)
 }
+
+// SecurityUnsubscribe says "Mailing list. To unsubscribe: {options}"
+// in the language the app shows.
+//
+// Says a message is from a mailing list and shows how to leave it.
+func SecurityUnsubscribe(options string) string {
+	return In(i18n.Locale()).SecurityUnsubscribe(options)
+}
+
+// SecurityUnsubscribe says "Mailing list. To unsubscribe: {options}"
+// in the language of msgs.
+//
+// Says a message is from a mailing list and shows how to leave it.
+func (msgs Messages) SecurityUnsubscribe(options string) string {
+	return Catalog.Format(msgs.locale, "securityUnsubscribe", map[string]any{"options": options})
+}

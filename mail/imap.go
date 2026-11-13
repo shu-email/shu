@@ -9,6 +9,7 @@ import (
 	"mime"
 	"net"
 	"net/mail"
+	"slices"
 	"strings"
 	"time"
 
@@ -277,13 +278,22 @@ func attrsOf(d *imap.ListData) []string {
 	return out
 }
 
+// syncHeaders are the headers a sync keeps with every message it reads:
+// the threading headers the envelope lacks, which has no References or
+// Thread-Index and parses In-Reply-To strictly, and what tells the
+// sender's authentication and how the message's list is left (see Trust
+// and Security), so that a cache read of an unopened message has them.
+var syncHeaders = slices.Concat(
+	[]string{"References", "In-Reply-To", "Thread-Index"},
+	securityHeaders, unsubscribeHeaders,
+)
+
 // threadSection is the part of the header a sync reads besides the
-// envelope, which has no References or Thread-Index and parses
-// In-Reply-To strictly. PEEK, as reading must never mark mail read.
+// envelope (see syncHeaders). PEEK, as reading must never mark mail read.
 func threadSection() *imap.FetchItemBodySection {
 	return &imap.FetchItemBodySection{
 		Specifier:    imap.PartSpecifierHeader,
-		HeaderFields: []string{"References", "In-Reply-To", "Thread-Index"},
+		HeaderFields: syncHeaders,
 		Peek:         true,
 	}
 }
@@ -325,6 +335,7 @@ func threadHeaders(m *Message, raw []byte) {
 		m.InReplyTo = ids[0]
 	}
 	m.ThreadIndex = cleanThreadIndex(msg.Header.Get("Thread-Index"))
+	m.SetRawHeaders(headerLines(raw, syncHeaders))
 }
 
 // fetchSummaries reads headers (and a preview) for a number set.
@@ -753,7 +764,7 @@ func (s *Service) fetchMessage(ctx context.Context, a Account, password, folder 
 		return FetchResult{}, fmt.Errorf("mime: %w", err)
 	}
 	msg.UID = uid
-	msg.RawHeaders = s.withRuleHeaders(ctx, a.ID, msg.RawHeaders, raw)
+	msg.SetRawHeaders(s.withRuleHeaders(ctx, a.ID, msg.RawHeaders, raw))
 	seen, flagged, keywords := readFlags(buf.Flags)
 	msg.Seen = msg.Seen || seen
 	msg.Flagged = msg.Flagged || flagged

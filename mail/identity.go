@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/mail"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -213,11 +214,11 @@ const deliveredToHeader = "Delivered-To"
 
 // keptHeaders writes the header lines of a message that RawHeaders keeps,
 // each on one line: the Delivered-To that says which address it reached,
-// and the authentication results that say whether its sender is who it
-// claims (see Trust).
+// the authentication results that say whether its sender is who it
+// claims (see Trust), and how its list is left (see Security).
 func keptHeaders(h gomsgmail.Header) string {
 	var b strings.Builder
-	for _, name := range append([]string{deliveredToHeader}, securityHeaders...) {
+	for _, name := range slices.Concat([]string{deliveredToHeader}, securityHeaders, unsubscribeHeaders) {
 		for _, value := range h.Values(name) {
 			if value = strings.Join(strings.Fields(value), " "); value != "" {
 				if len(value) > maxHeaderLine {

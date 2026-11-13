@@ -526,6 +526,13 @@ var migrations = [][]string{
 			last_error TEXT NOT NULL DEFAULT '')`,
 		`CREATE INDEX pending_operations_account ON pending_operations (account_id, state, id)`,
 	},
+	// v22: what a message's headers say of its sender and its list (see
+	// mail.Security), one JSON column, so that a read has it after a
+	// restart and without the headers. Migration v22 fills it from the
+	// header lines the cache already kept.
+	{
+		`ALTER TABLE messages ADD COLUMN security TEXT`,
+	},
 }
 
 // backfills compute, from the rows of the version before, statements a
@@ -535,6 +542,7 @@ var backfills = map[int]func(context.Context, *Store) ([]sqlite.Statement, error
 	6:  backfillThreads,
 	11: backfillContacts,
 	12: backfillLabelKeys,
+	22: backfillSecurity,
 }
 
 // SchemaVersion is the version Open migrates to.

@@ -84,6 +84,9 @@ func Seed(s *IMAP, now time.Time) error {
 	// HTML whose images are remote, which the reading pane blocks.
 	put("INBOX", alternative(header{
 		from: "Acme Weekly <news@acme.example.com>", to: me, subject: "This week at Acme", date: ago(5 * time.Hour), id: "news-1",
+		auth:                "mx.acme.example; spf=pass; dkim=pass; dmarc=pass header.from=acme.example.com",
+		listUnsubscribe:     "<https://acme.example.com/unsubscribe?id=seed>, <mailto:leave@acme.example.com>",
+		listUnsubscribePost: "List-Unsubscribe=One-Click",
 	}, "This week at Acme: the new dashboard is live.",
 		`<html><body><h1>This week at Acme</h1>`+
 			`<p><img src="https://images.example.com/hero.png" alt="Hero" width="600" height="200"></p>`+
@@ -130,6 +133,7 @@ func Seed(s *IMAP, now time.Time) error {
 
 	put("Junk", plain(header{
 		from: "Prize Desk <winner@prizes.example.net>", to: me, subject: "You have won a prize", date: ago(20 * time.Hour), id: "junk-1",
+		auth: "mx.example.net; spf=fail; dkim=none; dmarc=fail header.from=prizes.example.net",
 	}, "Click here to claim it."))
 	put("Trash", plain(header{
 		from: "Calendar <calendar@example.com>", to: me, subject: "Cancelled: weekly sync", date: ago(6 * 24 * time.Hour), id: "trash-1",
@@ -165,6 +169,13 @@ type header struct {
 	date                  time.Time
 	id, inReplyTo         string
 	refs                  []string
+	// auth is the Authentication-Results line the receiving server added,
+	// and listUnsubscribe and listUnsubscribePost the list's way out, as
+	// a newsletter carries them. The seed has both, to show the reading
+	// pane's security card.
+	auth                string
+	listUnsubscribe     string
+	listUnsubscribePost string
 }
 
 func msgID(id string) string { return "<seed-" + id + "@example.com>" }
@@ -185,6 +196,15 @@ func (h header) write(b *strings.Builder) {
 			refs[i] = msgID(r)
 		}
 		fmt.Fprintf(b, "References: %s\r\n", strings.Join(refs, " "))
+	}
+	if h.auth != "" {
+		fmt.Fprintf(b, "Authentication-Results: %s\r\n", h.auth)
+	}
+	if h.listUnsubscribe != "" {
+		fmt.Fprintf(b, "List-Unsubscribe: %s\r\n", h.listUnsubscribe)
+	}
+	if h.listUnsubscribePost != "" {
+		fmt.Fprintf(b, "List-Unsubscribe-Post: %s\r\n", h.listUnsubscribePost)
 	}
 }
 

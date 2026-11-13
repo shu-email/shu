@@ -83,6 +83,9 @@ type listPlan struct {
 	search   mail.Search
 	after    cursor
 	limit    int
+	// whole is whether the scope is every folder of its accounts, whose
+	// conversations' own aggregates then answer it.
+	whole bool
 }
 
 // plan reads what a list read needs to know of the folders and labels,
@@ -95,7 +98,8 @@ func (s *Store) plan(ctx context.Context, q mail.ListQuery, criteria []criterion
 	if err != nil {
 		return nil, err
 	}
-	p := &listPlan{starred: q.Scope.Starred, label: int64(q.Scope.Label), criteria: criteria, search: q.Search, after: after, limit: q.Limit}
+	p := &listPlan{starred: q.Scope.Starred, label: int64(q.Scope.Label), criteria: criteria, search: q.Search, after: after, limit: q.Limit,
+		whole: q.Scope.Folder == "" && q.Scope.Special == "" && !q.Scope.Starred && q.Scope.Label == 0}
 	if p.limit <= 0 {
 		p.limit = mail.DefaultPageSize
 	}

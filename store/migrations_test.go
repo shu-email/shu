@@ -142,6 +142,19 @@ func checkUpgradedData(t *testing.T, s *Store, v int) {
 	if key := text(r[3]); key != baselineMessageID {
 		t.Errorf("v%d: message key = %q, want %q", v, key, baselineMessageID)
 	}
+	// The conversation's aggregates were computed from the message.
+	rows, err = s.query(ctx, `SELECT t.message_count, t.unread_count, t.snippet,
+			(SELECT COUNT(*) FROM thread_folders tf WHERE tf.thread_id = t.id)
+		FROM threads t JOIN messages m ON m.thread_id = t.id WHERE m.id = 1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows.Values) != 1 {
+		t.Fatalf("v%d: the message has no conversation aggregate", v)
+	}
+	if a := rows.Values[0]; number(a[0]) != 1 || number(a[1]) != 1 || text(a[2]) != "baseline needle" || number(a[3]) != 1 {
+		t.Errorf("v%d: conversation aggregate = %v, want 1 message, 1 unread, its preview and its folder", v, a)
+	}
 	if a, ok, err := s.Account(ctx, "a1"); err != nil || !ok || a.Email != "ann@example.com" {
 		t.Errorf("v%d: account = %+v, %v, %v", v, a, ok, err)
 	}

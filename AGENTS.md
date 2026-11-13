@@ -116,7 +116,13 @@ Windows and Linux. It is written in Go with
   or expunging. The window lists conversations unless the user switched
   to single messages (`mail.Settings.Conversations`); the Drafts entry
   always lists drafts one by one. A row is a conversation's messages in
-  the list's scope, and the toolbar acts on those. The reading pane shows
+  the list's scope, and the toolbar acts on those. A conversation's
+  counts, snippet and participants are aggregates on `threads`, and those
+  of one folder on `thread_folders`, so that a list reads a row per
+  conversation rather than its messages; triggers write them in the
+  transaction of every write of a message, and
+  `Store.RebuildThreadAggregates` recomputes them from the messages. The
+  reading pane shows
   the conversation across folders, each message once and without the
   copies in Drafts, Junk and Trash the list does not show, and each
   expanded message has actions of its own.

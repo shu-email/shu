@@ -3129,5 +3129,64 @@
       }
     }
   },
-  "makeRuleEllipsis": "Make a rule from this message…"
+  "makeRuleEllipsis": "Make a rule from this message…",
+  "securityPassed": "Sender verified",
+  "securityFailed": "Sender check failed",
+  "securityAbsent": "Sender not verified",
+  "securityPassedDetail": "The receiving server verified this message's sender with SPF, DKIM or DMARC. That says where it came from, not that it is safe.",
+  "securityFailedDetail": "The receiving server reported that a sender check failed. The message may not come from the address it shows.",
+  "securityAbsentDetail": "The receiving server reported no sender verification. Treat unexpected mail with care.",
+  "securityExternal": "External sender",
+  "securityExternalDetail": "{email} is outside your organization's domains. Most mail is, but check unexpected requests for money or passwords.",
+  "@securityExternalDetail": {
+    "description": "Explains an external sender without calling the message malicious.",
+    "placeholders": {
+      "email": {
+        "type": "String",
+        "example": "bob@outside.example"
+      }
+    }
+  },
+  "securityReplyMismatch": "Replies go elsewhere",
+  "securityReplyMismatchDetail": "The message is from {from}, but replies would go to {replyTo}. Check that address before answering.",
+  "@securityReplyMismatchDetail": {
+    "description": "Explains a Reply-To that leaves the sender's domain.",
+    "placeholders": {
+      "from": {
+        "type": "String",
+        "example": "shop.example"
+      },
+      "replyTo": {
+        "type": "String",
+        "example": "collect@evil.example"
+      }
+    }
+  },
+  "securityChecks": "Checks: {checks}",
+  "@securityChecks": {
+    "description": "The SPF, DKIM and DMARC results a server reported.",
+    "placeholders": {
+      "checks": {
+        "type": "String",
+        "example": "SPF pass · DKIM fail · DMARC fail"
+      }
+    }
+  },
+  "securityShowDetails": "Why?",
+  "securityHideDetails": "Hide reason",
+  "securityLinkTitle": "Open this link?",
+  "securityLinkMessage": "The link goes to:\n\n{url}",
+  "@securityLinkMessage": {
+    "description": "Shows the real destination of a link before it opens.",
+    "placeholders": {
+      "url": {
+        "type": "String",
+        "example": "https://example.com/path"
+      }
+    }
+  },
+  "securityLinkOpen": "Open link",
+  "securityAttachmentExecutable": "Can run a program",
+  "securityAttachmentDisguised": "Name hides a program",
+  "securityAttachmentTypeMismatch": "Content does not match the name"
 }

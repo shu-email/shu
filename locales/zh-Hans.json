@@ -815,5 +815,64 @@
   "pauseUndoDone": "“{name}”已暂停，{count, plural, =0 {没有需要撤销的改动} other {已撤销 # 项改动}}。",
   "undoAllDone": "{count, plural, =0 {“{name}”没有需要撤销的改动。} other {已撤销“{name}”的 # 项改动。}}",
   "undoAllFailed": "{count, plural, =0 {“{name}”做过的改动都无法撤销：{error}} other {已撤销“{name}”的 # 项改动，但并非全部：{error}}}",
-  "makeRuleEllipsis": "根据此邮件创建规则…"
+  "makeRuleEllipsis": "根据此邮件创建规则…",
+  "securityPassed": "发件人已验证",
+  "securityFailed": "发件人验证失败",
+  "securityAbsent": "发件人未验证",
+  "securityPassedDetail": "接收服务器已通过 SPF、DKIM 或 DMARC 验证此邮件的发件人。这只说明邮件来自何处，并不代表内容安全。",
+  "securityFailedDetail": "接收服务器报告发件人验证失败。此邮件可能并非来自它所显示的地址。",
+  "securityAbsentDetail": "接收服务器未提供发件人验证结果。请谨慎对待意外的邮件。",
+  "securityExternal": "外部发件人",
+  "securityExternalDetail": "{email} 不在你所属组织的域名内。大多数邮件都是如此，但对涉及金钱或密码的意外请求请多加核实。",
+  "@securityExternalDetail": {
+    "description": "Explains an external sender without calling the message malicious.",
+    "placeholders": {
+      "email": {
+        "type": "String",
+        "example": "bob@outside.example"
+      }
+    }
+  },
+  "securityReplyMismatch": "回复将发往他处",
+  "securityReplyMismatchDetail": "邮件来自 {from}，但回复将发往 {replyTo}。回复前请确认该地址。",
+  "@securityReplyMismatchDetail": {
+    "description": "Explains a Reply-To that leaves the sender's domain.",
+    "placeholders": {
+      "from": {
+        "type": "String",
+        "example": "shop.example"
+      },
+      "replyTo": {
+        "type": "String",
+        "example": "collect@evil.example"
+      }
+    }
+  },
+  "securityChecks": "检查结果：{checks}",
+  "@securityChecks": {
+    "description": "The SPF, DKIM and DMARC results a server reported.",
+    "placeholders": {
+      "checks": {
+        "type": "String",
+        "example": "SPF pass · DKIM fail · DMARC fail"
+      }
+    }
+  },
+  "securityShowDetails": "原因",
+  "securityHideDetails": "收起原因",
+  "securityLinkTitle": "打开此链接？",
+  "securityLinkMessage": "该链接指向：\n\n{url}",
+  "@securityLinkMessage": {
+    "description": "Shows the real destination of a link before it opens.",
+    "placeholders": {
+      "url": {
+        "type": "String",
+        "example": "https://example.com/path"
+      }
+    }
+  },
+  "securityLinkOpen": "打开链接",
+  "securityAttachmentExecutable": "可运行程序",
+  "securityAttachmentDisguised": "文件名隐藏了程序",
+  "securityAttachmentTypeMismatch": "内容与文件名不符"
 }

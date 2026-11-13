@@ -75,6 +75,7 @@ func (a *app) messagePane(c *ui.Context, t *ui.Theme) {
 				a.messageLabels(c, t, *m)
 			})
 			a.senderHeader(c, t, *m)
+			a.securityNotice(c, t, *m, msg)
 			if msg != nil && len(msg.Attachments) > 0 {
 				a.attachments(c, t, *m, msg.Attachments)
 			}
@@ -432,6 +433,12 @@ func (a *app) attachments(c *ui.Context, t *ui.Theme, m mail.Summary, list []mai
 					ui.Text(c, name).FontSize(12).Bold().SingleLine()
 					ui.Text(c, fmt.Sprintf("%s · %s", att.ContentType, formatSize(att.Size))).
 						FontSize(11).TextColor(t.TextMuted).SingleLine()
+					if warning, icon := attachmentWarning(att); warning != "" {
+						ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
+							ui.Icon(c, icon).FontSize(10).TextColor(t.Warning)
+							ui.Text(c, warning).FontSize(10).TextColor(t.Warning).SingleLine()
+						})
+					}
 				})
 				if m.DraftID != "" {
 					return

@@ -545,8 +545,19 @@ lines). Keep the original HTML for the webview.
   before loading, inject the CSP
   `default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; form-action 'none'; base-uri 'none'`,
   strip `<script>` and event attributes; `Page.OnWillNavigate` cancels navigation
-  and opens http(s) links via `c.Services().OpenURL`. Windowless tests only check
-  the toggle state and the sanitizing function, not rendering.
+  and asks before opening an http(s) link, showing its real destination
+  (`security.go`); the user's `Open link` calls `c.Services().OpenURL`. Windowless
+  tests only check the toggle state and the sanitizing function, not rendering.
+- Sender authentication and phishing advice (`mail/trust.go`, `security.go`):
+  `Message.Trust` reads the `Authentication-Results` the receiving server added
+  (else `ARC-Authentication-Results`, else `Received-SPF`) from `RawHeaders`, and
+  reports passed, failed or absent; absent is never drawn as safe. The reading
+  pane adds a written, icon-labeled notice for the verdict, an external sender
+  (outside the accounts' and identities' domains) and a `Reply-To` at another
+  domain, with an expandable explanation and the raw headers. Attachment names
+  and types are checked for programs and disguises (`mail.RiskOf`) with a written
+  warning. Every check reads cached bytes only, performs no lookup, changes no
+  flag and blocks nothing.
 
 ### Common actions
 

@@ -26,12 +26,15 @@ func (a *app) ensureWebView() {
 	if err != nil {
 		return
 	}
-	services := a.services
 	v.Page().OnWillNavigate(func(e *mygo.NavigateEvent) {
 		e.PreventDefault()
-		if isWebURL(e.URL) {
-			services.OpenURL(e.URL)
+		if !isWebURL(e.URL) {
+			return
 		}
+		// The page never opens a link itself: the window asks the user
+		// first and shows the real destination (security.go).
+		url := e.URL
+		a.post(func() { a.askOpenLink(url) })
 	})
 	a.webview = v
 }

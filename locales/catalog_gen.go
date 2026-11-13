@@ -10565,3 +10565,143 @@ func AiCliEnvFailed(error string) string { return In(i18n.Locale()).AiCliEnvFail
 func (msgs Messages) AiCliEnvFailed(error string) string {
 	return Catalog.Format(msgs.locale, "aiCliEnvFailed", map[string]any{"error": error})
 }
+
+// AiProvidersTitle says "AI Providers"
+// in the language the app shows.
+func AiProvidersTitle() string { return In(i18n.Locale()).AiProvidersTitle() }
+
+// AiProvidersTitle says "AI Providers"
+// in the language of msgs.
+func (msgs Messages) AiProvidersTitle() string {
+	return Catalog.Format(msgs.locale, "aiProvidersTitle", nil)
+}
+
+// AiProvidersIntro says "Installed tools and API connections, and the models each one offers."
+// in the language the app shows.
+func AiProvidersIntro() string { return In(i18n.Locale()).AiProvidersIntro() }
+
+// AiProvidersIntro says "Installed tools and API connections, and the models each one offers."
+// in the language of msgs.
+func (msgs Messages) AiProvidersIntro() string {
+	return Catalog.Format(msgs.locale, "aiProvidersIntro", nil)
+}
+
+// AiManageProviders says "Manage providers…"
+// in the language the app shows.
+func AiManageProviders() string { return In(i18n.Locale()).AiManageProviders() }
+
+// AiManageProviders says "Manage providers…"
+// in the language of msgs.
+func (msgs Messages) AiManageProviders() string {
+	return Catalog.Format(msgs.locale, "aiManageProviders", nil)
+}
+
+// AiProviderOverview says "Overview"
+// in the language the app shows.
+func AiProviderOverview() string { return In(i18n.Locale()).AiProviderOverview() }
+
+// AiProviderOverview says "Overview"
+// in the language of msgs.
+func (msgs Messages) AiProviderOverview() string {
+	return Catalog.Format(msgs.locale, "aiProviderOverview", nil)
+}
+
+// AiProviderModels says "Models"
+// in the language the app shows.
+func AiProviderModels() string { return In(i18n.Locale()).AiProviderModels() }
+
+// AiProviderModels says "Models"
+// in the language of msgs.
+func (msgs Messages) AiProviderModels() string {
+	return Catalog.Format(msgs.locale, "aiProviderModels", nil)
+}
+
+// AiProviderAdvanced says "Advanced"
+// in the language the app shows.
+func AiProviderAdvanced() string { return In(i18n.Locale()).AiProviderAdvanced() }
+
+// AiProviderAdvanced says "Advanced"
+// in the language of msgs.
+func (msgs Messages) AiProviderAdvanced() string {
+	return Catalog.Format(msgs.locale, "aiProviderAdvanced", nil)
+}
+
+// AiProviderInUse says "In use"
+// in the language the app shows.
+func AiProviderInUse() string { return In(i18n.Locale()).AiProviderInUse() }
+
+// AiProviderInUse says "In use"
+// in the language of msgs.
+func (msgs Messages) AiProviderInUse() string {
+	return Catalog.Format(msgs.locale, "aiProviderInUse", nil)
+}
+
+// AiProviderUse says "Use this provider"
+// in the language the app shows.
+func AiProviderUse() string { return In(i18n.Locale()).AiProviderUse() }
+
+// AiProviderUse says "Use this provider"
+// in the language of msgs.
+func (msgs Messages) AiProviderUse() string {
+	return Catalog.Format(msgs.locale, "aiProviderUse", nil)
+}
+
+// AiProviderApi says "API connection"
+// in the language the app shows.
+func AiProviderApi() string { return In(i18n.Locale()).AiProviderApi() }
+
+// AiProviderApi says "API connection"
+// in the language of msgs.
+func (msgs Messages) AiProviderApi() string {
+	return Catalog.Format(msgs.locale, "aiProviderApi", nil)
+}
+
+// AiProviderModelShown says "Shown in the model pickers"
+// in the language the app shows.
+func AiProviderModelShown() string { return In(i18n.Locale()).AiProviderModelShown() }
+
+// AiProviderModelShown says "Shown in the model pickers"
+// in the language of msgs.
+func (msgs Messages) AiProviderModelShown() string {
+	return Catalog.Format(msgs.locale, "aiProviderModelShown", nil)
+}
+
+// AiProviderModelHidden says "Hidden from the model pickers"
+// in the language the app shows.
+func AiProviderModelHidden() string { return In(i18n.Locale()).AiProviderModelHidden() }
+
+// AiProviderModelHidden says "Hidden from the model pickers"
+// in the language of msgs.
+func (msgs Messages) AiProviderModelHidden() string {
+	return Catalog.Format(msgs.locale, "aiProviderModelHidden", nil)
+}
+
+// AiProviderModelDefault says "The chosen model always stays visible."
+// in the language the app shows.
+func AiProviderModelDefault() string { return In(i18n.Locale()).AiProviderModelDefault() }
+
+// AiProviderModelDefault says "The chosen model always stays visible."
+// in the language of msgs.
+func (msgs Messages) AiProviderModelDefault() string {
+	return Catalog.Format(msgs.locale, "aiProviderModelDefault", nil)
+}
+
+// AiProviderNoModels says "This provider reports no models yet. Type one below."
+// in the language the app shows.
+func AiProviderNoModels() string { return In(i18n.Locale()).AiProviderNoModels() }
+
+// AiProviderNoModels says "This provider reports no models yet. Type one below."
+// in the language of msgs.
+func (msgs Messages) AiProviderNoModels() string {
+	return Catalog.Format(msgs.locale, "aiProviderNoModels", nil)
+}
+
+// AiProviderModelHint says "Type a model, or choose one this provider reports."
+// in the language the app shows.
+func AiProviderModelHint() string { return In(i18n.Locale()).AiProviderModelHint() }
+
+// AiProviderModelHint says "Type a model, or choose one this provider reports."
+// in the language of msgs.
+func (msgs Messages) AiProviderModelHint() string {
+	return Catalog.Format(msgs.locale, "aiProviderModelHint", nil)
+}

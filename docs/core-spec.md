@@ -980,8 +980,17 @@ the engine's actions, `mail.ActionKinds`, and no others.
   `PATH`, `HOME` or a tool's managed variables are refused. They are merged into
   the child's environment after the whitelist, with reserved names filtered
   again.
-- Not yet in this slice: the separate Providers management panel, Codex
-  app-server, and live verification on Windows and Linux.
+- The AI tab has a single **Providers** row into a panel shaped like a system
+  settings sheet: API connections and installed tools on the left with one-line
+  statuses, and the chosen provider's Overview / Models / Advanced on the right.
+  Overview shows status, version, path or endpoint and whether it is in use;
+  Models edits the default model with autocomplete from what the tool reports and
+  toggles which reported models appear in the pickers (the default always
+  stays); Advanced holds the command path and per-tool values, or the endpoint,
+  key and plain-HTTP opt-in for an API connection. Selecting a provider makes it
+  active and loads its state.
+- Not yet in this slice: Codex app-server, and live verification on Windows and
+  Linux.
 
 ## Testing discipline
 

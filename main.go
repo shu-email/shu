@@ -230,6 +230,8 @@ type app struct {
 	folderNote string
 	// networkForm is the Network tab's editable state (network.go).
 	networkForm networkForm
+	// providers is the AI providers panel (providers.go).
+	providers providersPanel
 	// transfer is the import, export or backup running or just done
 	// (transfer.go).
 	transfer transferState

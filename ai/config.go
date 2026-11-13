@@ -120,6 +120,42 @@ type Config struct {
 	// CLIEnv holds the names of the environment values a local tool gets,
 	// by provider; their values are only in the keychain.
 	CLIEnv map[ProviderID][]string `json:"cliEnv,omitempty"`
+	// HiddenModels are the models a provider reports that the user keeps
+	// out of the model pickers, by provider. The chosen default is always
+	// shown.
+	HiddenModels map[ProviderID][]string `json:"hiddenModels,omitempty"`
+}
+
+// ModelHidden reports whether a model is kept out of the pickers.
+func (c Config) ModelHidden(id ProviderID, model string) bool {
+	for _, m := range c.HiddenModels[id] {
+		if m == model {
+			return true
+		}
+	}
+	return false
+}
+
+// SetModelHidden hides or shows a model a provider reports.
+func (c *Config) SetModelHidden(id ProviderID, model string, hidden bool) {
+	if c.HiddenModels == nil {
+		c.HiddenModels = map[ProviderID][]string{}
+	}
+	list := c.HiddenModels[id]
+	out := list[:0]
+	for _, m := range list {
+		if m != model {
+			out = append(out, m)
+		}
+	}
+	if hidden {
+		out = append(out, model)
+	}
+	if len(out) == 0 {
+		delete(c.HiddenModels, id)
+		return
+	}
+	c.HiddenModels[id] = out
 }
 
 // DefaultConfig is what a new install starts with: AI off.
@@ -137,6 +173,7 @@ func (c Config) Clone() Config {
 	out.Reviewed = cloneMap(c.Reviewed)
 	out.CLIPaths = cloneProviderMap(c.CLIPaths)
 	out.CLIEnv = cloneEnvMap(c.CLIEnv)
+	out.HiddenModels = cloneEnvMap(c.HiddenModels)
 	return out
 }
 

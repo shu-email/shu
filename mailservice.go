@@ -78,6 +78,11 @@ type mailService interface {
 
 	SetFlag(ctx context.Context, accountID, folder string, uid mail.UID, flag mail.Flag, on bool) error
 	SetFlags(ctx context.Context, accountID string, msgs []mail.MessageRef, flag mail.Flag, on bool) error
+	// UndoFlagChange and UndoLabelChange take a change back, as the undo
+	// banner offers: a change still waiting in the queue is dropped
+	// before the server makes it, and one it has is set back.
+	UndoFlagChange(ctx context.Context, accountID string, msgs []mail.MessageRef, flag mail.Flag, on bool) error
+	UndoLabelChange(ctx context.Context, accountID string, msgs []mail.MessageRef, id mail.LabelID, on bool) error
 	Move(ctx context.Context, accountID, folder string, uid mail.UID, dest string) (mail.MoveResult, error)
 	MoveBack(ctx context.Context, accountID, from, to string, uid mail.UID) error
 	MoveMessages(ctx context.Context, accountID string, msgs []mail.MessageRef, dest string) ([]mail.MoveResult, error)

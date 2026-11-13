@@ -497,7 +497,7 @@ func (a *app) moveConvsToFolder(all []mail.Conversation, dest string) {
 				a.err = failureText(err)
 			}
 			if canUndo(map[string][]mail.MoveResult{a.active: moved}) {
-				a.setUndo(&undoMove{label: locales.MovedToFolder(dest), moved: map[string][]mail.MoveResult{a.active: moved}})
+				a.setUndo(&undoAction{label: locales.MovedToFolder(dest), moved: map[string][]mail.MoveResult{a.active: moved}})
 			}
 			a.loadMessages(g)
 			a.loadFollowUps(g)

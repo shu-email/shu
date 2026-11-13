@@ -235,7 +235,7 @@ func TestUndoOfAMoveWaitingForTheServer(t *testing.T) {
 	if a.undo == nil || len(a.undo.moved["a1"]) != 1 || a.undo.moved["a1"][0].Pending == 0 {
 		t.Fatalf("undo = %+v", a.undo)
 	}
-	a.undoLastMove()
+	a.undoLastAction()
 	tt.Frame()
 	if !slices.Contains(fs.moveBacks, "Projects->"+m.Folder) {
 		t.Errorf("the undo did not take the queued move back: %v", fs.moveBacks)

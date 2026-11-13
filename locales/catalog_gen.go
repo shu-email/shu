@@ -2048,6 +2048,68 @@ func (msgs Messages) MovedToJunk() string {
 	return Catalog.Format(msgs.locale, "movedToJunk", nil)
 }
 
+// Unstarred says "Unstarred"
+// in the language the app shows.
+func Unstarred() string { return In(i18n.Locale()).Unstarred() }
+
+// Unstarred says "Unstarred"
+// in the language of msgs.
+func (msgs Messages) Unstarred() string {
+	return Catalog.Format(msgs.locale, "unstarred", nil)
+}
+
+// MarkedRead says "Marked read"
+// in the language the app shows.
+func MarkedRead() string { return In(i18n.Locale()).MarkedRead() }
+
+// MarkedRead says "Marked read"
+// in the language of msgs.
+func (msgs Messages) MarkedRead() string {
+	return Catalog.Format(msgs.locale, "markedRead", nil)
+}
+
+// MarkedUnread says "Marked unread"
+// in the language the app shows.
+//
+// The list's undo banner after messages were marked unread.
+func MarkedUnread() string { return In(i18n.Locale()).MarkedUnread() }
+
+// MarkedUnread says "Marked unread"
+// in the language of msgs.
+//
+// The list's undo banner after messages were marked unread.
+func (msgs Messages) MarkedUnread() string {
+	return Catalog.Format(msgs.locale, "markedUnread", nil)
+}
+
+// LabelAdded says "Label “{name}” added"
+// in the language the app shows.
+//
+// The list's undo banner after a label was put on messages.
+func LabelAdded(name string) string { return In(i18n.Locale()).LabelAdded(name) }
+
+// LabelAdded says "Label “{name}” added"
+// in the language of msgs.
+//
+// The list's undo banner after a label was put on messages.
+func (msgs Messages) LabelAdded(name string) string {
+	return Catalog.Format(msgs.locale, "labelAdded", map[string]any{"name": name})
+}
+
+// LabelRemoved says "Label “{name}” removed"
+// in the language the app shows.
+//
+// The list's undo banner after a label was taken off messages.
+func LabelRemoved(name string) string { return In(i18n.Locale()).LabelRemoved(name) }
+
+// LabelRemoved says "Label “{name}” removed"
+// in the language of msgs.
+//
+// The list's undo banner after a label was taken off messages.
+func (msgs Messages) LabelRemoved(name string) string {
+	return Catalog.Format(msgs.locale, "labelRemoved", map[string]any{"name": name})
+}
+
 // SendHint says "{key} to send"
 // in the language the app shows.
 func SendHint(key string) string { return In(i18n.Locale()).SendHint(key) }

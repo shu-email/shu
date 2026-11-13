@@ -453,6 +453,32 @@
   "archived": "Archived",
   "deleted": "Deleted",
   "movedToJunk": "Moved to junk",
+  "unstarred": "Unstarred",
+  "markedRead": "Marked read",
+  "markedUnread": "Marked unread",
+  "@markedUnread": {
+    "description": "The list's undo banner after messages were marked unread."
+  },
+  "labelAdded": "Label “{name}” added",
+  "@labelAdded": {
+    "description": "The list's undo banner after a label was put on messages.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Receipts"
+      }
+    }
+  },
+  "labelRemoved": "Label “{name}” removed",
+  "@labelRemoved": {
+    "description": "The list's undo banner after a label was taken off messages.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Receipts"
+      }
+    }
+  },
   "sendHint": "{key} to send",
   "searchClear": "Clear search",
   "@sendHint": {

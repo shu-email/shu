@@ -82,7 +82,7 @@ func TestUndoReminder(t *testing.T) {
 	tt := ui.NewTester(a.view, 1220, 800)
 	thread := reminderThread(t, a)
 	a.setReminder("a1", thread.Thread, time.Now().Add(time.Hour))
-	a.undoLastMove()
+	a.undoLastAction()
 	tt.Frame()
 	if len(fs.reminders) != 0 {
 		t.Errorf("the reminder stayed: %+v", fs.reminders)
@@ -110,7 +110,7 @@ func TestUndoReminderRestoresTheOldTime(t *testing.T) {
 	if len(fs.reminders) != 1 || !fs.reminders[0].RemindAt.Equal(later) {
 		t.Fatalf("the new time did not replace the old: %+v", fs.reminders)
 	}
-	a.undoLastMove()
+	a.undoLastAction()
 	if len(fs.reminders) != 1 || !fs.reminders[0].RemindAt.Equal(at) {
 		t.Fatalf("the old time did not come back: %+v", fs.reminders)
 	}
@@ -136,7 +136,7 @@ func TestUndoKeepsReminderWhenMoveBackFails(t *testing.T) {
 			list[i].DestUID = 0
 		}
 	}
-	a.undoLastMove()
+	a.undoLastAction()
 	if len(fs.reminders) != 1 || len(a.reminders) != 1 {
 		t.Fatalf("the reminder went with mail that did not come back: %+v, %+v", fs.reminders, a.reminders)
 	}

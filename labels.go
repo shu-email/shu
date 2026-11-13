@@ -765,8 +765,11 @@ func (a *app) setLabel(lt labelTargets, l mail.Label, on bool) {
 				a.err = locales.ActionNeedsSignIn()
 			case err != nil:
 				a.err = locales.LabelChangeFailed(err.Error())
-			case on:
-				a.noteKeptHere(l, msgs)
+			default:
+				if on {
+					a.noteKeptHere(l, msgs)
+				}
+				a.offerLabelUndo(account, refsOf(msgs), l, on)
 			}
 			a.readList(g, false, false)
 		})

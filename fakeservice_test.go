@@ -46,6 +46,8 @@ type fakeService struct {
 	moved           []string
 	moveBacks       []string
 	flagCalls       []string
+	undoneChanges   []string
+	changeErr       error
 	attachment      mail.Attachment
 	attachmentBytes []byte
 	// folderCalls records the folder actions taken, in order, and
@@ -1536,6 +1538,26 @@ func (f *fakeService) SetFlags(ctx context.Context, accountID string, msgs []mai
 		f.recount(accountID, r.Folder)
 	}
 	return nil
+}
+
+// UndoFlagChange takes back a flag change, as the undo banner asks.
+func (f *fakeService) UndoFlagChange(ctx context.Context, accountID string, msgs []mail.MessageRef, flag mail.Flag, on bool) error {
+	f.undoneChanges = append(f.undoneChanges, fmt.Sprintf("flag %s %v", flag, on))
+	f.act(accountID, "UndoFlagChange %s %v", flag, on)
+	if f.changeErr != nil {
+		return f.changeErr
+	}
+	return f.SetFlags(ctx, accountID, msgs, flag, !on)
+}
+
+// UndoLabelChange takes back a label change, as the undo banner asks.
+func (f *fakeService) UndoLabelChange(ctx context.Context, accountID string, msgs []mail.MessageRef, id mail.LabelID, on bool) error {
+	f.undoneChanges = append(f.undoneChanges, fmt.Sprintf("label %d %v", id, on))
+	f.act(accountID, "UndoLabelChange %d %v", id, on)
+	if f.changeErr != nil {
+		return f.changeErr
+	}
+	return f.SetLabel(ctx, accountID, msgs, id, !on)
 }
 
 // moveOne moves a message to another folder under another UID, in its

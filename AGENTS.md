@@ -130,6 +130,13 @@ Windows and Linux. It is written in Go with
   keep their own log of what has not happened, and a reminder waits for
   its next run, so neither is queued. The window hears of the queue as a
   `WatchEvent` with `Queue` set and says it under the watcher's line.
+- The list's one undo banner takes back the last change, whether the
+  server made it or it waits in the queue. An undo cancels the queued
+  actions it can (`Store.CancelOperations` drops only those no worker
+  has begun) rather than making them first, puts the cache back, and
+  leaves the rest for the inverse change (`mail/undo.go`); a move's undo
+  cancels its action and says so when the worker had begun it already
+  (`Service.MoveBackMessages`).
 - An account signs in with a password or, for Google and Microsoft, with
   OAuth (`Account.OAuth`, `mail/oauth.go`, `mail/signin.go`,
   `docs/oauth.md`). The engine runs the whole flow, PKCE and a one-answer

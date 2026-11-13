@@ -304,7 +304,7 @@ func (a *app) setReminder(account string, thread mail.ThreadID, at time.Time) {
 			default:
 				a.err = ""
 			}
-			a.setUndo(&undoMove{
+			a.setUndo(&undoAction{
 				label:        locales.ReminderSet(reminderWhen(time.Now(), r.RemindAt)),
 				moved:        map[string][]mail.MoveResult{account: moved},
 				reminder:     &r,

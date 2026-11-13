@@ -717,7 +717,10 @@ func (a *app) toggleThreadStar() {
 				// again, it shows what is so.
 				a.err = failureText(err)
 				a.readMessages(g, false)
-			case folder == "starred" && !on:
+			default:
+				a.offerFlagUndo(msgs, mail.FlagFlagged, on)
+			}
+			if err == nil && folder == "starred" && !on {
 				a.loadMessages(g)
 			}
 		})
@@ -789,6 +792,7 @@ func (a *app) toggleThreadRead() {
 				a.labelUnread(m, unreadDelta(seen))
 			}
 			a.updateBadge()
+			a.offerFlagUndo(changed, mail.FlagSeen, seen)
 		})
 	})
 }
@@ -871,7 +875,7 @@ func (a *app) moveThreads(special string) {
 			}
 			// What moved before a failure can be taken back as well.
 			if canUndo(moved) {
-				a.setUndo(&undoMove{label: label, moved: moved})
+				a.setUndo(&undoAction{label: label, moved: moved})
 			}
 			a.loadMessages(g)
 			a.loadFollowUps(g)
@@ -925,7 +929,7 @@ func threadMovedLabel(special string, n int) string {
 // undoThreadMove takes back a move of several messages, then syncs the
 // folders they went back to, so that their rows return, and reads the
 // folders of each account it reached with their counts.
-func (a *app) undoThreadMove(u *undoMove) {
+func (a *app) undoThreadMove(u *undoAction) {
 	g, shown := a.gen, a.active
 	accounts := slices.Sorted(maps.Keys(u.moved))
 	if !slices.Contains(accounts, shown) {
@@ -1023,11 +1027,13 @@ func (a *app) flagMessage(m mail.Summary, flag mail.Flag, on bool) {
 			if a.stale(g) {
 				return
 			}
-			switch {
-			case err != nil:
+			if err != nil {
 				a.err = failureText(err)
 				a.readMessages(g, false)
-			case folder == "starred" && flag == mail.FlagFlagged && !on:
+				return
+			}
+			a.offerFlagUndo([]mail.Summary{m}, flag, on)
+			if folder == "starred" && flag == mail.FlagFlagged && !on {
 				a.readMessages(g, false)
 			}
 		})
@@ -1088,7 +1094,7 @@ func (a *app) moveMessageToFolder(m mail.Summary, dest string) {
 			if err != nil {
 				a.err = failureText(err)
 			} else if canUndo(moved) {
-				a.setUndo(&undoMove{label: label, moved: moved})
+				a.setUndo(&undoAction{label: label, moved: moved})
 			}
 			a.loadMessages(g)
 			a.loadFollowUps(g)

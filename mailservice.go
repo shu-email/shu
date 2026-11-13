@@ -249,6 +249,10 @@ type mailService interface {
 	UnblockSender(ctx context.Context, accountID, value string, domain bool) error
 	BlockedSenders(ctx context.Context, accountID string) ([]mail.BlockedSender, error)
 
+	// CheckIntegrity reports what the cache holds out of step with what it
+	// is derived from, and changes nothing (see mail.IntegrityReport).
+	CheckIntegrity(ctx context.Context) (mail.IntegrityReport, error)
+
 	Settings(ctx context.Context) (mail.Settings, error)
 	SaveSettings(ctx context.Context, s mail.Settings) error
 }

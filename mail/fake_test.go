@@ -1689,6 +1689,12 @@ func (s *memStore) AttachmentFileRefs(ctx context.Context) ([]string, error) {
 	return slices.Clone(s.attachmentFiles), nil
 }
 
+func (s *memStore) CheckCache(ctx context.Context) ([]IntegrityFinding, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return nil, nil
+}
+
 func (s *memStore) PrepareCache(ctx context.Context, version int) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

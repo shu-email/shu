@@ -383,6 +383,8 @@ func (a *app) settingsView(c *ui.Context) {
 					a.composeSettingsView(c, t)
 					a.transferSettingsView(c, t)
 					ui.Divider(c)
+					a.cacheCheckView(c, t)
+					ui.Divider(c)
 					ui.Row(c).Gap(10).Children(func() {
 						ui.Button(c, locales.ManageAccounts()).OnClick(func() {
 							a.closeSettings()

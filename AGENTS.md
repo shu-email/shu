@@ -377,6 +377,13 @@ Windows and Linux. It is written in Go with
   the attachment files and temporary files no row names. It never touches
   drafts, the outbox, contacts, labels, rules or settings, which the
   server cannot give again.
+- The cache's derived state can be checked without changing it:
+  `Service.CheckIntegrity` (`mail/integrity.go`, `store/integrity.go`)
+  reports the schema version, the references the foreign keys promise,
+  the full-text index, the conversations' aggregates, and the
+  attachment and draft files, with counts and a few IDs and never a
+  message's content. The settings' General tab runs it
+  (`integrity.go`); it repairs nothing.
 
 ## Before changing MyGo UI
 

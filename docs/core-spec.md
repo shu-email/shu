@@ -269,6 +269,9 @@ END;
   removing a file nulls `cache_path`, the database stays consistent.
 - File names on disk never come from the message; "Save as" is the only place a
   human-chosen name is used, and it is sanitized.
+- Settings → General can check the cache without changing it: the schema version,
+  the foreign keys' references, the search index, the conversation counts, and the
+  attachment and draft files, reported as counts and a few IDs, never content.
 
 ### Cache first + incremental sync
 

@@ -168,6 +168,12 @@ type fakeService struct {
 	unsubErr   error
 	blockErr   error
 
+	// The cache check: integrity is what it reports, integrityCalls counts
+	// the runs, and integrityErr fails them.
+	integrity      mail.IntegrityReport
+	integrityCalls int
+	integrityErr   error
+
 	// Pages. cursors are the rows the cursors handed out end at;
 	// pageReads counts the page reads, onPage runs as each begins, and
 	// pageErr fails them. syncCalls records each SyncFolder with its
@@ -3045,6 +3051,15 @@ func (f *fakeService) UnblockSender(ctx context.Context, accountID, value string
 // BlockedSenders lists an account's blocks, newest first.
 func (f *fakeService) BlockedSenders(ctx context.Context, accountID string) ([]mail.BlockedSender, error) {
 	return append([]mail.BlockedSender(nil), f.blocks[accountID]...), nil
+}
+
+// CheckIntegrity reports what the test set the cache check to find.
+func (f *fakeService) CheckIntegrity(ctx context.Context) (mail.IntegrityReport, error) {
+	f.integrityCalls++
+	if f.integrityErr != nil {
+		return mail.IntegrityReport{}, f.integrityErr
+	}
+	return f.integrity, nil
 }
 
 // CountUnread counts the unread messages a list query reads.

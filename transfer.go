@@ -72,6 +72,7 @@ func (a *app) transferSettingsView(c *ui.Context, t *ui.Theme) {
 func (a *app) realFolder() bool {
 	name := a.folder
 	return name != "" && name != "starred" && name != draftsFolder && name != remindersFolder &&
+		name != followUpFolder &&
 		name != allInboxes && labelOf(name) == 0
 }
 

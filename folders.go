@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -423,6 +424,7 @@ func (a *app) moveMessagesToFolder(all []mail.Summary, dest string) {
 					dest: dest, destUID: first.DestUID, label: locales.MovedToFolder(dest)})
 			}
 			a.loadMessages(g)
+			a.loadFollowUps(g)
 		})
 	})
 }
@@ -444,6 +446,18 @@ func (a *app) moveConvsToFolder(all []mail.Conversation, dest string) {
 	}
 	if len(targets) == 0 {
 		return
+	}
+	// A list of several folders has the user's own messages in it: as the
+	// toolbar's move does, this one leaves Sent and Drafts alone.
+	stay := map[string]bool{}
+	if a.spansFolders() {
+		for _, c := range targets {
+			for _, special := range []string{mail.SpecialSent, mail.SpecialDrafts} {
+				if name := a.specialFolder(c.Account, special); name != "" {
+					stay[folderKey(c.Account, name)] = true
+				}
+			}
+		}
 	}
 	shown := a.shownMembers(targets)
 	chosen := threadSet(targets)
@@ -467,6 +481,7 @@ func (a *app) moveConvsToFolder(all []mail.Conversation, dest string) {
 		ctx, cancel := a.ctx()
 		defer cancel()
 		members, err := a.scopeMessages(ctx, scope, targets, shown)
+		members = slices.DeleteFunc(members, func(m mail.Summary) bool { return stay[folderKey(m.Account, m.Folder)] })
 		var moved []mail.MoveResult
 		if err == nil {
 			moved, err = a.svc.MoveMessages(ctx, a.active, refsOf(members), dest)
@@ -485,6 +500,7 @@ func (a *app) moveConvsToFolder(all []mail.Conversation, dest string) {
 				a.setUndo(&undoMove{label: locales.MovedToFolder(dest), moved: map[string][]mail.MoveResult{a.active: moved}})
 			}
 			a.loadMessages(g)
+			a.loadFollowUps(g)
 		})
 	})
 }

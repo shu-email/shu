@@ -116,7 +116,8 @@ func (a *app) leavesOutShown(q searchQuery) bool {
 // unified inbox is already a list of every account, and a label's list
 // of every folder of its own.
 func (a *app) defaultScope() searchScope {
-	if a.folder == draftsFolder || a.folder == remindersFolder || a.folder == allInboxes || labelOf(a.folder) != 0 {
+	if a.folder == draftsFolder || a.folder == remindersFolder || a.folder == followUpFolder ||
+		a.folder == allInboxes || labelOf(a.folder) != 0 {
 		return scopeHere
 	}
 	return scopeAccount
@@ -128,8 +129,9 @@ func (a *app) defaultScope() searchScope {
 // together, as would the account on screen and an account: that leaves it
 // out; the drafts' search knows their text alone.
 func (a *app) searchScope() searchScope {
-	// The reminders' list is its own scope: no other widens it.
-	if a.folder == remindersFolder {
+	// The reminders' and follow-ups' lists are their own scope: no other
+	// widens them.
+	if a.folder == remindersFolder || a.folder == followUpFolder {
 		return scopeHere
 	}
 	s := a.defaultScope()
@@ -167,7 +169,7 @@ func (a *app) searchScope() searchScope {
 // scopeChoices are the scopes the control offers on this list.
 func (a *app) scopeChoices() []searchScope {
 	out := []searchScope{scopeHere}
-	if a.folder == remindersFolder {
+	if a.folder == remindersFolder || a.folder == followUpFolder {
 		return out
 	}
 	if a.folder != allInboxes {
@@ -221,7 +223,8 @@ func (a *app) spansAccounts() bool {
 // label's list.
 func (a *app) spansFolders() bool {
 	q := a.listQuery()
-	return q.search != "" && q.scope != scopeHere || labelOf(q.folder) != 0 || q.folder == remindersFolder
+	return q.search != "" && q.scope != scopeHere || labelOf(q.folder) != 0 ||
+		q.folder == remindersFolder || q.folder == followUpFolder
 }
 
 // hasFilters reports whether a search asks more than its free text.

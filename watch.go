@@ -313,6 +313,7 @@ func (a *app) watchEvent(ev mail.WatchEvent) {
 	a.updateBadge()
 	if len(ev.New) > 0 {
 		a.loadReminders(a.gen)
+		a.loadFollowUps(a.gen)
 	}
 	// Whether to notify depends on what the window shows now, before
 	// the list changes under it.
@@ -321,7 +322,10 @@ func (a *app) watchEvent(ev mail.WatchEvent) {
 	case a.folder != shown:
 		// The folder on show is gone from the server.
 		a.selectFolder()
-	case a.folder == ev.Folder, a.isUnified() && a.isInboxOf(ev.AccountID, ev.Folder), labelOf(a.folder) != 0:
+	case a.folder == ev.Folder, a.isUnified() && a.isInboxOf(ev.AccountID, ev.Folder),
+		labelOf(a.folder) != 0, a.folder == followUpFolder:
+		// A reply takes its conversation off the follow-ups, which a read
+		// of the cache shows.
 		a.readList(a.gen, false, false)
 	default:
 		// The labels' counts follow the mail that came.

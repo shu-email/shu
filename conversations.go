@@ -32,7 +32,11 @@ func refOf(c mail.Conversation) convRef { return convRef{c.Account, c.Thread} }
 // threaded reports whether the list shows conversations. The Drafts entry
 // lists its drafts one by one in either view: a draft of this device is in
 // no conversation of the cache.
-func (a *app) threaded() bool { return a.mailSet.Conversations && !a.draftsList() }
+func (a *app) threaded() bool {
+	// The follow-ups are conversations' by nature: a row is one message
+	// the user sent that no one answered.
+	return !a.draftsList() && (a.mailSet.Conversations || a.folder == followUpFolder)
+}
 
 // draftsList reports whether the list is the Drafts entry's drafts, and
 // not a search of it that reaches further.
@@ -868,6 +872,7 @@ func (a *app) moveThreads(special string) {
 				a.setUndo(&undoMove{label: label, moved: moved})
 			}
 			a.loadMessages(g)
+			a.loadFollowUps(g)
 		})
 	})
 }
@@ -986,6 +991,7 @@ func (a *app) undoThreadMove(u *undoMove) {
 				a.loadReminders(g)
 			}
 			a.loadMessages(g)
+			a.loadFollowUps(g)
 		})
 	})
 }
@@ -1081,6 +1087,7 @@ func (a *app) moveMessageToFolder(m mail.Summary, dest string) {
 				a.setUndo(&undoMove{label: label, moved: moved})
 			}
 			a.loadMessages(g)
+			a.loadFollowUps(g)
 		})
 	})
 }

@@ -86,6 +86,9 @@ type memStore struct {
 	// gives the IDs.
 	reminders    map[string]map[ThreadID]Reminder
 	reminderNext int64
+	// dismissed is when each account took a conversation off its
+	// follow-up list.
+	dismissed map[string]map[ThreadID]time.Time
 }
 
 // memMark is a folder's watermark.
@@ -112,6 +115,7 @@ func newMemStore() *memStore {
 		keptLabels: map[string]map[LabelID]bool{},
 		labelsGone: map[string]time.Time{},
 		reminders:  map[string]map[ThreadID]Reminder{},
+		dismissed:  map[string]map[ThreadID]time.Time{},
 	}
 }
 
@@ -1500,4 +1504,80 @@ func (s *memStore) DeleteReminder(ctx context.Context, accountID string, thread 
 	defer s.mu.Unlock()
 	delete(s.reminders[accountID], thread)
 	return nil
+}
+
+func (s *memStore) DismissFollowUp(ctx context.Context, accountID string, thread ThreadID, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.dismissed[accountID] == nil {
+		s.dismissed[accountID] = map[ThreadID]time.Time{}
+	}
+	s.dismissed[accountID][thread] = at
+	return nil
+}
+
+// CountFollowUps counts the conversations that wait for a reply, as the
+// engine's query does from the cache.
+func (s *memStore) CountFollowUps(ctx context.Context, q ListQuery) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := q.Scope.FollowUpNow
+	if now.IsZero() {
+		now = time.Now()
+	}
+	accounts := q.Scope.Accounts
+	if len(accounts) == 0 {
+		for id := range s.accounts {
+			accounts = append(accounts, id)
+		}
+	}
+	count := 0
+	for _, accountID := range accounts {
+		folders := map[string]Folder{}
+		for _, f := range s.folders[accountID] {
+			folders[f.Name] = f
+		}
+		newest := map[ThreadID]Summary{}
+		aside := map[ThreadID]bool{}
+		for key, byUID := range s.messages {
+			if !strings.HasPrefix(key, accountID+"/") {
+				continue
+			}
+			folder := key[len(accountID)+1:]
+			fl, ok := folders[folder]
+			if !ok {
+				continue
+			}
+			for _, msg := range byUID {
+				m := msg.Summary
+				m.Folder = folder
+				switch fl.SpecialUse {
+				case SpecialJunk, SpecialTrash:
+					aside[m.Thread] = true
+					continue
+				case SpecialDrafts:
+					continue
+				}
+				if cur, ok := newest[m.Thread]; !ok || m.Date.After(cur.Date) {
+					newest[m.Thread] = m
+				}
+			}
+		}
+		for thread, m := range newest {
+			if aside[thread] {
+				continue
+			}
+			if folders[m.Folder].SpecialUse != SpecialSent {
+				continue
+			}
+			if _, ok := FollowUpAge(now, m.Date); !ok {
+				continue
+			}
+			if at, ok := s.dismissed[accountID][thread]; ok && !at.Before(m.Date) {
+				continue
+			}
+			count++
+		}
+	}
+	return count, nil
 }

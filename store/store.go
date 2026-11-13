@@ -460,6 +460,18 @@ var migrations = [][]string{
 		`CREATE INDEX reminders_account ON reminders (account_id, remind_at)`,
 		`CREATE INDEX reminders_due ON reminders (remind_at)`,
 	},
+	// v18: the follow-ups the user put off (see FollowUpScope): the time
+	// they dismissed a conversation, until a newer message of it is
+	// cached. One per conversation, and it goes with its account or its
+	// conversation, a merge taking it to the conversation it joined.
+	{
+		`CREATE TABLE follow_up_dismissals (
+			account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+			thread_id INTEGER NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+			dismissed_at INTEGER NOT NULL,
+			PRIMARY KEY (account_id, thread_id))`,
+		`CREATE INDEX follow_up_dismissals_thread ON follow_up_dismissals (thread_id)`,
+	},
 }
 
 // backfills compute, from the rows of the version before, statements a

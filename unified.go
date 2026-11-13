@@ -130,6 +130,7 @@ func (a *app) syncInboxes(g uint64) {
 				a.aim.last = true
 			}
 			a.loadMessages(g)
+			a.loadFollowUps(g)
 		})
 	})
 }
@@ -159,6 +160,7 @@ func (a *app) syncMovedBack(g uint64, account, folder string) {
 				a.updateBadge()
 			}
 			a.loadMessages(g)
+			a.loadFollowUps(g)
 		})
 	})
 }

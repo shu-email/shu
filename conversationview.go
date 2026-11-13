@@ -13,9 +13,10 @@ import (
 
 // viewToggle is the list header's switch between a row for each
 // conversation and a row for each message. The Drafts entry lists drafts
-// one by one either way, so it has none.
+// one by one either way, and the follow-ups are conversations' by nature,
+// so they have none.
 func (a *app) viewToggle(c *ui.Context) {
-	if a.draftsList() {
+	if a.draftsList() || a.folder == followUpFolder {
 		return
 	}
 	label := locales.GroupByConversation()
@@ -181,6 +182,11 @@ func (a *app) compactThreadMarks(c *ui.Context, n int, has, allFlagged, allSeen 
 			if n == 1 {
 				m.Separator()
 				m.Submenu(locales.RemindMe(), func(sub *ui.Menu) { a.remindMenuItems(sub, now, targets[0]) })
+				if a.folder == followUpFolder {
+					if m.Item(locales.DismissFollowUp()).Chosen() {
+						a.dismissFollowUp(targets[0].Account, targets[0].Thread)
+					}
+				}
 			}
 		})
 		if a.labels.picker {

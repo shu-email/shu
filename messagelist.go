@@ -100,7 +100,13 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme, bar ui.TitleBar, head floa
 				who, title := a.rowHeading(m)
 				return who + " " + title
 			}
-			parts := []string{m.From.Name + " " + m.Subject}
+			who := m.From.Name
+			if a.folder == followUpFolder {
+				// A follow-up row is a message the user sent: its name says
+				// whom it waits for, as its heading does.
+				who, _ = a.rowHeading(m)
+			}
+			parts := []string{who + " " + m.Subject}
 			account, folder := a.rowPlace(m)
 			if folder != "" {
 				parts = append(parts, locales.InFolder(folder))
@@ -269,7 +275,7 @@ func (a *app) listHead(c *ui.Context, t *ui.Theme, bar ui.TitleBar, head float32
 // isServerFolder reports whether id names one of the account's folders,
 // not a list of Shu's own, as Starred and Drafts are.
 func (a *app) isServerFolder(id string) bool {
-	if id == "starred" || id == draftsFolder || id == remindersFolder {
+	if id == "starred" || id == draftsFolder || id == remindersFolder || id == followUpFolder {
 		return false
 	}
 	for _, f := range a.folders {
@@ -545,6 +551,14 @@ func (a *app) rowReason(i int) string {
 // every row is from the user, so whom the draft is to tells the rows
 // apart; a draft may have neither that nor a subject yet.
 func (a *app) rowHeading(m mail.Summary) (who, title string) {
+	if a.folder == followUpFolder {
+		// The row is a message the user sent: whom they wrote to tells the
+		// conversations apart.
+		if who = recipients(m.To); who == "" {
+			who = locales.NoRecipient()
+		}
+		return who, m.Subject
+	}
 	if !a.draftsList() {
 		return displayName(m.From), m.Subject
 	}

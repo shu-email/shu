@@ -91,6 +91,11 @@ func (p *listPlan) messageSQL() (query string, args []any, ok bool) {
 		where += ` AND (m.date, m.id) < (?, ?)`
 		args = append(args, p.after.date, p.after.id)
 	}
+	if p.follow {
+		threads, threadArgs := p.followThreadsSQL()
+		where += ` AND m.thread_id IN (` + threads + `)`
+		args = append(args, threadArgs...)
+	}
 	return `SELECT ` + summaryColumns + `
 		FROM messages m JOIN folders f ON f.id = m.folder_id
 		WHERE ` + where + ` AND m.deleted = 0
@@ -280,10 +285,13 @@ func (p *listPlan) conversationSQL() (string, []any) {
 		where += ` AND +m.thread_id IN (SELECT h.thread_id FROM messages h WHERE h.deleted = 0 AND ` + match + `)`
 		args = append(args, matchArgs...)
 	}
-	newer, newerArgs := p.inScope("n", p.folders, false)
-	where += ` AND NOT EXISTS (SELECT 1 FROM messages n WHERE n.thread_id = m.thread_id AND ` + newer + `
-		AND n.deleted = 0 AND (n.date, n.id) > (m.date, m.id))`
-	args = append(args, newerArgs...)
+	newest, newestArgs := p.newestCond("m")
+	where += ` AND ` + newest
+	args = append(args, newestArgs...)
+	if cond, condArgs := p.followUpCond("m", "f"); cond != "" {
+		where += ` AND ` + cond
+		args = append(args, condArgs...)
+	}
 	columns, join, order := summaryColumns, "", "m.date DESC, m.id DESC"
 	if p.reminded {
 		// A row of the reminders carries its due time, which the page

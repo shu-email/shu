@@ -254,6 +254,36 @@ func (msgs Messages) RemoveReminder() string {
 	return Catalog.Format(msgs.locale, "removeReminder", nil)
 }
 
+// FollowUp says "Follow Up"
+// in the language the app shows.
+func FollowUp() string { return In(i18n.Locale()).FollowUp() }
+
+// FollowUp says "Follow Up"
+// in the language of msgs.
+func (msgs Messages) FollowUp() string {
+	return Catalog.Format(msgs.locale, "followUp", nil)
+}
+
+// DismissFollowUp says "Dismiss follow-up"
+// in the language the app shows.
+func DismissFollowUp() string { return In(i18n.Locale()).DismissFollowUp() }
+
+// DismissFollowUp says "Dismiss follow-up"
+// in the language of msgs.
+func (msgs Messages) DismissFollowUp() string {
+	return Catalog.Format(msgs.locale, "dismissFollowUp", nil)
+}
+
+// NoRecipient says "No recipient"
+// in the language the app shows.
+func NoRecipient() string { return In(i18n.Locale()).NoRecipient() }
+
+// NoRecipient says "No recipient"
+// in the language of msgs.
+func (msgs Messages) NoRecipient() string {
+	return Catalog.Format(msgs.locale, "noRecipient", nil)
+}
+
 // ReminderBadTime says "Type a date and time, as 2026-11-20 09:00."
 // in the language the app shows.
 func ReminderBadTime() string { return In(i18n.Locale()).ReminderBadTime() }

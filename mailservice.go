@@ -91,6 +91,13 @@ type mailService interface {
 	RemoveReminder(ctx context.Context, accountID string, thread mail.ThreadID) error
 	RestoreReminder(ctx context.Context, r mail.Reminder) (mail.Reminder, error)
 	DeliverReminders(ctx context.Context) ([]mail.Reminder, error)
+	// Follow Up is a list derived from the cache: the conversations whose
+	// newest message, outside the drafts, junk and trash, is one the user
+	// sent three days to a month ago and no one answered. FollowUpCount is
+	// how many there are; DismissFollowUp takes one off until a newer
+	// message of it is cached. No server hears of either.
+	FollowUpCount(ctx context.Context, accountID string) (int, error)
+	DismissFollowUp(ctx context.Context, accountID string, thread mail.ThreadID) error
 	Send(ctx context.Context, accountID string, out mail.Outgoing) (mail.SendResult, error)
 	RetryPending(ctx context.Context, id string) (mail.SendResult, error)
 	PendingSends(ctx context.Context, accountID string) ([]mail.PendingSend, error)

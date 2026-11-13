@@ -133,6 +133,14 @@ func (p *threadPlan) before() []stmtType {
 			stmt(`UPDATE reminders SET remind_at = (SELECT MIN(remind_at) FROM reminders WHERE thread_id IN (?, ?))
 				WHERE thread_id = ?`, to, id, to),
 			stmt(`DELETE FROM reminders WHERE thread_id = ?`, id),
+			// A dismissal goes the same way, the later keeping its time.
+			stmt(`INSERT INTO follow_up_dismissals (account_id, thread_id, dismissed_at)
+				SELECT account_id, ?, dismissed_at FROM follow_up_dismissals
+				WHERE thread_id = ? AND NOT EXISTS (SELECT 1 FROM follow_up_dismissals WHERE thread_id = ?)`, to, id, to),
+			stmt(`UPDATE follow_up_dismissals
+				SET dismissed_at = (SELECT MAX(dismissed_at) FROM follow_up_dismissals WHERE thread_id IN (?, ?))
+				WHERE thread_id = ?`, to, id, to),
+			stmt(`DELETE FROM follow_up_dismissals WHERE thread_id = ?`, id),
 			stmt(`DELETE FROM threads WHERE id = ?`, id))
 	}
 	for _, id := range p.created {

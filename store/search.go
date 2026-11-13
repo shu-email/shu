@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"shu/mail"
 )
@@ -72,10 +73,12 @@ type listPlan struct {
 	// folders are the scope's, and starred narrows them to the flagged
 	// messages, label to those with the label, reminded to the
 	// conversations an account has a reminder for.
-	folders  []int64
-	starred  bool
-	reminded bool
-	label    int64
+	folders   []int64
+	starred   bool
+	reminded  bool
+	follow    bool
+	followNow time.Time
+	label     int64
 	// in are the folders the search's In names, nil when it names none.
 	in []int64
 	// labels are, for each label the search names, the labels of that
@@ -100,9 +103,14 @@ func (s *Store) plan(ctx context.Context, q mail.ListQuery, criteria []criterion
 	if err != nil {
 		return nil, err
 	}
-	p := &listPlan{starred: q.Scope.Starred, reminded: q.Scope.Reminded, label: int64(q.Scope.Label),
+	p := &listPlan{starred: q.Scope.Starred, reminded: q.Scope.Reminded, follow: q.Scope.FollowUp,
+		followNow: q.Scope.FollowUpNow, label: int64(q.Scope.Label),
 		criteria: criteria, search: q.Search, after: after, limit: q.Limit,
-		whole: q.Scope.Folder == "" && q.Scope.Special == "" && !q.Scope.Starred && q.Scope.Label == 0 && !q.Scope.Reminded}
+		whole: q.Scope.Folder == "" && q.Scope.Special == "" && !q.Scope.Starred && q.Scope.Label == 0 &&
+			!q.Scope.Reminded && !q.Scope.FollowUp}
+	if p.follow && p.followNow.IsZero() {
+		p.followNow = s.now()
+	}
 	if p.limit <= 0 {
 		p.limit = mail.DefaultPageSize
 	}
@@ -133,7 +141,7 @@ func (s *Store) plan(ctx context.Context, q mail.ListQuery, criteria []criterion
 	}
 	for _, r := range rows.Values {
 		id, f := number(r[0]), mail.Folder{Name: text(r[1]), SpecialUse: text(r[2])}
-		kept := p.label == 0 && !p.reminded || f.InLabelScope()
+		kept := p.label == 0 && !p.reminded && !p.follow || f.InLabelScope()
 		if (q.Scope.Folder == "" || f.Name == q.Scope.Folder) && (q.Scope.Special == "" || f.SpecialUse == q.Scope.Special) && kept {
 			p.folders = append(p.folders, id)
 		}
@@ -348,4 +356,47 @@ func (s *Store) CheckSearchIndex(ctx context.Context) error {
 		return fmt.Errorf("store: full-text index is out of step with the messages: %w", err)
 	}
 	return nil
+}
+
+// newestCond is the condition that a message m of a scope is its
+// conversation's newest in that scope.
+func (p *listPlan) newestCond(m string) (string, []any) {
+	newer, args := p.inScope("n", p.folders, false)
+	return `NOT EXISTS (SELECT 1 FROM messages n WHERE n.thread_id = ` + m + `.thread_id AND ` + newer + `
+		AND n.deleted = 0 AND (n.date, n.id) > (` + m + `.date, ` + m + `.id))`, args
+}
+
+// followUpCond is the condition that a conversation's newest message m,
+// of the folder f, waits for a reply at the scope's time (see
+// mail.FollowUpScope). It is "" unless the scope is of follow-ups.
+func (p *listPlan) followUpCond(m, f string) (string, []any) {
+	if !p.follow {
+		return "", nil
+	}
+	since := p.followNow.Add(-mail.FollowUpMaxAge).Unix()
+	until := p.followNow.Add(-mail.FollowUpMinAge).Unix()
+	// The message is one the user sent: in Sent, or the copy of one that a
+	// server keeps elsewhere too, as Gmail keeps All Mail.
+	cond := `(COALESCE(` + f + `.special_use, '') = ? OR EXISTS (
+		SELECT 1 FROM messages c JOIN folders cf ON cf.id = c.folder_id
+		WHERE c.thread_id = ` + m + `.thread_id AND c.deleted = 0
+			AND COALESCE(cf.special_use, '') = ? AND c.msg_key = ` + m + `.msg_key))`
+	cond += ` AND ` + m + `.date >= ? AND ` + m + `.date <= ?`
+	cond += ` AND NOT EXISTS (SELECT 1 FROM messages x JOIN folders xf ON xf.id = x.folder_id
+		WHERE x.thread_id = ` + m + `.thread_id AND x.deleted = 0 AND COALESCE(xf.special_use, '') IN (?, ?))`
+	cond += ` AND NOT EXISTS (SELECT 1 FROM follow_up_dismissals d
+		WHERE d.thread_id = ` + m + `.thread_id AND d.dismissed_at >= ` + m + `.date)`
+	return cond, []any{mail.SpecialSent, mail.SpecialSent, since, until, mail.SpecialJunk, mail.SpecialTrash}
+}
+
+// followThreadsSQL selects the conversations a follow-up scope reads: a
+// message of one of them is in the scope, which a message page needs.
+func (p *listPlan) followThreadsSQL() (string, []any) {
+	where, args := p.inScope("m2", p.folders, false)
+	newest, newestArgs := p.newestCond("m2")
+	cond, condArgs := p.followUpCond("m2", "f2")
+	args = append(args, newestArgs...)
+	args = append(args, condArgs...)
+	return `SELECT m2.thread_id FROM messages m2 JOIN folders f2 ON f2.id = m2.folder_id
+		WHERE ` + where + ` AND m2.deleted = 0 AND ` + newest + ` AND ` + cond, args
 }

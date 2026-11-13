@@ -83,6 +83,19 @@ Windows and Linux. It is written in Go with
   folders, so their actions leave Sent alone. The undo of setting one
   takes it off, when the mail came back, and puts back the one it
   replaced.
+- Follow Up is derived from the cache alone (`mail/followup.go`,
+  `store/followup.go`): the conversations whose newest message outside
+  the drafts, junk and trash is one the user sent
+  (`FollowUpMinAge` to `FollowUpMaxAge` old) and no one answered, with no
+  message of the conversation in Junk or Trash. `mail.FollowUpScope`
+  carries the time that decides, so a list and its count agree; the store
+  uses its own clock when it is zero. `Service.DismissFollowUp` keeps a
+  conversation off until a message newer than the dismissal is cached
+  (`follow_up_dismissals`, one row per conversation, carried by a merge);
+  no server hears of it. Its list spans the folders
+  `Folder.InLabelScope` keeps, its rows are the sent messages, and the
+  window lists it as conversations even where the user lists single
+  messages.
 - Mail is received while the app runs by one watcher per account inside
   `mail.Service` (`Watch`, `Unwatch`, `Nudge`, `SetOnline`). A watcher
   keeps its own connection to the inbox, opened read-only, idles where

@@ -330,3 +330,16 @@ func parseCursor(c mail.Cursor) (cursor, error) {
 func (c cursor) value() mail.Cursor {
 	return mail.Cursor(strconv.FormatInt(c.date, 10) + "." + strconv.FormatInt(c.id, 10))
 }
+
+// CheckSearchIndex proves the full-text index is in step with the
+// messages. FTS5's integrity check with an argument compares the index
+// with the content table, so a row a skipped trigger left unindexed, an
+// indexed row the messages no longer hold and an indexed row whose
+// columns changed all show. It reads the indexed columns of every
+// message.
+func (s *Store) CheckSearchIndex(ctx context.Context) error {
+	if _, err := s.exec(ctx, `INSERT INTO messages_fts(messages_fts, rank) VALUES ('integrity-check', 1)`); err != nil {
+		return fmt.Errorf("store: full-text index is out of step with the messages: %w", err)
+	}
+	return nil
+}

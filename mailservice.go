@@ -235,6 +235,20 @@ type mailService interface {
 	// refused once more, as the footer offers, and returns how many went
 	// back to the queue.
 	RetryFailedActions(ctx context.Context, accountID string) (int, error)
+
+	// Leaving a mailing list, and blocking a sender. UnsubscribeOffer reads
+	// what a message's headers say the list offers, through the cache
+	// alone; Unsubscribe makes the one the user chose, and keeps it for
+	// this sender. Blocks are this device's: the sender's mail is filed as
+	// it arrives, and mail already here stays.
+	UnsubscribeOffer(ctx context.Context, accountID, folder string, uid mail.UID) (mail.UnsubscribeOffer, error)
+	Unsubscribe(ctx context.Context, accountID, folder string, uid mail.UID, method mail.UnsubscribeMethod) (mail.UnsubscribeRecord, error)
+	Unsubscribed(ctx context.Context, accountID, email string) (*mail.UnsubscribeRecord, error)
+	Unsubscribes(ctx context.Context, accountID string) ([]mail.UnsubscribeRecord, error)
+	BlockSender(ctx context.Context, accountID, address string, domain bool, folder string) (mail.BlockedSender, error)
+	UnblockSender(ctx context.Context, accountID, value string, domain bool) error
+	BlockedSenders(ctx context.Context, accountID string) ([]mail.BlockedSender, error)
+
 	Settings(ctx context.Context) (mail.Settings, error)
 	SaveSettings(ctx context.Context, s mail.Settings) error
 }

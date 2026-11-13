@@ -35,6 +35,27 @@ func (a *app) ownDomains() []string {
 	return out
 }
 
+// ownAddress reports whether an address is one the user receives and
+// sends from: an account's or an identity's. Leaving a list and blocking
+// a sender are not offered for the user's own mail.
+func (a *app) ownAddress(email string) bool {
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return false
+	}
+	for _, acc := range a.accounts {
+		if strings.EqualFold(acc.Email, email) {
+			return true
+		}
+		for _, id := range a.aliases[acc.ID] {
+			if strings.EqualFold(id.Email, email) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // securityNotice draws what the cached headers say about the message's
 // sender: its authentication verdict, a sender outside the user's
 // domains, and a Reply-To that leaves them. Unknown is never drawn as
@@ -94,6 +115,22 @@ func (a *app) securityNotice(c *ui.Context, t *ui.Theme, m mail.Summary, msg *ma
 			for _, evidence := range tr.Evidence {
 				ui.Text(c, evidence).FontSize(10).TextColor(t.TextMuted).
 					Selectable().MaxLines(4)
+			}
+			if rec, ok := a.lists[unsubKey(m.Account, m.From.Email)]; ok {
+				line(locales.UnsubscribedOn(a.longTime(c, rec.At)))
+			}
+			// Leaving a list and blocking a sender are the user's choices,
+			// each confirmed with the exact destination first.
+			offer := offerOf(msg)
+			if !a.ownAddress(m.From.Email) && (!offer.Empty() || m.From.Email != "") {
+				ui.Row(c).Wrap().Gap(8).AlignItems(ui.Center).Children(func() {
+					if !offer.Empty() {
+						ui.Button(c, locales.Unsubscribe()).OnClick(func() { a.openUnsubscribe(m, offer) })
+					}
+					if m.From.Email != "" {
+						ui.Button(c, locales.BlockSender()).OnClick(func() { a.openBlockSender(m) })
+					}
+				})
 			}
 		})
 	})

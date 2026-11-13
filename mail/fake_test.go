@@ -96,9 +96,12 @@ type memStore struct {
 	// discoveries are the servers kept for each domain.
 	discoveries map[string]Discovery
 	// pending are the actions queued for the server (see queue.go), the
-	// last ID given pendingNext.
+	// last ID given pendingNext. blocks are the senders an account files
+	// away, and unsubs the lists it left, by account and sender.
 	pending     []PendingOperation
 	pendingNext int64
+	blocks      map[string][]BlockedSender
+	unsubs      map[string]UnsubscribeRecord
 }
 
 // memMark is a folder's watermark.
@@ -128,6 +131,8 @@ func newMemStore() *memStore {
 		dismissed:   map[string]map[ThreadID]time.Time{},
 		smarts:      map[string][]SmartMailbox{},
 		discoveries: map[string]Discovery{},
+		blocks:      map[string][]BlockedSender{},
+		unsubs:      map[string]UnsubscribeRecord{},
 	}
 }
 
@@ -1055,6 +1060,66 @@ func (s *memStore) GetMessage(ctx context.Context, accountID, folder string, uid
 	m.Summary = s.labelledLocked(m.Summary, accountID, s.folderLocked(accountID, folder), m)
 	m.Account = accountID
 	return m, true, nil
+}
+
+func (s *memStore) BlockedSenders(ctx context.Context, accountID string) ([]BlockedSender, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]BlockedSender(nil), s.blocks[accountID]...), nil
+}
+
+func (s *memStore) SaveBlockedSender(ctx context.Context, b BlockedSender) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	list := s.blocks[b.AccountID]
+	for i := range list {
+		if list[i].Value == b.Value && list[i].Domain == b.Domain {
+			list[i] = b
+			return nil
+		}
+	}
+	s.blocks[b.AccountID] = append(list, b)
+	return nil
+}
+
+func (s *memStore) RemoveBlockedSender(ctx context.Context, accountID, value string, domain bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	list := s.blocks[accountID]
+	out := list[:0]
+	for _, b := range list {
+		if b.Value != value || b.Domain != domain {
+			out = append(out, b)
+		}
+	}
+	s.blocks[accountID] = out
+	return nil
+}
+
+func (s *memStore) UnsubscribeRecord(ctx context.Context, accountID, email string) (UnsubscribeRecord, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, ok := s.unsubs[accountID+"\x00"+email]
+	return r, ok, nil
+}
+
+func (s *memStore) Unsubscribes(ctx context.Context, accountID string) ([]UnsubscribeRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []UnsubscribeRecord
+	for _, r := range s.unsubs {
+		if r.AccountID == accountID {
+			out = append(out, r)
+		}
+	}
+	return out, nil
+}
+
+func (s *memStore) SaveUnsubscribe(ctx context.Context, r UnsubscribeRecord) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.unsubs[r.AccountID+"\x00"+r.Email] = r
+	return nil
 }
 
 func (s *memStore) SaveMessage(ctx context.Context, accountID, folder string, m Message) error {

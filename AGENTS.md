@@ -331,6 +331,26 @@ Windows and Linux. It is written in Go with
   of a rule, saved or not, and changes nothing; `RunRule` runs a saved
   rule once over exactly those, logged as any match. The log keeps the
   newest `mail.MaxRuleActivity` entries and every pending one.
+- Leaving a mailing list and blocking a sender are the user's own choices,
+  kept on this device (`mail/unsubscribe.go`, `mail/block.go`,
+  `store/block.go`, and the window's `block.go`). What a message's
+  `List-Unsubscribe` headers offer is read from the cached headers alone
+  (`mail.ParseUnsubscribeOffer`); the window offers an unsubscribe only
+  when one exists, and the confirmation names the exact URL or address
+  before anything leaves. `Service.Unsubscribe` makes the method chosen:
+  one RFC 8058 POST through `Service.HTTPClient`, an email from the
+  account through `Service.Send`, or nothing at all for a page, which the
+  window alone opens. Nothing unsubscribes by itself, and the choice is
+  kept per sender and account (`unsubscribes`, migration v23).
+  A block names an address or a whole domain, per account, and the folder
+  its new mail goes to. `fileBlocked` runs in `sortArrivals` before the
+  rules, takes the sender's mail out of the batch and files it with
+  `MoveMessages`, so the move waits in the queue when the server is out
+  of reach, and the watcher announces none of it (`heldBack`). No cached
+  mail moves, and no server hears of the block. The banner's undo drops
+  the block and puts back the one it replaced, and the settings' Privacy
+  tab lists the blocks to unblock (`Service.BlockedSenders`,
+  `UnblockSender`, `blocked_senders`).
 - `ai/` is the AI layer: provider settings, the excerpt that decides what
   part of a message may leave the device, the features (summary of a
   message or a conversation, triage, draft reply) and `Service.send`, the

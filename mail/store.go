@@ -277,6 +277,19 @@ type Store interface {
 	CancelOperations(ctx context.Context, ids []int64) ([]int64, error)
 	RetryFailedOperations(ctx context.Context, accountID string, nextTry time.Time) (int, error)
 
+	// Blocked senders (see BlockedSender), one account's each. SaveBlocked
+	// Sender adds one or changes where an existing block files its mail,
+	// and RemoveBlockedSender takes one back; both are this device's.
+	BlockedSenders(ctx context.Context, accountID string) ([]BlockedSender, error)
+	SaveBlockedSender(ctx context.Context, b BlockedSender) error
+	RemoveBlockedSender(ctx context.Context, accountID, value string, domain bool) error
+	// UnsubscribeRecord reads what the account kept of leaving one
+	// sender's list, and Unsubscribes all of them, newest first;
+	// SaveUnsubscribe keeps one, replacing what the sender had.
+	UnsubscribeRecord(ctx context.Context, accountID, email string) (UnsubscribeRecord, bool, error)
+	Unsubscribes(ctx context.Context, accountID string) ([]UnsubscribeRecord, error)
+	SaveUnsubscribe(ctx context.Context, r UnsubscribeRecord) error
+
 	// MessageHeaders reads cached messages of a folder without their
 	// bodies, each with its labels and RawHeaders: those of uids, or every
 	// one when uids is nil, tombstones left out.

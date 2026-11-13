@@ -67,6 +67,7 @@ func (s *Service) writeArrivals(ctx context.Context, accountID string, batch Syn
 	}
 	if !same {
 		delete(s.movedIn, accountID+"\x00"+batch.Folder.Name)
+		delete(s.heldBack, accountID+"\x00"+batch.Folder.Name)
 	}
 	if !sorts || !same {
 		return false, nil
@@ -93,6 +94,9 @@ func (s *Service) sortArrivals(ctx context.Context, accountID string, folder Fol
 		return false
 	}
 	msgs = s.skipMovedIn(ctx, accountID, folder, msgs)
+	// A block files its sender's mail before the rules see it: the rules
+	// sort the mail that stays.
+	msgs = s.fileBlocked(ctx, accountID, folder, msgs)
 	rules, err := s.sortingRules(ctx)
 	if err != nil {
 		return false
@@ -155,8 +159,9 @@ func (s *Service) takeNew(ctx context.Context, accountID, folder string) ([]Summ
 		return nil, err
 	}
 	note := accountID + "\x00" + folder
-	moved := s.movedIn[note]
+	moved, held := s.movedIn[note], s.heldBack[note]
 	delete(s.movedIn, note)
+	delete(s.heldBack, note)
 	if len(fresh) == 0 {
 		return fresh, nil
 	}
@@ -173,7 +178,9 @@ func (s *Service) takeNew(ctx context.Context, accountID, folder string) ([]Summ
 			}
 		}
 	}
-	return slices.DeleteFunc(fresh, func(m Summary) bool { return quiet[m.UID] || moved[m.UID] }), nil
+	return slices.DeleteFunc(fresh, func(m Summary) bool {
+		return quiet[m.UID] || moved[m.UID] || held[m.UID]
+	}), nil
 }
 
 // arrivalsCount reports whether the mail that arrives in a folder is

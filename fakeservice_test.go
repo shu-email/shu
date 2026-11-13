@@ -157,6 +157,17 @@ type fakeService struct {
 	smartSeq int64
 	smartErr error
 
+	// Leaving lists and blocking senders, both this device's. lists holds
+	// each account's unsubscribe records by sender, blocks each account's
+	// in their order, unsubCalls and blockCalls record the calls, and
+	// unsubErr and blockErr make them fail.
+	lists      map[string]map[string]mail.UnsubscribeRecord
+	blocks     map[string][]mail.BlockedSender
+	unsubCalls []string
+	blockCalls []string
+	unsubErr   error
+	blockErr   error
+
 	// Pages. cursors are the rows the cursors handed out end at;
 	// pageReads counts the page reads, onPage runs as each begins, and
 	// pageErr fails them. syncCalls records each SyncFolder with its
@@ -347,6 +358,8 @@ func newFakeService() *fakeService {
 		older:      map[string][]mail.Summary{},
 		smarts:     map[string][]mail.SmartMailbox{},
 		discovered: map[string]mail.Discovery{},
+		lists:      map[string]map[string]mail.UnsubscribeRecord{},
+		blocks:     map[string][]mail.BlockedSender{},
 
 		oauth:      map[string]bool{},
 		newAddress: "ann@gmail.com",
@@ -2904,6 +2917,135 @@ func (f *fakeService) DeleteSmartMailbox(ctx context.Context, accountID string, 
 		}
 	}
 	return mail.ErrNotFound
+}
+
+// UnsubscribeOffer reads what a cached message's headers say its list
+// offers.
+func (f *fakeService) UnsubscribeOffer(ctx context.Context, accountID, folder string, uid mail.UID) (mail.UnsubscribeOffer, error) {
+	f.act(accountID, "UnsubscribeOffer %s/%d", folder, uid)
+	if f.unsubErr != nil {
+		return mail.UnsubscribeOffer{}, f.unsubErr
+	}
+	msg, ok := f.bodies[bodyKey(accountID, folder, uid)]
+	if !ok {
+		s, found := f.find(accountID, folder, uid)
+		if !found {
+			return mail.UnsubscribeOffer{}, mail.ErrNotFound
+		}
+		msg = mail.Message{Summary: s}
+	}
+	list, post := msg.Unsubscribe()
+	offer := mail.ParseUnsubscribeOffer(list, post)
+	if offer.Empty() {
+		return mail.UnsubscribeOffer{}, mail.ErrNoUnsubscribe
+	}
+	return offer, nil
+}
+
+// Unsubscribe leaves a list by the method given, as the engine does, and
+// keeps the choice.
+func (f *fakeService) Unsubscribe(ctx context.Context, accountID, folder string, uid mail.UID, method mail.UnsubscribeMethod) (mail.UnsubscribeRecord, error) {
+	f.act(accountID, "Unsubscribe %s/%d %s", folder, uid, method)
+	if f.unsubErr != nil {
+		return mail.UnsubscribeRecord{}, f.unsubErr
+	}
+	msg, ok := f.bodies[bodyKey(accountID, folder, uid)]
+	if !ok {
+		s, found := f.find(accountID, folder, uid)
+		if !found {
+			return mail.UnsubscribeRecord{}, mail.ErrNotFound
+		}
+		msg = mail.Message{Summary: s}
+	}
+	list, post := msg.Unsubscribe()
+	dest, ok := mail.ParseUnsubscribeOffer(list, post).Destination(method)
+	if !ok {
+		return mail.UnsubscribeRecord{}, mail.ErrNoUnsubscribe
+	}
+	rec := mail.UnsubscribeRecord{
+		AccountID: accountID, Email: strings.ToLower(msg.From.Email),
+		Method: method, Destination: dest, At: f.now(),
+	}
+	if f.lists[accountID] == nil {
+		f.lists[accountID] = map[string]mail.UnsubscribeRecord{}
+	}
+	f.lists[accountID][rec.Email] = rec
+	f.unsubCalls = append(f.unsubCalls, accountID+" "+rec.Email+" "+string(method)+" "+dest)
+	return rec, nil
+}
+
+// Unsubscribed reads what the account kept of leaving a sender's list.
+func (f *fakeService) Unsubscribed(ctx context.Context, accountID, email string) (*mail.UnsubscribeRecord, error) {
+	rec, ok := f.lists[accountID][strings.ToLower(strings.TrimSpace(email))]
+	if !ok {
+		return nil, nil
+	}
+	return &rec, nil
+}
+
+// Unsubscribes lists every list the account left, newest first.
+func (f *fakeService) Unsubscribes(ctx context.Context, accountID string) ([]mail.UnsubscribeRecord, error) {
+	out := make([]mail.UnsubscribeRecord, 0, len(f.lists[accountID]))
+	for _, rec := range f.lists[accountID] {
+		out = append(out, rec)
+	}
+	slices.SortFunc(out, func(a, b mail.UnsubscribeRecord) int { return b.At.Compare(a.At) })
+	return out, nil
+}
+
+// BlockSender keeps a sender's mail out of the inbox from now on.
+func (f *fakeService) BlockSender(ctx context.Context, accountID, address string, domain bool, folder string) (mail.BlockedSender, error) {
+	f.act(accountID, "BlockSender %q %v %s", address, domain, folder)
+	if f.blockErr != nil {
+		return mail.BlockedSender{}, f.blockErr
+	}
+	var value string
+	var err error
+	if domain {
+		value, err = mail.BlockDomain(address)
+	} else {
+		value, err = mail.BlockAddress(address)
+	}
+	if err != nil {
+		return mail.BlockedSender{}, err
+	}
+	if _, ok := f.fakeFolder(accountID, folder); !ok {
+		return mail.BlockedSender{}, mail.ErrNotFound
+	}
+	b := mail.BlockedSender{AccountID: accountID, Value: value, Domain: domain, Folder: folder, At: f.now()}
+	kept := false
+	for i := range f.blocks[accountID] {
+		if f.blocks[accountID][i].Value == value && f.blocks[accountID][i].Domain == domain {
+			f.blocks[accountID][i] = b
+			kept = true
+		}
+	}
+	if !kept {
+		f.blocks[accountID] = append(f.blocks[accountID], b)
+	}
+	f.blockCalls = append(f.blockCalls, accountID+" "+value+" "+folder)
+	return b, nil
+}
+
+// UnblockSender takes a block back.
+func (f *fakeService) UnblockSender(ctx context.Context, accountID, value string, domain bool) error {
+	f.act(accountID, "UnblockSender %q %v", value, domain)
+	if f.blockErr != nil {
+		return f.blockErr
+	}
+	value = strings.ToLower(strings.TrimSpace(strings.TrimPrefix(value, "@")))
+	for i, b := range f.blocks[accountID] {
+		if b.Value == value && b.Domain == domain {
+			f.blocks[accountID] = append(f.blocks[accountID][:i], f.blocks[accountID][i+1:]...)
+			return nil
+		}
+	}
+	return nil
+}
+
+// BlockedSenders lists an account's blocks, newest first.
+func (f *fakeService) BlockedSenders(ctx context.Context, accountID string) ([]mail.BlockedSender, error) {
+	return append([]mail.BlockedSender(nil), f.blocks[accountID]...), nil
 }
 
 // CountUnread counts the unread messages a list query reads.

@@ -50,6 +50,10 @@ type undoAction struct {
 	// which the undo puts back.
 	reminder     *mail.Reminder
 	prevReminder *mail.Reminder
+	// block is the sender this action blocked, which the undo unblocks,
+	// and prevBlock the block it replaced, which the undo puts back.
+	block     *mail.BlockedSender
+	prevBlock *mail.BlockedSender
 }
 
 // undoOfMove is the undo a move of one message offers. A move that waits
@@ -336,6 +340,14 @@ type app struct {
 	rules        ruleState
 	ruleCheckMu  sync.Mutex
 	ruleCheckSeq atomic.Uint64
+	// Leaving a mailing list and blocking a sender (block.go): lists is
+	// what this device recorded of leaving each sender's list, by account
+	// and sender, and unsubForm the question before one is left. blocks
+	// is the Privacy tab's list of blocked senders, and blockForm the
+	// question before one is blocked.
+	lists     map[string]mail.UnsubscribeRecord
+	unsubForm unsubForm
+	blocks    blockState
 
 	// Hooks the window sets; tests leave them nil.
 	newWindow func(mygo.WindowOptions) *mygo.Window
@@ -551,6 +563,17 @@ func (a *app) start() {
 		// the first message written its compose settings.
 		set, setErr := a.svc.Settings(ctx)
 		compose, composeErr := a.svc.ComposeSettings(ctx)
+		// What this device kept of leaving lists, for the sender cards.
+		lists := map[string]mail.UnsubscribeRecord{}
+		for _, acc := range accounts {
+			records, e := a.svc.Unsubscribes(ctx, acc.ID)
+			if e != nil {
+				continue
+			}
+			for _, rec := range records {
+				lists[unsubKey(rec.AccountID, rec.Email)] = rec
+			}
+		}
 		// An account whose sign-in was revoked or signed out says so from
 		// the start, not after a sync has failed.
 		signedOut := map[string]bool{}
@@ -567,6 +590,7 @@ func (a *app) start() {
 				return
 			}
 			a.accounts = accounts
+			a.lists = lists
 			a.needSignIn = signedOut
 			if err != nil {
 				a.err = err.Error()
@@ -1538,6 +1562,8 @@ func (a *app) mailView(c *ui.Context) {
 	a.smartAlerts(c)
 	aiReviewModal(c, &a.review)
 	a.linkDialog(c)
+	a.unsubscribeDialog(c)
+	a.blockSenderDialog(c)
 	a.folderDialog(c)
 	a.reminderDialog(c)
 	a.attachmentPreviewDialog(c)

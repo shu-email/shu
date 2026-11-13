@@ -721,6 +721,10 @@ func (a *app) undoLastAction() {
 		return
 	}
 	a.setUndo(nil)
+	if u.block != nil {
+		a.undoBlock(u)
+		return
+	}
 	if u.refs != nil {
 		a.undoFlagOrLabel(u)
 		return

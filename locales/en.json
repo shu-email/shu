@@ -4046,5 +4046,122 @@
         "example": "<https://shop.example/unsub?id=1>, <mailto:leave@shop.example>"
       }
     }
+  },
+  "unsubscribe": "Unsubscribe…",
+  "unsubscribeTitle": "Leave this mailing list?",
+  "unsubscribeOneClick": "Shu sends one one-click request (RFC 8058) to:\n{destination}\nThe list's server handles it; nothing else leaves this device.",
+  "@unsubscribeOneClick": {
+    "description": "Confirms a one-click unsubscribe and names the exact URL the request goes to.",
+    "placeholders": {
+      "destination": {
+        "type": "String",
+        "example": "https://shop.example/unsub?id=1"
+      }
+    }
+  },
+  "unsubscribeEmail": "Shu sends an unsubscribe email from this account to:\n{destination}\nNo other message is sent.",
+  "@unsubscribeEmail": {
+    "description": "Confirms an unsubscribe sent as an email from the account, naming the exact address.",
+    "placeholders": {
+      "destination": {
+        "type": "String",
+        "example": "leave@shop.example"
+      }
+    }
+  },
+  "unsubscribePage": "Shu opens the list's page in your browser:\n{destination}\nNothing is sent until you act on that page.",
+  "@unsubscribePage": {
+    "description": "Confirms that the list's page opens in the browser, naming the exact URL.",
+    "placeholders": {
+      "destination": {
+        "type": "String",
+        "example": "https://shop.example/unsubscribe"
+      }
+    }
+  },
+  "unsubscribeConfirm": "Unsubscribe",
+  "unsubscribeOpenPage": "Open Page",
+  "unsubscribeFailed": "Could not unsubscribe: {error}",
+  "@unsubscribeFailed": {
+    "description": "Says that leaving a mailing list failed and why.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "the list answered 500 Internal Server Error"
+      }
+    }
+  },
+  "unsubscribedOn": "You unsubscribed from this list on {date}.",
+  "@unsubscribedOn": {
+    "description": "Says when the user left this sender's mailing list.",
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "2026-11-14 09:30"
+      }
+    }
+  },
+  "blockSender": "Block Sender…",
+  "blockSenderTitle": "Block this sender?",
+  "blockSenderBody": "Mail from {sender} that arrives from now on goes to the folder you choose. Mail already in your mailbox stays where it is.",
+  "@blockSenderBody": {
+    "description": "Explains what blocking a sender does before the user confirms it.",
+    "placeholders": {
+      "sender": {
+        "type": "String",
+        "example": "deals@shop.example"
+      }
+    }
+  },
+  "blockWholeDomain": "Block the whole domain @{domain}",
+  "@blockWholeDomain": {
+    "description": "Offers to block every sender of the sender's domain.",
+    "placeholders": {
+      "domain": {
+        "type": "String",
+        "example": "shop.example"
+      }
+    }
+  },
+  "blockFolderCaption": "Send the sender's new mail to",
+  "blockToJunk": "Move new mail to Junk",
+  "blockToTrash": "Move new mail to Trash",
+  "blockConfirm": "Block",
+  "blockFailed": "Could not block the sender: {error}",
+  "@blockFailed": {
+    "description": "Says that blocking a sender failed and why.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "mail: the sender to block is not an address or a domain"
+      }
+    }
+  },
+  "blockNoFolder": "This account has no Junk or Trash folder to file the sender's mail in.",
+  "senderBlocked": "Sender blocked",
+  "privacyTab": "Privacy",
+  "blockedSenders": "Blocked senders",
+  "blockedSendersHint": "Mail from these senders is filed away as it arrives, on this device only: nothing is deleted and no server hears of it.",
+  "blockedFiledTo": "New mail goes to {folder}",
+  "@blockedFiledTo": {
+    "description": "Says where a blocked sender's new mail is filed.",
+    "placeholders": {
+      "folder": {
+        "type": "String",
+        "example": "Junk"
+      }
+    }
+  },
+  "noBlockedSenders": "No blocked senders.",
+  "unblock": "Unblock",
+  "unblockFailed": "Could not unblock the sender: {error}",
+  "@unblockFailed": {
+    "description": "Says that unblocking a sender failed and why.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "mail: not found"
+      }
+    }
   }
 }

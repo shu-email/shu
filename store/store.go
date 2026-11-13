@@ -533,6 +533,26 @@ var migrations = [][]string{
 	{
 		`ALTER TABLE messages ADD COLUMN security TEXT`,
 	},
+	// v23: the lists left from this device (see mail.UnsubscribeRecord),
+	// one row per sender, and the senders whose mail is filed away as it
+	// arrives (see mail.BlockedSender). Both are the user's choices, and
+	// no server hears of either.
+	{
+		`CREATE TABLE unsubscribes (
+			account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+			email TEXT NOT NULL,
+			method TEXT NOT NULL,
+			destination TEXT NOT NULL,
+			at INTEGER NOT NULL,
+			PRIMARY KEY (account_id, email))`,
+		`CREATE TABLE blocked_senders (
+			account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+			value TEXT NOT NULL,
+			domain INTEGER NOT NULL DEFAULT 0,
+			folder TEXT NOT NULL,
+			at INTEGER NOT NULL,
+			PRIMARY KEY (account_id, value, domain))`,
+	},
 }
 
 // backfills compute, from the rows of the version before, statements a

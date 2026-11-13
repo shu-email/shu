@@ -660,7 +660,13 @@ lines). Keep the original HTML for the webview.
   headers said, and the `List-Unsubscribe` headers that say how the message's
   list is left, are read once (`mail.ParseSecurity`) and kept with the cached
   message (`messages.security`), so a read after a restart has them without
-  the headers; the reading pane reads them from there. The reading
+  the headers; the reading pane reads them from there. An unsubscribe is
+  offered only when those headers have a way, confirmed with its exact
+  destination, made by the RFC 8058 POST, an email from the account or the
+  list's page (`mail/unsubscribe.go`, `Service.Unsubscribe`), and kept for the
+  sender in `unsubscribes` (v23); a block kept per account (`blocked_senders`)
+  files its sender's new mail to the chosen folder as it arrives, before the
+  rules, and the settings' Privacy tab takes it back. The reading
   pane adds a written, icon-labeled notice for the verdict, an external sender
   (outside the accounts' and identities' domains) and a `Reply-To` at another
   domain, with an expandable explanation and the raw headers. Attachment names

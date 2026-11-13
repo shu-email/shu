@@ -67,6 +67,7 @@ var (
 	clockIcon          = mustIcon("clock")
 	shieldQuestionIcon = mustIcon("shield-question")
 	shieldCheckIcon    = mustIcon("shield-check")
+	shieldIcon         = mustIcon("shield")
 	folderInputIcon    = mustIcon("folder-input")
 	eyeIcon            = mustIcon("eye")
 	globeIcon          = mustIcon("globe")

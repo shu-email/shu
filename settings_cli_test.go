@@ -23,7 +23,8 @@ func TestAISettingsLocalToolStatus(t *testing.T) {
 	body := "#!/bin/sh\n" +
 		"if [ \"$1\" = \"--version\" ]; then echo '2.1.323 (Claude Code)'; exit 0; fi\n" +
 		"if [ \"$1\" = \"auth\" ]; then echo '{\"loggedIn\": true}'; exit 0; fi\n" +
-		"exit 1\n"
+		"echo '{\"type\":\"control_response\",\"response\":{\"request_id\":\"shu-models\",\"response\":{\"models\":[{\"value\":\"sonnet\"},{\"value\":\"opus\"}]}}}'\n" +
+		"exit 0\n"
 	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -44,6 +45,12 @@ func TestAISettingsLocalToolStatus(t *testing.T) {
 	}
 	if tt.HasText(locales.AiKey()) {
 		t.Errorf("a local tool asks for an API key: %q", tt.Texts())
+	}
+	if len(a.aiForm.cliModels) != 2 || a.aiForm.cliModels[1] != "opus" {
+		t.Errorf("models = %q", a.aiForm.cliModels)
+	}
+	if !tt.HasText(locales.AiModel()) {
+		t.Errorf("the model field is missing: %q", tt.Texts())
 	}
 }
 

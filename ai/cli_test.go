@@ -193,3 +193,23 @@ echo "- CLI summary line"
 		t.Errorf("an HTTP request was made: %d", provider.count())
 	}
 }
+
+// Claude reports its models through the control protocol, without a
+// model request; the values are deduplicated and "default" is dropped.
+func TestCLIModels(t *testing.T) {
+	script, _, _ := fakeCLI(t, `if [ "$1" = "--version" ]; then echo "2.1.323"; exit 0; fi
+if [ "$1" = "auth" ]; then echo '{"loggedIn": true}'; exit 0; fi
+echo '{"type":"control_response","response":{"request_id":"shu-models","response":{"models":[{"value":"sonnet"},{"value":"opus"},{"value":"default"},{"value":"sonnet"}]}}}'
+`)
+	svc := NewService(nil, nil)
+	models, err := svc.CLIModels(context.Background(), ProviderClaudeCLI, script)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(models) != 2 || models[0] != "sonnet" || models[1] != "opus" {
+		t.Errorf("models = %q", models)
+	}
+	if models, err := svc.CLIModels(context.Background(), ProviderCodexCLI, script); err != nil || len(models) != 0 {
+		t.Errorf("codex models = %q, %v", models, err)
+	}
+}

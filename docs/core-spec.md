@@ -969,8 +969,14 @@ the engine's actions, `mail.ActionKinds`, and no others.
   (`claude auth status --json`, `codex login status`): no prompt and no quota. A
   set command path that does not run is an error, never a fallback. The AI
   settings tab shows the status, version, path, model and the isolation note.
-- Not yet in this slice: the model list an installed tool reports, the separate
-  Providers management panel, and removal of stored tool environment variables.
+- `Service.CLIModels` asks Claude, through its `initialize` control request, which
+  models it offers; the AI settings use them as autocomplete suggestions for the
+  model field, while a typed value still wins. A failed run checks the sign-in
+  state (content-free) and reports `Sign in required` rather than a generic
+  failure. Codex still takes a free-text model.
+- Not yet in this slice: the separate Providers management panel, per-tool
+  environment variables, Codex app-server and removal of stored tool
+  environment values.
 
 ## Testing discipline
 

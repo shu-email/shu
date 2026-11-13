@@ -40,6 +40,7 @@ type aiSettings struct {
 	cliPath   string
 	cliBusy   bool
 	cliStatus ai.CLIStatus
+	cliModels []string
 }
 
 // settingsWindowOptions is the settings window: its own, as a system
@@ -213,6 +214,7 @@ func (a *app) chooseAIProvider() {
 		f.keyStored = false
 		f.cliPath = f.cfg.CLIPath(p.ID)
 		f.cliStatus = ai.CLIStatus{}
+		f.cliModels = nil
 		a.saveAI()
 		if ai.CLIProvider(p.ID) {
 			a.loadCLIStatus()
@@ -518,12 +520,17 @@ func (a *app) loadCLIStatus() {
 		ctx, cancel := a.ctx()
 		defer cancel()
 		status := a.ai.CLIStatus(ctx, id, path)
+		var models []string
+		if status.Installed && status.SignedIn {
+			models, _ = a.ai.CLIModels(ctx, id, path)
+		}
 		a.post(func() {
 			if f.cfg.Provider != id {
 				return
 			}
 			f.cliBusy = false
 			f.cliStatus = status
+			f.cliModels = models
 		})
 	})
 }
@@ -533,6 +540,11 @@ func (a *app) loadCLIStatus() {
 func (a *app) aiLocalToolSection(c *ui.Context, t *ui.Theme) {
 	f := &a.aiForm
 	p, _ := ai.ProviderByID(f.cfg.Provider)
+	ui.Column(c).Gap(4).Children(func() {
+		caption := ui.Text(c, locales.AiModel()).FontSize(11).Bold().TextColor(t.TextMuted)
+		ui.Autocomplete(c, &f.cfg.Model, f.cliModels).LabelledBy(caption).
+			Placeholder(p.Model).FillWidth().OnChange(a.saveAI)
+	})
 	ui.Text(c, locales.AiLocalToolIntro()).FontSize(11).TextColor(t.TextMuted).MaxLines(4).Role(ui.RoleStatus)
 	ui.Column(c).Gap(4).Children(func() {
 		caption := ui.Text(c, locales.AiLocalToolPath()).FontSize(11).Bold().TextColor(t.TextMuted)

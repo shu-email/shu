@@ -269,3 +269,96 @@ func TestCLIEnvironmentValues(t *testing.T) {
 		t.Errorf("the tool saw %q, %v", data, err)
 	}
 }
+
+// The account a tool reports is read from its sign-in status, at any of
+// the places that answer has kept it.
+func TestCLIAccount(t *testing.T) {
+	cases := map[string]string{
+		`{"loggedIn": true, "email": "maya@example.com"}`:              "maya@example.com",
+		`{"loggedIn": true, "emailAddress": "maya@example.com"}`:       "maya@example.com",
+		`{"loggedIn": true, "account": {"email": "maya@example.com"}}`: "maya@example.com",
+		`{"loggedIn": true}`:                            "",
+		`{"loggedIn": true, "email": "not an address"}`: "",
+		`not json`: "",
+	}
+	for in, want := range cases {
+		if got := claudeAccount(in); got != want {
+			t.Errorf("claudeAccount(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// A tool's status carries the account it is signed in as, and each tool
+// names the command and page its next step needs.
+func TestCLIStatusAccountAndNextSteps(t *testing.T) {
+	script, _, _ := fakeCLI(t, "if [ \"$1\" = \"--version\" ]; then echo '2.1.323'; exit 0; fi\n"+
+		"if [ \"$1\" = \"auth\" ]; then echo '{\"loggedIn\": true, \"email\": \"maya@example.com\"}'; exit 0; fi\nexit 0\n")
+	s, _, _, _ := newTestService(t)
+	status := s.CLIStatus(context.Background(), ProviderClaudeCLI, script)
+	if !status.SignedIn || status.Account != "maya@example.com" {
+		t.Errorf("status = %+v", status)
+	}
+	if got := CLISignInCommand(ProviderClaudeCLI); got != "claude auth login" {
+		t.Errorf("claude sign-in = %q", got)
+	}
+	if got := CLISignInCommand(ProviderCodexCLI); got != "codex login" {
+		t.Errorf("codex sign-in = %q", got)
+	}
+	if CLISignInCommand(ProviderOpenAI) != "" {
+		t.Error("an API provider has a sign-in command")
+	}
+	for _, id := range []ProviderID{ProviderClaudeCLI, ProviderCodexCLI} {
+		if !strings.HasPrefix(CLIInstallURL(id), "https://") {
+			t.Errorf("%s install page = %q", id, CLIInstallURL(id))
+		}
+	}
+	if CLIInstallURL(ProviderOpenAI) != "" {
+		t.Error("an API provider has an install page")
+	}
+}
+
+// Removing a provider forgets its setup and its keychain entries, and
+// leaves every other provider as it was.
+func TestRemoveProvider(t *testing.T) {
+	ctx := context.Background()
+	s, _, _, _ := newTestService(t)
+	cfg := DefaultConfig()
+	cfg.UseProvider(ProviderClaudeCLI)
+	cfg.SetCLIPath(ProviderClaudeCLI, "/opt/claude")
+	cfg.SetModelHidden(ProviderClaudeCLI, "opus", true)
+	cfg.SetEffort(ProviderClaudeCLI, "high")
+	cfg.SetProviderOff(ProviderClaudeCLI, true)
+	cfg.SetKeyEndpoint(ProviderClaudeCLI, "http://localhost:1")
+	cfg.UseProvider(ProviderClaudeCLI)
+	cfg.SetModelHidden(ProviderOpenAI, "gpt-4o", true)
+	if err := s.SaveConfig(ctx, cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveCLIEnv(ctx, ProviderClaudeCLI, []CLIEnvVar{{Name: "MY_TOKEN", Value: "secret"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RemoveProvider(ctx, ProviderClaudeCLI); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := s.Config(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.Provider != Providers[0].ID {
+		t.Errorf("provider = %q, want the first preset", saved.Provider)
+	}
+	if saved.CLIPath(ProviderClaudeCLI) != "" || saved.Effort(ProviderClaudeCLI) != "" ||
+		saved.ProviderOff(ProviderClaudeCLI) || saved.KeyEndpoint(ProviderClaudeCLI) != "" ||
+		len(saved.CLIEnvNames(ProviderClaudeCLI)) != 0 || saved.ModelHidden(ProviderClaudeCLI, "opus") {
+		t.Errorf("its setup is still there: %+v", saved)
+	}
+	if !saved.ModelHidden(ProviderOpenAI, "gpt-4o") {
+		t.Error("another provider's setup went with it")
+	}
+	if _, err := s.secrets.Get(cliEnvKey(ProviderClaudeCLI, "MY_TOKEN")); err == nil {
+		t.Error("the tool's value is still in the keychain")
+	}
+	if err := s.RemoveProvider(ctx, "nope"); err == nil {
+		t.Error("an unknown provider was removed")
+	}
+}

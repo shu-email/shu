@@ -10785,3 +10785,155 @@ func AiProviderKeyMoved() string { return In(i18n.Locale()).AiProviderKeyMoved()
 func (msgs Messages) AiProviderKeyMoved() string {
 	return Catalog.Format(msgs.locale, "aiProviderKeyMoved", nil)
 }
+
+// AiProviderRemove says "Remove provider"
+// in the language the app shows.
+func AiProviderRemove() string { return In(i18n.Locale()).AiProviderRemove() }
+
+// AiProviderRemove says "Remove provider"
+// in the language of msgs.
+func (msgs Messages) AiProviderRemove() string {
+	return Catalog.Format(msgs.locale, "aiProviderRemove", nil)
+}
+
+// AiProviderRemoveButton says "Remove"
+// in the language the app shows.
+func AiProviderRemoveButton() string { return In(i18n.Locale()).AiProviderRemoveButton() }
+
+// AiProviderRemoveButton says "Remove"
+// in the language of msgs.
+func (msgs Messages) AiProviderRemoveButton() string {
+	return Catalog.Format(msgs.locale, "aiProviderRemoveButton", nil)
+}
+
+// AiProviderRemoveHint says "Deletes this provider’s setup from this device, its keychain entries included. Mail and drafts stay."
+// in the language the app shows.
+func AiProviderRemoveHint() string { return In(i18n.Locale()).AiProviderRemoveHint() }
+
+// AiProviderRemoveHint says "Deletes this provider’s setup from this device, its keychain entries included. Mail and drafts stay."
+// in the language of msgs.
+func (msgs Messages) AiProviderRemoveHint() string {
+	return Catalog.Format(msgs.locale, "aiProviderRemoveHint", nil)
+}
+
+// AiProviderRemoveTitle says "Remove {name}?"
+// in the language the app shows.
+//
+// The title that asks before a provider's setup is deleted.
+func AiProviderRemoveTitle(name string) string { return In(i18n.Locale()).AiProviderRemoveTitle(name) }
+
+// AiProviderRemoveTitle says "Remove {name}?"
+// in the language of msgs.
+//
+// The title that asks before a provider's setup is deleted.
+func (msgs Messages) AiProviderRemoveTitle(name string) string {
+	return Catalog.Format(msgs.locale, "aiProviderRemoveTitle", map[string]any{"name": name})
+}
+
+// AiProviderRemoveKey says "Shu forgets this provider's setup and deletes its API key from the login Keychain. Mail, drafts and summaries stay, a…"
+// in the language the app shows.
+func AiProviderRemoveKey() string { return In(i18n.Locale()).AiProviderRemoveKey() }
+
+// AiProviderRemoveKey says "Shu forgets this provider's setup and deletes its API key from the login Keychain. Mail, drafts and summaries stay, a…"
+// in the language of msgs.
+func (msgs Messages) AiProviderRemoveKey() string {
+	return Catalog.Format(msgs.locale, "aiProviderRemoveKey", nil)
+}
+
+// AiProviderRemoveTool says "Shu forgets this provider's setup and deletes its keychain entries: the {count, plural, one {value it was given} othe…"
+// in the language the app shows.
+//
+// The message before a local tool's setup is deleted; it names how many
+// keychain values go.
+func AiProviderRemoveTool(count int) string { return In(i18n.Locale()).AiProviderRemoveTool(count) }
+
+// AiProviderRemoveTool says "Shu forgets this provider's setup and deletes its keychain entries: the {count, plural, one {value it was given} othe…"
+// in the language of msgs.
+//
+// The message before a local tool's setup is deleted; it names how many
+// keychain values go.
+func (msgs Messages) AiProviderRemoveTool(count int) string {
+	return Catalog.Format(msgs.locale, "aiProviderRemoveTool", map[string]any{"count": count})
+}
+
+// AiProviderRemoved says "{name} was removed."
+// in the language the app shows.
+//
+// The note after a provider's setup was deleted.
+func AiProviderRemoved(name string) string { return In(i18n.Locale()).AiProviderRemoved(name) }
+
+// AiProviderRemoved says "{name} was removed."
+// in the language of msgs.
+//
+// The note after a provider's setup was deleted.
+func (msgs Messages) AiProviderRemoved(name string) string {
+	return Catalog.Format(msgs.locale, "aiProviderRemoved", map[string]any{"name": name})
+}
+
+// AiLocalToolAccount says "Signed in as {account}"
+// in the language the app shows.
+//
+// The account a local tool reports it is signed in as.
+func AiLocalToolAccount(account string) string { return In(i18n.Locale()).AiLocalToolAccount(account) }
+
+// AiLocalToolAccount says "Signed in as {account}"
+// in the language of msgs.
+//
+// The account a local tool reports it is signed in as.
+func (msgs Messages) AiLocalToolAccount(account string) string {
+	return Catalog.Format(msgs.locale, "aiLocalToolAccount", map[string]any{"account": account})
+}
+
+// AiLocalToolAccountShow says "Show account"
+// in the language the app shows.
+func AiLocalToolAccountShow() string { return In(i18n.Locale()).AiLocalToolAccountShow() }
+
+// AiLocalToolAccountShow says "Show account"
+// in the language of msgs.
+func (msgs Messages) AiLocalToolAccountShow() string {
+	return Catalog.Format(msgs.locale, "aiLocalToolAccountShow", nil)
+}
+
+// AiLocalToolAccountHide says "Hide account"
+// in the language the app shows.
+func AiLocalToolAccountHide() string { return In(i18n.Locale()).AiLocalToolAccountHide() }
+
+// AiLocalToolAccountHide says "Hide account"
+// in the language of msgs.
+func (msgs Messages) AiLocalToolAccountHide() string {
+	return Catalog.Format(msgs.locale, "aiLocalToolAccountHide", nil)
+}
+
+// AiLocalToolSignInCommand says "Copy sign-in command"
+// in the language the app shows.
+func AiLocalToolSignInCommand() string { return In(i18n.Locale()).AiLocalToolSignInCommand() }
+
+// AiLocalToolSignInCommand says "Copy sign-in command"
+// in the language of msgs.
+func (msgs Messages) AiLocalToolSignInCommand() string {
+	return Catalog.Format(msgs.locale, "aiLocalToolSignInCommand", nil)
+}
+
+// AiLocalToolCopied says "Copied {command}"
+// in the language the app shows.
+//
+// Confirms the sign-in command is on the clipboard.
+func AiLocalToolCopied(command string) string { return In(i18n.Locale()).AiLocalToolCopied(command) }
+
+// AiLocalToolCopied says "Copied {command}"
+// in the language of msgs.
+//
+// Confirms the sign-in command is on the clipboard.
+func (msgs Messages) AiLocalToolCopied(command string) string {
+	return Catalog.Format(msgs.locale, "aiLocalToolCopied", map[string]any{"command": command})
+}
+
+// AiLocalToolInstall says "Open install page"
+// in the language the app shows.
+func AiLocalToolInstall() string { return In(i18n.Locale()).AiLocalToolInstall() }
+
+// AiLocalToolInstall says "Open install page"
+// in the language of msgs.
+func (msgs Messages) AiLocalToolInstall() string {
+	return Catalog.Format(msgs.locale, "aiLocalToolInstall", nil)
+}

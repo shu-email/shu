@@ -1376,5 +1376,18 @@
   "aiProviderEnabled": "在 Shu 中可用",
   "aiProviderEffort": "推理强度",
   "aiProviderEffortDefault": "默认",
-  "aiProviderKeyMoved": "该密钥是为另一个服务器保存的，请为当前服务器重新保存。"
+  "aiProviderKeyMoved": "这个密钥是为另一个服务器保存的。请为当前服务器重新保存。",
+  "aiProviderRemove": "移除提供商",
+  "aiProviderRemoveButton": "移除",
+  "aiProviderRemoveHint": "从本机删除这个提供商的设置，包括它在钥匙串中的条目。邮件和草稿都会保留。",
+  "aiProviderRemoveTitle": "移除 {name}？",
+  "aiProviderRemoveKey": "Shu 会忘记这个提供商的设置，并从登录钥匙串中删除它的 API 密钥。邮件、草稿和摘要都会保留；再次添加这个提供商时会从空白设置开始。",
+  "aiProviderRemoveTool": "Shu 会忘记这个提供商的设置，并从钥匙串中删除它收到的{count, plural, other { # 个值}}。工具本身、它的登录状态和它的文件都不会被改动；再次添加时会从空白设置开始。",
+  "aiProviderRemoved": "已移除 {name}。",
+  "aiLocalToolAccount": "登录账号：{account}",
+  "aiLocalToolAccountShow": "显示账号",
+  "aiLocalToolAccountHide": "隐藏账号",
+  "aiLocalToolSignInCommand": "复制登录命令",
+  "aiLocalToolCopied": "已复制 {command}",
+  "aiLocalToolInstall": "打开安装页面"
 }

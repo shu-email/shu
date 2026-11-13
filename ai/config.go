@@ -533,6 +533,41 @@ func (s *Service) DeleteKey(id ProviderID) error {
 	return nil
 }
 
+// RemoveProvider forgets a provider whole: its key or its tools' values
+// in the keychain, and its settings. It is a separate, confirmed action
+// from switching a provider off, which keeps both. The provider that was
+// chosen is replaced by the first preset, since the removed one cannot
+// answer any more; the others keep their own settings.
+func (s *Service) RemoveProvider(ctx context.Context, id ProviderID) error {
+	if _, ok := ProviderByID(id); !ok {
+		return &Error{Kind: KindBadConfig}
+	}
+	cfg, err := s.Config(ctx)
+	if err != nil {
+		return err
+	}
+	for _, name := range cfg.CLIEnvNames(id) {
+		if err := s.secrets.Delete(cliEnvKey(id, name)); err != nil && !errors.Is(err, ErrSecretNotFound) {
+			return &Error{Kind: KindKeychain}
+		}
+	}
+	// The key goes last, after the rest is ready to be forgotten: a run
+	// that fails half way leaves a provider that still works.
+	if err := s.DeleteKey(id); err != nil {
+		return err
+	}
+	delete(cfg.CLIPaths, id)
+	delete(cfg.CLIEnv, id)
+	delete(cfg.HiddenModels, id)
+	delete(cfg.Efforts, id)
+	delete(cfg.KeyEndpoints, id)
+	cfg.SetProviderOff(id, false)
+	if cfg.Provider == id {
+		cfg.UseProvider(Providers[0].ID)
+	}
+	return s.SaveConfig(ctx, cfg)
+}
+
 // key reads a provider's key for a request. It stays inside the package.
 func (s *Service) key(id ProviderID) (string, error) {
 	data, err := s.secrets.Get(KeyName(id))

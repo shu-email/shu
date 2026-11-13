@@ -27,8 +27,36 @@ type CLIStatus struct {
 	SignedIn  bool
 	Path      string
 	Version   string
+	// Account is the address the tool reports it is signed in as, or ""
+	// when the tool keeps it to itself. It comes from the tool's own
+	// status command, never from its credentials.
+	Account string
 	// Err names a failure without any prompt or credential.
 	Err string
+}
+
+// CLISignInCommand is the command that signs a tool in, for the user to
+// run in a terminal. Shu never runs it: it would need a browser prompt
+// and the user's password.
+func CLISignInCommand(id ProviderID) string {
+	switch CLIName(id) {
+	case "claude":
+		return "claude auth login"
+	case "codex":
+		return "codex login"
+	}
+	return ""
+}
+
+// CLIInstallURL is where a tool is installed from.
+func CLIInstallURL(id ProviderID) string {
+	switch CLIName(id) {
+	case "claude":
+		return "https://docs.claude.com/en/docs/claude-code/setup"
+	case "codex":
+		return "https://developers.openai.com/codex/cli/"
+	}
+	return ""
 }
 
 // CLIName is a provider's command name, or "" for one that is not a
@@ -155,6 +183,9 @@ func (s *Service) CLIStatus(ctx context.Context, id ProviderID, explicit string)
 	case "claude":
 		auth, err := s.runCLIProbe(ctx, path, []string{"auth", "status", "--json"})
 		status.SignedIn = err == nil && strings.Contains(auth, `"loggedIn": true`)
+		if status.SignedIn {
+			status.Account = claudeAccount(auth)
+		}
 	case "codex":
 		_, err := s.runCLIProbe(ctx, path, []string{"login", "status"})
 		status.SignedIn = err == nil
@@ -172,6 +203,30 @@ func (s *Service) runCLIProbe(ctx context.Context, path string, args []string) (
 }
 
 var versionPattern = regexp.MustCompile(`\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z.-]+)?`)
+
+// claudeAccount reads the address out of a sign-in status. The shape of
+// that answer has changed once already, so every place an address may sit
+// is read, and anything else is left alone: a wrong guess would put some
+// other field in the panel as if it were an account.
+func claudeAccount(output string) string {
+	var status map[string]any
+	if json.Unmarshal([]byte(strings.TrimSpace(stripANSI(output))), &status) != nil {
+		return ""
+	}
+	for _, key := range []string{"email", "emailAddress", "account"} {
+		if address, ok := status[key].(string); ok && strings.Contains(address, "@") {
+			return strings.TrimSpace(address)
+		}
+	}
+	if nested, ok := status["account"].(map[string]any); ok {
+		for _, key := range []string{"email", "emailAddress"} {
+			if address, ok := nested[key].(string); ok && strings.Contains(address, "@") {
+				return strings.TrimSpace(address)
+			}
+		}
+	}
+	return ""
+}
 
 func cliVersion(output string) string {
 	if m := versionPattern.FindString(output); m != "" {

@@ -30,6 +30,9 @@ type aiService interface {
 	KeyStored(id ai.ProviderID) (bool, error)
 	SetKey(ctx context.Context, id ai.ProviderID, key string) error
 	DeleteKey(id ai.ProviderID) error
+	// RemoveProvider forgets a provider's key, a tool's values and its
+	// settings, after the user confirmed it.
+	RemoveProvider(ctx context.Context, id ai.ProviderID) error
 	Test(ctx context.Context, cfg ai.Config, typedKey string) error
 
 	// Check reports why a capability cannot run, without any network call.

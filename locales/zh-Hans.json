@@ -1052,5 +1052,70 @@
       }
     }
   },
-  "networkNoAccount": "添加账户后才能测试连接。"
+  "networkNoAccount": "添加账户后才能测试连接。",
+  "imagesBlocked": "远程图片已被阻止",
+  "imagesBlockedDetail": "此邮件包含来自网络的图片。它们不会被加载，因此发件人无法得知你已阅读。",
+  "loadImages": "加载图片",
+  "loadImagesAlways": "对该发件人始终允许",
+  "imagesShownDetail": "此邮件中的远程图片已显示。",
+  "blockImages": "再次阻止图片",
+  "imagesFailed": "无法更改图片设置：{error}",
+  "@imagesFailed": {
+    "description": "The error after allowing or blocking remote images failed.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "the database is locked"
+      }
+    }
+  },
+  "previewAttachment": "预览 {name}",
+  "@previewAttachment": {
+    "description": "The button that opens an attachment preview.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "photo.png"
+      }
+    }
+  },
+  "saveAllAttachments": "全部保存",
+  "attachmentPreviewTitle": "预览",
+  "previewUnavailable": "此类文件没有预览。",
+  "openInDefaultApp": "用默认应用打开",
+  "previewFailed": "无法读取附件：{error}",
+  "@previewFailed": {
+    "description": "The error after reading an attachment for preview failed.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "the file is gone"
+      }
+    }
+  },
+  "saveAllDone": "已保存 {count} 个文件",
+  "@saveAllDone": {
+    "description": "The note after Save all wrote the attachments.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "saveAllFailed": "已保存 {saved} 个，{failed} 个保存失败",
+  "@saveAllFailed": {
+    "description": "The note after Save all had failures.",
+    "placeholders": {
+      "saved": {
+        "type": "int",
+        "example": "2"
+      },
+      "failed": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "saveAllNoFolder": "请选择保存附件的文件夹。"
 }

@@ -3,6 +3,7 @@ package mail
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"html"
 	"io"
@@ -19,6 +20,10 @@ import (
 const (
 	maxBodyPart    = 1 << 20  // 1 MiB per text part
 	maxAttachments = 25 << 20 // 25 MiB per message
+	// maxInlineImage is the most one inline image may be to be embedded
+	// in the HTML body: bigger ones stay out, so one picture cannot fill
+	// the cache.
+	maxInlineImage = 8 << 20
 )
 
 // ParseMessage parses a raw RFC 822 message into the cache's model. The
@@ -70,6 +75,9 @@ func parseMessage(raw []byte, attachmentCap int64) (Message, int, error) {
 	m.RawHeaders = keptHeaders(h)
 
 	var text, htmlBody strings.Builder
+	// inline maps a Content-ID to the data URI its part becomes, so that
+	// the HTML body shows it without a request.
+	inline := map[string]string{}
 	var attachmentBytes int64
 	truncated := false
 	part := 0
@@ -96,6 +104,17 @@ func parseMessage(raw []byte, attachmentCap int64) (Message, int, error) {
 				text.WriteString(data)
 			}
 			_ = params
+			continue
+		}
+		if cid := partContentID(p.Header); cid != "" && strings.HasPrefix(contentType, "image/") {
+			data, err := io.ReadAll(io.LimitReader(p.Body, maxInlineImage+1))
+			switch {
+			case err != nil || len(data) > maxInlineImage:
+				truncated = true
+				dropped++
+			default:
+				inline[cid] = "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(data)
+			}
 			continue
 		}
 		name, ok := attachmentName(p.Header, contentType, params)
@@ -127,7 +146,7 @@ func parseMessage(raw []byte, attachmentCap int64) (Message, int, error) {
 		})
 	}
 	m.BodyText = normalizeText(text.String())
-	m.BodyHTML = strings.TrimSpace(htmlBody.String())
+	m.BodyHTML = embedInline(strings.TrimSpace(htmlBody.String()), inline)
 	if m.BodyText == "" && m.BodyHTML != "" {
 		m.BodyText = HTMLToText(m.BodyHTML)
 	}
@@ -138,6 +157,26 @@ func parseMessage(raw []byte, attachmentCap int64) (Message, int, error) {
 	m.HasAttachments = len(m.Attachments) > 0
 	m.Preview = preview(m.BodyText)
 	return m, dropped, nil
+}
+
+// partContentID returns a part's Content-ID without its angle brackets.
+func partContentID(h gomsgmail.PartHeader) string {
+	cid := strings.TrimSpace(h.Get("Content-ID"))
+	cid = strings.TrimPrefix(cid, "<")
+	cid = strings.TrimSuffix(cid, ">")
+	return cid
+}
+
+// embedInline replaces the cid: references of a body with the data URIs
+// of their parts.
+func embedInline(body string, inline map[string]string) string {
+	if body == "" || len(inline) == 0 {
+		return body
+	}
+	for cid, uri := range inline {
+		body = strings.ReplaceAll(body, "cid:"+cid, uri)
+	}
+	return body
 }
 
 // attachmentName is the file name of a part that is no text of the body,

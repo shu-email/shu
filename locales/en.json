@@ -3366,5 +3366,70 @@
       }
     }
   },
-  "networkNoAccount": "Add an account to test the connection."
+  "networkNoAccount": "Add an account to test the connection.",
+  "imagesBlocked": "Remote images are blocked",
+  "imagesBlockedDetail": "This message shows pictures from the network. They are not loaded, so the sender cannot tell that you read it.",
+  "loadImages": "Load images",
+  "loadImagesAlways": "Always for this sender",
+  "imagesShownDetail": "Remote images from this message are shown.",
+  "blockImages": "Block images again",
+  "imagesFailed": "Could not change the image setting: {error}",
+  "@imagesFailed": {
+    "description": "The error after allowing or blocking remote images failed.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "the database is locked"
+      }
+    }
+  },
+  "previewAttachment": "Preview {name}",
+  "@previewAttachment": {
+    "description": "The button that opens an attachment preview.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "photo.png"
+      }
+    }
+  },
+  "saveAllAttachments": "Save all",
+  "attachmentPreviewTitle": "Preview",
+  "previewUnavailable": "There is no preview for this kind of file.",
+  "openInDefaultApp": "Open in the default app",
+  "previewFailed": "Could not read the attachment: {error}",
+  "@previewFailed": {
+    "description": "The error after reading an attachment for preview failed.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "the file is gone"
+      }
+    }
+  },
+  "saveAllDone": "Saved {count} files",
+  "@saveAllDone": {
+    "description": "The note after Save all wrote the attachments.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "saveAllFailed": "Saved {saved}, could not save {failed}",
+  "@saveAllFailed": {
+    "description": "The note after Save all had failures.",
+    "placeholders": {
+      "saved": {
+        "type": "int",
+        "example": "2"
+      },
+      "failed": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
+  "saveAllNoFolder": "Choose a folder to save the attachments in."
 }

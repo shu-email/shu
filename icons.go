@@ -68,4 +68,5 @@ var (
 	shieldQuestionIcon = mustIcon("shield-question")
 	shieldCheckIcon    = mustIcon("shield-check")
 	folderInputIcon    = mustIcon("folder-input")
+	eyeIcon            = mustIcon("eye")
 )

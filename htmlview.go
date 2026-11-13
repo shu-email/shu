@@ -12,6 +12,10 @@ import (
 // scripts, no network, no forms, only inline styles and data images.
 const contentSecurityPolicy = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; form-action 'none'; base-uri 'none'"
 
+// contentSecurityPolicyImages is the policy once the user allowed the
+// message's remote images: those may load, and nothing else changed.
+const contentSecurityPolicyImages = "default-src 'none'; style-src 'unsafe-inline'; img-src data: http: https:; font-src data:; form-action 'none'; base-uri 'none'"
+
 // ensureWebView creates the isolated web view the first time HTML mail is
 // shown. The page is untrusted: it calls no Go method and navigates
 // nowhere.
@@ -58,7 +62,7 @@ func (a *app) syncHTMLView() {
 		return
 	}
 	a.htmlKey = key
-	a.webview.Page().LoadHTML(renderHTML(msg.BodyHTML), "about:blank")
+	a.webview.Page().LoadHTML(renderHTML(msg.BodyHTML, a.imageAllowed(*m)), "about:blank")
 }
 
 // syncThreadHTML loads the HTML of the message of the conversation on
@@ -77,7 +81,11 @@ func (a *app) syncThreadHTML() {
 		return
 	}
 	a.htmlKey = key
-	a.webview.Page().LoadHTML(renderHTML(b.Message.BodyHTML), "about:blank")
+	allowed := false
+	if m, ok := cv.message(cv.html); ok {
+		allowed = a.imageAllowed(m)
+	}
+	a.webview.Page().LoadHTML(renderHTML(b.Message.BodyHTML, allowed), "about:blank")
 }
 
 // isWebURL reports whether a link may leave the reading pane.
@@ -88,12 +96,12 @@ func isWebURL(raw string) bool {
 
 // renderHTML sanitizes a message's HTML and wraps it with the CSP and a
 // readable base style.
-func renderHTML(source string) string {
+func renderHTML(source string, allowRemote bool) string {
 	doc, err := html.Parse(strings.NewReader(source))
 	if err != nil {
 		return "<!doctype html><html><body></body></html>"
 	}
-	sanitizeNode(doc)
+	sanitizeNode(doc, allowRemote)
 	head := findElement(doc, atom.Head)
 	if head == nil {
 		head = &html.Node{Type: html.ElementNode, Data: "head"}
@@ -109,7 +117,7 @@ func renderHTML(source string) string {
 	meta := &html.Node{Type: html.ElementNode, Data: "meta", DataAtom: atom.Meta}
 	meta.Attr = []html.Attribute{
 		{Key: "http-equiv", Val: "Content-Security-Policy"},
-		{Key: "content", Val: contentSecurityPolicy},
+		{Key: "content", Val: contentSecurityPolicyOf(allowRemote)},
 	}
 	viewport := &html.Node{Type: html.ElementNode, Data: "meta", DataAtom: atom.Meta}
 	viewport.Attr = []html.Attribute{
@@ -144,7 +152,14 @@ func renderHTML(source string) string {
 }
 
 // sanitizeNode removes what a message may not run or load.
-func sanitizeNode(n *html.Node) {
+func contentSecurityPolicyOf(allowRemote bool) string {
+	if allowRemote {
+		return contentSecurityPolicyImages
+	}
+	return contentSecurityPolicy
+}
+
+func sanitizeNode(n *html.Node, allowRemote bool) {
 	if n.Type == html.ElementNode {
 		switch n.DataAtom {
 		case atom.Script, atom.Noscript, atom.Iframe, atom.Object, atom.Embed,
@@ -157,16 +172,16 @@ func sanitizeNode(n *html.Node) {
 	}
 	for child := n.FirstChild; child != nil; {
 		next := child.NextSibling
-		sanitizeNode(child)
+		sanitizeNode(child, allowRemote)
 		child = next
 	}
 	if n.Type == html.ElementNode {
-		n.Attr = safeAttributes(n.Data, n.Attr)
+		n.Attr = safeAttributes(n.Data, n.Attr, allowRemote)
 	}
 }
 
 // safeAttributes drops event handlers, form actions and unsafe links.
-func safeAttributes(tag string, attrs []html.Attribute) []html.Attribute {
+func safeAttributes(tag string, attrs []html.Attribute, allowRemote bool) []html.Attribute {
 	out := attrs[:0]
 	for _, attr := range attrs {
 		key := strings.ToLower(attr.Key)
@@ -181,8 +196,11 @@ func safeAttributes(tag string, attrs []html.Attribute) []html.Attribute {
 				out = append(out, attr)
 				continue
 			}
-			if key == "src" && strings.HasPrefix(strings.ToLower(strings.TrimSpace(attr.Val)), "data:") {
-				out = append(out, attr)
+			if key == "src" {
+				v := strings.ToLower(strings.TrimSpace(attr.Val))
+				if strings.HasPrefix(v, "data:") || (allowRemote && isWebURL(v)) {
+					out = append(out, attr)
+				}
 			}
 			continue
 		}

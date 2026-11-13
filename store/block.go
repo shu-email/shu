@@ -31,7 +31,7 @@ func (s *Store) SaveBlockedSender(ctx context.Context, b mail.BlockedSender) err
 		VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT (account_id, value, domain) DO UPDATE SET
 			folder = excluded.folder, at = excluded.at`,
-		b.AccountID, b.Value, boolInt(b.Domain), b.Folder, unixPtr(b.At))
+		b.AccountID, b.Value, boolInt(b.Domain), b.Folder, b.At.Unix())
 	return err
 }
 
@@ -84,6 +84,6 @@ func (s *Store) SaveUnsubscribe(ctx context.Context, r mail.UnsubscribeRecord) e
 		VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT (account_id, email) DO UPDATE SET
 			method = excluded.method, destination = excluded.destination, at = excluded.at`,
-		r.AccountID, r.Email, string(r.Method), r.Destination, unixPtr(r.At))
+		r.AccountID, r.Email, string(r.Method), r.Destination, r.At.Unix())
 	return err
 }

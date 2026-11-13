@@ -193,9 +193,10 @@ func TestBlockWholeDomain(t *testing.T) {
 // The settings' Privacy tab lists the blocked senders and unblocks them.
 func TestPrivacyTabListsBlockedSenders(t *testing.T) {
 	a, fs := sampleMessageApp(t)
+	at := time.Date(2026, 3, 2, 9, 0, 0, 0, time.UTC)
 	fs.blocks["a1"] = []mail.BlockedSender{
-		{AccountID: "a1", Value: "deals@shop.example", Folder: "Junk", At: time.Now()},
-		{AccountID: "a1", Value: "spam.example", Domain: true, Folder: "Trash", At: time.Now()},
+		{AccountID: "a1", Value: "deals@shop.example", Folder: "Junk", At: at},
+		{AccountID: "a1", Value: "spam.example", Domain: true, Folder: "Trash", At: at},
 	}
 	a.openSettings(settingsTabPrivacy)
 	tt := ui.NewTester(a.view, 1220, 800)

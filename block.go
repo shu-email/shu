@@ -96,8 +96,8 @@ func (a *app) unsubscribeDialog(c *ui.Context) {
 }
 
 // submitUnsubscribe makes the request the user confirmed. A one-click
-// request and an email are the engine's; the page is opened here, and
-// only then does anything leave the app. Either way the choice is kept.
+// request and an email are the engine's; a page the browser opens, so
+// that the app itself sends nothing. Either way the choice is kept.
 func (a *app) submitUnsubscribe() {
 	f := a.unsubForm
 	g := a.gen

@@ -78,6 +78,7 @@ func (a *app) messagePane(c *ui.Context, t *ui.Theme) {
 			a.securityNotice(c, t, *m, msg)
 			if msg != nil {
 				a.imageNotice(c, t, *m, msg)
+				a.calendarCard(c, t, *m, msg)
 			}
 			if msg != nil && len(msg.Attachments) > 0 {
 				a.attachments(c, t, *m, msg.Attachments)

@@ -235,6 +235,12 @@ type app struct {
 	transfer transferState
 	// shortcutsOpen shows the keyboard reference (shortcuts.go).
 	shortcutsOpen bool
+	// inviteResponses, inviteBusy and inviteNote hold the user's RSVP
+	// answers by event UID, the send in flight and its result
+	// (calendar.go).
+	inviteResponses map[string]string
+	inviteBusy      bool
+	inviteNote      string
 	// Remote images and attachment previews (images.go): images is the
 	// senders whose pictures are allowed, imagesShown the messages the
 	// user chose to show them in, and preview the open preview.

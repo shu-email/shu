@@ -913,6 +913,23 @@ the engine's actions, `mail.ActionKinds`, and no others.
   account's mail, the account's folders are read with their counts, and the log and
   the preview of the rule being written are read again if they are on screen.
 
+### Calendar invitations (added since)
+
+- `mail/calendar.go` parses the first VEVENT of a `text/calendar` part (or an
+  `.ics` attachment): METHOD, UID, SEQUENCE, SUMMARY, DTSTART/DTEND with
+  `VALUE=DATE` and `TZID` (the time keeps its zone), LOCATION, ORGANIZER,
+  ATTENDEE PARTSTAT and STATUS:CANCELLED. An unreadable part is kept as
+  `CalendarRaw` so the pane can say so instead of showing nothing. The
+  invitation is stored with the message (`messages.calendar`) so the card shows
+  from the cache after a restart.
+- The reading pane shows a card with the summary, the time in the user's zone,
+  location, organizer, attendee count, an update or cancellation marker, and the
+  user's PARTSTAT when known. Accept / Maybe / Decline send an iMIP reply
+  (`CalendarReply`) through the normal `Send` path with a
+  `text/calendar; method=REPLY` part; nothing is sent without a click.
+  **Add to calendar** writes the event to a temporary `.ics` and hands it to the
+  system calendar; it never creates duplicates in the cache.
+
 ## Testing discipline
 
 Tests are part of each change, not a later phase:

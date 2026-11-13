@@ -168,6 +168,9 @@ func checkUpgradedData(t *testing.T, s *Store, v int) {
 	if len(page.Messages) != 1 || page.Messages[0].MessageID != baselineMessageID {
 		t.Errorf("v%d: search found %+v, want the fixture", v, page.Messages)
 	}
+	if err := s.CheckSearchIndex(ctx); err != nil {
+		t.Errorf("v%d: %v", v, err)
+	}
 	// The address book was made from the mail already cached, once.
 	if v < 11 {
 		rows, err := s.query(ctx, `SELECT COUNT(*) FROM contacts WHERE key = 'bob@example.org'`)

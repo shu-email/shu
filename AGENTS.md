@@ -139,9 +139,11 @@ Windows and Linux. It is written in Go with
   each term is one phrase, through the trigram index from three
   characters and LIKE below, never an operator of the index, and each
   row says in which parts (`mail.Field`) its terms were found. The index
-  holds the subject, sender, recipients, body and preview. The older
-  reads that take an account, a folder and a query are this read, with
-  the query as one term.
+  holds the subject, sender, recipients, body and preview; it is an FTS5
+  external-content table whose triggers write it in the transaction of
+  every message, and `Store.CheckSearchIndex` proves it is in step. The
+  older reads that take an account, a folder and a query are this read,
+  with the query as one term.
 - A folder's first sync caches its newest `mail.Settings.SyncWindow`
   messages, the window's and the watcher's alike. `Service.FetchOlder`
   fetches on demand, read-only and as a sync fetches, the newest

@@ -708,7 +708,7 @@ func (a *app) undoLastMove() {
 		return
 	}
 	a.setUndo(nil)
-	if len(u.moved) > 0 {
+	if len(u.moved) > 0 || u.reminder != nil {
 		a.undoThreadMove(u)
 		return
 	}

@@ -71,7 +71,8 @@ func (a *app) transferSettingsView(c *ui.Context, t *ui.Theme) {
 // can be imported into or exported from.
 func (a *app) realFolder() bool {
 	name := a.folder
-	return name != "" && name != "starred" && name != draftsFolder && name != allInboxes && labelOf(name) == 0
+	return name != "" && name != "starred" && name != draftsFolder && name != remindersFolder &&
+		name != allInboxes && labelOf(name) == 0
 }
 
 // startImport reads an mbox or eml file into the folder on screen. The

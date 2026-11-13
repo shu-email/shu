@@ -125,6 +125,14 @@ func (p *threadPlan) before() []stmtType {
 		stmts = append(stmts,
 			stmt(`UPDATE messages SET thread_id = ? WHERE thread_id = ?`, to, id),
 			stmt(`UPDATE thread_refs SET thread_id = ? WHERE thread_id = ?`, to, id),
+			// A reminder goes to the conversation it joined, and one on
+			// each of two merged conversations becomes the earlier due.
+			stmt(`INSERT INTO reminders (account_id, thread_id, subject, remind_at, created_at)
+				SELECT account_id, ?, subject, remind_at, created_at FROM reminders
+				WHERE thread_id = ? AND NOT EXISTS (SELECT 1 FROM reminders WHERE thread_id = ?)`, to, id, to),
+			stmt(`UPDATE reminders SET remind_at = (SELECT MIN(remind_at) FROM reminders WHERE thread_id IN (?, ?))
+				WHERE thread_id = ?`, to, id, to),
+			stmt(`DELETE FROM reminders WHERE thread_id = ?`, id),
 			stmt(`DELETE FROM threads WHERE id = ?`, id))
 	}
 	for _, id := range p.created {

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -49,8 +50,18 @@ func (a *app) threadToolbar(c *ui.Context, t *ui.Theme) {
 	newest, _ := a.newestShown()
 	compact, field := a.readingCompact(), a.readingSearchShown()
 	lt := a.labelTargets()
+	now := c.Now()
 	var labels ui.Element
 	hasLabels := false
+	// A reminder is of one conversation: its time is chosen for that one.
+	remind := func() {
+		b := a.barMenuButton(c, clockIcon, locales.RemindMe(), locales.RemindMe(), func(m *ui.Menu) {
+			if n == 1 {
+				a.remindMenuItems(m, now, targets[0])
+			}
+		})
+		b.Disabled(n != 1)
+	}
 	a.readingBar(c, locales.ConversationActions(), func() {
 		replies := func() {
 			reply := has && newest != nil
@@ -72,7 +83,7 @@ func (a *app) threadToolbar(c *ui.Context, t *ui.Theme) {
 				return
 			}
 			a.compactThreadMoves(c, n, has, archive, trash, junk)
-			labels, hasLabels = a.compactThreadMarks(c, n, has, allFlagged, allSeen, lt)
+			labels, hasLabels = a.compactThreadMarks(c, n, has, allFlagged, allSeen, lt, targets, now)
 		} else {
 			a.glassGroup(c, locales.MoveActions(), func() {
 				a.threadMoveButtons(c, n, has, archive, trash, junk)
@@ -94,6 +105,7 @@ func (a *app) threadToolbar(c *ui.Context, t *ui.Theme) {
 				a.toolButton(c, readIcon, readLabel, has, a.toggleThreadRead)
 				labels, hasLabels = a.labelButton(c, lt), true
 			})
+			a.glassGroup(c, locales.RemindMe(), remind)
 		}
 		if a.ai != nil {
 			a.barCapsule(c, func() ui.Element {
@@ -144,7 +156,8 @@ func (a *app) compactThreadMoves(c *ui.Context, n int, has, archive, trash, junk
 // compactThreadMarks folds star, read and labels into one button's menu.
 // While the checklist of labels is open it returns the button it hangs
 // from, which the capsule then holds.
-func (a *app) compactThreadMarks(c *ui.Context, n int, has, allFlagged, allSeen bool, lt labelTargets) (ui.Element, bool) {
+func (a *app) compactThreadMarks(c *ui.Context, n int, has, allFlagged, allSeen bool, lt labelTargets,
+	targets []mail.Conversation, now time.Time) (ui.Element, bool) {
 	starLabel, star := locales.StarConversations(n), starIcon
 	if allFlagged {
 		starLabel, star = locales.UnstarConversations(n), starFilledIcon
@@ -165,6 +178,10 @@ func (a *app) compactThreadMarks(c *ui.Context, n int, has, allFlagged, allSeen 
 			}
 			m.Separator()
 			m.Submenu(locales.Labels(), func(m *ui.Menu) { a.labelMenuItems(m, lt) })
+			if n == 1 {
+				m.Separator()
+				m.Submenu(locales.RemindMe(), func(sub *ui.Menu) { a.remindMenuItems(sub, now, targets[0]) })
+			}
 		})
 		if a.labels.picker {
 			anchor, picker = a.labelButton(c, lt), true

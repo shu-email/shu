@@ -67,6 +67,22 @@ Windows and Linux. It is written in Go with
   its own address or an alias the user entered, in its From and in the
   envelope alike. Its Bcc recipients are in the envelope only: the copy
   saved in Sent alone names them.
+- A reminder is a conversation the user asked to come back to
+  (`mail/reminders.go`, `store/reminders.go`). It is this device's: one
+  per conversation, in the store, with the subject it had when it was
+  set. `Service.SetReminder` moves the conversation's inbox messages to
+  the account's Archive folder and saves the time; an account with no
+  archive cannot remind one in its inbox (`ErrNoArchive`).
+  `DeliverReminders` at that time, as the app starts and each minute it
+  runs, moves the archive's messages back to the inbox, syncs that
+  folder, and drops the reminder; only the archive's messages move, so
+  mail the user moved elsewhere meanwhile stays, and a reminder a thread
+  merge carried follows the conversation to its new ID. The reminders'
+  list is `mail.RemindersScope`, the cache alone, soonest due first, and
+  in every folder `Folder.InLabelScope` keeps; its conversations span
+  folders, so their actions leave Sent alone. The undo of setting one
+  takes it off, when the mail came back, and puts back the one it
+  replaced.
 - Mail is received while the app runs by one watcher per account inside
   `mail.Service` (`Watch`, `Unwatch`, `Nudge`, `SetOnline`). A watcher
   keeps its own connection to the inbox, opened read-only, idles where

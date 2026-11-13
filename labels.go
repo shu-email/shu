@@ -672,6 +672,16 @@ func (a *app) rowMenu(m *ui.Menu) {
 	m.Submenu(locales.MoveToFolder(), func(m *ui.Menu) { a.moveFolderMenu(m) })
 	m.Submenu(locales.Labels(), func(m *ui.Menu) { a.labelMenuItems(m, lt) })
 	a.ruleMenuItem(m, lt)
+	// A reminded conversation can have its reminder taken off, leaving the
+	// mail where it is; setting one is the toolbar's, which knows the time.
+	if targets := a.threadTargets(); len(targets) == 1 {
+		if a.reminderFor(targets[0].Account, targets[0].Thread) != nil {
+			m.Separator()
+			if m.Item(locales.RemoveReminder()).Chosen() {
+				a.removeReminder(targets[0].Account, targets[0].Thread)
+			}
+		}
+	}
 }
 
 // labelMenuItems are the labels of rows as items of a menu, each checked

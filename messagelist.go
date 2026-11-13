@@ -269,7 +269,7 @@ func (a *app) listHead(c *ui.Context, t *ui.Theme, bar ui.TitleBar, head float32
 // isServerFolder reports whether id names one of the account's folders,
 // not a list of Shu's own, as Starred and Drafts are.
 func (a *app) isServerFolder(id string) bool {
-	if id == "starred" || id == draftsFolder {
+	if id == "starred" || id == draftsFolder || id == remindersFolder {
 		return false
 	}
 	for _, f := range a.folders {
@@ -495,7 +495,7 @@ func (a *app) messageRow(row ui.ListRow) {
 					if flagged {
 						ui.Icon(c, starFilledIcon).FontSize(11).TextColor(starColor)
 					}
-					ui.Text(c, a.messageTime(c, m.Date)).FontSize(11).TextColor(muted).Shrink(0)
+					ui.Text(c, a.rowTime(c, m)).FontSize(11).TextColor(muted).Shrink(0)
 				})
 				// A row's labels end its subject's line, of which they take
 				// at most half.

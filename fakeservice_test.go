@@ -121,6 +121,13 @@ type fakeService struct {
 	movedRefs  []string
 	convErr    error
 
+	// Reminders, one per conversation, and the calls that set and took
+	// them off; reminderErr fails them.
+	reminders   []mail.Reminder
+	reminderSeq int64
+	reminderErr error
+	reminderSet []string
+
 	// Pages. cursors are the rows the cursors handed out end at;
 	// pageReads counts the page reads, onPage runs as each begins, and
 	// pageErr fails them. syncCalls records each SyncFolder with its
@@ -528,6 +535,8 @@ func (f *fakeService) scopeAccounts(sc mail.Scope) []string {
 // folders.
 func (f *fakeService) inScope(sc mail.Scope, m mail.Summary) bool {
 	switch {
+	case sc.Reminded:
+		return f.reminded(m.Account, m.Thread) && f.inLabelScope(m.Account, m.Folder)
 	case sc.Starred:
 		return m.Flagged
 	case sc.Label != 0:
@@ -2611,4 +2620,115 @@ func (f *fakeService) RestoreConfig(ctx context.Context, data []byte) (int, erro
 	}
 	f.restored = append(f.restored, string(data))
 	return 1, nil
+}
+
+// reminded reports whether a conversation has a reminder.
+func (f *fakeService) reminded(accountID string, thread mail.ThreadID) bool {
+	for _, r := range f.reminders {
+		if r.Account == accountID && r.Thread == thread {
+			return true
+		}
+	}
+	return false
+}
+
+func (f *fakeService) reminderOf(accountID string, thread mail.ThreadID) *mail.Reminder {
+	for i := range f.reminders {
+		if f.reminders[i].Account == accountID && f.reminders[i].Thread == thread {
+			return &f.reminders[i]
+		}
+	}
+	return nil
+}
+
+func (f *fakeService) Reminders(ctx context.Context, accountID string) ([]mail.Reminder, error) {
+	if f.reminderErr != nil {
+		return nil, f.reminderErr
+	}
+	out := []mail.Reminder{}
+	for _, r := range f.reminders {
+		if r.Account == accountID {
+			out = append(out, r)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].RemindAt.Before(out[j].RemindAt) })
+	return out, nil
+}
+
+func (f *fakeService) SetReminder(ctx context.Context, accountID string, thread mail.ThreadID, at time.Time) (mail.Reminder, []mail.MoveResult, error) {
+	if f.reminderErr != nil {
+		return mail.Reminder{}, nil, f.reminderErr
+	}
+	f.reminderSet = append(f.reminderSet, fmt.Sprintf("%s/%d/%d", accountID, thread, at.Unix()))
+	var refs []mail.MessageRef
+	subject := ""
+	for _, m := range f.messages[listKey(accountID, "INBOX")] {
+		if f.threadOf(accountID, m) == thread {
+			refs = append(refs, mail.MessageRef{Folder: m.Folder, UID: m.UID})
+			subject = m.Subject
+		}
+	}
+	moved, err := f.MoveMessages(ctx, accountID, refs, "Archive")
+	if err != nil {
+		return mail.Reminder{}, moved, err
+	}
+	r := f.reminderOf(accountID, thread)
+	if r == nil {
+		f.reminderSeq++
+		f.reminders = append(f.reminders, mail.Reminder{ID: f.reminderSeq, Account: accountID, Thread: thread})
+		r = &f.reminders[len(f.reminders)-1]
+	}
+	r.Subject, r.RemindAt, r.CreatedAt = subject, at, time.Now()
+	return *r, moved, nil
+}
+
+func (f *fakeService) RemoveReminder(ctx context.Context, accountID string, thread mail.ThreadID) error {
+	if f.reminderErr != nil {
+		return f.reminderErr
+	}
+	f.reminders = slices.DeleteFunc(f.reminders, func(r mail.Reminder) bool {
+		return r.Account == accountID && r.Thread == thread
+	})
+	return nil
+}
+
+// RestoreReminder saves a reminder as the undo of a new time has it.
+func (f *fakeService) RestoreReminder(ctx context.Context, r mail.Reminder) (mail.Reminder, error) {
+	if f.reminderErr != nil {
+		return mail.Reminder{}, f.reminderErr
+	}
+	if got := f.reminderOf(r.Account, r.Thread); got != nil {
+		got.Subject, got.RemindAt = r.Subject, r.RemindAt
+		return *got, nil
+	}
+	f.reminderSeq++
+	r.ID = f.reminderSeq
+	f.reminders = append(f.reminders, r)
+	return r, nil
+}
+
+// DeliverReminders brings back those due now, as the engine's clock would.
+func (f *fakeService) DeliverReminders(ctx context.Context) ([]mail.Reminder, error) {
+	if f.reminderErr != nil {
+		return nil, f.reminderErr
+	}
+	now := time.Now()
+	var delivered []mail.Reminder
+	for _, r := range append([]mail.Reminder(nil), f.reminders...) {
+		if r.RemindAt.After(now) {
+			continue
+		}
+		var refs []mail.MessageRef
+		for _, m := range f.messages[listKey(r.Account, "Archive")] {
+			if f.threadOf(r.Account, m) == r.Thread {
+				refs = append(refs, mail.MessageRef{Folder: m.Folder, UID: m.UID})
+			}
+		}
+		if _, err := f.MoveMessages(ctx, r.Account, refs, "INBOX"); err != nil {
+			return delivered, err
+		}
+		_ = f.RemoveReminder(ctx, r.Account, r.Thread)
+		delivered = append(delivered, r)
+	}
+	return delivered, nil
 }

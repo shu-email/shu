@@ -18,12 +18,14 @@ type Scope struct {
 	// to the folder of that name, Special to the folder of that special
 	// use (SpecialInbox and the like), Starred to the flagged messages of
 	// every folder, Label to the messages with that label, of its account,
-	// in every folder Folder.InLabelScope keeps (LabelScope). With none,
-	// every folder is read.
-	Folder  string  `json:"folder,omitempty"`
-	Special string  `json:"special,omitempty"`
-	Starred bool    `json:"starred,omitempty"`
-	Label   LabelID `json:"label,omitempty"`
+	// in every folder Folder.InLabelScope keeps (LabelScope), Reminded to
+	// the conversations an account has a reminder for, in every folder
+	// InLabelScope keeps. With none, every folder is read.
+	Folder   string  `json:"folder,omitempty"`
+	Special  string  `json:"special,omitempty"`
+	Starred  bool    `json:"starred,omitempty"`
+	Label    LabelID `json:"label,omitempty"`
+	Reminded bool    `json:"reminded,omitempty"`
 }
 
 // AccountScope is the scope of the reads that take an account and a
@@ -44,13 +46,19 @@ func AccountScope(accountID, folder string) Scope {
 // AllInboxes is the unified inbox: the inbox of every account.
 func AllInboxes() Scope { return Scope{Special: SpecialInbox} }
 
+// RemindersScope is an account's conversations that have a reminder, in
+// every folder Folder.InLabelScope keeps: not Junk, Trash or Drafts.
+func RemindersScope(accountID string) Scope {
+	return Scope{Accounts: []string{accountID}, Reminded: true}
+}
+
 // ErrBadScope is a scope that narrows its folders in more than one way.
-var ErrBadScope = errors.New("mail: a scope narrows to a folder, a special use, the starred messages or a label, not to several")
+var ErrBadScope = errors.New("mail: a scope narrows to a folder, a special use, the starred messages, a label or the reminders, not to several")
 
 // Check reports a scope the reads refuse.
 func (sc Scope) Check() error {
 	narrowed := 0
-	for _, set := range []bool{sc.Folder != "", sc.Special != "", sc.Starred, sc.Label != 0} {
+	for _, set := range []bool{sc.Folder != "", sc.Special != "", sc.Starred, sc.Label != 0, sc.Reminded} {
 		if set {
 			narrowed++
 		}

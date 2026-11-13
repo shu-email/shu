@@ -444,6 +444,22 @@ var migrations = [][]string{
 	// v16: the aggregates of a conversation, so that a list reads one row
 	// per conversation instead of its messages (see thread_aggregates.go).
 	threadAggregateMigration(),
+	// v17: the reminders (see mail.Reminder): a conversation of an account
+	// the user asked to come back to the inbox, with the time it is due.
+	// One per conversation, and it goes with its account or its
+	// conversation, a merge taking it to the conversation it joined.
+	{
+		`CREATE TABLE reminders (
+			id INTEGER PRIMARY KEY,
+			account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+			thread_id INTEGER NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+			subject TEXT NOT NULL DEFAULT '',
+			remind_at INTEGER NOT NULL,
+			created_at INTEGER NOT NULL,
+			UNIQUE (account_id, thread_id))`,
+		`CREATE INDEX reminders_account ON reminders (account_id, remind_at)`,
+		`CREATE INDEX reminders_due ON reminders (remind_at)`,
+	},
 }
 
 // backfills compute, from the rows of the version before, statements a

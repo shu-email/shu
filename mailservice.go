@@ -82,6 +82,15 @@ type mailService interface {
 	MoveBack(ctx context.Context, accountID, from, to string, uid mail.UID) error
 	MoveMessages(ctx context.Context, accountID string, msgs []mail.MessageRef, dest string) ([]mail.MoveResult, error)
 	MoveBackMessages(ctx context.Context, accountID string, moved []mail.MoveResult) error
+	// Reminders are this device's: a conversation taken out of the inbox
+	// until a time, when DeliverReminders brings it back. SetReminder
+	// moves the conversation to the archive, and returns the moves it
+	// made for the undo.
+	Reminders(ctx context.Context, accountID string) ([]mail.Reminder, error)
+	SetReminder(ctx context.Context, accountID string, thread mail.ThreadID, at time.Time) (mail.Reminder, []mail.MoveResult, error)
+	RemoveReminder(ctx context.Context, accountID string, thread mail.ThreadID) error
+	RestoreReminder(ctx context.Context, r mail.Reminder) (mail.Reminder, error)
+	DeliverReminders(ctx context.Context) ([]mail.Reminder, error)
 	Send(ctx context.Context, accountID string, out mail.Outgoing) (mail.SendResult, error)
 	RetryPending(ctx context.Context, id string) (mail.SendResult, error)
 	PendingSends(ctx context.Context, accountID string) ([]mail.PendingSend, error)

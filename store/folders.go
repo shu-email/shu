@@ -2,13 +2,14 @@ package store
 
 import (
 	"context"
+	"strings"
 
 	"shu/mail"
 )
 
 // folderColumns are the folder fields every query reads.
 const folderColumns = `name, COALESCE(delimiter, ''), COALESCE(special_use, ''),
-	unread, total, uidvalidity, last_uid, synced_at, complete, permanent_flags`
+	unread, total, uidvalidity, last_uid, synced_at, complete, permanent_flags, subscribed`
 
 func folderRow(r []any) mail.Folder {
 	return mail.Folder{
@@ -22,6 +23,7 @@ func folderRow(r []any) mail.Folder {
 		SyncedAt:       unix(r[7]),
 		Complete:       truth(r[8]),
 		PermanentFlags: decodeFlags(r[9]),
+		Subscribed:     truth(r[10]),
 	}
 }
 
@@ -61,12 +63,13 @@ func (s *Store) SaveFolders(ctx context.Context, accountID string, folders []mai
 	stmts := make([]stmtType, 0, len(folders)+1)
 	for _, f := range folders {
 		stmts = append(stmts,
-			stmt(`INSERT INTO folders (account_id, name, delimiter, special_use, unread, total)
-				VALUES (?, ?, ?, ?, ?, ?)
+			stmt(`INSERT INTO folders (account_id, name, delimiter, special_use, unread, total, subscribed)
+				VALUES (?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT (account_id, name) DO UPDATE SET
 					delimiter=excluded.delimiter, special_use=excluded.special_use,
-					unread=excluded.unread, total=excluded.total`,
-				accountID, f.Name, f.Delimiter, f.SpecialUse, f.Unread, f.Total),
+					unread=excluded.unread, total=excluded.total,
+					subscribed=excluded.subscribed`,
+				accountID, f.Name, f.Delimiter, f.SpecialUse, f.Unread, f.Total, f.Subscribed),
 		)
 	}
 	return s.transaction(ctx, stmts)
@@ -116,4 +119,62 @@ func (s *Store) folderID(ctx context.Context, accountID, name string) (int64, er
 		return 0, mail.ErrNotFound
 	}
 	return number(rows.Values[0][0]), nil
+}
+
+// SetFolderSubscribed records whether the user wants a folder in the
+// sidebar. The server is told by the engine; a folder keeps its mail and
+// its cursor either way.
+func (s *Store) SetFolderSubscribed(ctx context.Context, accountID, name string, on bool) error {
+	if _, err := s.folderID(ctx, accountID, name); err != nil {
+		return err
+	}
+	return s.transaction(ctx, []stmtType{
+		stmt(`UPDATE folders SET subscribed = ? WHERE account_id = ? AND name = ?`,
+			on, accountID, name),
+	})
+}
+
+// RenameFolder moves a folder row and the rows of the folders below it to
+// their new names, keeping their messages, cursors and what each keeps.
+// The server renames the children with their parent; the engine says
+// which prefix it used, delimiter.
+func (s *Store) RenameFolder(ctx context.Context, accountID, from, to, delimiter string) error {
+	if delimiter == "" {
+		delimiter = "/"
+	}
+	rows, err := s.query(ctx, `SELECT name FROM folders
+		WHERE account_id = ? AND (name = ? OR name LIKE ? ESCAPE '\')`,
+		accountID, from, escapeLike(from+delimiter)+"%")
+	if err != nil {
+		return err
+	}
+	stmts := make([]stmtType, 0, len(rows.Values))
+	for _, r := range rows.Values {
+		name := text(r[0])
+		next := to + strings.TrimPrefix(name, from)
+		stmts = append(stmts, stmt(`UPDATE folders SET name = ? WHERE account_id = ? AND name = ?`,
+			next, accountID, name))
+	}
+	if len(stmts) == 0 {
+		return mail.ErrNotFound
+	}
+	return s.transaction(ctx, stmts)
+}
+
+// DeleteFolder removes a folder row and, with it, the cached messages in
+// it. The engine deletes the folder on the server only after the user
+// chose to lose it.
+func (s *Store) DeleteFolder(ctx context.Context, accountID, name string) error {
+	if _, err := s.folderID(ctx, accountID, name); err != nil {
+		return err
+	}
+	return s.transaction(ctx, []stmtType{
+		stmt(`DELETE FROM folders WHERE account_id = ? AND name = ?`, accountID, name),
+	})
+}
+
+// escapeLike makes a literal match for a SQL LIKE pattern.
+func escapeLike(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return r.Replace(s)
 }

@@ -33,6 +33,10 @@ type memStore struct {
 	// the highest UID announced, under its UIDVALIDITY.
 	kv    map[string]string
 	marks map[string]memMark
+	// keepsSubscriptions makes SaveFolders keep what the cache knew about
+	// a folder's subscription, as a real LIST does when the user changed
+	// it here but the fake server's list says nothing.
+	keepsSubscriptions bool
 	// afterDrafts runs once, right after the next Drafts call returned
 	// its rows: the moment a sync has read the drafts and something else
 	// changes them. afterDraft does the same for the next Draft call,
@@ -319,11 +323,76 @@ func (s *memStore) SaveFolders(ctx context.Context, accountID string, folders []
 				saved[i].UIDValidity, saved[i].LastUID = old.UIDValidity, old.LastUID
 				saved[i].SyncedAt, saved[i].Complete = old.SyncedAt, old.Complete
 				saved[i].PermanentFlags = old.PermanentFlags
+				// A list the fake server answers keeps subscriptions as
+				// they were when it says nothing of them.
+				if s.keepsSubscriptions {
+					saved[i].Subscribed = old.Subscribed
+				}
 			}
 		}
 	}
 	s.folders[accountID] = saved
 	return nil
+}
+
+// RenameFolder moves a folder and the folders below it to their new
+// names, keeping their messages and cursors, as the SQLite store does.
+func (s *memStore) RenameFolder(ctx context.Context, accountID, from, to, delimiter string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if delimiter == "" {
+		delimiter = "/"
+	}
+	found := false
+	for i := range s.folders[accountID] {
+		name := s.folders[accountID][i].Name
+		if name == from || strings.HasPrefix(name, from+delimiter) {
+			next := to + strings.TrimPrefix(name, from)
+			if msgs, ok := s.messages[msgKey(accountID, name)]; ok {
+				delete(s.messages, msgKey(accountID, name))
+				s.messages[msgKey(accountID, next)] = msgs
+			}
+			s.folders[accountID][i].Name = next
+			found = true
+		}
+	}
+	if !found {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *memStore) DeleteFolder(ctx context.Context, accountID, name string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	kept := s.folders[accountID][:0]
+	found := false
+	for _, f := range s.folders[accountID] {
+		if f.Name == name {
+			found = true
+			continue
+		}
+		kept = append(kept, f)
+	}
+	if !found {
+		return ErrNotFound
+	}
+	s.folders[accountID] = kept
+	delete(s.messages, msgKey(accountID, name))
+	return nil
+}
+
+func (s *memStore) SetFolderSubscribed(ctx context.Context, accountID, name string, on bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.folders[accountID] {
+		if s.folders[accountID][i].Name == name {
+			s.folders[accountID][i].Subscribed = on
+			s.keepsSubscriptions = true
+			return nil
+		}
+	}
+	return ErrNotFound
 }
 
 func (s *memStore) ListMessages(ctx context.Context, accountID, folder, query string, limit int) ([]Summary, error) {

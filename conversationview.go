@@ -117,6 +117,9 @@ func (a *app) threadMoveButtons(c *ui.Context, n int, has, archive, trash, junk 
 	a.toolButton(c, spamIcon, locales.JunkConversations(n), has && junk, func() {
 		a.moveThreads(mail.SpecialJunk)
 	})
+	a.barMenuButton(c, folderInputIcon, locales.MoveToFolder(), locales.MoveToFolder(), func(m *ui.Menu) {
+		a.moveFolderMenu(m)
+	})
 }
 
 // compactThreadMoves folds the move actions into the menu of one button.
@@ -132,6 +135,8 @@ func (a *app) compactThreadMoves(c *ui.Context, n int, has, archive, trash, junk
 			if m.Item(locales.JunkConversations(n)).Disabled(!has || !junk).Chosen() {
 				a.moveThreads(mail.SpecialJunk)
 			}
+			m.Separator()
+			m.Submenu(locales.MoveToFolder(), func(m *ui.Menu) { a.moveFolderMenu(m) })
 		})
 	})
 }
@@ -450,6 +455,16 @@ func (a *app) messageMenu(menu *ui.Menu, key string) {
 		a.moveMessage(m, mail.SpecialTrash)
 	}
 	menu.Separator()
+	menu.Submenu(locales.MoveToFolder(), func(menu *ui.Menu) {
+		for _, f := range a.folders {
+			if f.Name == m.Folder || f.SpecialUse == mail.SpecialFlagged {
+				continue
+			}
+			if menu.Item(f.Name).Chosen() {
+				a.moveMessageToFolder(m, f.Name)
+			}
+		}
+	})
 	menu.Submenu(locales.Labels(), func(menu *ui.Menu) { a.labelMenuItems(menu, oneMessage(m)) })
 	a.ruleMenuItem(menu, oneMessage(m))
 }

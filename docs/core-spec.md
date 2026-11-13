@@ -528,6 +528,22 @@ lines). Keep the original HTML for the webview.
 - States: loading skeleton, empty folder, error banner + Retry; the sync button
   refreshes and preserves the selection.
 - Remove the currently inert Filter/More buttons (do not ship dead controls).
+- Folder management (`mail/folders.go`, `store/folders.go`, `folders.go` in the
+  window): `Service.CreateFolder`, `RenameFolder`, `DeleteFolder` and
+  `SetFolderSubscribed` send CREATE/RENAME/DELETE/SUBSCRIBE to the server first
+  and change the cache only after it agreed, so a failure leaves the previous
+  list. A system folder (Inbox, Sent, Drafts, Trash, Junk, Archive, Flagged)
+  cannot be renamed or deleted, and deleting a folder asks first and says that
+  its mail goes with it. A rename moves the folder's children and keeps their
+  cursors and messages. `Folder.Subscribed` comes from LIST-EXTENDED where the
+  server has it (the column defaults to subscribed for servers that cannot
+  tell); the sidebar hides a hidden folder unless it is the one on screen, and
+  the account menu lists hidden folders to show again. Folders are renamed,
+  deleted and made from their context menu and the account menu; a message moves
+  by name from the list's, a message's or the toolbar's Move to folder button and
+  submenu, and by dragging rows onto a folder (`ListState.DragRows` and
+  `ui.Drop`), which highlights the target, with the same undo as the toolbar's
+  moves.
 
 ### Reading pane
 

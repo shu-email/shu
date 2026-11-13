@@ -206,6 +206,7 @@ func (s *Service) listFolders(c *imapSession) ([]Folder, error) {
 			return nil, fmt.Errorf("imap: list: %w", err)
 		}
 	}
+	subscribed, knowsSubscriptions := subscribedFolders(c)
 	folders := make([]Folder, 0, len(data))
 	for _, d := range data {
 		if d == nil || d.Mailbox == "" || hasNoSelect(attrsOf(d)) {
@@ -214,6 +215,7 @@ func (s *Service) listFolders(c *imapSession) ([]Folder, error) {
 		f := Folder{
 			Name:       d.Mailbox,
 			SpecialUse: folderSpecialUse(d.Mailbox, attrsOf(d)),
+			Subscribed: !knowsSubscriptions || subscribed[d.Mailbox],
 		}
 		if d.Delim != 0 {
 			f.Delimiter = string(d.Delim)
@@ -240,6 +242,27 @@ func (s *Service) listFolders(c *imapSession) ([]Folder, error) {
 		folders = append(folders, f)
 	}
 	return folders, nil
+}
+
+// subscribedFolders asks a server that can tell which folders the user
+// subscribed to. A server without LIST-EXTENDED keeps them all, and the
+// second value says so.
+func subscribedFolders(c *imapSession) (map[string]bool, bool) {
+	if !c.capHas(imap.CapListExtended) && !c.capHas(imap.CapIMAP4rev2) {
+		return nil, false
+	}
+	cmd := c.client.List("", "*", &imap.ListOptions{SelectSubscribed: true})
+	data, err := cmd.Collect()
+	if err != nil {
+		return nil, false
+	}
+	set := make(map[string]bool, len(data))
+	for _, d := range data {
+		if d != nil && d.Mailbox != "" {
+			set[d.Mailbox] = true
+		}
+	}
+	return set, true
 }
 
 func attrsOf(d *imap.ListData) []string {

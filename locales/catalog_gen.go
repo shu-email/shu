@@ -8881,3 +8881,315 @@ func SecurityAttachmentTypeMismatch() string {
 func (msgs Messages) SecurityAttachmentTypeMismatch() string {
 	return Catalog.Format(msgs.locale, "securityAttachmentTypeMismatch", nil)
 }
+
+// NewFolder says "New folder"
+// in the language the app shows.
+func NewFolder() string { return In(i18n.Locale()).NewFolder() }
+
+// NewFolder says "New folder"
+// in the language of msgs.
+func (msgs Messages) NewFolder() string {
+	return Catalog.Format(msgs.locale, "newFolder", nil)
+}
+
+// NewSubfolder says "New subfolder…"
+// in the language the app shows.
+func NewSubfolder() string { return In(i18n.Locale()).NewSubfolder() }
+
+// NewSubfolder says "New subfolder…"
+// in the language of msgs.
+func (msgs Messages) NewSubfolder() string {
+	return Catalog.Format(msgs.locale, "newSubfolder", nil)
+}
+
+// FolderNameLabel says "Folder name"
+// in the language the app shows.
+func FolderNameLabel() string { return In(i18n.Locale()).FolderNameLabel() }
+
+// FolderNameLabel says "Folder name"
+// in the language of msgs.
+func (msgs Messages) FolderNameLabel() string {
+	return Catalog.Format(msgs.locale, "folderNameLabel", nil)
+}
+
+// CreateFolder says "Create folder"
+// in the language the app shows.
+func CreateFolder() string { return In(i18n.Locale()).CreateFolder() }
+
+// CreateFolder says "Create folder"
+// in the language of msgs.
+func (msgs Messages) CreateFolder() string {
+	return Catalog.Format(msgs.locale, "createFolder", nil)
+}
+
+// RenameFolder says "Rename folder…"
+// in the language the app shows.
+func RenameFolder() string { return In(i18n.Locale()).RenameFolder() }
+
+// RenameFolder says "Rename folder…"
+// in the language of msgs.
+func (msgs Messages) RenameFolder() string {
+	return Catalog.Format(msgs.locale, "renameFolder", nil)
+}
+
+// RenameFolderTitle says "Rename “{name}”"
+// in the language the app shows.
+//
+// The title of the form that renames a folder.
+func RenameFolderTitle(name string) string { return In(i18n.Locale()).RenameFolderTitle(name) }
+
+// RenameFolderTitle says "Rename “{name}”"
+// in the language of msgs.
+//
+// The title of the form that renames a folder.
+func (msgs Messages) RenameFolderTitle(name string) string {
+	return Catalog.Format(msgs.locale, "renameFolderTitle", map[string]any{"name": name})
+}
+
+// DeleteFolder says "Delete folder…"
+// in the language the app shows.
+func DeleteFolder() string { return In(i18n.Locale()).DeleteFolder() }
+
+// DeleteFolder says "Delete folder…"
+// in the language of msgs.
+func (msgs Messages) DeleteFolder() string {
+	return Catalog.Format(msgs.locale, "deleteFolder", nil)
+}
+
+// DeleteFolderTitle says "Delete “{name}”?"
+// in the language the app shows.
+//
+// The title of the confirmation before a folder is deleted.
+func DeleteFolderTitle(name string) string { return In(i18n.Locale()).DeleteFolderTitle(name) }
+
+// DeleteFolderTitle says "Delete “{name}”?"
+// in the language of msgs.
+//
+// The title of the confirmation before a folder is deleted.
+func (msgs Messages) DeleteFolderTitle(name string) string {
+	return Catalog.Format(msgs.locale, "deleteFolderTitle", map[string]any{"name": name})
+}
+
+// DeleteFolderConfirm says "This deletes the folder “{name}” and the {count, plural, one {message} other {# messages}} in it. This cannot be …"
+// in the language the app shows.
+//
+// Says that deleting a folder also deletes its mail.
+func DeleteFolderConfirm(name string, count int) string {
+	return In(i18n.Locale()).DeleteFolderConfirm(name, count)
+}
+
+// DeleteFolderConfirm says "This deletes the folder “{name}” and the {count, plural, one {message} other {# messages}} in it. This cannot be …"
+// in the language of msgs.
+//
+// Says that deleting a folder also deletes its mail.
+func (msgs Messages) DeleteFolderConfirm(name string, count int) string {
+	return Catalog.Format(msgs.locale, "deleteFolderConfirm", map[string]any{"name": name, "count": count})
+}
+
+// FolderCreated says "Created “{name}”"
+// in the language the app shows.
+//
+// The note after a folder was created.
+func FolderCreated(name string) string { return In(i18n.Locale()).FolderCreated(name) }
+
+// FolderCreated says "Created “{name}”"
+// in the language of msgs.
+//
+// The note after a folder was created.
+func (msgs Messages) FolderCreated(name string) string {
+	return Catalog.Format(msgs.locale, "folderCreated", map[string]any{"name": name})
+}
+
+// FolderRenamed says "Renamed “{from}” to “{to}”"
+// in the language the app shows.
+//
+// The note after a folder was renamed.
+func FolderRenamed(from string, to string) string { return In(i18n.Locale()).FolderRenamed(from, to) }
+
+// FolderRenamed says "Renamed “{from}” to “{to}”"
+// in the language of msgs.
+//
+// The note after a folder was renamed.
+func (msgs Messages) FolderRenamed(from string, to string) string {
+	return Catalog.Format(msgs.locale, "folderRenamed", map[string]any{"from": from, "to": to})
+}
+
+// FolderDeleted says "Deleted “{name}”"
+// in the language the app shows.
+//
+// The note after a folder was deleted.
+func FolderDeleted(name string) string { return In(i18n.Locale()).FolderDeleted(name) }
+
+// FolderDeleted says "Deleted “{name}”"
+// in the language of msgs.
+//
+// The note after a folder was deleted.
+func (msgs Messages) FolderDeleted(name string) string {
+	return Catalog.Format(msgs.locale, "folderDeleted", map[string]any{"name": name})
+}
+
+// FolderActionFailed says "Could not change the folders: {error}"
+// in the language the app shows.
+//
+// The error after a folder action failed.
+func FolderActionFailed(error string) string { return In(i18n.Locale()).FolderActionFailed(error) }
+
+// FolderActionFailed says "Could not change the folders: {error}"
+// in the language of msgs.
+//
+// The error after a folder action failed.
+func (msgs Messages) FolderActionFailed(error string) string {
+	return Catalog.Format(msgs.locale, "folderActionFailed", map[string]any{"error": error})
+}
+
+// HideFromSidebar says "Hide from sidebar"
+// in the language the app shows.
+func HideFromSidebar() string { return In(i18n.Locale()).HideFromSidebar() }
+
+// HideFromSidebar says "Hide from sidebar"
+// in the language of msgs.
+func (msgs Messages) HideFromSidebar() string {
+	return Catalog.Format(msgs.locale, "hideFromSidebar", nil)
+}
+
+// ShowInSidebar says "Show in sidebar"
+// in the language the app shows.
+func ShowInSidebar() string { return In(i18n.Locale()).ShowInSidebar() }
+
+// ShowInSidebar says "Show in sidebar"
+// in the language of msgs.
+func (msgs Messages) ShowInSidebar() string {
+	return Catalog.Format(msgs.locale, "showInSidebar", nil)
+}
+
+// FolderHidden says "“{name}” is hidden from the sidebar"
+// in the language the app shows.
+//
+// The note after a folder was hidden.
+func FolderHidden(name string) string { return In(i18n.Locale()).FolderHidden(name) }
+
+// FolderHidden says "“{name}” is hidden from the sidebar"
+// in the language of msgs.
+//
+// The note after a folder was hidden.
+func (msgs Messages) FolderHidden(name string) string {
+	return Catalog.Format(msgs.locale, "folderHidden", map[string]any{"name": name})
+}
+
+// FolderShown says "“{name}” is in the sidebar again"
+// in the language the app shows.
+//
+// The note after a folder was shown again.
+func FolderShown(name string) string { return In(i18n.Locale()).FolderShown(name) }
+
+// FolderShown says "“{name}” is in the sidebar again"
+// in the language of msgs.
+//
+// The note after a folder was shown again.
+func (msgs Messages) FolderShown(name string) string {
+	return Catalog.Format(msgs.locale, "folderShown", map[string]any{"name": name})
+}
+
+// MoveToFolder says "Move to folder"
+// in the language the app shows.
+func MoveToFolder() string { return In(i18n.Locale()).MoveToFolder() }
+
+// MoveToFolder says "Move to folder"
+// in the language of msgs.
+func (msgs Messages) MoveToFolder() string {
+	return Catalog.Format(msgs.locale, "moveToFolder", nil)
+}
+
+// MoveToFolderEllipsis says "Move to folder…"
+// in the language the app shows.
+func MoveToFolderEllipsis() string { return In(i18n.Locale()).MoveToFolderEllipsis() }
+
+// MoveToFolderEllipsis says "Move to folder…"
+// in the language of msgs.
+func (msgs Messages) MoveToFolderEllipsis() string {
+	return Catalog.Format(msgs.locale, "moveToFolderEllipsis", nil)
+}
+
+// MovedToFolder says "Moved to {name}"
+// in the language the app shows.
+//
+// The note after messages were moved to a folder. On the undo banner.
+func MovedToFolder(name string) string { return In(i18n.Locale()).MovedToFolder(name) }
+
+// MovedToFolder says "Moved to {name}"
+// in the language of msgs.
+//
+// The note after messages were moved to a folder. On the undo banner.
+func (msgs Messages) MovedToFolder(name string) string {
+	return Catalog.Format(msgs.locale, "movedToFolder", map[string]any{"name": name})
+}
+
+// NoOtherFolders says "No other folders"
+// in the language the app shows.
+func NoOtherFolders() string { return In(i18n.Locale()).NoOtherFolders() }
+
+// NoOtherFolders says "No other folders"
+// in the language of msgs.
+func (msgs Messages) NoOtherFolders() string {
+	return Catalog.Format(msgs.locale, "noOtherFolders", nil)
+}
+
+// FolderExists says "A folder of that name already exists."
+// in the language the app shows.
+func FolderExists() string { return In(i18n.Locale()).FolderExists() }
+
+// FolderExists says "A folder of that name already exists."
+// in the language of msgs.
+func (msgs Messages) FolderExists() string {
+	return Catalog.Format(msgs.locale, "folderExists", nil)
+}
+
+// FolderBadName says "That name cannot be used: it is empty, has control characters, or starts or ends with the folder separator."
+// in the language the app shows.
+func FolderBadName() string { return In(i18n.Locale()).FolderBadName() }
+
+// FolderBadName says "That name cannot be used: it is empty, has control characters, or starts or ends with the folder separator."
+// in the language of msgs.
+func (msgs Messages) FolderBadName() string {
+	return Catalog.Format(msgs.locale, "folderBadName", nil)
+}
+
+// FolderSystem says "The inbox and the Sent, Drafts, Archive, Junk and Trash folders cannot be renamed or deleted."
+// in the language the app shows.
+func FolderSystem() string { return In(i18n.Locale()).FolderSystem() }
+
+// FolderSystem says "The inbox and the Sent, Drafts, Archive, Junk and Trash folders cannot be renamed or deleted."
+// in the language of msgs.
+func (msgs Messages) FolderSystem() string {
+	return Catalog.Format(msgs.locale, "folderSystem", nil)
+}
+
+// FolderGone says "That folder no longer exists."
+// in the language the app shows.
+func FolderGone() string { return In(i18n.Locale()).FolderGone() }
+
+// FolderGone says "That folder no longer exists."
+// in the language of msgs.
+func (msgs Messages) FolderGone() string {
+	return Catalog.Format(msgs.locale, "folderGone", nil)
+}
+
+// DismissFolderNote says "Dismiss this note"
+// in the language the app shows.
+func DismissFolderNote() string { return In(i18n.Locale()).DismissFolderNote() }
+
+// DismissFolderNote says "Dismiss this note"
+// in the language of msgs.
+func (msgs Messages) DismissFolderNote() string {
+	return Catalog.Format(msgs.locale, "dismissFolderNote", nil)
+}
+
+// HiddenFolders says "Hidden folders"
+// in the language the app shows.
+func HiddenFolders() string { return In(i18n.Locale()).HiddenFolders() }
+
+// HiddenFolders says "Hidden folders"
+// in the language of msgs.
+func (msgs Messages) HiddenFolders() string {
+	return Catalog.Format(msgs.locale, "hiddenFolders", nil)
+}

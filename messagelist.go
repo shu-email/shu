@@ -31,6 +31,9 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme, bar ui.TitleBar, head floa
 		if a.labels.note != "" {
 			a.labelNoteBanner(c, t)
 		}
+		if a.folderNote != "" {
+			a.folderNoteBanner(c, t)
+		}
 		if a.triage != nil {
 			a.triageBanner(c, t)
 		}
@@ -114,6 +117,9 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme, bar ui.TitleBar, head floa
 			return strings.Join(parts, ", ")
 		}
 		a.list.Header = func(i int) bool { return i >= n }
+		// Rows drag their messages, or the conversations they stand for,
+		// onto a folder in the sidebar (folderDrop).
+		a.list.DragRows = a.dragRows
 		a.list.Selected = &a.selected
 		a.list.Selection = &a.sel
 		// The menu is the list's, after its rows: a right-click on a row

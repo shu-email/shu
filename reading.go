@@ -207,6 +207,9 @@ func (a *app) messageMoveButtons(c *ui.Context, has, onlyDrafts, archive, trash,
 	a.toolButton(c, spamIcon, locales.JunkMessage(), has && junk, func() {
 		a.moveSelected(mail.SpecialJunk)
 	})
+	a.barMenuButton(c, folderInputIcon, locales.MoveToFolder(), locales.MoveToFolder(), func(m *ui.Menu) {
+		a.moveFolderMenu(m)
+	})
 }
 
 // compactMessageMoves folds the move actions into the menu of one button.
@@ -226,6 +229,8 @@ func (a *app) compactMessageMoves(c *ui.Context, has, onlyDrafts, archive, trash
 			if m.Item(locales.JunkMessage()).Disabled(!has || !junk).Chosen() {
 				a.moveSelected(mail.SpecialJunk)
 			}
+			m.Separator()
+			m.Submenu(locales.MoveToFolder(), func(m *ui.Menu) { a.moveFolderMenu(m) })
 		})
 	})
 }

@@ -240,11 +240,45 @@ func TestDiscoverSRV(t *testing.T) {
 		t.Fatal(err)
 	}
 	if d.Source != DiscoverySRV || d.IMAP.Host != "imap.example.com" || d.IMAP.TLS != TLSImplicit ||
-		d.SMTP.Host != "smtp.example.com" || d.SMTP.TLS != TLSStartTLS {
+		d.SMTP.Host != "smtp.example.com" || d.SMTP.TLS != TLSImplicit {
 		t.Errorf("found %+v", d)
 	}
 	if len(asked) != 2 {
 		t.Errorf("looked up %v", asked)
+	}
+}
+
+// The port a record names decides how the connection starts TLS: the
+// older submission service on 587, the newer one on 465.
+func TestDiscoverSRVPorts(t *testing.T) {
+	svc, _, _ := newTestService()
+	port := uint16(587)
+	svc.lookupSRV = func(ctx context.Context, service, proto, name string) (string, []*net.SRV, error) {
+		if service == "submission" {
+			return "", []*net.SRV{{Target: "smtp.example.com.", Port: port}}, nil
+		}
+		return "", nil, errors.New("no record")
+	}
+	smtp, err := svc.lookupMailSRV(context.Background(), "example.com", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if smtp != (Server{Host: "smtp.example.com", Port: 587, TLS: TLSStartTLS}) {
+		t.Errorf("587 reads %+v", smtp)
+	}
+	port = 465
+	svc.lookupSRV = func(ctx context.Context, service, proto, name string) (string, []*net.SRV, error) {
+		if service == "submissions" {
+			return "", []*net.SRV{{Target: "smtp.example.com.", Port: port}}, nil
+		}
+		return "", nil, errors.New("no record")
+	}
+	smtp, err = svc.lookupMailSRV(context.Background(), "example.com", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if smtp != (Server{Host: "smtp.example.com", Port: 465, TLS: TLSImplicit}) {
+		t.Errorf("465 reads %+v", smtp)
 	}
 }
 

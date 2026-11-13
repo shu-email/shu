@@ -295,11 +295,13 @@ func (s *Service) lookupMailSRV(ctx context.Context, domain string, imap bool) (
 		{"imap", TLSStartTLS},
 	}
 	if !imap {
+		// RFC 8314's submissions is the implicit-TLS submission service;
+		// the older submission starts TLS.
 		services = []struct {
 			name string
 			tls  TLSMode
 		}{
-			{"submissions", TLSStartTLS},
+			{"submissions", TLSImplicit},
 			{"submission", TLSStartTLS},
 		}
 	}
@@ -318,7 +320,14 @@ func (s *Service) lookupMailSRV(ctx context.Context, domain string, imap bool) (
 			if host == "" || host == "." || rec.Port == 0 {
 				continue
 			}
-			return Server{Host: host, Port: int(rec.Port), TLS: svc.tls}, nil
+			port := int(rec.Port)
+			tls := svc.tls
+			// A record that names a well-known port says how it starts
+			// TLS better than the service's name does.
+			if guess := tlsForPort(port); guess != "" {
+				tls = guess
+			}
+			return Server{Host: host, Port: port, TLS: tls}, nil
 		}
 		errs = append(errs, "_"+svc.name+"._tcp."+domain+": no target")
 	}
@@ -555,25 +564,17 @@ func parseAutodiscover(data []byte) (Discovery, error) {
 			if out.IMAP.Host != "" {
 				continue
 			}
-			tls := TLSStartTLS
-			if truthy(p.SSL) {
-				tls = TLSImplicit
+			tls, ok := autodiscoverTLS(p)
+			if !ok {
+				continue
 			}
 			out.IMAP = Server{Host: host, Port: portOr(p.Port, defaultPort(true, tls)), TLS: tls}
 		case "SMTP":
 			if out.SMTP.Host != "" {
 				continue
 			}
-			tls := TLSStartTLS
-			switch {
-			case truthy(p.SSL):
-				tls = TLSImplicit
-			case truthy(p.Encryption) || strings.EqualFold(strings.TrimSpace(p.Encryption), "starttls") ||
-				strings.EqualFold(strings.TrimSpace(p.Encryption), "tls"):
-				tls = TLSStartTLS
-			case strings.TrimSpace(p.Encryption) == "":
-			default:
-				// No encryption, which is not offered.
+			tls, ok := autodiscoverTLS(p)
+			if !ok {
 				continue
 			}
 			out.SMTP = Server{Host: host, Port: portOr(p.Port, defaultPort(false, tls)), TLS: tls}
@@ -583,6 +584,24 @@ func parseAutodiscover(data []byte) (Discovery, error) {
 		return Discovery{}, errors.New("no IMAP or SMTP server in the configuration")
 	}
 	return out, nil
+}
+
+// autodiscoverTLS reads how a protocol starts TLS; false for a server
+// without TLS, which is not offered.
+func autodiscoverTLS(p autodiscoverProtocol) (TLSMode, bool) {
+	if truthy(p.SSL) {
+		return TLSImplicit, true
+	}
+	switch strings.ToLower(strings.TrimSpace(p.Encryption)) {
+	case "", "none", "tls", "starttls":
+		// Without a word from the server, STARTTLS is the safe reading;
+		// "None" means nothing would be encrypted at all.
+		if strings.EqualFold(strings.TrimSpace(p.Encryption), "none") {
+			return "", false
+		}
+		return TLSStartTLS, true
+	}
+	return "", false
 }
 
 func truthy(s string) bool {

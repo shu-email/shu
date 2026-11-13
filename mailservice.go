@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"time"
 
@@ -27,6 +28,13 @@ type mailService interface {
 	SignInAgain(ctx context.Context, accountID string, prompt mail.OAuthPrompt) error
 	SignOut(ctx context.Context, accountID string) error
 	NeedsSignIn(ctx context.Context, accountID string) (bool, error)
+
+	// Import and export, and the configuration backup (transfer.go).
+	ImportMbox(ctx context.Context, accountID, folder string, r io.Reader, progress func(mail.ImportResult)) (mail.ImportResult, error)
+	ImportEML(ctx context.Context, accountID, folder string, raw []byte) (mail.ImportResult, error)
+	Export(ctx context.Context, req mail.ExportRequest, w io.Writer, progress func(mail.ExportResult)) (mail.ExportResult, error)
+	BackupConfig(ctx context.Context) ([]byte, error)
+	RestoreConfig(ctx context.Context, data []byte) (int, error)
 
 	NetworkSettings(ctx context.Context) (mail.NetworkSettings, bool, error)
 	SaveNetworkSettings(ctx context.Context, set mail.NetworkSettings, password string, setPassword bool) error

@@ -56,6 +56,12 @@ type fakeService struct {
 	// the policy calls fail.
 	remote    map[string]bool
 	remoteErr error
+	// imported, exported and restored record the transfer actions, and
+	// transferErr makes them fail.
+	imported    []string
+	exported    []string
+	restored    []string
+	transferErr error
 
 	// Drafts. The fake keeps them as the engine does: saving is local,
 	// and SyncDrafts is the step that reaches the server, or fails to.
@@ -2531,4 +2537,54 @@ func (f *fakeService) SetRemoteImages(ctx context.Context, from mail.Address, on
 		delete(f.remote, key)
 	}
 	return nil
+}
+
+func (f *fakeService) ImportMbox(ctx context.Context, accountID, folder string, r io.Reader, progress func(mail.ImportResult)) (mail.ImportResult, error) {
+	if f.transferErr != nil {
+		return mail.ImportResult{}, f.transferErr
+	}
+	data, _ := io.ReadAll(r)
+	count := strings.Count(string(data), "From ")
+	f.imported = append(f.imported, fmt.Sprintf("%s/%s/%d", accountID, folder, count))
+	if progress != nil {
+		progress(mail.ImportResult{Imported: count})
+	}
+	return mail.ImportResult{Imported: count}, nil
+}
+
+func (f *fakeService) ImportEML(ctx context.Context, accountID, folder string, raw []byte) (mail.ImportResult, error) {
+	if f.transferErr != nil {
+		return mail.ImportResult{}, f.transferErr
+	}
+	f.imported = append(f.imported, accountID+"/"+folder+"/eml")
+	return mail.ImportResult{Imported: 1}, nil
+}
+
+func (f *fakeService) Export(ctx context.Context, req mail.ExportRequest, w io.Writer, progress func(mail.ExportResult)) (mail.ExportResult, error) {
+	if f.transferErr != nil {
+		return mail.ExportResult{}, f.transferErr
+	}
+	if _, err := io.WriteString(w, "From a@example.com Mon Jan  2 15:04:05 2006\nFrom: Alice <alice@example.com>\nSubject: Exported\n\nHello\n"); err != nil {
+		return mail.ExportResult{}, err
+	}
+	f.exported = append(f.exported, fmt.Sprintf("%s/%s/%s/%v", req.AccountID, req.Folder, req.Format, req.IncludeAttachments))
+	if progress != nil {
+		progress(mail.ExportResult{Messages: 1})
+	}
+	return mail.ExportResult{Messages: 1}, nil
+}
+
+func (f *fakeService) BackupConfig(ctx context.Context) ([]byte, error) {
+	if f.transferErr != nil {
+		return nil, f.transferErr
+	}
+	return []byte(`{"version":1,"accounts":[]}`), nil
+}
+
+func (f *fakeService) RestoreConfig(ctx context.Context, data []byte) (int, error) {
+	if f.transferErr != nil {
+		return 0, f.transferErr
+	}
+	f.restored = append(f.restored, string(data))
+	return 1, nil
 }

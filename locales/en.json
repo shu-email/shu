@@ -3431,5 +3431,75 @@
       }
     }
   },
-  "saveAllNoFolder": "Choose a folder to save the attachments in."
+  "saveAllNoFolder": "Choose a folder to save the attachments in.",
+  "transferTitle": "Import and export",
+  "transferIntro": "Bring mail in from mbox or .eml files, take it out, or back up the account settings. Imports upload to the folder open in the mail window; secrets are never exported.",
+  "importMbox": "Import mbox…",
+  "importEML": "Import .eml…",
+  "exportFolder": "Export this folder…",
+  "exportAccount": "Export the account…",
+  "backupConfig": "Back up settings…",
+  "restoreConfig": "Restore settings…",
+  "transferNoFolder": "Open a mail folder before importing or exporting.",
+  "transferWorking": "Working…",
+  "transferImported": "{count, plural, one {Imported # message} other {Imported # messages}}",
+  "@transferImported": {
+    "description": "The note after an import finished.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "12"
+      }
+    }
+  },
+  "transferImportedSkipped": "{count, plural, one {Imported # message} other {Imported # messages}}, skipped {skipped}",
+  "@transferImportedSkipped": {
+    "description": "The note after an import with refusals.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "10"
+      },
+      "skipped": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "transferExported": "{count, plural, one {Exported # message} other {Exported # messages}}",
+  "@transferExported": {
+    "description": "The note after an export finished.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "12"
+      }
+    }
+  },
+  "transferFailed": "The transfer failed: {error}",
+  "@transferFailed": {
+    "description": "The error after an import or export failed.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "the file could not be read"
+      }
+    }
+  },
+  "transferCancel": "Cancel",
+  "transferCancelled": "Cancelled",
+  "backupDone": "Saved the settings backup",
+  "restoreDone": "Restored {count, plural, one {# account} other {# accounts}}",
+  "@restoreDone": {
+    "description": "The note after a configuration restore.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "restoreNeedsSignIn": "Restored accounts have no password or sign-in yet: open each one to add it.",
+  "exportSelected": "Export selected…",
+  "transferNoSelection": "Choose at least one message to export."
 }

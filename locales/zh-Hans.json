@@ -1117,5 +1117,75 @@
       }
     }
   },
-  "saveAllNoFolder": "请选择保存附件的文件夹。"
+  "saveAllNoFolder": "请选择保存附件的文件夹。",
+  "transferTitle": "导入与导出",
+  "transferIntro": "从 mbox 或 .eml 文件导入邮件、导出邮件，或备份账户设置。导入会上传到邮件窗口中打开的文件夹；任何密钥都不会被导出。",
+  "importMbox": "导入 mbox…",
+  "importEML": "导入 .eml…",
+  "exportFolder": "导出此文件夹…",
+  "exportAccount": "导出账户…",
+  "backupConfig": "备份设置…",
+  "restoreConfig": "恢复设置…",
+  "transferNoFolder": "请先打开一个邮件文件夹，再进行导入或导出。",
+  "transferWorking": "处理中…",
+  "transferImported": "{count, plural, other {已导入 # 封邮件}}",
+  "@transferImported": {
+    "description": "The note after an import finished.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "12"
+      }
+    }
+  },
+  "transferImportedSkipped": "{count, plural, other {已导入 # 封邮件}}，跳过 {skipped} 封",
+  "@transferImportedSkipped": {
+    "description": "The note after an import with refusals.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "10"
+      },
+      "skipped": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "transferExported": "{count, plural, other {已导出 # 封邮件}}",
+  "@transferExported": {
+    "description": "The note after an export finished.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "12"
+      }
+    }
+  },
+  "transferFailed": "传输失败：{error}",
+  "@transferFailed": {
+    "description": "The error after an import or export failed.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "the file could not be read"
+      }
+    }
+  },
+  "transferCancel": "取消",
+  "transferCancelled": "已取消",
+  "backupDone": "已保存设置备份",
+  "restoreDone": "已恢复 {count, plural, other {# 个账户}}",
+  "@restoreDone": {
+    "description": "The note after a configuration restore.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "restoreNeedsSignIn": "已恢复的账户尚无密码或登录信息：请打开每个账户补全。",
+  "exportSelected": "导出所选…",
+  "transferNoSelection": "请至少选择一封要导出的邮件。"
 }

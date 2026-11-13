@@ -176,19 +176,20 @@ func (a *app) listHeader(c *ui.Context, t *ui.Theme) {
 	query := strings.TrimSpace(a.query)
 	title := a.folderLabel(a.folder)
 	chosen := a.sel.Len()
+	smart := a.shownSmart()
 	switch {
 	case chosen > 1 && a.threaded():
 		title = locales.ConversationsSelected(chosen)
 	case chosen > 1:
 		title = locales.SelectedCount(chosen)
-	case query != "":
+	case query != "" && smart == nil:
 		title = locales.SearchResults()
 	}
 	ui.Row(c).Gap(6).AlignItems(ui.Center).MinWidth(0).Children(func() {
 		ui.Text(c, title).FontSize(17).Bold().SingleLine().Shrink(1).MinWidth(0)
 		switch {
 		case chosen > 1:
-		case query != "":
+		case query != "" && smart == nil:
 			found := fmt.Sprint(len(a.all))
 			if a.pager.more {
 				found += "+"
@@ -197,7 +198,8 @@ func (a *app) listHeader(c *ui.Context, t *ui.Theme) {
 		default:
 			// A folder's badge is its unread count as the server keeps it,
 			// the number the sidebar shows: the rows read so far are only
-			// the newest pages. Other lists count their rows read.
+			// the newest pages. Other lists count their rows read, and a
+			// smart mailbox what the cache says it finds.
 			n, more := a.unread(), a.pager.more
 			switch {
 			case a.isServerFolder(a.folder):
@@ -206,6 +208,8 @@ func (a *app) listHeader(c *ui.Context, t *ui.Theme) {
 				n, more = a.unifiedUnread(), false
 			case a.shownLabel() != nil:
 				n, more = a.shownLabel().Unread, false
+			case smart != nil:
+				n, more = smart.Unread, false
 			}
 			if n > 0 {
 				label := fmt.Sprint(n)
@@ -253,6 +257,9 @@ func (a *app) listHead(c *ui.Context, t *ui.Theme, bar ui.TitleBar, head float32
 			a.glassGroup(c, "", func() {
 				if l := a.shownLabel(); l != nil {
 					a.labelHeaderMenu(c, *l)
+				}
+				if mb := a.shownSmart(); mb != nil {
+					a.smartHeaderMenu(c, *mb)
 				}
 				a.viewToggle(c)
 				if a.ai != nil {
@@ -348,6 +355,8 @@ func (a *app) emptyState() string {
 		return locales.Loading()
 	case len(a.all) > 0:
 		return ""
+	case a.smartFolderGone():
+		return locales.SmartFolderGone(a.shownSmart().Name)
 	case strings.TrimSpace(a.query) != "":
 		return noResultsText(a.query)
 	case a.emptyOlder() != endNone:

@@ -89,6 +89,10 @@ type memStore struct {
 	// dismissed is when each account took a conversation off its
 	// follow-up list.
 	dismissed map[string]map[ThreadID]time.Time
+	// smarts are the smart mailboxes by account, in their order, and
+	// smartNext gives the IDs.
+	smarts    map[string][]SmartMailbox
+	smartNext int64
 }
 
 // memMark is a folder's watermark.
@@ -116,6 +120,7 @@ func newMemStore() *memStore {
 		labelsGone: map[string]time.Time{},
 		reminders:  map[string]map[ThreadID]Reminder{},
 		dismissed:  map[string]map[ThreadID]time.Time{},
+		smarts:     map[string][]SmartMailbox{},
 	}
 }
 
@@ -1521,10 +1526,6 @@ func (s *memStore) DismissFollowUp(ctx context.Context, accountID string, thread
 func (s *memStore) CountFollowUps(ctx context.Context, q ListQuery) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	now := q.Scope.FollowUpNow
-	if now.IsZero() {
-		now = time.Now()
-	}
 	accounts := q.Scope.Accounts
 	if len(accounts) == 0 {
 		for id := range s.accounts {
@@ -1533,51 +1534,141 @@ func (s *memStore) CountFollowUps(ctx context.Context, q ListQuery) (int, error)
 	}
 	count := 0
 	for _, accountID := range accounts {
-		folders := map[string]Folder{}
-		for _, f := range s.folders[accountID] {
-			folders[f.Name] = f
-		}
-		newest := map[ThreadID]Summary{}
-		aside := map[ThreadID]bool{}
-		for key, byUID := range s.messages {
-			if !strings.HasPrefix(key, accountID+"/") {
-				continue
-			}
-			folder := key[len(accountID)+1:]
-			fl, ok := folders[folder]
-			if !ok {
-				continue
-			}
-			for _, msg := range byUID {
-				m := msg.Summary
-				m.Folder = folder
-				switch fl.SpecialUse {
-				case SpecialJunk, SpecialTrash:
-					aside[m.Thread] = true
-					continue
-				case SpecialDrafts:
-					continue
-				}
-				if cur, ok := newest[m.Thread]; !ok || m.Date.After(cur.Date) {
-					newest[m.Thread] = m
-				}
-			}
-		}
-		for thread, m := range newest {
-			if aside[thread] {
-				continue
-			}
-			if folders[m.Folder].SpecialUse != SpecialSent {
-				continue
-			}
-			if _, ok := FollowUpAge(now, m.Date); !ok {
-				continue
-			}
-			if at, ok := s.dismissed[accountID][thread]; ok && !at.Before(m.Date) {
-				continue
-			}
-			count++
-		}
+		count += len(s.followThreadsLocked(accountID, q.Scope.FollowUpNow))
 	}
 	return count, nil
+}
+
+// followThreadsLocked are an account's conversations that wait for a
+// reply at now, as FollowUpScope finds them.
+func (s *memStore) followThreadsLocked(accountID string, now time.Time) map[ThreadID]bool {
+	if now.IsZero() {
+		now = time.Now()
+	}
+	folders := map[string]Folder{}
+	for _, f := range s.folders[accountID] {
+		folders[f.Name] = f
+	}
+	newest := map[ThreadID]Summary{}
+	aside := map[ThreadID]bool{}
+	for key, byUID := range s.messages {
+		if !strings.HasPrefix(key, accountID+"/") {
+			continue
+		}
+		folder := key[len(accountID)+1:]
+		fl, ok := folders[folder]
+		if !ok {
+			continue
+		}
+		for _, msg := range byUID {
+			m := msg.Summary
+			m.Folder = folder
+			switch fl.SpecialUse {
+			case SpecialJunk, SpecialTrash:
+				aside[m.Thread] = true
+				continue
+			case SpecialDrafts:
+				continue
+			}
+			if cur, ok := newest[m.Thread]; !ok || m.Date.After(cur.Date) {
+				newest[m.Thread] = m
+			}
+		}
+	}
+	out := map[ThreadID]bool{}
+	for thread, m := range newest {
+		if aside[thread] {
+			continue
+		}
+		if folders[m.Folder].SpecialUse != SpecialSent {
+			continue
+		}
+		if _, ok := FollowUpAge(now, m.Date); !ok {
+			continue
+		}
+		if at, ok := s.dismissed[accountID][thread]; ok && !at.Before(m.Date) {
+			continue
+		}
+		out[thread] = true
+	}
+	return out
+}
+
+func (s *memStore) SmartMailboxes(ctx context.Context, accountID string) ([]SmartMailbox, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]SmartMailbox(nil), s.smarts[accountID]...), nil
+}
+
+func (s *memStore) SaveSmartMailbox(ctx context.Context, m SmartMailbox) (SmartMailbox, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := SmartNameKey(m.Name)
+	for _, have := range s.smarts[m.Account] {
+		if have.ID != m.ID && SmartNameKey(have.Name) == key {
+			return SmartMailbox{}, ErrSmartExists
+		}
+	}
+	if m.ID == 0 {
+		s.smartNext++
+		m.ID = s.smartNext
+		s.smarts[m.Account] = append(s.smarts[m.Account], m)
+		return m, nil
+	}
+	for i := range s.smarts[m.Account] {
+		if s.smarts[m.Account][i].ID == m.ID {
+			m.Folder = s.smarts[m.Account][i].Folder
+			s.smarts[m.Account][i] = m
+			return m, nil
+		}
+	}
+	return SmartMailbox{}, ErrNotFound
+}
+
+func (s *memStore) DeleteSmartMailbox(ctx context.Context, accountID string, id int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, m := range s.smarts[accountID] {
+		if m.ID == id {
+			s.smarts[accountID] = append(s.smarts[accountID][:i], s.smarts[accountID][i+1:]...)
+			return nil
+		}
+	}
+	return ErrNotFound
+}
+
+// CountUnread counts the unread messages a list query reads.
+func (s *memStore) CountUnread(ctx context.Context, q ListQuery) (int, error) {
+	if err := q.Scope.Check(); err != nil {
+		return 0, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var follow map[string]map[ThreadID]bool
+	if q.Scope.FollowUp {
+		follow = map[string]map[ThreadID]bool{}
+		accounts := q.Scope.Accounts
+		if len(accounts) == 0 {
+			for id := range s.accounts {
+				accounts = append(accounts, id)
+			}
+		}
+		for _, accountID := range accounts {
+			follow[accountID] = s.followThreadsLocked(accountID, q.Scope.FollowUpNow)
+		}
+	}
+	n := 0
+	s.pageLocked(q.Scope, func(f Folder, m Message, row memRow, inScope bool) {
+		if !inScope || m.Seen {
+			return
+		}
+		if _, ok := memFound(q.Search, f, m, s.namedLocked(row, m)); !ok {
+			return
+		}
+		if follow != nil && !follow[row.Account][row.Thread] {
+			return
+		}
+		n++
+	})
+	return n, nil
 }

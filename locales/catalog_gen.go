@@ -284,6 +284,348 @@ func (msgs Messages) NoRecipient() string {
 	return Catalog.Format(msgs.locale, "noRecipient", nil)
 }
 
+// SmartMailboxes says "Smart mailboxes"
+// in the language the app shows.
+//
+// The sidebar's section of saved searches, each opening the list it saved.
+func SmartMailboxes() string { return In(i18n.Locale()).SmartMailboxes() }
+
+// SmartMailboxes says "Smart mailboxes"
+// in the language of msgs.
+//
+// The sidebar's section of saved searches, each opening the list it saved.
+func (msgs Messages) SmartMailboxes() string {
+	return Catalog.Format(msgs.locale, "smartMailboxes", nil)
+}
+
+// SaveSearchEllipsis says "Save search…"
+// in the language the app shows.
+//
+// Saves the search on screen as a smart mailbox.
+func SaveSearchEllipsis() string { return In(i18n.Locale()).SaveSearchEllipsis() }
+
+// SaveSearchEllipsis says "Save search…"
+// in the language of msgs.
+//
+// Saves the search on screen as a smart mailbox.
+func (msgs Messages) SaveSearchEllipsis() string {
+	return Catalog.Format(msgs.locale, "saveSearchEllipsis", nil)
+}
+
+// SaveSearchTip says "Save the search on screen as a smart mailbox"
+// in the language the app shows.
+func SaveSearchTip() string { return In(i18n.Locale()).SaveSearchTip() }
+
+// SaveSearchTip says "Save the search on screen as a smart mailbox"
+// in the language of msgs.
+func (msgs Messages) SaveSearchTip() string {
+	return Catalog.Format(msgs.locale, "saveSearchTip", nil)
+}
+
+// NoSmartMailboxesYet says "No smart mailboxes yet."
+// in the language the app shows.
+//
+// Shown in the sidebar's smart mailboxes section when the account has none.
+func NoSmartMailboxesYet() string { return In(i18n.Locale()).NoSmartMailboxesYet() }
+
+// NoSmartMailboxesYet says "No smart mailboxes yet."
+// in the language of msgs.
+//
+// Shown in the sidebar's smart mailboxes section when the account has none.
+func (msgs Messages) NoSmartMailboxesYet() string {
+	return Catalog.Format(msgs.locale, "noSmartMailboxesYet", nil)
+}
+
+// SaveSearchTitle says "Save search as smart mailbox"
+// in the language the app shows.
+//
+// The title of the dialog that saves the search on screen.
+func SaveSearchTitle() string { return In(i18n.Locale()).SaveSearchTitle() }
+
+// SaveSearchTitle says "Save search as smart mailbox"
+// in the language of msgs.
+//
+// The title of the dialog that saves the search on screen.
+func (msgs Messages) SaveSearchTitle() string {
+	return Catalog.Format(msgs.locale, "saveSearchTitle", nil)
+}
+
+// SaveSmartMailbox says "Save smart mailbox"
+// in the language the app shows.
+//
+// The button that saves a new smart mailbox.
+func SaveSmartMailbox() string { return In(i18n.Locale()).SaveSmartMailbox() }
+
+// SaveSmartMailbox says "Save smart mailbox"
+// in the language of msgs.
+//
+// The button that saves a new smart mailbox.
+func (msgs Messages) SaveSmartMailbox() string {
+	return Catalog.Format(msgs.locale, "saveSmartMailbox", nil)
+}
+
+// EditSmartMailbox says "Edit smart mailbox"
+// in the language the app shows.
+//
+// The title of the dialog that changes a smart mailbox's name and search.
+func EditSmartMailbox() string { return In(i18n.Locale()).EditSmartMailbox() }
+
+// EditSmartMailbox says "Edit smart mailbox"
+// in the language of msgs.
+//
+// The title of the dialog that changes a smart mailbox's name and search.
+func (msgs Messages) EditSmartMailbox() string {
+	return Catalog.Format(msgs.locale, "editSmartMailbox", nil)
+}
+
+// EditSmartMailboxEllipsis says "Edit smart mailbox…"
+// in the language the app shows.
+func EditSmartMailboxEllipsis() string { return In(i18n.Locale()).EditSmartMailboxEllipsis() }
+
+// EditSmartMailboxEllipsis says "Edit smart mailbox…"
+// in the language of msgs.
+func (msgs Messages) EditSmartMailboxEllipsis() string {
+	return Catalog.Format(msgs.locale, "editSmartMailboxEllipsis", nil)
+}
+
+// DeleteSmartMailboxEllipsis says "Delete smart mailbox…"
+// in the language the app shows.
+func DeleteSmartMailboxEllipsis() string { return In(i18n.Locale()).DeleteSmartMailboxEllipsis() }
+
+// DeleteSmartMailboxEllipsis says "Delete smart mailbox…"
+// in the language of msgs.
+func (msgs Messages) DeleteSmartMailboxEllipsis() string {
+	return Catalog.Format(msgs.locale, "deleteSmartMailboxEllipsis", nil)
+}
+
+// SmartMailboxActions says "Smart mailbox actions for {name}"
+// in the language the app shows.
+//
+// The menu of a smart mailbox's list in the header.
+func SmartMailboxActions(name string) string { return In(i18n.Locale()).SmartMailboxActions(name) }
+
+// SmartMailboxActions says "Smart mailbox actions for {name}"
+// in the language of msgs.
+//
+// The menu of a smart mailbox's list in the header.
+func (msgs Messages) SmartMailboxActions(name string) string {
+	return Catalog.Format(msgs.locale, "smartMailboxActions", map[string]any{"name": name})
+}
+
+// SmartMailboxNameCaption says "Name"
+// in the language the app shows.
+func SmartMailboxNameCaption() string { return In(i18n.Locale()).SmartMailboxNameCaption() }
+
+// SmartMailboxNameCaption says "Name"
+// in the language of msgs.
+func (msgs Messages) SmartMailboxNameCaption() string {
+	return Catalog.Format(msgs.locale, "smartMailboxNameCaption", nil)
+}
+
+// SmartMailboxNamePlaceholder says "Weekly reports"
+// in the language the app shows.
+func SmartMailboxNamePlaceholder() string { return In(i18n.Locale()).SmartMailboxNamePlaceholder() }
+
+// SmartMailboxNamePlaceholder says "Weekly reports"
+// in the language of msgs.
+func (msgs Messages) SmartMailboxNamePlaceholder() string {
+	return Catalog.Format(msgs.locale, "smartMailboxNamePlaceholder", nil)
+}
+
+// SmartSearchCaption says "Search"
+// in the language the app shows.
+//
+// The caption of a smart mailbox's search in its dialog.
+func SmartSearchCaption() string { return In(i18n.Locale()).SmartSearchCaption() }
+
+// SmartSearchCaption says "Search"
+// in the language of msgs.
+//
+// The caption of a smart mailbox's search in its dialog.
+func (msgs Messages) SmartSearchCaption() string {
+	return Catalog.Format(msgs.locale, "smartSearchCaption", nil)
+}
+
+// SmartSearchPlaceholder says "from:alice has:attachment"
+// in the language the app shows.
+func SmartSearchPlaceholder() string { return In(i18n.Locale()).SmartSearchPlaceholder() }
+
+// SmartSearchPlaceholder says "from:alice has:attachment"
+// in the language of msgs.
+func (msgs Messages) SmartSearchPlaceholder() string {
+	return Catalog.Format(msgs.locale, "smartSearchPlaceholder", nil)
+}
+
+// SmartMailboxNameInvalid says "A name up to {max} characters."
+// in the language the app shows.
+//
+// A smart mailbox's name was empty or too long.
+func SmartMailboxNameInvalid(max int) string { return In(i18n.Locale()).SmartMailboxNameInvalid(max) }
+
+// SmartMailboxNameInvalid says "A name up to {max} characters."
+// in the language of msgs.
+//
+// A smart mailbox's name was empty or too long.
+func (msgs Messages) SmartMailboxNameInvalid(max int) string {
+	return Catalog.Format(msgs.locale, "smartMailboxNameInvalid", map[string]any{"max": max})
+}
+
+// SmartMailboxQueryLong says "The search is longer than {max} characters."
+// in the language the app shows.
+//
+// A smart mailbox's search was too long.
+func SmartMailboxQueryLong(max int) string { return In(i18n.Locale()).SmartMailboxQueryLong(max) }
+
+// SmartMailboxQueryLong says "The search is longer than {max} characters."
+// in the language of msgs.
+//
+// A smart mailbox's search was too long.
+func (msgs Messages) SmartMailboxQueryLong(max int) string {
+	return Catalog.Format(msgs.locale, "smartMailboxQueryLong", map[string]any{"max": max})
+}
+
+// SmartMailboxExists says "A smart mailbox named “{name}” already exists."
+// in the language the app shows.
+//
+// Another smart mailbox of the account has the name, in any case.
+func SmartMailboxExists(name string) string { return In(i18n.Locale()).SmartMailboxExists(name) }
+
+// SmartMailboxExists says "A smart mailbox named “{name}” already exists."
+// in the language of msgs.
+//
+// Another smart mailbox of the account has the name, in any case.
+func (msgs Messages) SmartMailboxExists(name string) string {
+	return Catalog.Format(msgs.locale, "smartMailboxExists", map[string]any{"name": name})
+}
+
+// SmartMailboxSaveFailed says "Couldn't save the smart mailbox: {error}"
+// in the language the app shows.
+func SmartMailboxSaveFailed(error string) string {
+	return In(i18n.Locale()).SmartMailboxSaveFailed(error)
+}
+
+// SmartMailboxSaveFailed says "Couldn't save the smart mailbox: {error}"
+// in the language of msgs.
+func (msgs Messages) SmartMailboxSaveFailed(error string) string {
+	return Catalog.Format(msgs.locale, "smartMailboxSaveFailed", map[string]any{"error": error})
+}
+
+// SmartMailboxDeleteFailed says "Couldn't delete “{name}”: {error}"
+// in the language the app shows.
+func SmartMailboxDeleteFailed(name string, error string) string {
+	return In(i18n.Locale()).SmartMailboxDeleteFailed(name, error)
+}
+
+// SmartMailboxDeleteFailed says "Couldn't delete “{name}”: {error}"
+// in the language of msgs.
+func (msgs Messages) SmartMailboxDeleteFailed(name string, error string) string {
+	return Catalog.Format(msgs.locale, "smartMailboxDeleteFailed", map[string]any{"name": name, "error": error})
+}
+
+// DeleteSmartMailboxTitle says "Delete the smart mailbox “{name}”?"
+// in the language the app shows.
+func DeleteSmartMailboxTitle(name string) string {
+	return In(i18n.Locale()).DeleteSmartMailboxTitle(name)
+}
+
+// DeleteSmartMailboxTitle says "Delete the smart mailbox “{name}”?"
+// in the language of msgs.
+func (msgs Messages) DeleteSmartMailboxTitle(name string) string {
+	return Catalog.Format(msgs.locale, "deleteSmartMailboxTitle", map[string]any{"name": name})
+}
+
+// DeleteSmartMailboxMessage says "It only saves a search: no message is moved or deleted."
+// in the language the app shows.
+func DeleteSmartMailboxMessage() string { return In(i18n.Locale()).DeleteSmartMailboxMessage() }
+
+// DeleteSmartMailboxMessage says "It only saves a search: no message is moved or deleted."
+// in the language of msgs.
+func (msgs Messages) DeleteSmartMailboxMessage() string {
+	return Catalog.Format(msgs.locale, "deleteSmartMailboxMessage", nil)
+}
+
+// DeleteSmartMailboxButton says "Delete smart mailbox"
+// in the language the app shows.
+func DeleteSmartMailboxButton() string { return In(i18n.Locale()).DeleteSmartMailboxButton() }
+
+// DeleteSmartMailboxButton says "Delete smart mailbox"
+// in the language of msgs.
+func (msgs Messages) DeleteSmartMailboxButton() string {
+	return Catalog.Format(msgs.locale, "deleteSmartMailboxButton", nil)
+}
+
+// SmartFolderGone says "“{name}” searches a folder that is no longer there."
+// in the language the app shows.
+//
+// A smart mailbox was saved from a folder, or a label, that is gone.
+func SmartFolderGone(name string) string { return In(i18n.Locale()).SmartFolderGone(name) }
+
+// SmartFolderGone says "“{name}” searches a folder that is no longer there."
+// in the language of msgs.
+//
+// A smart mailbox was saved from a folder, or a label, that is gone.
+func (msgs Messages) SmartFolderGone(name string) string {
+	return Catalog.Format(msgs.locale, "smartFolderGone", map[string]any{"name": name})
+}
+
+// SmartSearchAllAccounts says "Searches every folder of every account"
+// in the language the app shows.
+func SmartSearchAllAccounts() string { return In(i18n.Locale()).SmartSearchAllAccounts() }
+
+// SmartSearchAllAccounts says "Searches every folder of every account"
+// in the language of msgs.
+func (msgs Messages) SmartSearchAllAccounts() string {
+	return Catalog.Format(msgs.locale, "smartSearchAllAccounts", nil)
+}
+
+// SmartSearchAllFolders says "Searches every folder of the account"
+// in the language the app shows.
+func SmartSearchAllFolders() string { return In(i18n.Locale()).SmartSearchAllFolders() }
+
+// SmartSearchAllFolders says "Searches every folder of the account"
+// in the language of msgs.
+func (msgs Messages) SmartSearchAllFolders() string {
+	return Catalog.Format(msgs.locale, "smartSearchAllFolders", nil)
+}
+
+// SmartSearchIn says "Searches {folder}"
+// in the language the app shows.
+func SmartSearchIn(folder string) string { return In(i18n.Locale()).SmartSearchIn(folder) }
+
+// SmartSearchIn says "Searches {folder}"
+// in the language of msgs.
+func (msgs Messages) SmartSearchIn(folder string) string {
+	return Catalog.Format(msgs.locale, "smartSearchIn", map[string]any{"folder": folder})
+}
+
+// ThisSearch says "This search"
+// in the language the app shows.
+//
+// The scope control's name for a smart mailbox's own list.
+func ThisSearch() string { return In(i18n.Locale()).ThisSearch() }
+
+// ThisSearch says "This search"
+// in the language of msgs.
+//
+// The scope control's name for a smart mailbox's own list.
+func (msgs Messages) ThisSearch() string {
+	return Catalog.Format(msgs.locale, "thisSearch", nil)
+}
+
+// CancelSmartForm says "Close without saving the smart mailbox"
+// in the language the app shows.
+//
+// The label of the button that closes a smart mailbox's dialog.
+func CancelSmartForm() string { return In(i18n.Locale()).CancelSmartForm() }
+
+// CancelSmartForm says "Close without saving the smart mailbox"
+// in the language of msgs.
+//
+// The label of the button that closes a smart mailbox's dialog.
+func (msgs Messages) CancelSmartForm() string {
+	return Catalog.Format(msgs.locale, "cancelSmartForm", nil)
+}
+
 // ReminderBadTime says "Type a date and time, as 2026-11-20 09:00."
 // in the language the app shows.
 func ReminderBadTime() string { return In(i18n.Locale()).ReminderBadTime() }

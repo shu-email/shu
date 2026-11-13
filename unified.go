@@ -161,6 +161,7 @@ func (a *app) syncMovedBack(g uint64, account, folder string) {
 			}
 			a.loadMessages(g)
 			a.loadFollowUps(g)
+			a.loadSmarts(g)
 		})
 	})
 }

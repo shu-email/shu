@@ -235,6 +235,18 @@ type Store interface {
 	// cached. Both are the cache's own; no server hears of them.
 	CountFollowUps(ctx context.Context, q ListQuery) (int, error)
 	DismissFollowUp(ctx context.Context, accountID string, thread ThreadID, at time.Time) error
+	// Smart mailboxes (see SmartMailbox), which go with their account.
+	// SmartMailboxes lists an account's in their order; SaveSmartMailbox
+	// adds one after them, or changes the name, search and scope of one
+	// there is, ErrSmartExists when another of the account has its name in
+	// any case (SmartNameKey) and ErrNotFound for an ID it has not;
+	// DeleteSmartMailbox removes one, ErrNotFound when it is gone.
+	// CountUnread counts the unread messages a list query reads, which is
+	// what a smart mailbox's badge shows. All are the cache's own.
+	SmartMailboxes(ctx context.Context, accountID string) ([]SmartMailbox, error)
+	SaveSmartMailbox(ctx context.Context, m SmartMailbox) (SmartMailbox, error)
+	DeleteSmartMailbox(ctx context.Context, accountID string, id int64) error
+	CountUnread(ctx context.Context, q ListQuery) (int, error)
 
 	// MessageHeaders reads cached messages of a folder without their
 	// bodies, each with its labels and RawHeaders: those of uids, or every

@@ -472,6 +472,24 @@ var migrations = [][]string{
 			PRIMARY KEY (account_id, thread_id))`,
 		`CREATE INDEX follow_up_dismissals_thread ON follow_up_dismissals (thread_id)`,
 	},
+	// v19: the smart mailboxes (see mail.SmartMailbox): a search the user
+	// saved, by the list it was saved from, the typed text and the scope it
+	// covered. They are this device's, go with their account, and a name is
+	// one per account, whatever its case.
+	{
+		`CREATE TABLE smart_mailboxes (
+			id INTEGER PRIMARY KEY,
+			account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+			name TEXT NOT NULL,
+			name_key TEXT NOT NULL,
+			folder TEXT NOT NULL DEFAULT '',
+			query TEXT NOT NULL DEFAULT '',
+			scope TEXT NOT NULL DEFAULT 'here',
+			position INTEGER NOT NULL,
+			created_at INTEGER NOT NULL,
+			UNIQUE (account_id, name_key))`,
+		`CREATE INDEX smart_mailboxes_account ON smart_mailboxes (account_id, position)`,
+	},
 }
 
 // backfills compute, from the rows of the version before, statements a

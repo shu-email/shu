@@ -25,6 +25,142 @@
   "followUp": "Follow Up",
   "dismissFollowUp": "Dismiss follow-up",
   "noRecipient": "No recipient",
+  "smartMailboxes": "Smart mailboxes",
+  "@smartMailboxes": {
+    "description": "The sidebar's section of saved searches, each opening the list it saved."
+  },
+  "saveSearchEllipsis": "Save search…",
+  "@saveSearchEllipsis": {
+    "description": "Saves the search on screen as a smart mailbox."
+  },
+  "saveSearchTip": "Save the search on screen as a smart mailbox",
+  "noSmartMailboxesYet": "No smart mailboxes yet.",
+  "@noSmartMailboxesYet": {
+    "description": "Shown in the sidebar's smart mailboxes section when the account has none."
+  },
+  "saveSearchTitle": "Save search as smart mailbox",
+  "@saveSearchTitle": {
+    "description": "The title of the dialog that saves the search on screen."
+  },
+  "saveSmartMailbox": "Save smart mailbox",
+  "@saveSmartMailbox": {
+    "description": "The button that saves a new smart mailbox."
+  },
+  "editSmartMailbox": "Edit smart mailbox",
+  "@editSmartMailbox": {
+    "description": "The title of the dialog that changes a smart mailbox's name and search."
+  },
+  "editSmartMailboxEllipsis": "Edit smart mailbox…",
+  "deleteSmartMailboxEllipsis": "Delete smart mailbox…",
+  "smartMailboxActions": "Smart mailbox actions for {name}",
+  "@smartMailboxActions": {
+    "description": "The menu of a smart mailbox's list in the header.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Weekly reports"
+      }
+    }
+  },
+  "smartMailboxNameCaption": "Name",
+  "smartMailboxNamePlaceholder": "Weekly reports",
+  "smartSearchCaption": "Search",
+  "@smartSearchCaption": {
+    "description": "The caption of a smart mailbox's search in its dialog."
+  },
+  "smartSearchPlaceholder": "from:alice has:attachment",
+  "smartMailboxNameInvalid": "A name up to {max} characters.",
+  "@smartMailboxNameInvalid": {
+    "description": "A smart mailbox's name was empty or too long.",
+    "placeholders": {
+      "max": {
+        "type": "int",
+        "example": "120"
+      }
+    }
+  },
+  "smartMailboxQueryLong": "The search is longer than {max} characters.",
+  "@smartMailboxQueryLong": {
+    "description": "A smart mailbox's search was too long.",
+    "placeholders": {
+      "max": {
+        "type": "int",
+        "example": "2000"
+      }
+    }
+  },
+  "smartMailboxExists": "A smart mailbox named “{name}” already exists.",
+  "@smartMailboxExists": {
+    "description": "Another smart mailbox of the account has the name, in any case.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Weekly reports"
+      }
+    }
+  },
+  "smartMailboxSaveFailed": "Couldn't save the smart mailbox: {error}",
+  "@smartMailboxSaveFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "connection refused"
+      }
+    }
+  },
+  "smartMailboxDeleteFailed": "Couldn't delete “{name}”: {error}",
+  "@smartMailboxDeleteFailed": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Weekly reports"
+      },
+      "error": {
+        "type": "String",
+        "example": "connection refused"
+      }
+    }
+  },
+  "deleteSmartMailboxTitle": "Delete the smart mailbox “{name}”?",
+  "@deleteSmartMailboxTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Weekly reports"
+      }
+    }
+  },
+  "deleteSmartMailboxMessage": "It only saves a search: no message is moved or deleted.",
+  "deleteSmartMailboxButton": "Delete smart mailbox",
+  "smartFolderGone": "“{name}” searches a folder that is no longer there.",
+  "@smartFolderGone": {
+    "description": "A smart mailbox was saved from a folder, or a label, that is gone.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Weekly reports"
+      }
+    }
+  },
+  "smartSearchAllAccounts": "Searches every folder of every account",
+  "smartSearchAllFolders": "Searches every folder of the account",
+  "smartSearchIn": "Searches {folder}",
+  "@smartSearchIn": {
+    "placeholders": {
+      "folder": {
+        "type": "String",
+        "example": "Inbox"
+      }
+    }
+  },
+  "thisSearch": "This search",
+  "@thisSearch": {
+    "description": "The scope control's name for a smart mailbox's own list."
+  },
+  "cancelSmartForm": "Close without saving the smart mailbox",
+  "@cancelSmartForm": {
+    "description": "The label of the button that closes a smart mailbox's dialog."
+  },
   "reminderBadTime": "Type a date and time, as 2026-11-20 09:00.",
   "reminderTimePast": "That time has passed. Choose one ahead.",
   "reminderDue": "A reminder is due",

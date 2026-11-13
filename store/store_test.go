@@ -81,6 +81,7 @@ func TestMigrationsFromEmpty(t *testing.T) {
 		"reminders", "reminders_account", "reminders_due",
 		"follow_up_dismissals", "follow_up_dismissals_thread",
 		"smart_mailboxes", "smart_mailboxes_account",
+		"discoveries",
 		"rules", "rules_account", "rule_log", "rule_log_rule", "rule_log_account", "rule_log_message",
 		"expected_arrivals", "expected_arrivals_key",
 	} {

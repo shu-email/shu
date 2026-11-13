@@ -52,6 +52,13 @@ type fakeService struct {
 	networkSet    mail.NetworkSettings
 	networkStored bool
 	networkErr    error
+	// discovered are the servers a domain's lookup finds, discoverErr
+	// makes the lookup fail, and remembered those the window said to
+	// keep. discoveredCalls are the addresses looked up, in order.
+	discovered      map[string]mail.Discovery
+	discoverErr     error
+	remembered      []mail.Discovery
+	discoveredCalls []string
 	// remote is the senders whose images are allowed, and remoteErr makes
 	// the policy calls fail.
 	remote    map[string]bool
@@ -331,6 +338,7 @@ func newFakeService() *fakeService {
 		cursors:    map[mail.Cursor]mail.Summary{},
 		older:      map[string][]mail.Summary{},
 		smarts:     map[string][]mail.SmartMailbox{},
+		discovered: map[string]mail.Discovery{},
 
 		oauth:      map[string]bool{},
 		newAddress: "ann@gmail.com",
@@ -2879,6 +2887,38 @@ func (f *fakeService) CountUnread(ctx context.Context, q mail.ListQuery) (int, e
 		}
 	}
 	return n, nil
+}
+
+// Discover answers a domain's lookup from the fixtures, with the preset
+// as the engine finds one.
+func (f *fakeService) Discover(ctx context.Context, email string) (mail.Discovery, error) {
+	f.discoveredCalls = append(f.discoveredCalls, email)
+	if f.discoverErr != nil {
+		return mail.Discovery{}, f.discoverErr
+	}
+	domain := email
+	if at := strings.LastIndexByte(email, '@'); at >= 0 {
+		domain = email[at+1:]
+	}
+	if d, ok := f.discovered[domain]; ok {
+		d.Domain = domain
+		return d, nil
+	}
+	if p, ok := mail.ProviderFor(email); ok {
+		return mail.Discovery{Domain: domain, IMAP: p.IMAP, SMTP: p.SMTP, Source: mail.DiscoveryPreset}, nil
+	}
+	return mail.Discovery{}, &mail.DiscoveryError{Domain: domain,
+		Steps: []mail.DiscoveryStep{{Source: mail.DiscoveryAutoconfig, Err: "no configuration"}}}
+}
+
+// RememberDiscovery records the servers the window said to keep.
+func (f *fakeService) RememberDiscovery(ctx context.Context, email string, imap, smtp mail.Server) error {
+	domain := email
+	if at := strings.LastIndexByte(email, '@'); at >= 0 {
+		domain = email[at+1:]
+	}
+	f.remembered = append(f.remembered, mail.Discovery{Domain: domain, IMAP: imap, SMTP: smtp, Source: mail.DiscoveryManual})
+	return nil
 }
 
 // DeliverReminders brings back those due now, as the engine's clock would.

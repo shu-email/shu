@@ -1328,6 +1328,106 @@ func (msgs Messages) AccountSaved() string {
 	return Catalog.Format(msgs.locale, "accountSaved", nil)
 }
 
+// DiscoverLooking says "Looking for {domain}'s servers…"
+// in the language the app shows.
+func DiscoverLooking(domain string) string { return In(i18n.Locale()).DiscoverLooking(domain) }
+
+// DiscoverLooking says "Looking for {domain}'s servers…"
+// in the language of msgs.
+func (msgs Messages) DiscoverLooking(domain string) string {
+	return Catalog.Format(msgs.locale, "discoverLooking", map[string]any{"domain": domain})
+}
+
+// DiscoverFound says "Servers found from {source}. Edit them if they are not right."
+// in the language the app shows.
+func DiscoverFound(source string) string { return In(i18n.Locale()).DiscoverFound(source) }
+
+// DiscoverFound says "Servers found from {source}. Edit them if they are not right."
+// in the language of msgs.
+func (msgs Messages) DiscoverFound(source string) string {
+	return Catalog.Format(msgs.locale, "discoverFound", map[string]any{"source": source})
+}
+
+// DiscoverManualKept says "Servers found, but your own entries were kept."
+// in the language the app shows.
+func DiscoverManualKept() string { return In(i18n.Locale()).DiscoverManualKept() }
+
+// DiscoverManualKept says "Servers found, but your own entries were kept."
+// in the language of msgs.
+func (msgs Messages) DiscoverManualKept() string {
+	return Catalog.Format(msgs.locale, "discoverManualKept", nil)
+}
+
+// DiscoverFailed says "Could not find all the settings automatically: {details}"
+// in the language the app shows.
+func DiscoverFailed(details string) string { return In(i18n.Locale()).DiscoverFailed(details) }
+
+// DiscoverFailed says "Could not find all the settings automatically: {details}"
+// in the language of msgs.
+func (msgs Messages) DiscoverFailed(details string) string {
+	return Catalog.Format(msgs.locale, "discoverFailed", map[string]any{"details": details})
+}
+
+// DiscoverTimedOut says "Looking up the servers took too long. Enter them by hand."
+// in the language the app shows.
+func DiscoverTimedOut() string { return In(i18n.Locale()).DiscoverTimedOut() }
+
+// DiscoverTimedOut says "Looking up the servers took too long. Enter them by hand."
+// in the language of msgs.
+func (msgs Messages) DiscoverTimedOut() string {
+	return Catalog.Format(msgs.locale, "discoverTimedOut", nil)
+}
+
+// DiscoverSourcePreset says "the provider's preset"
+// in the language the app shows.
+func DiscoverSourcePreset() string { return In(i18n.Locale()).DiscoverSourcePreset() }
+
+// DiscoverSourcePreset says "the provider's preset"
+// in the language of msgs.
+func (msgs Messages) DiscoverSourcePreset() string {
+	return Catalog.Format(msgs.locale, "discoverSourcePreset", nil)
+}
+
+// DiscoverSourceAutoconfig says "autoconfig"
+// in the language the app shows.
+func DiscoverSourceAutoconfig() string { return In(i18n.Locale()).DiscoverSourceAutoconfig() }
+
+// DiscoverSourceAutoconfig says "autoconfig"
+// in the language of msgs.
+func (msgs Messages) DiscoverSourceAutoconfig() string {
+	return Catalog.Format(msgs.locale, "discoverSourceAutoconfig", nil)
+}
+
+// DiscoverSourceAutodiscover says "autodiscover"
+// in the language the app shows.
+func DiscoverSourceAutodiscover() string { return In(i18n.Locale()).DiscoverSourceAutodiscover() }
+
+// DiscoverSourceAutodiscover says "autodiscover"
+// in the language of msgs.
+func (msgs Messages) DiscoverSourceAutodiscover() string {
+	return Catalog.Format(msgs.locale, "discoverSourceAutodiscover", nil)
+}
+
+// DiscoverSourceSRV says "DNS records"
+// in the language the app shows.
+func DiscoverSourceSRV() string { return In(i18n.Locale()).DiscoverSourceSRV() }
+
+// DiscoverSourceSRV says "DNS records"
+// in the language of msgs.
+func (msgs Messages) DiscoverSourceSRV() string {
+	return Catalog.Format(msgs.locale, "discoverSourceSRV", nil)
+}
+
+// DiscoverSourceManual says "your saved settings"
+// in the language the app shows.
+func DiscoverSourceManual() string { return In(i18n.Locale()).DiscoverSourceManual() }
+
+// DiscoverSourceManual says "your saved settings"
+// in the language of msgs.
+func (msgs Messages) DiscoverSourceManual() string {
+	return Catalog.Format(msgs.locale, "discoverSourceManual", nil)
+}
+
 // EditAccount says "Edit account"
 // in the language the app shows.
 func EditAccount() string { return In(i18n.Locale()).EditAccount() }

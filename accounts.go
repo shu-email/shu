@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -29,6 +32,36 @@ type accountForm struct {
 	// OAuth is the provider the account edited signs in with, "" for
 	// one with a password.
 	OAuth string
+	// disc is the lookup of the address's servers (discoverSettings).
+	disc discoveryForm
+}
+
+// discoveryPause is how long the form waits after the address changes
+// before looking its servers up: the typing is for another domain while
+// it goes on.
+const discoveryPause = 500 * time.Millisecond
+
+// discoveryForm is what the account form has of the lookup of the
+// address's servers.
+type discoveryForm struct {
+	// seq tells the lookups apart, of which the one begun last is kept;
+	// cancel ends that one, as the form closes or the address changes.
+	seq    uint64
+	cancel context.CancelFunc
+	timer  *time.Timer
+	busy   bool
+	domain string
+	// source is where the servers on show came from, and found what the
+	// lookup answered, for keeping the user's own entry.
+	source mail.DiscoverySource
+	found  mail.Discovery
+	// note says what was found, and err why nothing complete was; both
+	// are shown under the address.
+	note string
+	err  string
+	// manual is set once the user changed the servers, which a lookup
+	// then leaves alone.
+	manual bool
 }
 
 // providerNames are the Select labels: the presets then Custom.
@@ -97,6 +130,7 @@ func (f accountForm) account() (mail.Account, error) {
 // mail window, or the full-window onboarding view when no account exists.
 func (a *app) openAccountForm(acc *mail.Account) {
 	a.closeSettings()
+	a.stopDiscovery()
 	a.accountErr = ""
 	a.accountNote = ""
 	a.signOutOpen = false
@@ -131,6 +165,7 @@ func (a *app) openAccountForm(acc *mail.Account) {
 // being added by signing in.
 func (a *app) closeAccountForm() {
 	a.cancelAdding()
+	a.stopDiscovery()
 	a.accountOpen = false
 	a.signOutOpen = false
 	a.accountErr = ""
@@ -323,9 +358,10 @@ func (a *app) accountFields(c *ui.Context, t *ui.Theme) {
 				for _, p := range mail.Providers {
 					if p.Name == f.Provider {
 						a.applyProvider(p)
-						return
+						break
 					}
 				}
+				a.serversChanged()
 			})
 	})
 	a.field(c, locales.AccountName(), func() ui.Element {
@@ -333,8 +369,10 @@ func (a *app) accountFields(c *ui.Context, t *ui.Theme) {
 			Placeholder(locales.AccountNamePlaceholder()).Label(locales.AccountName())
 	})
 	a.field(c, locales.Email(), func() ui.Element {
-		return ui.TextInput(c, &f.Email).Placeholder("name@example.com").Label(locales.Email())
+		return ui.TextInput(c, &f.Email).Placeholder("name@example.com").Label(locales.Email()).
+			OnChange(a.emailChanged).OnSubmit(a.discoverSettings)
 	})
+	a.discoveryStatus(c, t)
 	ui.Column(c).Gap(4).Children(func() {
 		ui.Text(c, locales.Password()).FontSize(11).Bold().TextColor(t.TextMuted)
 		pw := ui.TextInput(c, &f.Password).Password().Label(locales.Password())
@@ -345,30 +383,193 @@ func (a *app) accountFields(c *ui.Context, t *ui.Theme) {
 	})
 	a.section(c, locales.ImapSection(), func() {
 		a.field(c, locales.Host(), func() ui.Element {
-			return ui.TextInput(c, &f.Host).Label(locales.Host())
+			return ui.TextInput(c, &f.Host).Label(locales.Host()).OnChange(a.serversChanged)
 		})
 		ui.Row(c).Gap(12).Children(func() {
 			a.fixedField(c, locales.Port(), 140, func() ui.Element {
-				return ui.TextInput(c, &f.Port).Label(locales.Port())
+				return ui.TextInput(c, &f.Port).Label(locales.Port()).OnChange(a.serversChanged)
 			})
 			a.fixedField(c, locales.Security(), 220, func() ui.Element {
-				return ui.Select(c, &f.TLS, tlsNames()).Label(locales.Security())
+				return ui.Select(c, &f.TLS, tlsNames()).Label(locales.Security()).OnChange(a.serversChanged)
 			})
 		})
 	})
 	a.section(c, locales.SmtpSection(), func() {
 		a.field(c, locales.Host(), func() ui.Element {
-			return ui.TextInput(c, &f.SMTPHost).Label(locales.Host())
+			return ui.TextInput(c, &f.SMTPHost).Label(locales.Host()).OnChange(a.serversChanged)
 		})
 		ui.Row(c).Gap(12).Children(func() {
 			a.fixedField(c, locales.Port(), 140, func() ui.Element {
-				return ui.TextInput(c, &f.SMTPPort).Label(locales.Port())
+				return ui.TextInput(c, &f.SMTPPort).Label(locales.Port()).OnChange(a.serversChanged)
 			})
 			a.fixedField(c, locales.Security(), 220, func() ui.Element {
-				return ui.Select(c, &f.SMTPTLS, tlsNames()).Label(locales.Security())
+				return ui.Select(c, &f.SMTPTLS, tlsNames()).Label(locales.Security()).OnChange(a.serversChanged)
 			})
 		})
 	})
+}
+
+// emailChanged looks the address's servers up once the typing pauses:
+// what it finds fills the fields, and the manual form stays.
+func (a *app) emailChanged() {
+	f := &a.accountForm
+	if f.editing || a.after == nil {
+		return
+	}
+	a.stopDiscovery()
+	if f.disc.source != "" && !f.disc.manual {
+		// The servers on show were another domain's: clear them rather
+		// than keep them under a new address.
+		f.Host, f.Port, f.TLS = "", "", "TLS"
+		f.SMTPHost, f.SMTPPort, f.SMTPTLS = "", "", "STARTTLS"
+	}
+	f.disc.note, f.disc.err, f.disc.source, f.disc.found = "", "", "", mail.Discovery{}
+	if !strings.Contains(strings.TrimSpace(f.Email), "@") {
+		return
+	}
+	seq := f.disc.seq
+	f.disc.timer = a.after(discoveryPause, func() {
+		if f.disc.seq == seq {
+			a.discoverSettings()
+		}
+	})
+}
+
+// discoverSettings looks up the servers of the address entered, and
+// fills those the user has not entered: what is found shows in its
+// fields, with where it came from, or why nothing complete was found.
+func (a *app) discoverSettings() {
+	f := &a.accountForm
+	email := strings.TrimSpace(f.Email)
+	f.disc.timer = nil
+	if f.editing || !strings.Contains(email, "@") {
+		return
+	}
+	a.stopDiscovery()
+	ctx, cancel := a.ctx()
+	seq := f.disc.seq
+	f.disc.cancel = cancel
+	f.disc.busy = true
+	f.disc.domain = email[strings.LastIndexByte(email, '@')+1:]
+	f.disc.note, f.disc.err, f.disc.source, f.disc.found = "", "", "", mail.Discovery{}
+	a.run(func() {
+		d, err := a.svc.Discover(ctx, email)
+		a.post(func() {
+			if f.disc.seq != seq {
+				return
+			}
+			f.disc.busy, f.disc.cancel = false, nil
+			f.disc.found = d
+			if d.IMAP.Host != "" || d.SMTP.Host != "" {
+				if f.disc.manual {
+					f.disc.note = locales.DiscoverManualKept()
+				} else {
+					if d.IMAP.Host != "" {
+						f.Host, f.Port, f.TLS = d.IMAP.Host, strconv.Itoa(d.IMAP.Port), tlsLabel(d.IMAP.TLS)
+					}
+					if d.SMTP.Host != "" {
+						f.SMTPHost, f.SMTPPort, f.SMTPTLS = d.SMTP.Host, strconv.Itoa(d.SMTP.Port), tlsLabel(d.SMTP.TLS)
+					}
+					f.disc.source = d.Source
+					f.disc.note = locales.DiscoverFound(discoverSource(d.Source))
+				}
+			}
+			if err != nil {
+				if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+					// The user closed the form or typed another address.
+					return
+				}
+				var found *mail.DiscoveryError
+				switch {
+				case errors.As(err, &found):
+					f.disc.err = locales.DiscoverFailed(discoverStages(found))
+				case errors.Is(err, context.DeadlineExceeded):
+					f.disc.err = locales.DiscoverTimedOut()
+				default:
+					f.disc.err = locales.DiscoverFailed(err.Error())
+				}
+			}
+		})
+	})
+}
+
+// stopDiscovery ends the lookup on its way, if there is one, and drops
+// what it would have shown.
+func (a *app) stopDiscovery() {
+	f := &a.accountForm
+	if f.disc.timer != nil {
+		f.disc.timer.Stop()
+		f.disc.timer = nil
+	}
+	if f.disc.cancel != nil {
+		f.disc.cancel()
+		f.disc.cancel = nil
+	}
+	f.disc.seq++
+	f.disc.busy = false
+}
+
+// serversChanged notes that the user entered the servers, which a lookup
+// must not then replace.
+func (a *app) serversChanged() {
+	f := &a.accountForm
+	if f.disc.manual {
+		return
+	}
+	f.disc.manual = true
+	f.disc.note, f.disc.err, f.disc.source = "", "", ""
+}
+
+// discoverSource names where a lookup found the servers.
+func discoverSource(source mail.DiscoverySource) string {
+	switch source {
+	case mail.DiscoveryPreset:
+		return locales.DiscoverSourcePreset()
+	case mail.DiscoveryAutoconfig:
+		return locales.DiscoverSourceAutoconfig()
+	case mail.DiscoveryAutodiscover:
+		return locales.DiscoverSourceAutodiscover()
+	case mail.DiscoverySRV:
+		return locales.DiscoverSourceSRV()
+	case mail.DiscoveryManual:
+		return locales.DiscoverSourceManual()
+	}
+	return string(source)
+}
+
+// discoverStages says which sources were tried and what each reported.
+func discoverStages(e *mail.DiscoveryError) string {
+	parts := make([]string, 0, len(e.Steps))
+	for _, s := range e.Steps {
+		parts = append(parts, discoverSource(s.Source)+": "+s.Err)
+	}
+	return strings.Join(parts, "; ")
+}
+
+// discoveryStatus draws what the lookup of the address's servers found,
+// or why it found nothing.
+func (a *app) discoveryStatus(c *ui.Context, t *ui.Theme) {
+	d := &a.accountForm.disc
+	if a.accountForm.editing || d.domain == "" {
+		return
+	}
+	switch {
+	case d.busy:
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Spinner(c).Size(12, 12)
+			ui.Text(c, locales.DiscoverLooking(d.domain)).FontSize(11).TextColor(t.TextMuted)
+		})
+	case d.err != "":
+		ui.Row(c).Gap(8).AlignItems(ui.Start).Children(func() {
+			ui.Icon(c, alertIcon).FontSize(13).TextColor(t.Warning)
+			ui.Text(c, d.err).FontSize(11).TextColor(t.TextMuted).Grow(1).MinWidth(0).MaxLines(4)
+		})
+	case d.note != "":
+		ui.Row(c).Gap(8).AlignItems(ui.Start).Children(func() {
+			ui.Icon(c, checkIcon).FontSize(13).TextColor(t.Success)
+			ui.Text(c, d.note).FontSize(11).TextColor(t.TextMuted).Grow(1).MinWidth(0).MaxLines(3)
+		})
+	}
 }
 
 // section draws a titled group of fields.
@@ -433,6 +634,11 @@ func (a *app) saveAccount() {
 			saveErr = a.svc.UpdateAccount(ctx, acc, f.Password)
 		} else {
 			saveErr = a.svc.AddAccount(ctx, acc, f.Password)
+		}
+		if saveErr == nil && (f.disc.manual || !f.disc.found.Complete()) {
+			// The servers the user entered are the domain's from now on,
+			// so that a later form does not look for others.
+			_ = a.svc.RememberDiscovery(ctx, acc.Email, acc.IMAP, acc.SMTP)
 		}
 		a.post(func() {
 			a.accountBusy = false

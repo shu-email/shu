@@ -273,6 +273,40 @@
   "saveFailed": "Could not save the account: {error}",
   "testFailed": "Could not connect: {error}",
   "accountSaved": "Account saved",
+  "discoverLooking": "Looking for {domain}'s servers…",
+  "@discoverLooking": {
+    "placeholders": {
+      "domain": {
+        "type": "String",
+        "example": "example.com"
+      }
+    }
+  },
+  "discoverFound": "Servers found from {source}. Edit them if they are not right.",
+  "@discoverFound": {
+    "placeholders": {
+      "source": {
+        "type": "String",
+        "example": "autoconfig"
+      }
+    }
+  },
+  "discoverManualKept": "Servers found, but your own entries were kept.",
+  "discoverFailed": "Could not find all the settings automatically: {details}",
+  "@discoverFailed": {
+    "placeholders": {
+      "details": {
+        "type": "String",
+        "example": "autoconfig: no configuration"
+      }
+    }
+  },
+  "discoverTimedOut": "Looking up the servers took too long. Enter them by hand.",
+  "discoverSourcePreset": "the provider's preset",
+  "discoverSourceAutoconfig": "autoconfig",
+  "discoverSourceAutodiscover": "autodiscover",
+  "discoverSourceSRV": "DNS records",
+  "discoverSourceManual": "your saved settings",
   "editAccount": "Edit account",
   "back": "Back",
   "done": "Done",

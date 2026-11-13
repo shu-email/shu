@@ -93,6 +93,8 @@ type memStore struct {
 	// smartNext gives the IDs.
 	smarts    map[string][]SmartMailbox
 	smartNext int64
+	// discoveries are the servers kept for each domain.
+	discoveries map[string]Discovery
 }
 
 // memMark is a folder's watermark.
@@ -103,25 +105,42 @@ type memMark struct {
 
 func newMemStore() *memStore {
 	return &memStore{
-		kv:         map[string]string{},
-		marks:      map[string]memMark{},
-		accounts:   map[string]Account{},
-		folders:    map[string][]Folder{},
-		messages:   map[string]map[UID]Message{},
-		outbox:     map[string]PendingSend{},
-		drafts:     map[string]Draft{},
-		draftOrder: map[string]int{},
-		tombs:      map[string]bool{},
-		contacts:   map[string]*ContactState{},
-		counted:    map[string]bool{},
-		labels:     map[LabelID]*memLabel{},
-		msgLabels:  map[string]map[LabelID]bool{},
-		keptLabels: map[string]map[LabelID]bool{},
-		labelsGone: map[string]time.Time{},
-		reminders:  map[string]map[ThreadID]Reminder{},
-		dismissed:  map[string]map[ThreadID]time.Time{},
-		smarts:     map[string][]SmartMailbox{},
+		kv:          map[string]string{},
+		marks:       map[string]memMark{},
+		accounts:    map[string]Account{},
+		folders:     map[string][]Folder{},
+		messages:    map[string]map[UID]Message{},
+		outbox:      map[string]PendingSend{},
+		drafts:      map[string]Draft{},
+		draftOrder:  map[string]int{},
+		tombs:       map[string]bool{},
+		contacts:    map[string]*ContactState{},
+		counted:     map[string]bool{},
+		labels:      map[LabelID]*memLabel{},
+		msgLabels:   map[string]map[LabelID]bool{},
+		keptLabels:  map[string]map[LabelID]bool{},
+		labelsGone:  map[string]time.Time{},
+		reminders:   map[string]map[ThreadID]Reminder{},
+		dismissed:   map[string]map[ThreadID]time.Time{},
+		smarts:      map[string][]SmartMailbox{},
+		discoveries: map[string]Discovery{},
 	}
+}
+
+// Discovery reads the servers kept for a domain.
+func (s *memStore) Discovery(ctx context.Context, domain string) (Discovery, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d, ok := s.discoveries[domain]
+	return d, ok, nil
+}
+
+// SaveDiscovery keeps a domain's servers, replacing what it had.
+func (s *memStore) SaveDiscovery(ctx context.Context, d Discovery) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.discoveries[d.Domain] = d
+	return nil
 }
 
 func msgKey(accountID, folder string) string { return accountID + "/" + folder }

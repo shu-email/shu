@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"shu/ai"
@@ -35,13 +36,60 @@ type aiSettings struct {
 	err       string
 }
 
-// openSettings shows the settings view on a tab.
+// settingsWindowOptions is the settings window: its own, as a system
+// settings window is, so that mail stays readable behind it.
+func (a *app) settingsWindowOptions() mygo.WindowOptions {
+	return mygo.WindowOptions{
+		Title:           locales.Settings(),
+		Width:           900,
+		Height:          720,
+		MinWidth:        760,
+		MinHeight:       560,
+		TitleBarStyle:   mygo.TitleBarHiddenInset,
+		BackgroundColor: "light-dark(#f6f6f7, #18181b)",
+		Content:         ui.View(a.settingsView),
+	}
+}
+
+// openSettings shows the settings window on a tab. One window serves
+// every opening: a second call brings the open one forward.
 func (a *app) openSettings(tab int) {
-	a.showSettings = true
 	a.settingsTab = tab
 	a.loadAISettings()
 	if tab == settingsTabNetwork {
 		a.loadNetworkSettings()
+	}
+	if a.showSettings && a.settingsWin != nil {
+		a.settingsWin.Show()
+		a.settingsWin.Focus()
+		a.settingsWin.Invalidate()
+		return
+	}
+	a.showSettings = true
+	if a.newWindow == nil {
+		// Tests run the view without a window: the settings show in the
+		// main view.
+		return
+	}
+	win := a.newWindow(a.settingsWindowOptions())
+	if win == nil {
+		return
+	}
+	a.settingsWin = win
+	win.OnClosed(func() {
+		if a.settingsWin == win {
+			a.settingsWin = nil
+		}
+		a.showSettings = false
+	})
+}
+
+// closeSettings closes the settings window, or leaves the inline view.
+func (a *app) closeSettings() {
+	a.showSettings = false
+	if win := a.settingsWin; win != nil {
+		a.settingsWin = nil
+		win.Close()
 	}
 }
 
@@ -240,59 +288,82 @@ func (a *app) testAI() {
 	})
 }
 
-// settingsView is the settings window: the language, receiving mail,
-// writing and sending, and accounts, and the AI settings on a tab of
-// their own.
+// settingsView draws the settings window: a title, an icon tab bar as a
+// system settings window has, and the chosen tab below it.
 func (a *app) settingsView(c *ui.Context) {
 	t := c.Theme()
 	bar := c.TitleBar()
-	top := max(bar.Bottom, 52)
+	head := max(bar.Bottom, 34)
 	ui.Column(c).Fill().Background(t.Background).Children(func() {
-		ui.Row(c).Height(top).Shrink(0).AlignItems(ui.Center).Gap(10).
-			Padding(0, max(bar.Right, 0)+16, 0, max(bar.Left, 0)+16).
-			BorderWidth(0, 0, 1, 0).BorderColor(t.Border).DragWindow().Children(func() {
-			ui.Text(c, locales.Settings()).FontSize(17).Bold()
+		ui.Column(c).Height(head).Shrink(0).Center().DragWindow().Children(func() {
+			ui.Text(c, locales.Settings()).FontSize(13).Bold()
+		})
+		ui.Row(c).Shrink(0).Gap(6).AlignItems(ui.Center).Padding(2, 20, 10, 20).
+			DragWindow().Children(func() {
 			ui.Spacer(c)
-			ui.Button(c, locales.Done()).OnClick(func() { a.showSettings = false })
-		})
-		ui.Row(c).Shrink(0).Padding(10, 32, 0, 32).Children(func() {
-			labels := []string{locales.General(), locales.NetworkTab()}
-			if a.ai != nil {
-				labels = append(labels, locales.Ai())
-			}
-			ui.Tabs(c, &a.settingsTab, labels...).Label(locales.Settings()).
-				OnChange(func() {
-					if a.settingsTab == settingsTabAI {
-						a.loadAISettings()
-					}
-					if a.settingsTab == settingsTabNetwork {
-						a.loadNetworkSettings()
-					}
-				})
-		})
-		ui.Scroll(c).Grow(1).Children(func() {
-			ui.Column(c).Padding(20, 32, 28, 32).Gap(14).MaxWidth(680).Children(func() {
-				if a.settingsTab == settingsTabAI && a.ai != nil {
-					a.aiSettingsView(c, t)
-					return
-				}
-				if a.settingsTab == settingsTabNetwork {
-					a.networkSettingsView(c, t)
-					return
-				}
-				ui.Text(c, locales.Language()).FontSize(12).Bold().TextColor(t.TextMuted)
-				a.languageChoice(c).Width(320)
-				a.mailSettingsView(c, t)
-				a.composeSettingsView(c, t)
-				a.transferSettingsView(c, t)
-				ui.Divider(c)
-				ui.Row(c).Gap(10).Children(func() {
-					ui.Button(c, locales.ManageAccounts()).OnClick(func() {
-						a.showSettings = false
-						a.openAccountForm(a.activeAccount())
-					})
-				})
+			a.settingsTabButton(c, t, settingsIcon, locales.General(), a.settingsTab == settingsTabGeneral, func() {
+				a.settingsTab = settingsTabGeneral
 			})
+			a.settingsTabButton(c, t, globeIcon, locales.NetworkTab(), a.settingsTab == settingsTabNetwork, func() {
+				a.settingsTab = settingsTabNetwork
+				a.loadNetworkSettings()
+			})
+			if a.ai != nil {
+				a.settingsTabButton(c, t, sparklesIcon, locales.Ai(), a.settingsTab == settingsTabAI, func() {
+					a.settingsTab = settingsTabAI
+					a.loadAISettings()
+				})
+			}
+			ui.Spacer(c)
+		})
+		ui.Divider(c)
+		ui.Scroll(c).Grow(1).Children(func() {
+			ui.Column(c).Padding(22, 36, 32, 36).Gap(16).MaxWidth(760).Children(func() {
+				switch {
+				case a.settingsTab == settingsTabAI && a.ai != nil:
+					a.aiSettingsView(c, t)
+				case a.settingsTab == settingsTabNetwork:
+					a.networkSettingsView(c, t)
+				default:
+					ui.Text(c, locales.Language()).FontSize(12).Bold().TextColor(t.TextMuted)
+					a.languageChoice(c).Width(320)
+					a.mailSettingsView(c, t)
+					a.composeSettingsView(c, t)
+					a.transferSettingsView(c, t)
+					ui.Divider(c)
+					ui.Row(c).Gap(10).Children(func() {
+						ui.Button(c, locales.ManageAccounts()).OnClick(func() {
+							a.closeSettings()
+							a.openAccountForm(a.activeAccount())
+						})
+					})
+				}
+				if a.settingsWin == nil {
+					// Without a window, as in tests, Done is the way back.
+					ui.Row(c).Children(func() {
+						ui.Spacer(c)
+						ui.Button(c, locales.Done()).OnClick(a.closeSettings)
+					})
+				}
+			})
+		})
+	})
+}
+
+// settingsTabButton is one icon and label of the settings window's tab
+// bar, filled with the accent while its tab shows.
+func (a *app) settingsTabButton(c *ui.Context, t *ui.Theme, icon *ui.SVG, label string, chosen bool, fn func()) {
+	color := t.TextMuted
+	background := ui.Transparent
+	if chosen {
+		color = t.Accent
+		background = t.Accent.Alpha(0.12)
+	}
+	ui.ButtonBase(c).Label(label).OnClick(fn).Width(104).Padding(7, 8).Radius(9).
+		Background(background).Children(func() {
+		ui.Column(c).Gap(5).Center().Children(func() {
+			ui.Icon(c, icon).FontSize(18).TextColor(color)
+			ui.Text(c, label).FontSize(11).TextColor(color)
 		})
 	})
 }

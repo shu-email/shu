@@ -443,6 +443,21 @@ MIME: prefer `text/plain`; when only HTML exists, extract text with
 `x/net/html` (skip script/style/head, break on block elements, collapse blank
 lines). Keep the original HTML for the webview.
 
+### Settings window (added since)
+
+- The settings open in a window of their own (`settingsWindowOptions`), not by
+  replacing the mail view, so mail stays readable behind them. One window serves
+  every opening: a second `Settings` call, the Gear, `Cmd+,` or an AI shortcut
+  brings the open one forward and selects the tab.
+- The window draws a centered title and an icon tab bar (General, Network, AI),
+  with the chosen tab filled with the accent, as a system settings window does.
+  The body scrolls below the bar; the General tab keeps language, mail,
+  compose, import/export and account management. `closeSettings` closes the
+  window; closing it by its title bar clears the same state.
+- Tests run without a window, where `newWindow` is nil: the settings then show
+  in the main view (with a Done button) so existing view tests can read them;
+  `settings_test.go` covers the window options, reuse and close paths.
+
 ### Keyboard reference and accessibility (added since)
 
 - `shortcuts.go` holds the reference as data (groups and rows), opened with

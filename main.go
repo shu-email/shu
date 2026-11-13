@@ -346,11 +346,19 @@ func (a *app) post(f func()) {
 	if a.closed {
 		return
 	}
+	run := func() {
+		f()
+		// The settings are a window of their own: a result that arrives
+		// after its frame must redraw that window, not the mail one.
+		if w := a.settingsWin; w != nil {
+			w.Invalidate()
+		}
+	}
 	if a.update != nil {
-		a.update(f)
+		a.update(run)
 		return
 	}
-	f()
+	run()
 }
 
 func (a *app) stale(g uint64) bool { return a.closed || g != a.gen }

@@ -112,6 +112,24 @@ Windows and Linux. It is written in Go with
   network reach the window through hook fields on `app` that `attach`
   sets. The target of a notification travels in its ID, which is parsed
   as untrusted input.
+- An action on mail the server cannot be reached for is neither lost nor
+  a failure: `Service.SetFlags`, `Service.SetLabel` and
+  `Service.MoveMessages` (and so `Move`) write it to
+  `pending_operations` (migration v21, `mail/queue.go`,
+  `store/pending.go`) before the server is touched, show it in the cache
+  and return. The account's one queue worker, which runs beside its
+  watcher, makes the actions oldest first, taking each with one state
+  change (`Store.ClaimOperation`) so that no action is made twice, and
+  it groups those one command makes (`Store.ClaimOperationsByKey`). A
+  server it cannot reach is tried again with a growing wait, and one
+  that refuses an action leaves it `failed` with its reason for the
+  window to show; a refused move puts back the message's row. A folder
+  whose UIDVALIDITY changed since the action was queued is not touched,
+  and a move whose message the folder no longer has is done. The
+  actions are the ones in `mail.OperationKind`; rules and their undo
+  keep their own log of what has not happened, and a reminder waits for
+  its next run, so neither is queued. The window hears of the queue as a
+  `WatchEvent` with `Queue` set and says it under the watcher's line.
 - An account signs in with a password or, for Google and Microsoft, with
   OAuth (`Account.OAuth`, `mail/oauth.go`, `mail/signin.go`,
   `docs/oauth.md`). The engine runs the whole flow, PKCE and a one-answer

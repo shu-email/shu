@@ -414,14 +414,14 @@ func (s *Service) applyRound(ctx context.Context, accountID string, out []RuleAc
 		switch op.kind {
 		case ActionMove:
 			var moved []MoveResult
-			moved, err = s.MoveMessages(ctx, accountID, refs, op.dest)
+			moved, err = s.moveMessages(ctx, accountID, refs, op.dest, false)
 			for _, r := range moved {
 				dest[r.UID] = r.DestUID
 			}
 		case ActionAddLabel, ActionRemoveLabel:
-			err = s.SetLabel(ctx, accountID, refs, op.label, op.on)
+			err = s.setLabel(ctx, accountID, refs, op.label, op.on, false)
 		default:
-			err = s.SetFlags(ctx, accountID, refs, op.flag, op.on)
+			err = s.setFlags(ctx, accountID, refs, op.flag, op.on, false)
 		}
 		if err != nil && ruleWaits(err) {
 			waiting = err

@@ -230,6 +230,10 @@ type MoveResult struct {
 	DestUID UID
 	From    string
 	UID     UID
+	// Pending is the queued action of a message the move could not reach
+	// the server for: DestUID is 0, and an undo cancels the action
+	// instead of moving the message back.
+	Pending int64
 }
 
 // SendResult says whether the Sent copy was saved. Copied is false when

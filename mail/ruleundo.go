@@ -321,8 +321,8 @@ func (u *undoRun) restoreMarks() map[int]bool {
 		}
 		var err error
 		if op.kind == "" {
-			err = u.s.SetFlags(u.ctx, u.account, refs, op.flag, op.on)
-		} else if err = u.s.SetLabel(u.ctx, u.account, refs, op.label, op.on); errors.Is(err, ErrNotFound) {
+			err = u.s.setFlags(u.ctx, u.account, refs, op.flag, op.on, false)
+		} else if err = u.s.setLabel(u.ctx, u.account, refs, op.label, op.on, false); errors.Is(err, ErrNotFound) {
 			// The label is gone, and with it what there was to put back.
 			err = nil
 		}

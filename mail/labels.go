@@ -451,6 +451,13 @@ func (s *Service) label(ctx context.Context, accountID string, id LabelID) (Labe
 // name other messages; when a folder fails, those before it keep their
 // change.
 func (s *Service) SetLabel(ctx context.Context, accountID string, msgs []MessageRef, id LabelID, on bool) error {
+	return s.setLabel(ctx, accountID, msgs, id, on, true)
+}
+
+// setLabel is SetLabel with the queue or without it. The rules and their
+// undo keep their own log of what the server has not made yet, so they
+// ask for every change to be made now or to fail.
+func (s *Service) setLabel(ctx context.Context, accountID string, msgs []MessageRef, id LabelID, on bool, queue bool) error {
 	groups := byFolder(msgs, "")
 	if len(groups) == 0 {
 		return nil
@@ -465,23 +472,33 @@ func (s *Service) SetLabel(ctx context.Context, accountID string, msgs []Message
 			c.close()
 		}
 	}()
+	// The keyword change of a folder is written before the server is
+	// touched. When the server cannot be reached, the groups not yet
+	// tried wait in the queue too, so that the cache and the queue agree
+	// with what the user asked.
+	var waiting []int64
+	deferred := false
 	for _, g := range groups {
 		folder, ok, err := s.store.Folder(ctx, accountID, g.folder)
 		if err != nil {
+			s.dropOperations(ctx, waiting)
 			return err
 		}
 		if !ok {
+			s.dropOperations(ctx, waiting)
 			return fmt.Errorf("mail: folder %s is not cached: %w", g.folder, ErrNotFound)
 		}
 		server := !folder.KeywordsKnown() || folder.KeepsKeyword(label.Keyword)
 		if on && !server {
 			if _, err := s.store.SetLabel(ctx, accountID, id, g.folder, g.uids, true, true); err != nil {
+				s.dropOperations(ctx, waiting)
 				return err
 			}
 			continue
 		}
 		synced, err := s.store.SetLabel(ctx, accountID, id, g.folder, g.uids, on, false)
 		if err != nil {
+			s.dropOperations(ctx, waiting)
 			return err
 		}
 		var local []UID
@@ -494,6 +511,7 @@ func (s *Service) SetLabel(ctx context.Context, accountID string, msgs []Message
 		if !on {
 			if local, err = s.store.SetLabel(ctx, accountID, id, g.folder, g.uids, false, true); err != nil {
 				undo()
+				s.dropOperations(ctx, waiting)
 				return err
 			}
 			// A label this device alone kept needs no server.
@@ -501,29 +519,72 @@ func (s *Service) SetLabel(ctx context.Context, accountID string, msgs []Message
 				continue
 			}
 		}
+		var ids []int64
+		if queue && server && len(synced) > 0 {
+			ops := make([]PendingOperation, 0, len(synced))
+			for _, uid := range synced {
+				ops = append(ops, PendingOperation{
+					Kind: OpLabel, Folder: g.folder, UID: uid,
+					Label: id, On: on, Validity: folder.UIDValidity,
+				})
+			}
+			if ids, err = s.enqueueOperations(ctx, accountID, ops); err != nil {
+				undo()
+				s.dropOperations(ctx, waiting)
+				return err
+			}
+		}
+		if deferred {
+			waiting = append(waiting, ids...)
+			continue
+		}
 		if c == nil {
 			if c, err = s.labelSession(ctx, accountID); err != nil {
+				if queue && retryable(err) {
+					// The folder keeps the change in the cache, and its
+					// keyword waits for the server.
+					waiting = append(waiting, ids...)
+					deferred = true
+					continue
+				}
 				undo()
+				s.dropOperations(ctx, append(waiting, ids...))
 				return err
 			}
 		}
 		opened, err := s.openToChange(ctx, c, accountID, folder)
 		if err != nil {
+			if queue && retryable(err) {
+				waiting = append(waiting, ids...)
+				deferred = true
+				continue
+			}
 			undo()
+			s.dropOperations(ctx, append(waiting, ids...))
 			return err
 		}
 		if on && !opened.KeepsKeyword(label.Keyword) {
 			undo()
+			s.dropOperations(ctx, ids)
 			if _, err := s.store.SetLabel(ctx, accountID, id, g.folder, g.uids, true, true); err != nil {
+				s.dropOperations(ctx, waiting)
 				return err
 			}
 			continue
 		}
 		if err := storeKeyword(c, g.folder, g.uids, label.Keyword, on); err != nil {
+			if queue && retryable(err) {
+				waiting = append(waiting, ids...)
+				deferred = true
+				continue
+			}
 			undo()
+			s.dropOperations(ctx, append(waiting, ids...))
 			return err
 		}
+		s.dropOperations(ctx, ids)
 	}
+	s.requeueOperations(ctx, accountID, waiting)
 	return nil
 }
 

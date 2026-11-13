@@ -171,6 +171,7 @@ type app struct {
 	watches   bool
 	watched   map[string]mail.Account
 	watch     map[string]mail.WatchStatus
+	queue     map[string]mail.QueueStatus
 	watchMu   sync.Mutex
 	watchOps  []func()
 	watchTurn sync.Mutex
@@ -328,6 +329,7 @@ func newApp(svc mailService) *app {
 		watches:       true,
 		watched:       map[string]mail.Account{},
 		watch:         map[string]mail.WatchStatus{},
+		queue:         map[string]mail.QueueStatus{},
 		needSignIn:    map[string]bool{},
 		inboxes:       map[string]int{},
 		otherFolders:  map[string][]mail.Folder{},
@@ -1711,6 +1713,7 @@ func (a *app) sidebarFooter(c *ui.Context, t *ui.Theme) {
 			ui.Text(c, locales.SidebarSummary(unread, total)).FontSize(11).TextColor(t.TextMuted)
 		}
 		a.watchLine(c, t)
+		a.queueLine(c, t)
 	})
 }
 

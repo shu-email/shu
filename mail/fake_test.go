@@ -95,6 +95,10 @@ type memStore struct {
 	smartNext int64
 	// discoveries are the servers kept for each domain.
 	discoveries map[string]Discovery
+	// pending are the actions queued for the server (see queue.go), the
+	// last ID given pendingNext.
+	pending     []PendingOperation
+	pendingNext int64
 }
 
 // memMark is a folder's watermark.
@@ -141,6 +145,165 @@ func (s *memStore) SaveDiscovery(ctx context.Context, d Discovery) error {
 	defer s.mu.Unlock()
 	s.discoveries[d.Domain] = d
 	return nil
+}
+
+// EnqueueOperations writes queued actions, each with its ID.
+func (s *memStore) EnqueueOperations(ctx context.Context, ops []PendingOperation) ([]int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ids := make([]int64, 0, len(ops))
+	for _, op := range ops {
+		s.pendingNext++
+		op.ID = s.pendingNext
+		if op.State == "" {
+			op.State = OperationPending
+		}
+		if op.CreatedAt.IsZero() {
+			op.CreatedAt = time.Now()
+		}
+		s.pending = append(s.pending, op)
+		ids = append(ids, op.ID)
+	}
+	return ids, nil
+}
+
+// ClaimOperation takes the oldest action of an account that is due.
+func (s *memStore) ClaimOperation(ctx context.Context, accountID string, now time.Time) (PendingOperation, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, op := range s.pending {
+		if op.AccountID != accountID || op.State != OperationPending || op.NextTry.After(now) {
+			continue
+		}
+		s.pending[i].State = OperationClaimed
+		s.pending[i].ClaimedAt = now
+		return s.pending[i], true, nil
+	}
+	return PendingOperation{}, false, nil
+}
+
+// ClaimOperationsByKey claims what one command can make with op.
+func (s *memStore) ClaimOperationsByKey(ctx context.Context, op PendingOperation, now time.Time) ([]PendingOperation, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []PendingOperation
+	for i, got := range s.pending {
+		if got.AccountID != op.AccountID || got.State != OperationPending ||
+			got.Kind != op.Kind || got.Folder != op.Folder || got.Dest != op.Dest {
+			continue
+		}
+		if got.Flag != op.Flag || got.On != op.On || got.Label != op.Label || got.Validity != op.Validity {
+			continue
+		}
+		s.pending[i].State = OperationClaimed
+		s.pending[i].ClaimedAt = now
+		out = append(out, s.pending[i])
+	}
+	return out, nil
+}
+
+// FinishOperation drops an action the server made.
+func (s *memStore) FinishOperation(ctx context.Context, id int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.dropOperation(id)
+	return nil
+}
+
+// RetryOperation puts an action back for a later try.
+func (s *memStore) RetryOperation(ctx context.Context, id int64, nextTry time.Time, reason string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, op := range s.pending {
+		if op.ID != id {
+			continue
+		}
+		s.pending[i].State = OperationPending
+		s.pending[i].ClaimedAt = time.Time{}
+		s.pending[i].Attempts++
+		s.pending[i].NextTry = nextTry
+		s.pending[i].LastError = reason
+	}
+	return nil
+}
+
+// FailOperation keeps an action the server refused.
+func (s *memStore) FailOperation(ctx context.Context, id int64, reason string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, op := range s.pending {
+		if op.ID != id {
+			continue
+		}
+		s.pending[i].State = OperationFailed
+		s.pending[i].ClaimedAt = time.Time{}
+		s.pending[i].Attempts++
+		s.pending[i].LastError = reason
+	}
+	return nil
+}
+
+// Operations reads an account's actions, oldest first.
+func (s *memStore) Operations(ctx context.Context, accountID string) ([]PendingOperation, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []PendingOperation
+	for _, op := range s.pending {
+		if op.AccountID == accountID {
+			out = append(out, op)
+		}
+	}
+	return out, nil
+}
+
+// ReclaimOperations gives back what a run that ended left claimed.
+func (s *memStore) ReclaimOperations(ctx context.Context, accountID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, op := range s.pending {
+		if op.AccountID == accountID && op.State == OperationClaimed {
+			s.pending[i].State = OperationPending
+			s.pending[i].ClaimedAt = time.Time{}
+		}
+	}
+	return nil
+}
+
+// CancelOperations drops actions before the server makes them.
+func (s *memStore) CancelOperations(ctx context.Context, ids []int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, id := range ids {
+		s.dropOperation(id)
+	}
+	return nil
+}
+
+// RetryFailedOperations puts the actions the server refused back in the
+// queue.
+func (s *memStore) RetryFailedOperations(ctx context.Context, accountID string, nextTry time.Time) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := 0
+	for i, op := range s.pending {
+		if op.AccountID == accountID && op.State == OperationFailed {
+			s.pending[i].State = OperationPending
+			s.pending[i].NextTry = nextTry
+			s.pending[i].ClaimedAt = time.Time{}
+			n++
+		}
+	}
+	return n, nil
+}
+
+// dropOperation removes one action. mu is held.
+func (s *memStore) dropOperation(id int64) {
+	for i, op := range s.pending {
+		if op.ID == id {
+			s.pending = append(s.pending[:i], s.pending[i+1:]...)
+			return
+		}
+	}
 }
 
 func msgKey(accountID, folder string) string { return accountID + "/" + folder }

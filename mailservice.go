@@ -226,6 +226,10 @@ type mailService interface {
 	Unwatch(accountID string)
 	Nudge()
 	SetOnline(online bool)
+	// RetryFailedActions tries the account's queued actions the server
+	// refused once more, as the footer offers, and returns how many went
+	// back to the queue.
+	RetryFailedActions(ctx context.Context, accountID string) (int, error)
 	Settings(ctx context.Context) (mail.Settings, error)
 	SaveSettings(ctx context.Context, s mail.Settings) error
 }

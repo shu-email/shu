@@ -814,6 +814,53 @@ func TestFooterShowsWatchState(t *testing.T) {
 	}
 }
 
+// The footer says what the account's queued actions are doing: those the
+// server has not made yet, and those it refused, under the watcher's own
+// line.
+func TestFooterShowsTheQueue(t *testing.T) {
+	w := startWatchApp(t)
+	tt := ui.NewTester(w.a.view, 1220, 800)
+	w.report(t, mail.WatchEvent{AccountID: "a1", Queue: &mail.QueueStatus{Pending: 2}})
+	tt.Frame()
+	if want := locales.QueuePending(2); !tt.HasText(want) {
+		t.Errorf("the footer does not say %q: %q", want, tt.Texts())
+	}
+	if !tt.HasText(locales.WatchConnecting()) {
+		t.Errorf("the queue took the watcher's line: %q", tt.Texts())
+	}
+
+	// A refusal is the queue's line, with the reason the header holds.
+	w.report(t, mail.WatchEvent{AccountID: "a1", Queue: &mail.QueueStatus{
+		Pending: 1, Failed: 1, Reason: "mail: folder Archive is gone",
+	}})
+	tt.Frame()
+	if want := locales.QueueFailed(1); !tt.HasText(want) {
+		t.Errorf("the footer does not say %q: %q", want, tt.Texts())
+	}
+	// A refusal waits for the user, who may fix its cause and ask again.
+	click(t, tt, locales.QueueFailed(1))
+	if !slices.Contains(w.fs.watchLog, "retry a1") {
+		t.Errorf("a press on the refused changes did not ask for a retry: %v", w.fs.watchLog)
+	}
+
+	// Another account's queue is not this account's.
+	w.report(t, mail.WatchEvent{AccountID: "a2", Queue: &mail.QueueStatus{Pending: 4}})
+	tt.Frame()
+	if tt.HasText(locales.QueuePending(4)) {
+		t.Error("the footer shows another account's queue")
+	}
+
+	// A queue the server caught up with takes its line away.
+	w.report(t, mail.WatchEvent{AccountID: "a1", Queue: &mail.QueueStatus{}})
+	tt.Frame()
+	if tt.HasText(locales.QueueFailed(1)) || tt.HasText(locales.QueuePending(1)) {
+		t.Errorf("the footer keeps the queue: %q", tt.Texts())
+	}
+	if !tt.HasText(locales.WatchConnecting()) {
+		t.Errorf("the watcher's line went with the queue: %q", tt.Texts())
+	}
+}
+
 // Without watchers the footer says nothing of them.
 func TestFooterWithoutWatchers(t *testing.T) {
 	a, _ := sampleApp(t)

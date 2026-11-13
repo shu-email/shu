@@ -29,11 +29,14 @@ type fakeService struct {
 	bodies   map[string]mail.Message
 	pending  []mail.PendingSend
 
-	testErr         error
-	flagErr         error
-	moveErr         error
-	sendErr         error
-	sendWarn        error
+	testErr  error
+	flagErr  error
+	moveErr  error
+	sendErr  error
+	sendWarn error
+	// retried is how many actions RetryFailedActions says it queued
+	// again, and retryErr makes the call fail.
+	retried         int
 	retryErr        error
 	password        map[string]string
 	sent            []mail.Outgoing
@@ -1305,6 +1308,11 @@ func (f *fakeService) SetOnline(online bool) {
 	} else {
 		f.watchLog = append(f.watchLog, "offline")
 	}
+}
+
+func (f *fakeService) RetryFailedActions(ctx context.Context, accountID string) (int, error) {
+	f.watchLog = append(f.watchLog, "retry "+accountID)
+	return f.retried, f.retryErr
 }
 
 func (f *fakeService) Settings(ctx context.Context) (mail.Settings, error) {

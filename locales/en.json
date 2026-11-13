@@ -3499,5 +3499,7 @@
       }
     }
   },
-  "restoreNeedsSignIn": "Restored accounts have no password or sign-in yet: open each one to add it."
+  "restoreNeedsSignIn": "Restored accounts have no password or sign-in yet: open each one to add it.",
+  "exportSelected": "Export selected…",
+  "transferNoSelection": "Choose at least one message to export."
 }

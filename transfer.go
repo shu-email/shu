@@ -36,6 +36,7 @@ func (a *app) transferSettingsView(c *ui.Context, t *ui.Theme) {
 		ui.Button(c, locales.ImportMbox()).Disabled(a.transfer.busy).OnClick(func() { a.startImport(false) })
 		ui.Button(c, locales.ImportEML()).Disabled(a.transfer.busy).OnClick(func() { a.startImport(true) })
 		ui.Button(c, locales.ExportFolder()).Disabled(a.transfer.busy).OnClick(func() { a.startExport(false) })
+		ui.Button(c, locales.ExportSelected()).Disabled(a.transfer.busy).OnClick(a.startExportSelected)
 		ui.Button(c, locales.ExportAccount()).Disabled(a.transfer.busy).OnClick(func() { a.startExport(true) })
 	})
 	ui.Row(c).Wrap().Gap(8).Children(func() {
@@ -95,6 +96,11 @@ func (a *app) startImport(eml bool) {
 		})
 		defer cancel()
 		result, err := a.importPaths(ctx, account, folder, paths, eml)
+		if err == nil && result.Imported > 0 {
+			// Bring what the server took into the cache, so the list and
+			// search show it without waiting for another sync.
+			_ = a.svc.SyncFolder(ctx, account, folder, 0)
+		}
 		a.post(func() {
 			if a.stale(g) {
 				return
@@ -178,12 +184,36 @@ func (a *app) startExport(account bool) {
 	if account {
 		req.Folder = ""
 	}
+	name := "mail.mbox"
+	if !account {
+		name = safeFileName(a.folder) + ".mbox"
+	}
+	a.exportWith(req, name)
+}
+
+// startExportSelected writes the chosen messages as mbox or eml.
+func (a *app) startExportSelected() {
+	if a.transfer.busy {
+		return
+	}
+	var refs []mail.MessageRef
+	for _, m := range a.targets() {
+		if m.Account == a.active && m.DraftID == "" {
+			refs = append(refs, mail.MessageRef{Folder: m.Folder, UID: m.UID})
+		}
+	}
+	if len(refs) == 0 {
+		a.transfer.note, a.transfer.err = "", locales.TransferNoSelection()
+		return
+	}
+	req := mail.ExportRequest{AccountID: a.active, Refs: refs, Format: mail.FormatMbox, IncludeAttachments: true}
+	a.exportWith(req, "selected.mbox")
+}
+
+// exportWith asks where the export goes and runs it.
+func (a *app) exportWith(req mail.ExportRequest, name string) {
 	g := a.gen
 	a.run(func() {
-		name := "mail.mbox"
-		if !account {
-			name = safeFileName(a.folder) + ".mbox"
-		}
 		path, err := a.saveFile(a.win, name)
 		if err != nil || path == "" {
 			return

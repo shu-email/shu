@@ -9859,3 +9859,23 @@ func RestoreNeedsSignIn() string { return In(i18n.Locale()).RestoreNeedsSignIn()
 func (msgs Messages) RestoreNeedsSignIn() string {
 	return Catalog.Format(msgs.locale, "restoreNeedsSignIn", nil)
 }
+
+// ExportSelected says "Export selected…"
+// in the language the app shows.
+func ExportSelected() string { return In(i18n.Locale()).ExportSelected() }
+
+// ExportSelected says "Export selected…"
+// in the language of msgs.
+func (msgs Messages) ExportSelected() string {
+	return Catalog.Format(msgs.locale, "exportSelected", nil)
+}
+
+// TransferNoSelection says "Choose at least one message to export."
+// in the language the app shows.
+func TransferNoSelection() string { return In(i18n.Locale()).TransferNoSelection() }
+
+// TransferNoSelection says "Choose at least one message to export."
+// in the language of msgs.
+func (msgs Messages) TransferNoSelection() string {
+	return Catalog.Format(msgs.locale, "transferNoSelection", nil)
+}

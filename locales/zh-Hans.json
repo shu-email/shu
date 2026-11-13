@@ -1185,5 +1185,7 @@
       }
     }
   },
-  "restoreNeedsSignIn": "已恢复的账户尚无密码或登录信息：请打开每个账户补全。"
+  "restoreNeedsSignIn": "已恢复的账户尚无密码或登录信息：请打开每个账户补全。",
+  "exportSelected": "导出所选…",
+  "transferNoSelection": "请至少选择一封要导出的邮件。"
 }

@@ -269,3 +269,29 @@ func TestCLIEnvironmentValues(t *testing.T) {
 		t.Errorf("the tool saw %q, %v", data, err)
 	}
 }
+
+// Codex reports its models through app-server's JSON-RPC, without a
+// thread or a model request.
+func TestCodexModels(t *testing.T) {
+	dir := t.TempDir()
+	script := filepath.Join(dir, "codex")
+	body := `#!/bin/sh
+while IFS= read -r line; do
+  case "$line" in
+    *'"id":1'*) echo '{"jsonrpc":"2.0","id":1,"result":{}}' ;;
+    *'"id":2'*) echo '{"jsonrpc":"2.0","id":2,"result":{"data":[{"model":"gpt-5-codex"},{"model":"gpt-5"},{"model":"gpt-5-codex"}]}}' ;;
+  esac
+done
+`
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	svc := NewService(nil, nil)
+	models, err := svc.CodexModels(context.Background(), script)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(models) != 2 || models[0] != "gpt-5-codex" || models[1] != "gpt-5" {
+		t.Errorf("models = %q", models)
+	}
+}

@@ -3682,5 +3682,34 @@
   "aiProviderModelHidden": "Hidden from the model pickers",
   "aiProviderModelDefault": "The chosen model always stays visible.",
   "aiProviderNoModels": "This provider reports no models yet. Type one below.",
-  "aiProviderModelHint": "Type a model, or choose one this provider reports."
+  "aiProviderModelHint": "Type a model, or choose one this provider reports.",
+  "aiProviderNeedsURL": "Server URL needed",
+  "aiProviderNoConnection": "No provider selected",
+  "aiProviderAdd": "Add API connection",
+  "aiProviderEdit": "Edit…",
+  "aiProviderDelete": "Remove connection",
+  "aiProviderEnabled": "Enabled",
+  "aiProviderFetchModels": "Fetch models",
+  "aiProviderFetching": "Fetching models…",
+  "aiProviderModelsCount": "{count, plural, one {# model} other {# models}}",
+  "@aiProviderModelsCount": {
+    "description": "How many models a connection offers.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "aiProviderName": "Name",
+  "aiProviderNameHint": "Optional note",
+  "aiProviderBaseURL": "Base URL",
+  "aiProviderAPIKey": "API key",
+  "aiProviderAPIKeyHint": "Paste API key",
+  "aiProviderModelsHint": "Choose the models this connection offers.",
+  "aiProviderNoModelsYet": "No models yet — fetch or add one by ID.",
+  "aiProviderModelAdd": "Add model by ID",
+  "aiProviderSave": "Save",
+  "aiProviderCancel": "Cancel",
+  "aiProviderDisabled": "Off"
 }

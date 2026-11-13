@@ -127,8 +127,12 @@ func (s *Service) usable(cfg Config, model, typedKey string) (string, error) {
 	}
 	key := strings.TrimSpace(typedKey)
 	if key == "" {
+		keyID := cfg.Provider
+		if conn, ok := cfg.ActiveConnection(); ok {
+			keyID = ConnectionKeyID(conn)
+		}
 		var err error
-		if key, err = s.key(cfg.Provider); err != nil {
+		if key, err = s.key(keyID); err != nil {
 			return "", err
 		}
 	}

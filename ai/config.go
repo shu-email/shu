@@ -117,6 +117,10 @@ type Config struct {
 	// providers, by provider. Empty finds the command the way a Terminal
 	// would.
 	CLIPaths map[ProviderID]string `json:"cliPaths,omitempty"`
+	// Connections are the API connections the user added.
+	Connections []AIConnection `json:"connections,omitempty"`
+	// Active is the connection in use, "" when none.
+	Active string `json:"active,omitempty"`
 	// CLIEnv holds the names of the environment values a local tool gets,
 	// by provider; their values are only in the keychain.
 	CLIEnv map[ProviderID][]string `json:"cliEnv,omitempty"`
@@ -125,6 +129,63 @@ type Config struct {
 	// shown.
 	HiddenModels map[ProviderID][]string `json:"hiddenModels,omitempty"`
 }
+
+// AIConnection is one API connection the user added.
+type AIConnection struct {
+	ID      string     `json:"id"`
+	Name    string     `json:"name"`
+	Preset  ProviderID `json:"preset"`
+	BaseURL string     `json:"baseURL,omitempty"`
+	Model   string     `json:"model,omitempty"`
+	Models  []string   `json:"models,omitempty"`
+	Enabled bool       `json:"enabled"`
+}
+
+// Connection returns the connection of an ID.
+func (c Config) Connection(id string) (AIConnection, bool) {
+	for _, conn := range c.Connections {
+		if conn.ID == id {
+			return conn, true
+		}
+	}
+	return AIConnection{}, false
+}
+
+// ActiveConnection returns the connection in use.
+func (c Config) ActiveConnection() (AIConnection, bool) {
+	if c.Active == "" {
+		return AIConnection{}, false
+	}
+	return c.Connection(c.Active)
+}
+
+// SetConnection replaces or appends a connection.
+func (c *Config) SetConnection(conn AIConnection) {
+	for i := range c.Connections {
+		if c.Connections[i].ID == conn.ID {
+			c.Connections[i] = conn
+			return
+		}
+	}
+	c.Connections = append(c.Connections, conn)
+}
+
+// RemoveConnection drops a connection.
+func (c *Config) RemoveConnection(id string) {
+	out := c.Connections[:0]
+	for _, conn := range c.Connections {
+		if conn.ID != id {
+			out = append(out, conn)
+		}
+	}
+	c.Connections = out
+	if c.Active == id {
+		c.Active = ""
+	}
+}
+
+// ConnectionKeyID is the keychain key of a connection.
+func ConnectionKeyID(conn AIConnection) ProviderID { return ProviderID("conn:" + conn.ID) }
 
 // ModelHidden reports whether a model is kept out of the pickers.
 func (c Config) ModelHidden(id ProviderID, model string) bool {
@@ -174,6 +235,7 @@ func (c Config) Clone() Config {
 	out.CLIPaths = cloneProviderMap(c.CLIPaths)
 	out.CLIEnv = cloneEnvMap(c.CLIEnv)
 	out.HiddenModels = cloneEnvMap(c.HiddenModels)
+	out.Connections = append([]AIConnection(nil), c.Connections...)
 	return out
 }
 
@@ -380,7 +442,7 @@ func (s *Service) SetKey(id ProviderID, key string) error {
 	if key == "" {
 		return &Error{Kind: KindNoKey}
 	}
-	if _, ok := ProviderByID(id); !ok {
+	if _, ok := ProviderByID(id); !ok && !strings.HasPrefix(string(id), "conn:") {
 		return &Error{Kind: KindBadConfig}
 	}
 	if err := s.secrets.Set(KeyName(id), []byte(key)); err != nil {
@@ -407,4 +469,14 @@ func (s *Service) key(id ProviderID) (string, error) {
 		return "", &Error{Kind: KindKeychain}
 	}
 	return strings.TrimSpace(string(data)), nil
+}
+
+// Secret reads a stored secret by its key name, for settings that need to
+// reuse a key they do not show.
+func (s *Service) Secret(id ProviderID) (string, error) {
+	data, err := s.secrets.Get(KeyName(id))
+	if err != nil {
+		return "", &Error{Kind: KindKeychain}
+	}
+	return string(data), nil
 }

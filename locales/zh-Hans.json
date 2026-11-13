@@ -1368,5 +1368,34 @@
   "aiProviderModelHidden": "在模型选择中隐藏",
   "aiProviderModelDefault": "已选定的模型始终可见。",
   "aiProviderNoModels": "此服务商尚未报告模型，可在下方手动输入。",
-  "aiProviderModelHint": "输入模型，或选择此服务商报告的模型。"
+  "aiProviderModelHint": "输入模型，或选择此服务商报告的模型。",
+  "aiProviderNeedsURL": "需要服务器地址",
+  "aiProviderNoConnection": "未选择服务商",
+  "aiProviderAdd": "添加 API 连接",
+  "aiProviderEdit": "编辑…",
+  "aiProviderDelete": "删除连接",
+  "aiProviderEnabled": "启用",
+  "aiProviderFetchModels": "拉取模型",
+  "aiProviderFetching": "正在拉取模型…",
+  "aiProviderModelsCount": "{count, plural, other {# 个模型}}",
+  "@aiProviderModelsCount": {
+    "description": "How many models a connection offers.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "aiProviderName": "名称",
+  "aiProviderNameHint": "可选备注",
+  "aiProviderBaseURL": "基础 URL",
+  "aiProviderAPIKey": "API 密钥",
+  "aiProviderAPIKeyHint": "粘贴 API 密钥",
+  "aiProviderModelsHint": "选择这条连接提供的模型。",
+  "aiProviderNoModelsYet": "还没有模型——先拉取，或按 ID 添加。",
+  "aiProviderModelAdd": "按 ID 添加模型",
+  "aiProviderSave": "保存",
+  "aiProviderCancel": "取消",
+  "aiProviderDisabled": "已关闭"
 }

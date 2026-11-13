@@ -449,17 +449,16 @@ func TestAISettings(t *testing.T) {
 	if !cfg.Enabled {
 		t.Fatal("the switch did not save")
 	}
+	conn := addAIConnection(t, a, ai.ProviderOpenAI, "", "")
 	a.openProviders()
 	tt.Frame()
-	click(t, tt, locales.AiProviderAdvanced())
 	if !tt.HasText(locales.AiKeyMissing()) {
 		t.Errorf("missing-key note absent: %q", tt.Texts())
 	}
-
 	click(t, tt, locales.AiKey())
 	tt.Type(testAIKey)
 	click(t, tt, locales.AiKeySave())
-	if got := string(secrets[ai.KeyName(ai.ProviderOpenAI)]); got != testAIKey {
+	if got := string(secrets[ai.KeyName(ai.ConnectionKeyID(conn))]); got != testAIKey {
 		t.Fatalf("keychain = %q", got)
 	}
 	if a.aiForm.key != "" {
@@ -499,8 +498,9 @@ func TestAISettings(t *testing.T) {
 
 	a.openProviders()
 	tt.Frame()
-	click(t, tt, locales.AiProviderAdvanced())
 	click(t, tt, locales.AiKeyDelete())
+	a.loadProviderStates()
+	tt.Frame()
 	if len(secrets) != 0 {
 		t.Errorf("keychain after delete = %v", secrets)
 	}
@@ -509,33 +509,23 @@ func TestAISettings(t *testing.T) {
 	}
 
 	// A remote server over plain HTTP shows the warning and its opt-in.
-	a.providers.open = false
-	a.aiForm.provider = locales.AiProviderCustom()
-	a.chooseAIProvider()
-	a.aiForm.cfg.BaseURL = "http://models.example.com/v1"
+	addAIConnection(t, a, ai.ProviderCustom, "http://models.example.com/v1", "")
 	a.openProviders()
 	tt.Frame()
-	click(t, tt, locales.AiProviderAdvanced())
 	tt.Frame()
-	if !tt.HasText(locales.AiHTTPWarning()) {
-		t.Fatalf("no plain HTTP warning: %q", tt.Texts())
+	if !tt.HasText(locales.AiAllowHTTP()) {
+		t.Fatalf("no plain HTTP opt-in: %q", tt.Texts())
 	}
 	click(t, tt, locales.AiAllowHTTP())
 	if !a.aiForm.cfg.AllowHTTP {
 		t.Error("the opt-in switch did not turn on")
 	}
 	// A local server needs neither the warning nor a key.
-	a.aiForm.provider = locales.AiProviderLocal()
-	a.chooseAIProvider()
-	a.providers.open = false
+	addAIConnection(t, a, ai.ProviderLocal, "", "")
 	a.openProviders()
 	tt.Frame()
-	if tt.HasText(locales.AiHTTPWarning()) || !tt.HasText(locales.AiKeyOptional()) {
+	if tt.HasText(locales.AiAllowHTTP()) || !tt.HasText(locales.AiKeyOptional()) {
 		t.Errorf("local provider view: %q", tt.Texts())
-	}
-	cfg, _ = a.ai.Config(context.Background())
-	if cfg.Provider != ai.ProviderLocal || cfg.AllowHTTP {
-		t.Errorf("saved config = %+v", cfg)
 	}
 }
 
@@ -574,4 +564,24 @@ func TestAIStringsInChinese(t *testing.T) {
 	if got := zh.AiReviewQuoted(3); !strings.Contains(got, "3") {
 		t.Errorf("plural = %q", got)
 	}
+}
+
+// addAIConnection adds an API connection as the add overlay does and makes
+// it the active one.
+func addAIConnection(t *testing.T, a *app, preset ai.ProviderID, baseURL, key string) ai.AIConnection {
+	t.Helper()
+	a.startAddConnection()
+	for i, p := range apiPresets() {
+		if p.ID == preset {
+			a.providers.form.preset = i
+		}
+	}
+	a.providers.form.baseURL = baseURL
+	a.providers.form.key = key
+	a.saveConnection()
+	if conn, ok := a.aiForm.cfg.ActiveConnection(); ok {
+		return conn
+	}
+	t.Fatal("the connection was not saved")
+	return ai.AIConnection{}
 }

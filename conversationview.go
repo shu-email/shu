@@ -298,6 +298,9 @@ func (a *app) threadMessage(c *ui.Context, t *ui.Theme, cv *convView, i int, m m
 				a.messageFields(c, t, m)
 			}
 			body, loaded := a.bodies[key]
+			if loaded {
+				a.securityNotice(c, t, m, &body.Message)
+			}
 			if loaded && len(body.Message.Attachments) > 0 {
 				a.attachments(c, t, m, body.Message.Attachments)
 			}

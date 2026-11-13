@@ -107,10 +107,16 @@ type app struct {
 	sidebarOpen   bool
 	mailboxesOpen bool
 	details       bool
-	accountForm   accountForm
-	accountBusy   bool
-	accountErr    string
-	accountNote   string
+	// securityOpen is, by message key, whether its sender-authentication
+	// details are shown; linkOpen and linkURL hold a link the HTML view
+	// asked to open until the user confirms where it goes (security.go).
+	securityOpen map[string]bool
+	linkOpen     bool
+	linkURL      string
+	accountForm  accountForm
+	accountBusy  bool
+	accountErr   string
+	accountNote  string
 
 	// Signing in with Google or Microsoft (signin.go). signIn is the
 	// sign-in under way, nil when none, signInErr how the last one failed,
@@ -283,6 +289,7 @@ func newApp(svc mailService) *app {
 		signatures:    map[string]mail.Signature{},
 		aliases:       map[string][]mail.Identity{},
 		labels:        newLabelState(),
+		securityOpen:  map[string]bool{},
 	}
 }
 
@@ -1309,6 +1316,7 @@ func (a *app) mailView(c *ui.Context) {
 	a.labelDialog(c)
 	a.labelAlerts(c)
 	aiReviewModal(c, &a.review)
+	a.linkDialog(c)
 }
 
 // paneShortcuts gives the sidebar and the panes the unmodified shortcuts.

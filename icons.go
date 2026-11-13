@@ -64,5 +64,7 @@ var (
 	gripVerticalIcon  = mustIcon("grip-vertical")
 	arrowUpIcon       = mustIcon("arrow-up")
 	arrowDownIcon     = mustIcon("arrow-down")
-	clockIcon         = mustIcon("clock")
+	clockIcon          = mustIcon("clock")
+	shieldQuestionIcon = mustIcon("shield-question")
+	shieldCheckIcon    = mustIcon("shield-check")
 )

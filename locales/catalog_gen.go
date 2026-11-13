@@ -8669,3 +8669,215 @@ func MakeRuleEllipsis() string { return In(i18n.Locale()).MakeRuleEllipsis() }
 func (msgs Messages) MakeRuleEllipsis() string {
 	return Catalog.Format(msgs.locale, "makeRuleEllipsis", nil)
 }
+
+// SecurityPassed says "Sender verified"
+// in the language the app shows.
+func SecurityPassed() string { return In(i18n.Locale()).SecurityPassed() }
+
+// SecurityPassed says "Sender verified"
+// in the language of msgs.
+func (msgs Messages) SecurityPassed() string {
+	return Catalog.Format(msgs.locale, "securityPassed", nil)
+}
+
+// SecurityFailed says "Sender check failed"
+// in the language the app shows.
+func SecurityFailed() string { return In(i18n.Locale()).SecurityFailed() }
+
+// SecurityFailed says "Sender check failed"
+// in the language of msgs.
+func (msgs Messages) SecurityFailed() string {
+	return Catalog.Format(msgs.locale, "securityFailed", nil)
+}
+
+// SecurityAbsent says "Sender not verified"
+// in the language the app shows.
+func SecurityAbsent() string { return In(i18n.Locale()).SecurityAbsent() }
+
+// SecurityAbsent says "Sender not verified"
+// in the language of msgs.
+func (msgs Messages) SecurityAbsent() string {
+	return Catalog.Format(msgs.locale, "securityAbsent", nil)
+}
+
+// SecurityPassedDetail says "The receiving server verified this message's sender with SPF, DKIM or DMARC. That says where it came from, not that i…"
+// in the language the app shows.
+func SecurityPassedDetail() string { return In(i18n.Locale()).SecurityPassedDetail() }
+
+// SecurityPassedDetail says "The receiving server verified this message's sender with SPF, DKIM or DMARC. That says where it came from, not that i…"
+// in the language of msgs.
+func (msgs Messages) SecurityPassedDetail() string {
+	return Catalog.Format(msgs.locale, "securityPassedDetail", nil)
+}
+
+// SecurityFailedDetail says "The receiving server reported that a sender check failed. The message may not come from the address it shows."
+// in the language the app shows.
+func SecurityFailedDetail() string { return In(i18n.Locale()).SecurityFailedDetail() }
+
+// SecurityFailedDetail says "The receiving server reported that a sender check failed. The message may not come from the address it shows."
+// in the language of msgs.
+func (msgs Messages) SecurityFailedDetail() string {
+	return Catalog.Format(msgs.locale, "securityFailedDetail", nil)
+}
+
+// SecurityAbsentDetail says "The receiving server reported no sender verification. Treat unexpected mail with care."
+// in the language the app shows.
+func SecurityAbsentDetail() string { return In(i18n.Locale()).SecurityAbsentDetail() }
+
+// SecurityAbsentDetail says "The receiving server reported no sender verification. Treat unexpected mail with care."
+// in the language of msgs.
+func (msgs Messages) SecurityAbsentDetail() string {
+	return Catalog.Format(msgs.locale, "securityAbsentDetail", nil)
+}
+
+// SecurityExternal says "External sender"
+// in the language the app shows.
+func SecurityExternal() string { return In(i18n.Locale()).SecurityExternal() }
+
+// SecurityExternal says "External sender"
+// in the language of msgs.
+func (msgs Messages) SecurityExternal() string {
+	return Catalog.Format(msgs.locale, "securityExternal", nil)
+}
+
+// SecurityExternalDetail says "{email} is outside your organization's domains. Most mail is, but check unexpected requests for money or passwords."
+// in the language the app shows.
+//
+// Explains an external sender without calling the message malicious.
+func SecurityExternalDetail(email string) string {
+	return In(i18n.Locale()).SecurityExternalDetail(email)
+}
+
+// SecurityExternalDetail says "{email} is outside your organization's domains. Most mail is, but check unexpected requests for money or passwords."
+// in the language of msgs.
+//
+// Explains an external sender without calling the message malicious.
+func (msgs Messages) SecurityExternalDetail(email string) string {
+	return Catalog.Format(msgs.locale, "securityExternalDetail", map[string]any{"email": email})
+}
+
+// SecurityReplyMismatch says "Replies go elsewhere"
+// in the language the app shows.
+func SecurityReplyMismatch() string { return In(i18n.Locale()).SecurityReplyMismatch() }
+
+// SecurityReplyMismatch says "Replies go elsewhere"
+// in the language of msgs.
+func (msgs Messages) SecurityReplyMismatch() string {
+	return Catalog.Format(msgs.locale, "securityReplyMismatch", nil)
+}
+
+// SecurityReplyMismatchDetail says "The message is from {from}, but replies would go to {replyTo}. Check that address before answering."
+// in the language the app shows.
+//
+// Explains a Reply-To that leaves the sender's domain.
+func SecurityReplyMismatchDetail(from string, replyTo string) string {
+	return In(i18n.Locale()).SecurityReplyMismatchDetail(from, replyTo)
+}
+
+// SecurityReplyMismatchDetail says "The message is from {from}, but replies would go to {replyTo}. Check that address before answering."
+// in the language of msgs.
+//
+// Explains a Reply-To that leaves the sender's domain.
+func (msgs Messages) SecurityReplyMismatchDetail(from string, replyTo string) string {
+	return Catalog.Format(msgs.locale, "securityReplyMismatchDetail", map[string]any{"from": from, "replyTo": replyTo})
+}
+
+// SecurityChecks says "Checks: {checks}"
+// in the language the app shows.
+//
+// The SPF, DKIM and DMARC results a server reported.
+func SecurityChecks(checks string) string { return In(i18n.Locale()).SecurityChecks(checks) }
+
+// SecurityChecks says "Checks: {checks}"
+// in the language of msgs.
+//
+// The SPF, DKIM and DMARC results a server reported.
+func (msgs Messages) SecurityChecks(checks string) string {
+	return Catalog.Format(msgs.locale, "securityChecks", map[string]any{"checks": checks})
+}
+
+// SecurityShowDetails says "Why?"
+// in the language the app shows.
+func SecurityShowDetails() string { return In(i18n.Locale()).SecurityShowDetails() }
+
+// SecurityShowDetails says "Why?"
+// in the language of msgs.
+func (msgs Messages) SecurityShowDetails() string {
+	return Catalog.Format(msgs.locale, "securityShowDetails", nil)
+}
+
+// SecurityHideDetails says "Hide reason"
+// in the language the app shows.
+func SecurityHideDetails() string { return In(i18n.Locale()).SecurityHideDetails() }
+
+// SecurityHideDetails says "Hide reason"
+// in the language of msgs.
+func (msgs Messages) SecurityHideDetails() string {
+	return Catalog.Format(msgs.locale, "securityHideDetails", nil)
+}
+
+// SecurityLinkTitle says "Open this link?"
+// in the language the app shows.
+func SecurityLinkTitle() string { return In(i18n.Locale()).SecurityLinkTitle() }
+
+// SecurityLinkTitle says "Open this link?"
+// in the language of msgs.
+func (msgs Messages) SecurityLinkTitle() string {
+	return Catalog.Format(msgs.locale, "securityLinkTitle", nil)
+}
+
+// SecurityLinkMessage says "The link goes to:\n\n{url}"
+// in the language the app shows.
+//
+// Shows the real destination of a link before it opens.
+func SecurityLinkMessage(url string) string { return In(i18n.Locale()).SecurityLinkMessage(url) }
+
+// SecurityLinkMessage says "The link goes to:\n\n{url}"
+// in the language of msgs.
+//
+// Shows the real destination of a link before it opens.
+func (msgs Messages) SecurityLinkMessage(url string) string {
+	return Catalog.Format(msgs.locale, "securityLinkMessage", map[string]any{"url": url})
+}
+
+// SecurityLinkOpen says "Open link"
+// in the language the app shows.
+func SecurityLinkOpen() string { return In(i18n.Locale()).SecurityLinkOpen() }
+
+// SecurityLinkOpen says "Open link"
+// in the language of msgs.
+func (msgs Messages) SecurityLinkOpen() string {
+	return Catalog.Format(msgs.locale, "securityLinkOpen", nil)
+}
+
+// SecurityAttachmentExecutable says "Can run a program"
+// in the language the app shows.
+func SecurityAttachmentExecutable() string { return In(i18n.Locale()).SecurityAttachmentExecutable() }
+
+// SecurityAttachmentExecutable says "Can run a program"
+// in the language of msgs.
+func (msgs Messages) SecurityAttachmentExecutable() string {
+	return Catalog.Format(msgs.locale, "securityAttachmentExecutable", nil)
+}
+
+// SecurityAttachmentDisguised says "Name hides a program"
+// in the language the app shows.
+func SecurityAttachmentDisguised() string { return In(i18n.Locale()).SecurityAttachmentDisguised() }
+
+// SecurityAttachmentDisguised says "Name hides a program"
+// in the language of msgs.
+func (msgs Messages) SecurityAttachmentDisguised() string {
+	return Catalog.Format(msgs.locale, "securityAttachmentDisguised", nil)
+}
+
+// SecurityAttachmentTypeMismatch says "Content does not match the name"
+// in the language the app shows.
+func SecurityAttachmentTypeMismatch() string {
+	return In(i18n.Locale()).SecurityAttachmentTypeMismatch()
+}
+
+// SecurityAttachmentTypeMismatch says "Content does not match the name"
+// in the language of msgs.
+func (msgs Messages) SecurityAttachmentTypeMismatch() string {
+	return Catalog.Format(msgs.locale, "securityAttachmentTypeMismatch", nil)
+}

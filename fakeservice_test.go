@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	netmail "net/mail"
 	"os"
 	"path/filepath"
@@ -44,6 +45,12 @@ type fakeService struct {
 	// folderErr makes them fail.
 	folderCalls []string
 	folderErr   error
+	// networkSet is the network settings the window saved, networkStored
+	// whether a proxy password is kept, and networkErr makes the calls
+	// fail.
+	networkSet    mail.NetworkSettings
+	networkStored bool
+	networkErr    error
 
 	// Drafts. The fake keeps them as the engine does: saving is local,
 	// and SyncDrafts is the step that reaches the server, or fails to.
@@ -2472,4 +2479,28 @@ func (f *fakeService) SetFolderSubscribed(ctx context.Context, accountID, name s
 		}
 	}
 	return mail.ErrNotFound
+}
+
+func (f *fakeService) NetworkSettings(ctx context.Context) (mail.NetworkSettings, bool, error) {
+	return f.networkSet, f.networkStored, f.networkErr
+}
+
+func (f *fakeService) SaveNetworkSettings(ctx context.Context, set mail.NetworkSettings, password string, setPassword bool) error {
+	if f.networkErr != nil {
+		return f.networkErr
+	}
+	f.networkSet = set
+	if setPassword {
+		f.networkStored = password != ""
+	}
+	return nil
+}
+
+func (f *fakeService) TestNetwork(ctx context.Context, accountID string) error { return f.testErr }
+
+func (f *fakeService) HTTPClient(ctx context.Context) (*http.Client, error) {
+	if f.networkErr != nil {
+		return nil, f.networkErr
+	}
+	return http.DefaultClient, nil
 }

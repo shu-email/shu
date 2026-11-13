@@ -999,5 +999,58 @@
   "folderSystem": "收件箱以及已发送、草稿、归档、垃圾邮件和回收站文件夹不能重命名或删除。",
   "folderGone": "该文件夹已不存在。",
   "dismissFolderNote": "关闭此提示",
-  "hiddenFolders": "隐藏的文件夹"
+  "hiddenFolders": "隐藏的文件夹",
+  "networkTab": "网络",
+  "networkTitle": "代理与证书",
+  "networkIntro": "Shu 如何连接邮件服务器和模型提供方。更改将在下次连接时生效，无需重启。",
+  "proxyMode": "代理",
+  "proxySystem": "跟随系统",
+  "proxyDirect": "直接连接",
+  "proxyManual": "使用代理",
+  "proxyAddress": "代理地址",
+  "proxyAddressHint": "http://主机:端口 或 socks5://主机:端口",
+  "proxyUsername": "代理用户名",
+  "proxyPassword": "代理密码",
+  "proxyPasswordStored": "已保存密码。留空则保持不变。",
+  "proxyBypass": "直接连接的主机",
+  "proxyBypassHint": "以逗号分隔的主机，规则同 NO_PROXY：localhost, .internal.example",
+  "certificateAuthority": "证书颁发机构",
+  "certificateAuthorityHint": "信任 PEM 文件中的内部或自签名证书颁发机构。证书校验保持开启。",
+  "importCA": "导入证书…",
+  "removeCA": "移除证书",
+  "caImported": "已导入 {name}",
+  "@caImported": {
+    "description": "The note after a certificate authority file was read.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "corp-ca.pem"
+      }
+    }
+  },
+  "caInvalid": "该文件中没有 Shu 能读取的证书。",
+  "networkSaved": "网络设置已保存",
+  "networkSaveFailed": "无法保存网络设置：{error}",
+  "@networkSaveFailed": {
+    "description": "The error after saving the network settings failed.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "the keychain refused the password"
+      }
+    }
+  },
+  "networkTest": "测试连接",
+  "networkTestOk": "使用这些设置可以正常连接。",
+  "networkTestFailed": "连接失败：{error}",
+  "@networkTestFailed": {
+    "description": "The error after a network test failed.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "proxy refused the tunnel"
+      }
+    }
+  },
+  "networkNoAccount": "添加账户后才能测试连接。"
 }

@@ -9193,3 +9193,275 @@ func HiddenFolders() string { return In(i18n.Locale()).HiddenFolders() }
 func (msgs Messages) HiddenFolders() string {
 	return Catalog.Format(msgs.locale, "hiddenFolders", nil)
 }
+
+// NetworkTab says "Network"
+// in the language the app shows.
+func NetworkTab() string { return In(i18n.Locale()).NetworkTab() }
+
+// NetworkTab says "Network"
+// in the language of msgs.
+func (msgs Messages) NetworkTab() string {
+	return Catalog.Format(msgs.locale, "networkTab", nil)
+}
+
+// NetworkTitle says "Proxy and certificates"
+// in the language the app shows.
+func NetworkTitle() string { return In(i18n.Locale()).NetworkTitle() }
+
+// NetworkTitle says "Proxy and certificates"
+// in the language of msgs.
+func (msgs Messages) NetworkTitle() string {
+	return Catalog.Format(msgs.locale, "networkTitle", nil)
+}
+
+// NetworkIntro says "How Shu reaches your mail servers and model providers. Changes apply to the next connection; no restart is needed."
+// in the language the app shows.
+func NetworkIntro() string { return In(i18n.Locale()).NetworkIntro() }
+
+// NetworkIntro says "How Shu reaches your mail servers and model providers. Changes apply to the next connection; no restart is needed."
+// in the language of msgs.
+func (msgs Messages) NetworkIntro() string {
+	return Catalog.Format(msgs.locale, "networkIntro", nil)
+}
+
+// ProxyMode says "Proxy"
+// in the language the app shows.
+func ProxyMode() string { return In(i18n.Locale()).ProxyMode() }
+
+// ProxyMode says "Proxy"
+// in the language of msgs.
+func (msgs Messages) ProxyMode() string {
+	return Catalog.Format(msgs.locale, "proxyMode", nil)
+}
+
+// ProxySystem says "Follow the system"
+// in the language the app shows.
+func ProxySystem() string { return In(i18n.Locale()).ProxySystem() }
+
+// ProxySystem says "Follow the system"
+// in the language of msgs.
+func (msgs Messages) ProxySystem() string {
+	return Catalog.Format(msgs.locale, "proxySystem", nil)
+}
+
+// ProxyDirect says "Connect directly"
+// in the language the app shows.
+func ProxyDirect() string { return In(i18n.Locale()).ProxyDirect() }
+
+// ProxyDirect says "Connect directly"
+// in the language of msgs.
+func (msgs Messages) ProxyDirect() string {
+	return Catalog.Format(msgs.locale, "proxyDirect", nil)
+}
+
+// ProxyManual says "Use a proxy"
+// in the language the app shows.
+func ProxyManual() string { return In(i18n.Locale()).ProxyManual() }
+
+// ProxyManual says "Use a proxy"
+// in the language of msgs.
+func (msgs Messages) ProxyManual() string {
+	return Catalog.Format(msgs.locale, "proxyManual", nil)
+}
+
+// ProxyAddress says "Proxy address"
+// in the language the app shows.
+func ProxyAddress() string { return In(i18n.Locale()).ProxyAddress() }
+
+// ProxyAddress says "Proxy address"
+// in the language of msgs.
+func (msgs Messages) ProxyAddress() string {
+	return Catalog.Format(msgs.locale, "proxyAddress", nil)
+}
+
+// ProxyAddressHint says "http://host:port or socks5://host:port"
+// in the language the app shows.
+func ProxyAddressHint() string { return In(i18n.Locale()).ProxyAddressHint() }
+
+// ProxyAddressHint says "http://host:port or socks5://host:port"
+// in the language of msgs.
+func (msgs Messages) ProxyAddressHint() string {
+	return Catalog.Format(msgs.locale, "proxyAddressHint", nil)
+}
+
+// ProxyUsername says "Proxy user"
+// in the language the app shows.
+func ProxyUsername() string { return In(i18n.Locale()).ProxyUsername() }
+
+// ProxyUsername says "Proxy user"
+// in the language of msgs.
+func (msgs Messages) ProxyUsername() string {
+	return Catalog.Format(msgs.locale, "proxyUsername", nil)
+}
+
+// ProxyPassword says "Proxy password"
+// in the language the app shows.
+func ProxyPassword() string { return In(i18n.Locale()).ProxyPassword() }
+
+// ProxyPassword says "Proxy password"
+// in the language of msgs.
+func (msgs Messages) ProxyPassword() string {
+	return Catalog.Format(msgs.locale, "proxyPassword", nil)
+}
+
+// ProxyPasswordStored says "A password is stored. Leave it empty to keep it."
+// in the language the app shows.
+func ProxyPasswordStored() string { return In(i18n.Locale()).ProxyPasswordStored() }
+
+// ProxyPasswordStored says "A password is stored. Leave it empty to keep it."
+// in the language of msgs.
+func (msgs Messages) ProxyPasswordStored() string {
+	return Catalog.Format(msgs.locale, "proxyPasswordStored", nil)
+}
+
+// ProxyBypass says "Connect directly to"
+// in the language the app shows.
+func ProxyBypass() string { return In(i18n.Locale()).ProxyBypass() }
+
+// ProxyBypass says "Connect directly to"
+// in the language of msgs.
+func (msgs Messages) ProxyBypass() string {
+	return Catalog.Format(msgs.locale, "proxyBypass", nil)
+}
+
+// ProxyBypassHint says "Comma-separated hosts, as NO_PROXY: localhost, .internal.example"
+// in the language the app shows.
+func ProxyBypassHint() string { return In(i18n.Locale()).ProxyBypassHint() }
+
+// ProxyBypassHint says "Comma-separated hosts, as NO_PROXY: localhost, .internal.example"
+// in the language of msgs.
+func (msgs Messages) ProxyBypassHint() string {
+	return Catalog.Format(msgs.locale, "proxyBypassHint", nil)
+}
+
+// CertificateAuthority says "Certificate authority"
+// in the language the app shows.
+func CertificateAuthority() string { return In(i18n.Locale()).CertificateAuthority() }
+
+// CertificateAuthority says "Certificate authority"
+// in the language of msgs.
+func (msgs Messages) CertificateAuthority() string {
+	return Catalog.Format(msgs.locale, "certificateAuthority", nil)
+}
+
+// CertificateAuthorityHint says "Trust an internal or self-signed authority from a PEM file. Certificate checks stay on."
+// in the language the app shows.
+func CertificateAuthorityHint() string { return In(i18n.Locale()).CertificateAuthorityHint() }
+
+// CertificateAuthorityHint says "Trust an internal or self-signed authority from a PEM file. Certificate checks stay on."
+// in the language of msgs.
+func (msgs Messages) CertificateAuthorityHint() string {
+	return Catalog.Format(msgs.locale, "certificateAuthorityHint", nil)
+}
+
+// ImportCA says "Import a certificate…"
+// in the language the app shows.
+func ImportCA() string { return In(i18n.Locale()).ImportCA() }
+
+// ImportCA says "Import a certificate…"
+// in the language of msgs.
+func (msgs Messages) ImportCA() string {
+	return Catalog.Format(msgs.locale, "importCA", nil)
+}
+
+// RemoveCA says "Remove the certificate"
+// in the language the app shows.
+func RemoveCA() string { return In(i18n.Locale()).RemoveCA() }
+
+// RemoveCA says "Remove the certificate"
+// in the language of msgs.
+func (msgs Messages) RemoveCA() string {
+	return Catalog.Format(msgs.locale, "removeCA", nil)
+}
+
+// CaImported says "Imported {name}"
+// in the language the app shows.
+//
+// The note after a certificate authority file was read.
+func CaImported(name string) string { return In(i18n.Locale()).CaImported(name) }
+
+// CaImported says "Imported {name}"
+// in the language of msgs.
+//
+// The note after a certificate authority file was read.
+func (msgs Messages) CaImported(name string) string {
+	return Catalog.Format(msgs.locale, "caImported", map[string]any{"name": name})
+}
+
+// CaInvalid says "That file holds no certificate Shu can read."
+// in the language the app shows.
+func CaInvalid() string { return In(i18n.Locale()).CaInvalid() }
+
+// CaInvalid says "That file holds no certificate Shu can read."
+// in the language of msgs.
+func (msgs Messages) CaInvalid() string {
+	return Catalog.Format(msgs.locale, "caInvalid", nil)
+}
+
+// NetworkSaved says "Network settings saved"
+// in the language the app shows.
+func NetworkSaved() string { return In(i18n.Locale()).NetworkSaved() }
+
+// NetworkSaved says "Network settings saved"
+// in the language of msgs.
+func (msgs Messages) NetworkSaved() string {
+	return Catalog.Format(msgs.locale, "networkSaved", nil)
+}
+
+// NetworkSaveFailed says "Could not save the network settings: {error}"
+// in the language the app shows.
+//
+// The error after saving the network settings failed.
+func NetworkSaveFailed(error string) string { return In(i18n.Locale()).NetworkSaveFailed(error) }
+
+// NetworkSaveFailed says "Could not save the network settings: {error}"
+// in the language of msgs.
+//
+// The error after saving the network settings failed.
+func (msgs Messages) NetworkSaveFailed(error string) string {
+	return Catalog.Format(msgs.locale, "networkSaveFailed", map[string]any{"error": error})
+}
+
+// NetworkTest says "Test the connection"
+// in the language the app shows.
+func NetworkTest() string { return In(i18n.Locale()).NetworkTest() }
+
+// NetworkTest says "Test the connection"
+// in the language of msgs.
+func (msgs Messages) NetworkTest() string {
+	return Catalog.Format(msgs.locale, "networkTest", nil)
+}
+
+// NetworkTestOk says "The connection works through these settings."
+// in the language the app shows.
+func NetworkTestOk() string { return In(i18n.Locale()).NetworkTestOk() }
+
+// NetworkTestOk says "The connection works through these settings."
+// in the language of msgs.
+func (msgs Messages) NetworkTestOk() string {
+	return Catalog.Format(msgs.locale, "networkTestOk", nil)
+}
+
+// NetworkTestFailed says "The connection failed: {error}"
+// in the language the app shows.
+//
+// The error after a network test failed.
+func NetworkTestFailed(error string) string { return In(i18n.Locale()).NetworkTestFailed(error) }
+
+// NetworkTestFailed says "The connection failed: {error}"
+// in the language of msgs.
+//
+// The error after a network test failed.
+func (msgs Messages) NetworkTestFailed(error string) string {
+	return Catalog.Format(msgs.locale, "networkTestFailed", map[string]any{"error": error})
+}
+
+// NetworkNoAccount says "Add an account to test the connection."
+// in the language the app shows.
+func NetworkNoAccount() string { return In(i18n.Locale()).NetworkNoAccount() }
+
+// NetworkNoAccount says "Add an account to test the connection."
+// in the language of msgs.
+func (msgs Messages) NetworkNoAccount() string {
+	return Catalog.Format(msgs.locale, "networkNoAccount", nil)
+}

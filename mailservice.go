@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	"shu/mail"
@@ -26,6 +27,11 @@ type mailService interface {
 	SignInAgain(ctx context.Context, accountID string, prompt mail.OAuthPrompt) error
 	SignOut(ctx context.Context, accountID string) error
 	NeedsSignIn(ctx context.Context, accountID string) (bool, error)
+
+	NetworkSettings(ctx context.Context) (mail.NetworkSettings, bool, error)
+	SaveNetworkSettings(ctx context.Context, set mail.NetworkSettings, password string, setPassword bool) error
+	TestNetwork(ctx context.Context, accountID string) error
+	HTTPClient(ctx context.Context) (*http.Client, error)
 
 	CachedFolders(ctx context.Context, accountID string) ([]mail.Folder, error)
 	// Folder actions reach the server first and change the cache only

@@ -12,6 +12,7 @@ import (
 // The tabs of the settings view.
 const (
 	settingsTabGeneral = iota
+	settingsTabNetwork
 	settingsTabAI
 )
 
@@ -39,6 +40,9 @@ func (a *app) openSettings(tab int) {
 	a.showSettings = true
 	a.settingsTab = tab
 	a.loadAISettings()
+	if tab == settingsTabNetwork {
+		a.loadNetworkSettings()
+	}
 }
 
 // aiProviderName is a provider's name in the settings.
@@ -252,17 +256,28 @@ func (a *app) settingsView(c *ui.Context) {
 			ui.Button(c, locales.Done()).OnClick(func() { a.showSettings = false })
 		})
 		ui.Row(c).Shrink(0).Padding(10, 32, 0, 32).Children(func() {
-			labels := []string{locales.General()}
+			labels := []string{locales.General(), locales.NetworkTab()}
 			if a.ai != nil {
 				labels = append(labels, locales.Ai())
 			}
 			ui.Tabs(c, &a.settingsTab, labels...).Label(locales.Settings()).
-				OnChange(func() { a.loadAISettings() })
+				OnChange(func() {
+					if a.settingsTab == settingsTabAI {
+						a.loadAISettings()
+					}
+					if a.settingsTab == settingsTabNetwork {
+						a.loadNetworkSettings()
+					}
+				})
 		})
 		ui.Scroll(c).Grow(1).Children(func() {
 			ui.Column(c).Padding(20, 32, 28, 32).Gap(14).MaxWidth(680).Children(func() {
 				if a.settingsTab == settingsTabAI && a.ai != nil {
 					a.aiSettingsView(c, t)
+					return
+				}
+				if a.settingsTab == settingsTabNetwork {
+					a.networkSettingsView(c, t)
 					return
 				}
 				ui.Text(c, locales.Language()).FontSize(12).Bold().TextColor(t.TextMuted)

@@ -443,6 +443,30 @@ MIME: prefer `text/plain`; when only HTML exists, extract text with
 `x/net/html` (skip script/style/head, break on block elements, collapse blank
 lines). Keep the original HTML for the webview.
 
+### Proxies and certificate authorities (added since)
+
+- `mail/network.go` reads the network settings from the store before each
+  connection, so a change applies to the next dial without a restart. `Mode`
+  follows the environment's proxy variables, connects directly, or uses an
+  explicit `http`, `https`, `socks5` or `socks5h` proxy with a bypass list whose
+  rules are `NO_PROXY`'s. The proxy password is in the keychain
+  (`ProxyPasswordKey`); credentials typed into the proxy address are moved there
+  and the stored address is kept without them.
+- Both IMAP (implicit TLS and STARTTLS) and SMTP (go-mail's
+  `WithDialContextFunc`) dial through `Service.dialNetwork`, so account tests,
+  syncs, sending and attachment fetches take the same path. An HTTP proxy is
+  tunnelled with CONNECT and `Proxy-Authorization`; a SOCKS5 proxy uses
+  `golang.org/x/net/proxy`.
+- A PEM certificate authority imported in the settings is appended to the
+  system roots for every TLS config (`tlsConfigFor`), including go-mail's
+  STARTTLS. Certificate checks stay on. `Service.HTTPClient` gives the AI layer a
+  client with the same proxy, roots and bypass list, and the window rebuilds it
+  after a save.
+- The Network tab of the settings edits the mode, address, user, password,
+  bypass list and authority, shows whether a password is stored, tests the same
+  path real mail takes (`Service.TestNetwork`), and saves to the store and the
+  keychain. No setting or password is written to logs.
+
 ## UI changes (package main)
 
 ### State and async model

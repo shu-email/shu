@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"net/mail"
 	"net/textproto"
 	"strconv"
@@ -562,7 +564,7 @@ func (s *Service) dialSMTP(ctx context.Context, a Account, password string) (*sm
 // dialSMTPAs connects and signs in with secret: the account's password,
 // or its access token.
 func (s *Service) dialSMTPAs(ctx context.Context, a Account, secret string) (*smtp.Client, error) {
-	client, err := s.smtpClient(a, secret)
+	client, err := s.smtpClient(ctx, a, secret)
 	if err != nil {
 		return nil, err
 	}
@@ -579,19 +581,38 @@ func smtpRefused(err error) bool {
 // smtpClient configures go-mail for implicit TLS or STARTTLS. An account
 // that signs in with OAuth gives its access token for the password, by
 // XOAUTH2.
-func (s *Service) smtpClient(a Account, password string) (*gomail.Client, error) {
+func (s *Service) smtpClient(ctx context.Context, a Account, password string) (*gomail.Client, error) {
 	auth := gomail.SMTPAuthAutoDiscover
 	if a.OAuth != "" {
 		auth = gomail.SMTPAuthXOAUTH2
 	}
+	tlsConfig := s.tlsConfigFor(ctx, a.SMTP.Host)
 	opts := []gomail.Option{
 		gomail.WithPort(a.SMTP.Port),
 		gomail.WithUsername(a.Username),
 		gomail.WithPassword(password),
 		gomail.WithSMTPAuth(auth),
 		gomail.WithTLSPolicy(gomail.TLSMandatory),
-		gomail.WithTLSConfig(s.tlsConfigFor(a.SMTP.Host)),
+		gomail.WithTLSConfig(tlsConfig),
 		gomail.WithTimeout(30 * time.Second),
+		// The connection goes through the network settings' proxy, and
+		// an implicit TLS connection is wrapped here, since go-mail uses
+		// this dialer as it is.
+		gomail.WithDialContextFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
+			conn, err := s.dialNetwork(ctx, a.SMTP.Host, a.SMTP.Port)
+			if err != nil {
+				return nil, err
+			}
+			if a.SMTP.TLS != TLSImplicit {
+				return conn, nil
+			}
+			tlsConn := tls.Client(conn, tlsConfig.Clone())
+			if err := tlsConn.HandshakeContext(ctx); err != nil {
+				conn.Close()
+				return nil, err
+			}
+			return tlsConn, nil
+		}),
 	}
 	if a.SMTP.TLS == TLSImplicit {
 		opts = append(opts, gomail.WithSSL())

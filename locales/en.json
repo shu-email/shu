@@ -3313,5 +3313,58 @@
   "folderSystem": "The inbox and the Sent, Drafts, Archive, Junk and Trash folders cannot be renamed or deleted.",
   "folderGone": "That folder no longer exists.",
   "dismissFolderNote": "Dismiss this note",
-  "hiddenFolders": "Hidden folders"
+  "hiddenFolders": "Hidden folders",
+  "networkTab": "Network",
+  "networkTitle": "Proxy and certificates",
+  "networkIntro": "How Shu reaches your mail servers and model providers. Changes apply to the next connection; no restart is needed.",
+  "proxyMode": "Proxy",
+  "proxySystem": "Follow the system",
+  "proxyDirect": "Connect directly",
+  "proxyManual": "Use a proxy",
+  "proxyAddress": "Proxy address",
+  "proxyAddressHint": "http://host:port or socks5://host:port",
+  "proxyUsername": "Proxy user",
+  "proxyPassword": "Proxy password",
+  "proxyPasswordStored": "A password is stored. Leave it empty to keep it.",
+  "proxyBypass": "Connect directly to",
+  "proxyBypassHint": "Comma-separated hosts, as NO_PROXY: localhost, .internal.example",
+  "certificateAuthority": "Certificate authority",
+  "certificateAuthorityHint": "Trust an internal or self-signed authority from a PEM file. Certificate checks stay on.",
+  "importCA": "Import a certificate…",
+  "removeCA": "Remove the certificate",
+  "caImported": "Imported {name}",
+  "@caImported": {
+    "description": "The note after a certificate authority file was read.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "corp-ca.pem"
+      }
+    }
+  },
+  "caInvalid": "That file holds no certificate Shu can read.",
+  "networkSaved": "Network settings saved",
+  "networkSaveFailed": "Could not save the network settings: {error}",
+  "@networkSaveFailed": {
+    "description": "The error after saving the network settings failed.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "the keychain refused the password"
+      }
+    }
+  },
+  "networkTest": "Test the connection",
+  "networkTestOk": "The connection works through these settings.",
+  "networkTestFailed": "The connection failed: {error}",
+  "@networkTestFailed": {
+    "description": "The error after a network test failed.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "proxy refused the tunnel"
+      }
+    }
+  },
+  "networkNoAccount": "Add an account to test the connection."
 }

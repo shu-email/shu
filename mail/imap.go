@@ -59,20 +59,24 @@ func (e *loginError) Unwrap() error { return e.err }
 // connect reaches the server and starts TLS. Cancelling ctx gives up at
 // once, which the library's own dialing would not: a watcher that is
 // stopped must not wait out a timeout for a server that does not answer.
-func connect(ctx context.Context, a Account, options *imapclient.Options) (*imapclient.Client, error) {
-	dialer := &net.Dialer{Timeout: dialTimeout}
+func connect(ctx context.Context, a Account, options *imapclient.Options, dial func(context.Context, string, int) (net.Conn, error)) (*imapclient.Client, error) {
 	if a.IMAP.TLS == TLSImplicit {
 		cfg := options.TLSConfig.Clone()
 		if cfg.NextProtos == nil {
 			cfg.NextProtos = []string{"imap"}
 		}
-		conn, err := (&tls.Dialer{NetDialer: dialer, Config: cfg}).DialContext(ctx, "tcp", a.IMAP.Addr())
+		conn, err := dial(ctx, a.IMAP.Host, a.IMAP.Port)
 		if err != nil {
 			return nil, err
 		}
-		return imapclient.New(conn, options), nil
+		tlsConn := tls.Client(conn, cfg)
+		if err := tlsConn.HandshakeContext(ctx); err != nil {
+			conn.Close()
+			return nil, err
+		}
+		return imapclient.New(tlsConn, options), nil
 	}
-	conn, err := dialer.DialContext(ctx, "tcp", a.IMAP.Addr())
+	conn, err := dial(ctx, a.IMAP.Host, a.IMAP.Port)
 	if err != nil {
 		return nil, err
 	}
@@ -119,11 +123,11 @@ func (s *Service) dialIMAPAs(ctx context.Context, a Account, secret string, hand
 		return nil, err
 	}
 	options := &imapclient.Options{
-		TLSConfig:             s.tlsConfigFor(a.IMAP.Host),
+		TLSConfig:             s.tlsConfigFor(ctx, a.IMAP.Host),
 		WordDecoder:           &mime.WordDecoder{CharsetReader: charset.Reader},
 		UnilateralDataHandler: handler,
 	}
-	c, err := connect(ctx, a, options)
+	c, err := connect(ctx, a, options, s.dialNetwork)
 	if err != nil {
 		return nil, fmt.Errorf("imap: connect %s: %w", a.IMAP.Addr(), err)
 	}
@@ -1050,16 +1054,4 @@ func appendTo(c *imapSession, folder string, raw []byte, now time.Time) error {
 	}
 	_, err := cmd.Wait()
 	return err
-}
-
-// tlsConfig returns the TLS configuration to dial servers with.
-func (s *Service) tlsConfigFor(host string) *tls.Config {
-	if s.tlsConfig != nil {
-		cfg := s.tlsConfig.Clone()
-		if cfg.ServerName == "" {
-			cfg.ServerName = host
-		}
-		return cfg
-	}
-	return &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}
 }

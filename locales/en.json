@@ -1019,6 +1019,30 @@
   "watchRetryAuth": "The mail server refused the sign-in. Trying again later.",
   "watchRetryOther": "Couldn't check for mail. Trying again soon.",
   "watchOffline": "Offline. Mail is checked once you're back online.",
+  "queuePending": "{count, plural, one {Waiting to make # change} other {Waiting to make # changes}}",
+  "@queuePending": {
+    "description": "The sidebar footer: actions the user asked for that the mail server has not made yet, which happen once it can be reached.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "queueRetry": "Try these changes again",
+  "@queueRetry": {
+    "description": "The tooltip of the sidebar footer's line about the changes the mail server refused: pressing it asks the engine to try them once more."
+  },
+  "queueFailed": "{count, plural, one {# change couldn't be made} other {# changes couldn't be made}}",
+  "@queueFailed": {
+    "description": "The sidebar footer: queued actions the mail server refused, which stay queued until the user does something about them.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "1"
+      }
+    }
+  },
   "checkMail": "Checking for mail",
   "checkEvery": "Check for new mail every",
   "checkMinutes": "{count} min",

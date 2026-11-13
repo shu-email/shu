@@ -110,6 +110,9 @@ type WatchEvent struct {
 	// that arrived since the last announcement, each reported once ever.
 	// All that a check found come together, however many they are.
 	New []Summary
+	// Queue is what the account's queued actions are doing, when the
+	// report is one's (see queue.go); nil on a check's.
+	Queue *QueueStatus
 }
 
 // watcher is one account's watcher. Its goroutine owns everything but
@@ -203,10 +206,13 @@ func (s *Service) Watch(accountID string, report func(WatchEvent)) {
 		ctx: ctx, cancel: cancel, done: make(chan struct{}),
 		nudge: make(chan struct{}, 1), reconsider: make(chan struct{}, 1),
 	}
+	q := s.startQueue(accountID, report)
 	s.watchMu.Lock()
 	s.watchers[accountID] = w
+	s.queues[accountID] = q
 	s.watchMu.Unlock()
 	go w.run()
+	go q.run()
 }
 
 // Unwatch stops watching an account. It returns when the watcher's
@@ -217,15 +223,22 @@ func (s *Service) Unwatch(accountID string) {
 	s.stopWatcher(accountID)
 }
 
-// stopWatcher ends one watcher and waits for it. watchLife is held.
+// stopWatcher ends one watcher and its queue worker, and waits for them.
+// watchLife is held.
 func (s *Service) stopWatcher(accountID string) {
 	s.watchMu.Lock()
 	w := s.watchers[accountID]
 	delete(s.watchers, accountID)
+	q := s.queues[accountID]
+	delete(s.queues, accountID)
 	s.watchMu.Unlock()
 	if w != nil {
 		w.cancel()
 		<-w.done
+	}
+	if q != nil {
+		q.cancel()
+		<-q.done
 	}
 }
 
@@ -239,23 +252,35 @@ func (s *Service) StopWatching() {
 	s.watchMu.Lock()
 	all := s.watchers
 	s.watchers = map[string]*watcher{}
+	queues := s.queues
+	s.queues = map[string]*queueWorker{}
 	s.watchMu.Unlock()
 	for _, w := range all {
 		w.cancel()
 	}
+	for _, q := range queues {
+		q.cancel()
+	}
 	for _, w := range all {
 		<-w.done
+	}
+	for _, q := range queues {
+		<-q.done
 	}
 	s.stopRules()
 }
 
 // Nudge has every watcher check now instead of waiting: the app came to
-// the front, the computer woke, or the user asked for a sync.
+// the front, the computer woke, or the user asked for a sync. The queues
+// look at their actions too.
 func (s *Service) Nudge() {
 	s.watchMu.Lock()
 	defer s.watchMu.Unlock()
 	for _, w := range s.watchers {
 		signal(w.nudge)
+	}
+	for _, q := range s.queues {
+		signal(q.wake)
 	}
 }
 
@@ -274,6 +299,12 @@ func (s *Service) SetOnline(online bool) {
 			signal(w.nudge)
 		} else {
 			signal(w.reconsider)
+		}
+	}
+	if online {
+		// What waited for the network is made now.
+		for _, q := range s.queues {
+			signal(q.wake)
 		}
 	}
 }

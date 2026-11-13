@@ -80,7 +80,9 @@ func (s *Service) SetReminder(ctx context.Context, accountID string, thread Thre
 		for i, m := range members {
 			refs[i] = MessageRef{Folder: m.Folder, UID: m.UID}
 		}
-		if moved, err = s.MoveMessages(ctx, accountID, refs, archive); err != nil {
+		// The move is made now or not at all: a reminder waits until its
+		// mail is in the archive, and setting one again is a click.
+		if moved, err = s.moveMessages(ctx, accountID, refs, archive, false); err != nil {
 			// MoveMessages may have moved some before it failed; their
 			// inbox rows come back rather than stay archived with no
 			// reminder to bring them back.
@@ -193,7 +195,9 @@ func (s *Service) deliverReminder(ctx context.Context, r Reminder) (bool, error)
 			for i, m := range msgs {
 				refs[i] = MessageRef{Folder: m.Folder, UID: m.UID}
 			}
-			if _, err := s.MoveMessages(ctx, r.Account, refs, inbox); err != nil {
+			// A move left in the queue would come back to an inbox the
+			// reminder no longer names: the reminder stays for a later run.
+			if _, err := s.moveMessages(ctx, r.Account, refs, inbox, false); err != nil {
 				return false, err
 			}
 			// The mail is back on the server whatever this says: the

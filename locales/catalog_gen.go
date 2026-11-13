@@ -3698,6 +3698,54 @@ func (msgs Messages) WatchOffline() string {
 	return Catalog.Format(msgs.locale, "watchOffline", nil)
 }
 
+// QueuePending says "{count, plural, one {Waiting to make # change} other {Waiting to make # changes}}"
+// in the language the app shows.
+//
+// The sidebar footer: actions the user asked for that the mail server has
+// not made yet, which happen once it can be reached.
+func QueuePending(count int) string { return In(i18n.Locale()).QueuePending(count) }
+
+// QueuePending says "{count, plural, one {Waiting to make # change} other {Waiting to make # changes}}"
+// in the language of msgs.
+//
+// The sidebar footer: actions the user asked for that the mail server has
+// not made yet, which happen once it can be reached.
+func (msgs Messages) QueuePending(count int) string {
+	return Catalog.Format(msgs.locale, "queuePending", map[string]any{"count": count})
+}
+
+// QueueRetry says "Try these changes again"
+// in the language the app shows.
+//
+// The tooltip of the sidebar footer's line about the changes the mail
+// server refused: pressing it asks the engine to try them once more.
+func QueueRetry() string { return In(i18n.Locale()).QueueRetry() }
+
+// QueueRetry says "Try these changes again"
+// in the language of msgs.
+//
+// The tooltip of the sidebar footer's line about the changes the mail
+// server refused: pressing it asks the engine to try them once more.
+func (msgs Messages) QueueRetry() string {
+	return Catalog.Format(msgs.locale, "queueRetry", nil)
+}
+
+// QueueFailed says "{count, plural, one {# change couldn't be made} other {# changes couldn't be made}}"
+// in the language the app shows.
+//
+// The sidebar footer: queued actions the mail server refused, which stay
+// queued until the user does something about them.
+func QueueFailed(count int) string { return In(i18n.Locale()).QueueFailed(count) }
+
+// QueueFailed says "{count, plural, one {# change couldn't be made} other {# changes couldn't be made}}"
+// in the language of msgs.
+//
+// The sidebar footer: queued actions the mail server refused, which stay
+// queued until the user does something about them.
+func (msgs Messages) QueueFailed(count int) string {
+	return Catalog.Format(msgs.locale, "queueFailed", map[string]any{"count": count})
+}
+
 // CheckMail says "Checking for mail"
 // in the language the app shows.
 func CheckMail() string { return In(i18n.Locale()).CheckMail() }

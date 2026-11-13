@@ -206,6 +206,7 @@ func (a *app) watchAccounts() {
 		}
 		delete(a.watched, id)
 		delete(a.watch, id)
+		delete(a.queue, id)
 		a.watchOp(func() { a.svc.Unwatch(id) })
 	}
 }
@@ -282,10 +283,19 @@ func (a *app) watchEvent(ev mail.WatchEvent) {
 		// The account was removed while the report was on its way.
 		return
 	}
-	a.watch[ev.AccountID] = ev.Status
-	if ev.Status.State == mail.WatchSignIn {
-		// The watcher waits for the sign-in, which the window offers.
-		a.markSignIn(ev.AccountID)
+	// A report of the queue is no watcher's, and says nothing of its state.
+	if ev.Queue != nil {
+		if ev.Queue.Pending == 0 && ev.Queue.Failed == 0 {
+			delete(a.queue, ev.AccountID)
+		} else {
+			a.queue[ev.AccountID] = *ev.Queue
+		}
+	} else {
+		a.watch[ev.AccountID] = ev.Status
+		if ev.Status.State == mail.WatchSignIn {
+			// The watcher waits for the sign-in, which the window offers.
+			a.markSignIn(ev.AccountID)
+		}
 	}
 	if ev.Folders == nil {
 		return
@@ -596,6 +606,50 @@ func (a *app) watchLine(c *ui.Context, t *ui.Theme) {
 			})
 		}
 		ui.Text(c, text).FontSize(11).TextColor(t.TextMuted).Grow(1).MinWidth(0)
+	})
+}
+
+// queueLine says what the account on screen asked of its server that has
+// not happened yet: the changes that wait for it, or those it refused.
+func (a *app) queueLine(c *ui.Context, t *ui.Theme) {
+	st, ok := a.queue[a.active]
+	if !ok {
+		return
+	}
+	icon, text, color := clockIcon, locales.QueuePending(st.Pending), t.TextMuted
+	if st.Failed > 0 {
+		icon, text, color = alertIcon, locales.QueueFailed(st.Failed), t.Warning
+	}
+	line := func() {
+		ui.Row(c).Gap(6).Children(func() {
+			ui.Row(c).Width(12).Shrink(0).Padding(2, 0, 0, 0).Children(func() {
+				ui.Icon(c, icon).FontSize(12).TextColor(color)
+			})
+			text := ui.Text(c, text).FontSize(11).TextColor(color).Grow(1).MinWidth(0)
+			if st.Failed > 0 && st.Reason != "" {
+				// The server's own words: a refusal or a folder that is gone.
+				text.Tooltip(st.Reason)
+			}
+		})
+	}
+	if st.Failed == 0 {
+		line()
+		return
+	}
+	// A refusal waits for the user: a press tries those changes again.
+	ui.ButtonBase(c).Label(text).Tooltip(locales.QueueRetry()).OnClick(a.retryQueue).Children(line)
+}
+
+// retryQueue asks the engine to try the account's refused changes once
+// more, as its footer offers.
+func (a *app) retryQueue() {
+	id := a.active
+	a.run(func() {
+		ctx, cancel := a.ctx()
+		defer cancel()
+		if _, err := a.svc.RetryFailedActions(ctx, id); err != nil {
+			a.post(func() { a.err = failureText(err) })
+		}
 	})
 }
 

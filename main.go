@@ -43,6 +43,17 @@ type undoMove struct {
 	prevReminder *mail.Reminder
 }
 
+// undoOfMove is the undo a move of one message offers. A move that waits
+// in the queue is taken back by dropping its action, which MoveBackMessages
+// does from the result alone; one the server made comes back from its
+// destination UID.
+func undoOfMove(accountID, source, dest, label string, r mail.MoveResult) *undoMove {
+	if r.Pending != 0 {
+		return &undoMove{label: label, moved: map[string][]mail.MoveResult{accountID: {r}}}
+	}
+	return &undoMove{accountID: accountID, source: source, dest: dest, destUID: r.DestUID, label: label}
+}
+
 type app struct {
 	svc mailService
 	// ai is the AI layer, nil where there is none: the AI controls then
@@ -171,6 +182,7 @@ type app struct {
 	watches   bool
 	watched   map[string]mail.Account
 	watch     map[string]mail.WatchStatus
+	queue     map[string]mail.QueueStatus
 	watchMu   sync.Mutex
 	watchOps  []func()
 	watchTurn sync.Mutex
@@ -328,6 +340,7 @@ func newApp(svc mailService) *app {
 		watches:       true,
 		watched:       map[string]mail.Account{},
 		watch:         map[string]mail.WatchStatus{},
+		queue:         map[string]mail.QueueStatus{},
 		needSignIn:    map[string]bool{},
 		inboxes:       map[string]int{},
 		otherFolders:  map[string][]mail.Folder{},
@@ -1711,6 +1724,7 @@ func (a *app) sidebarFooter(c *ui.Context, t *ui.Theme) {
 			ui.Text(c, locales.SidebarSummary(unread, total)).FontSize(11).TextColor(t.TextMuted)
 		}
 		a.watchLine(c, t)
+		a.queueLine(c, t)
 	})
 }
 

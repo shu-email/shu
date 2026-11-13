@@ -505,6 +505,27 @@ var migrations = [][]string{
 			source TEXT NOT NULL,
 			found_at INTEGER NOT NULL)`,
 	},
+	// v21: the actions the user asked for that the server has not made
+	// yet (see mail/queue.go). One row per message and action: it is
+	// written before the server is touched, claimed with one state
+	// change, and gone once it is done.
+	{
+		`CREATE TABLE pending_operations (
+			id INTEGER PRIMARY KEY,
+			account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+			kind TEXT NOT NULL,
+			folder TEXT NOT NULL,
+			uid INTEGER NOT NULL,
+			dest TEXT NOT NULL DEFAULT '',
+			payload TEXT NOT NULL DEFAULT '',
+			state TEXT NOT NULL,
+			attempts INTEGER NOT NULL DEFAULT 0,
+			next_try INTEGER NOT NULL DEFAULT 0,
+			created_at INTEGER NOT NULL,
+			claimed_at INTEGER NOT NULL DEFAULT 0,
+			last_error TEXT NOT NULL DEFAULT '')`,
+		`CREATE INDEX pending_operations_account ON pending_operations (account_id, state, id)`,
+	},
 }
 
 // backfills compute, from the rows of the version before, statements a

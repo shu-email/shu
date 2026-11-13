@@ -898,11 +898,13 @@ func (a *app) movedOut(msgs []mail.Summary, moved map[string][]mail.MoveResult) 
 	a.updateBadge()
 }
 
-// canUndo reports whether the server said where any of the messages went.
+// canUndo reports whether any of the messages can be taken back: the
+// server said where it put them, or the move waits in the queue with an
+// action the undo drops.
 func canUndo(moved map[string][]mail.MoveResult) bool {
 	for _, list := range moved {
 		for _, r := range list {
-			if r.DestUID != 0 {
+			if r.DestUID != 0 || r.Pending != 0 {
 				return true
 			}
 		}

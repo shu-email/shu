@@ -254,6 +254,29 @@ type Store interface {
 	Discovery(ctx context.Context, domain string) (Discovery, bool, error)
 	SaveDiscovery(ctx context.Context, d Discovery) error
 
+	// The queue of actions the server has not made yet (see
+	// Service.MoveMessages and queue.go). EnqueueOperations writes them,
+	// each with the ID the store gave it; ClaimOperation takes the oldest
+	// one due, with one state change, and ClaimOperationsByKey the rest
+	// that one command can make with it. FinishOperations drops those the
+	// server made, RetryOperation puts one back for a later try, and
+	// FailOperation keeps one the server refused, with its reason.
+	// Operations reads an account's, ReclaimOperations gives back those a
+	// run that ended left claimed before a time, CancelOperations drops
+	// those the user took back before the server made them and returns
+	// the ones it did, and RetryFailedOperations puts those the server
+	// refused back in the queue.
+	EnqueueOperations(ctx context.Context, ops []PendingOperation) ([]int64, error)
+	ClaimOperation(ctx context.Context, accountID string, now time.Time) (PendingOperation, bool, error)
+	ClaimOperationsByKey(ctx context.Context, op PendingOperation, now time.Time) ([]PendingOperation, error)
+	FinishOperations(ctx context.Context, ids []int64) error
+	RetryOperation(ctx context.Context, id int64, nextTry time.Time, reason string) error
+	FailOperation(ctx context.Context, id int64, reason string) error
+	Operations(ctx context.Context, accountID string) ([]PendingOperation, error)
+	ReclaimOperations(ctx context.Context, accountID string, before time.Time) error
+	CancelOperations(ctx context.Context, ids []int64) ([]int64, error)
+	RetryFailedOperations(ctx context.Context, accountID string, nextTry time.Time) (int, error)
+
 	// MessageHeaders reads cached messages of a folder without their
 	// bodies, each with its labels and RawHeaders: those of uids, or every
 	// one when uids is nil, tombstones left out.

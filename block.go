@@ -104,8 +104,13 @@ func (a *app) submitUnsubscribe() {
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
-		rec, err := a.svc.Unsubscribe(ctx, f.account, f.folder, f.uid, f.method)
+		rec, err := a.svc.Unsubscribe(ctx, f.account, f.folder, f.uid, f.method, f.dest)
 		a.post(func() {
+			if err == nil && f.method == mail.UnsubscribePage {
+				// Opening the page is the action the user confirmed, not a
+				// result of the list read that drew the message.
+				a.services.OpenURL(f.dest)
+			}
 			if a.stale(g) {
 				return
 			}
@@ -117,9 +122,6 @@ func (a *app) submitUnsubscribe() {
 				a.lists = map[string]mail.UnsubscribeRecord{}
 			}
 			a.lists[unsubKey(rec.AccountID, rec.Email)] = rec
-			if f.method == mail.UnsubscribePage {
-				a.services.OpenURL(f.dest)
-			}
 		})
 	})
 }
@@ -382,7 +384,7 @@ func (a *app) privacySettingsView(c *ui.Context, t *ui.Theme) {
 		ui.Text(c, acc.Email).FontSize(11).Bold().TextColor(t.TextMuted)
 		for _, b := range list {
 			b := b
-			ui.Row(c).Gap(10).AlignItems(ui.Center).Padding(8, 10).Radius(8).
+			ui.Row(c.Key(acc.ID+"\x00"+blockLabel(b))).Gap(10).AlignItems(ui.Center).Padding(8, 10).Radius(8).
 				Border(1, t.Border).Children(func() {
 				ui.Icon(c, spamIcon).FontSize(14).TextColor(t.TextMuted)
 				ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {

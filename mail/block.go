@@ -124,9 +124,11 @@ func (s *Service) BlockedSenders(ctx context.Context, accountID string) ([]Block
 
 // fileBlocked files the mail of blocked senders away as it arrives and
 // returns the messages left for the rules: none of a blocked sender. The
-// move is written to the queue before the server is touched and is made
-// in the background, so nothing delays the mail; the watcher announces
-// none of it (see heldBack).
+// move is written to the queue before the server is touched, so it is made
+// offline as well; the watcher announces none of the mail that was filed
+// or is waiting (see heldBack). A move that failed leaves the message
+// where it arrived, to be sorted and announced as any other, rather than
+// held back in silence.
 func (s *Service) fileBlocked(ctx context.Context, accountID string, folder Folder, msgs []Message) []Message {
 	if len(msgs) == 0 {
 		return msgs
@@ -135,36 +137,41 @@ func (s *Service) fileBlocked(ctx context.Context, accountID string, folder Fold
 	if err != nil || len(blocks) == 0 {
 		return msgs
 	}
-	held := map[UID]bool{}
 	byDest := map[string][]MessageRef{}
 	for _, m := range msgs {
 		b, ok := Blocked(blocks, m.From)
 		if !ok || b.Folder == folder.Name {
 			continue
 		}
-		held[m.UID] = true
 		byDest[b.Folder] = append(byDest[b.Folder], MessageRef{Folder: folder.Name, UID: m.UID})
 	}
-	if len(held) == 0 {
+	if len(byDest) == 0 {
+		return msgs
+	}
+	// The move outlives the context of the check that found this mail: the
+	// mail is filed even as a sync that began it ends.
+	base := context.WithoutCancel(ctx)
+	filed := map[UID]bool{}
+	for dest, refs := range byDest {
+		ctx, cancel := context.WithTimeout(base, ruleApplyTimeout)
+		_, err := s.MoveMessages(ctx, accountID, refs, dest)
+		cancel()
+		if err != nil {
+			continue
+		}
+		for _, ref := range refs {
+			filed[ref.UID] = true
+		}
+	}
+	if len(filed) == 0 {
 		return msgs
 	}
 	note := accountID + "\x00" + folder.Name
 	if s.heldBack[note] == nil {
 		s.heldBack[note] = map[UID]bool{}
 	}
-	for uid := range held {
+	for uid := range filed {
 		s.heldBack[note][uid] = true
 	}
-	base := context.WithoutCancel(ctx)
-	for dest, refs := range byDest {
-		dest, refs := dest, refs
-		go func() {
-			// The move outlives the context of the check that found this
-			// mail: the mail is filed even as a sync that began it ends.
-			ctx, cancel := context.WithTimeout(base, ruleApplyTimeout)
-			defer cancel()
-			_, _ = s.MoveMessages(ctx, accountID, refs, dest)
-		}()
-	}
-	return slices.DeleteFunc(msgs, func(m Message) bool { return held[m.UID] })
+	return slices.DeleteFunc(msgs, func(m Message) bool { return filed[m.UID] })
 }

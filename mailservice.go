@@ -242,7 +242,7 @@ type mailService interface {
 	// this sender. Blocks are this device's: the sender's mail is filed as
 	// it arrives, and mail already here stays.
 	UnsubscribeOffer(ctx context.Context, accountID, folder string, uid mail.UID) (mail.UnsubscribeOffer, error)
-	Unsubscribe(ctx context.Context, accountID, folder string, uid mail.UID, method mail.UnsubscribeMethod) (mail.UnsubscribeRecord, error)
+	Unsubscribe(ctx context.Context, accountID, folder string, uid mail.UID, method mail.UnsubscribeMethod, dest string) (mail.UnsubscribeRecord, error)
 	Unsubscribed(ctx context.Context, accountID, email string) (*mail.UnsubscribeRecord, error)
 	Unsubscribes(ctx context.Context, accountID string) ([]mail.UnsubscribeRecord, error)
 	BlockSender(ctx context.Context, accountID, address string, domain bool, folder string) (mail.BlockedSender, error)

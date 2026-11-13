@@ -95,8 +95,12 @@ func (s *Service) sortArrivals(ctx context.Context, accountID string, folder Fol
 	}
 	msgs = s.skipMovedIn(ctx, accountID, folder, msgs)
 	// A block files its sender's mail before the rules see it: the rules
-	// sort the mail that stays.
-	msgs = s.fileBlocked(ctx, accountID, folder, msgs)
+	// sort the mail that stays. It holds back only what arrives in the
+	// inbox; mail in another folder is what the user or another mail client
+	// put there, and moving it again would undo their choice.
+	if folder.IsInbox() {
+		msgs = s.fileBlocked(ctx, accountID, folder, msgs)
+	}
 	rules, err := s.sortingRules(ctx)
 	if err != nil {
 		return false

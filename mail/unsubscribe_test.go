@@ -50,6 +50,26 @@ func TestParseUnsubscribeOffer(t *testing.T) {
 			dest:   "https://shop.example/unsubscribe",
 		},
 		{
+			// RFC 8058 asks a one-click endpoint for HTTPS, so that the
+			// list's token does not travel in cleartext.
+			name:     "an HTTP link is a page, not a one-click request",
+			list:     "<http://shop.example/unsub>",
+			post:     "List-Unsubscribe=One-Click",
+			links:    []string{"http://shop.example/unsub"},
+			oneClick: true,
+			method:   UnsubscribePage,
+			dest:     "http://shop.example/unsub",
+		},
+		{
+			name:     "the one-click link is the HTTPS one",
+			list:     "<http://shop.example/unsub>, <https://shop.example/unsub>",
+			post:     "List-Unsubscribe=One-Click",
+			links:    []string{"http://shop.example/unsub", "https://shop.example/unsub"},
+			oneClick: true,
+			method:   UnsubscribeOneClick,
+			dest:     "https://shop.example/unsub",
+		},
+		{
 			name:   "the address's parameters are not its name",
 			list:   "<mailto:leave@shop.example?subject=unsubscribe>",
 			emails: []string{"leave@shop.example"},
@@ -133,12 +153,13 @@ func TestUnsubscribeOneClick(t *testing.T) {
 	svc, store, _ := newTestService()
 	var mu sync.Mutex
 	var got []string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		got = append(got, r.Method+" "+r.URL.String()+" "+r.Header.Get("Content-Type")+"="+r.FormValue("List-Unsubscribe"))
 		mu.Unlock()
 	}))
 	defer server.Close()
+	svc.SetTLSConfig(insecureTLS())
 	offerMessage(t, store, "<"+server.URL+"/unsub?id=1>", "List-Unsubscribe=One-Click")
 
 	offer, err := svc.UnsubscribeOffer(ctx, "a1", "INBOX", 1)
@@ -148,7 +169,7 @@ func TestUnsubscribeOneClick(t *testing.T) {
 	if method, dest, ok := offer.Preferred(); !ok || method != UnsubscribeOneClick || dest != server.URL+"/unsub?id=1" {
 		t.Fatalf("preferred = %q %q %v", method, dest, ok)
 	}
-	rec, err := svc.Unsubscribe(ctx, "a1", "INBOX", 1, UnsubscribeOneClick)
+	rec, err := svc.Unsubscribe(ctx, "a1", "INBOX", 1, UnsubscribeOneClick, server.URL+"/unsub?id=1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,12 +193,13 @@ func TestUnsubscribeOneClick(t *testing.T) {
 func TestUnsubscribeOneClickFailure(t *testing.T) {
 	ctx := context.Background()
 	svc, store, _ := newTestService()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no", http.StatusInternalServerError)
 	}))
 	defer server.Close()
+	svc.SetTLSConfig(insecureTLS())
 	offerMessage(t, store, "<"+server.URL+"/unsub>", "List-Unsubscribe=One-Click")
-	if _, err := svc.Unsubscribe(ctx, "a1", "INBOX", 1, UnsubscribeOneClick); err == nil {
+	if _, err := svc.Unsubscribe(ctx, "a1", "INBOX", 1, UnsubscribeOneClick, server.URL+"/unsub"); err == nil {
 		t.Fatal("a refused request was taken for made")
 	}
 	if _, ok, err := store.UnsubscribeRecord(ctx, "a1", "news@shop.example"); err != nil || ok {
@@ -201,7 +223,7 @@ func TestUnsubscribePageSendsNothing(t *testing.T) {
 	if method, _, ok := offer.Preferred(); !ok || method != UnsubscribePage {
 		t.Fatalf("preferred = %q %v", method, ok)
 	}
-	rec, err := svc.Unsubscribe(ctx, "a1", "INBOX", 1, UnsubscribePage)
+	rec, err := svc.Unsubscribe(ctx, "a1", "INBOX", 1, UnsubscribePage, server.URL+"/unsubscribe")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,6 +235,49 @@ func TestUnsubscribePageSendsNothing(t *testing.T) {
 	}
 }
 
+// A one-click endpoint that redirects is refused: the request goes to the
+// host the confirmation named, and to no other.
+func TestUnsubscribeOneClickRefusesARedirect(t *testing.T) {
+	ctx := context.Background()
+	svc, store, _ := newTestService()
+	var target int
+	other := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { target++ }))
+	defer other.Close()
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, other.URL+"/unsub", http.StatusTemporaryRedirect)
+	}))
+	defer server.Close()
+	svc.SetTLSConfig(insecureTLS())
+	offerMessage(t, store, "<"+server.URL+"/unsub>", "List-Unsubscribe=One-Click")
+	if _, err := svc.Unsubscribe(ctx, "a1", "INBOX", 1, UnsubscribeOneClick, server.URL+"/unsub"); err == nil {
+		t.Fatal("a redirect was followed")
+	}
+	if target != 0 {
+		t.Errorf("the redirect's host was asked %d times", target)
+	}
+	if _, ok, err := store.UnsubscribeRecord(ctx, "a1", "news@shop.example"); err != nil || ok {
+		t.Errorf("a refused request was kept: %v, %v", ok, err)
+	}
+}
+
+// The request goes to the destination the user confirmed, never to the
+// one a message the folder gave another UID to meanwhile offers.
+func TestUnsubscribeSendsOnlyToTheConfirmedDestination(t *testing.T) {
+	ctx := context.Background()
+	svc, store, _ := newTestService()
+	var calls int
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls++ }))
+	defer server.Close()
+	svc.SetTLSConfig(insecureTLS())
+	offerMessage(t, store, "<"+server.URL+"/unsub>", "List-Unsubscribe=One-Click")
+	if _, err := svc.Unsubscribe(ctx, "a1", "INBOX", 1, UnsubscribeOneClick, "https://other.example/unsub"); !errors.Is(err, ErrNoUnsubscribe) {
+		t.Errorf("a destination the message does not offer = %v", err)
+	}
+	if calls != 0 {
+		t.Errorf("the list was asked %d times", calls)
+	}
+}
+
 // A message that offers nothing offers nothing, whichever read is made.
 func TestUnsubscribeWithoutHeaders(t *testing.T) {
 	ctx := context.Background()
@@ -221,7 +286,7 @@ func TestUnsubscribeWithoutHeaders(t *testing.T) {
 	if _, err := svc.UnsubscribeOffer(ctx, "a1", "INBOX", 1); !errors.Is(err, ErrNoUnsubscribe) {
 		t.Errorf("offer = %v", err)
 	}
-	if _, err := svc.Unsubscribe(ctx, "a1", "INBOX", 1, UnsubscribeEmail); !errors.Is(err, ErrNoUnsubscribe) {
+	if _, err := svc.Unsubscribe(ctx, "a1", "INBOX", 1, UnsubscribeEmail, "leave@shop.example"); !errors.Is(err, ErrNoUnsubscribe) {
 		t.Errorf("unsubscribe = %v", err)
 	}
 	if _, err := svc.UnsubscribeOffer(ctx, "a1", "INBOX", 9); !errors.Is(err, ErrNotFound) {
@@ -235,7 +300,7 @@ func TestUnsubscribeByEmail(t *testing.T) {
 	ctx := context.Background()
 	env := newAttachEnv(t, nil)
 	env.imap.append(t, "INBOX", ruleMail("Weekly", "Shop News <news@shop.example>", "n1@shop.example",
-		"List-Unsubscribe: <mailto:leave@shop.example?subject=unsubscribe>\r\n", 1))
+		"List-Unsubscribe: <mailto:leave@shop.example?subject=unsubscribe%20weekly>\r\n", 1))
 	if err := env.svc.SyncFolder(ctx, env.a.ID, "INBOX", 50); err != nil {
 		t.Fatal(err)
 	}
@@ -251,7 +316,7 @@ func TestUnsubscribeByEmail(t *testing.T) {
 	if method, dest, ok := offer.Preferred(); !ok || method != UnsubscribeEmail || dest != "leave@shop.example" {
 		t.Fatalf("preferred = %q %q %v", method, dest, ok)
 	}
-	rec, err := env.svc.Unsubscribe(ctx, env.a.ID, "INBOX", uid, UnsubscribeEmail)
+	rec, err := env.svc.Unsubscribe(ctx, env.a.ID, "INBOX", uid, UnsubscribeEmail, "leave@shop.example")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +327,8 @@ func TestUnsubscribeByEmail(t *testing.T) {
 		t.Errorf("the server was told to deliver to %v", got)
 	}
 	received := env.smtp.received()
-	if len(received) != 1 || !strings.Contains(received[0], "Subject: unsubscribe") {
+	// The list asked for its own subject; the email says what it asked.
+	if len(received) != 1 || !strings.Contains(received[0], "Subject: unsubscribe weekly") {
 		t.Errorf("the server received %v", received)
 	}
 	if from := env.smtp.senders(); len(from) != 1 || from[0] != env.a.Email {

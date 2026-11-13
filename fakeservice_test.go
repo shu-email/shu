@@ -2944,7 +2944,7 @@ func (f *fakeService) UnsubscribeOffer(ctx context.Context, accountID, folder st
 
 // Unsubscribe leaves a list by the method given, as the engine does, and
 // keeps the choice.
-func (f *fakeService) Unsubscribe(ctx context.Context, accountID, folder string, uid mail.UID, method mail.UnsubscribeMethod) (mail.UnsubscribeRecord, error) {
+func (f *fakeService) Unsubscribe(ctx context.Context, accountID, folder string, uid mail.UID, method mail.UnsubscribeMethod, dest string) (mail.UnsubscribeRecord, error) {
 	f.act(accountID, "Unsubscribe %s/%d %s", folder, uid, method)
 	if f.unsubErr != nil {
 		return mail.UnsubscribeRecord{}, f.unsubErr
@@ -2958,8 +2958,7 @@ func (f *fakeService) Unsubscribe(ctx context.Context, accountID, folder string,
 		msg = mail.Message{Summary: s}
 	}
 	list, post := msg.Unsubscribe()
-	dest, ok := mail.ParseUnsubscribeOffer(list, post).Destination(method)
-	if !ok {
+	if offered, ok := mail.ParseUnsubscribeOffer(list, post).Destination(method); !ok || offered != dest {
 		return mail.UnsubscribeRecord{}, mail.ErrNoUnsubscribe
 	}
 	rec := mail.UnsubscribeRecord{

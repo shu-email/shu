@@ -65,7 +65,7 @@ func ParseUnsubscribeOffer(list, post string) UnsubscribeOffer {
 				if address := mailtoAddress(uri); address != "" {
 					o.Emails = append(o.Emails, address)
 				}
-			case isHTTPSURL(uri):
+			case isWebURL(uri):
 				o.Links = append(o.Links, uri)
 			}
 		}
@@ -75,11 +75,11 @@ func ParseUnsubscribeOffer(list, post string) UnsubscribeOffer {
 }
 
 // Preferred is the method to offer, with where it goes: the one-click
-// request when the list asks for one and names a link, an email when it
-// names an address, the page otherwise.
+// request when the list asks for one and names a link it may be made to,
+// an email when it names an address, the page otherwise.
 func (o UnsubscribeOffer) Preferred() (UnsubscribeMethod, string, bool) {
-	if o.OneClick && len(o.Links) > 0 {
-		return UnsubscribeOneClick, o.Links[0], true
+	if link, ok := o.oneClickLink(); ok {
+		return UnsubscribeOneClick, link, true
 	}
 	if len(o.Emails) > 0 {
 		return UnsubscribeEmail, o.Emails[0], true
@@ -94,9 +94,7 @@ func (o UnsubscribeOffer) Preferred() (UnsubscribeMethod, string, bool) {
 func (o UnsubscribeOffer) Destination(method UnsubscribeMethod) (string, bool) {
 	switch method {
 	case UnsubscribeOneClick:
-		if o.OneClick && len(o.Links) > 0 {
-			return o.Links[0], true
-		}
+		return o.oneClickLink()
 	case UnsubscribeEmail:
 		if len(o.Emails) > 0 {
 			return o.Emails[0], true
@@ -104,6 +102,22 @@ func (o UnsubscribeOffer) Destination(method UnsubscribeMethod) (string, bool) {
 	case UnsubscribePage:
 		if len(o.Links) > 0 {
 			return o.Links[0], true
+		}
+	}
+	return "", false
+}
+
+// oneClickLink is the link a one-click request may go to: RFC 8058 asks
+// for HTTPS, so that the list's token and the user's address do not travel
+// in cleartext. A list that names only an HTTP link is left by email or on
+// its page, where the browser decides.
+func (o UnsubscribeOffer) oneClickLink() (string, bool) {
+	if !o.OneClick {
+		return "", false
+	}
+	for _, link := range o.Links {
+		if isHTTPSURL(link) {
+			return link, true
 		}
 	}
 	return "", false
@@ -145,21 +159,60 @@ func splitUnsubscribe(value string) []string {
 // mailtoAddress is the address of a mailto URI, without what the list
 // asks a message to say.
 func mailtoAddress(uri string) string {
-	rest := uri[len("mailto:"):]
-	if i := strings.IndexAny(rest, "?#"); i >= 0 {
-		rest = rest[:i]
-	}
-	return strings.ToLower(strings.TrimSpace(rest))
+	address, _, _ := mailtoRequest(uri)
+	return address
 }
 
-// isHTTPSURL reports whether a value is a link the app may ask, and make
-// a one-click request to: web, with a host, and no credentials in it.
-func isHTTPSURL(value string) bool {
+// mailtoRequest reads a mailto URI: its address, and the subject and body
+// its query asks an unsubscribe message to carry, when it asks any.
+func mailtoRequest(uri string) (address, subject, body string) {
+	rest := uri[len("mailto:"):]
+	if i := strings.IndexByte(rest, '#'); i >= 0 {
+		rest = rest[:i]
+	}
+	address, query, _ := strings.Cut(rest, "?")
+	address = strings.ToLower(strings.TrimSpace(address))
+	if query == "" {
+		return address, "", ""
+	}
+	values, err := url.ParseQuery(query)
+	if err != nil {
+		return address, "", ""
+	}
+	return address, values.Get("subject"), values.Get("body")
+}
+
+// unsubscribeEmail reads what the list asks of the email to address, from
+// its List-Unsubscribe value; "" is what lists without a query expect.
+func unsubscribeEmail(list, address string) (subject, body string) {
+	for _, value := range strings.Split(list, "\n") {
+		for _, uri := range splitUnsubscribe(value) {
+			if !strings.HasPrefix(strings.ToLower(uri), "mailto:") {
+				continue
+			}
+			if got, subject, body := mailtoRequest(uri); got == address {
+				return subject, body
+			}
+		}
+	}
+	return "", ""
+}
+
+// isWebURL reports whether a value is a link the app may offer: web, with
+// a host, and no credentials in it.
+func isWebURL(value string) bool {
 	u, err := url.Parse(strings.TrimSpace(value))
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return false
 	}
 	return u.User == nil
+}
+
+// isHTTPSURL reports whether a value is a link a one-click request may be
+// posted to: web, with a host, no credentials, and encrypted.
+func isHTTPSURL(value string) bool {
+	u, err := url.Parse(strings.TrimSpace(value))
+	return err == nil && u.Scheme == "https" && u.Host != "" && u.User == nil
 }
 
 // UnsubscribeOffer reads what a cached message offers, from the cache
@@ -192,11 +245,13 @@ type UnsubscribeRecord struct {
 }
 
 // Unsubscribe leaves the message's list by the method the user chose,
-// which the headers must offer. A one-click request is one POST; an email
-// is sent from the account as any message is, and a page is only named
-// for the window to open. The choice is kept in the store, and nothing
-// else leaves the device.
-func (s *Service) Unsubscribe(ctx context.Context, accountID, folder string, uid UID, method UnsubscribeMethod) (UnsubscribeRecord, error) {
+// which the headers must offer at dest, the destination the window showed
+// before the user confirmed it: a message the folder gave another UID to
+// meanwhile offers another, and nothing is sent to it. A one-click request
+// is one POST; an email is sent from the account as any message is, and a
+// page is only named for the window to open. The choice is kept in the
+// store, and nothing else leaves the device.
+func (s *Service) Unsubscribe(ctx context.Context, accountID, folder string, uid UID, method UnsubscribeMethod, dest string) (UnsubscribeRecord, error) {
 	m, ok, err := s.store.GetMessage(ctx, accountID, folder, uid)
 	if err != nil {
 		return UnsubscribeRecord{}, err
@@ -206,9 +261,8 @@ func (s *Service) Unsubscribe(ctx context.Context, accountID, folder string, uid
 	}
 	list, post := m.Unsubscribe()
 	offer := ParseUnsubscribeOffer(list, post)
-	dest, ok := offer.Destination(method)
-	if !ok {
-		return UnsubscribeRecord{}, ErrNoUnsubscribe
+	if offered, ok := offer.Destination(method); !ok || offered != dest {
+		return UnsubscribeRecord{}, fmt.Errorf("mail: the message no longer offers %q: %w", dest, ErrNoUnsubscribe)
 	}
 	switch method {
 	case UnsubscribeOneClick:
@@ -216,10 +270,17 @@ func (s *Service) Unsubscribe(ctx context.Context, accountID, folder string, uid
 			return UnsubscribeRecord{}, err
 		}
 	case UnsubscribeEmail:
+		subject, body := unsubscribeEmail(list, dest)
+		if subject == "" {
+			subject = "unsubscribe"
+		}
+		if body == "" {
+			body = "unsubscribe"
+		}
 		if _, err := s.Send(ctx, accountID, Outgoing{
 			To:      []Address{{Email: dest}},
-			Subject: "unsubscribe",
-			Text:    "unsubscribe",
+			Subject: subject,
+			Text:    body,
 		}); err != nil {
 			return UnsubscribeRecord{}, fmt.Errorf("mail: unsubscribe by email: %w", err)
 		}
@@ -249,6 +310,12 @@ func (s *Service) postUnsubscribe(ctx context.Context, link string) error {
 	if err != nil {
 		return err
 	}
+	// RFC 8058 forbids a redirecting one-click endpoint, and following one
+	// would POST the list's token to a host the confirmation never named.
+	// The redirect's answer is then the failure it is.
+	refused := *client
+	refused.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	client = &refused
 	ctx, cancel := context.WithTimeout(ctx, unsubscribeTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, link,

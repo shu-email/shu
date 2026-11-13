@@ -99,6 +99,24 @@ func TestBlockFilesTheMailThatArrives(t *testing.T) {
 	}
 }
 
+// A block holds back the mail that arrives in the inbox alone: mail the
+// user or another mail client put in another folder stays where it is.
+func TestBlockLeavesOtherFoldersAlone(t *testing.T) {
+	r := newRuleRig(t, allCaps())
+	r.sync("Trash")
+	if _, err := r.svc.BlockSender(r.ctx, r.a.ID, "news@shop.example", false, "Lists"); err != nil {
+		t.Fatal(err)
+	}
+	r.deliver("Trash", news("Weekly news 1", "n1@shop.example", 1))
+	r.sync("Trash")
+	if got := r.onServer("Trash"); !slices.Contains(got, "Weekly news 1") {
+		t.Errorf("Trash lost the newsletter: %v", got)
+	}
+	if got := r.onServer("Lists"); slices.Contains(got, "Weekly news 1") {
+		t.Errorf("the block filed mail of another folder: Lists holds %v", got)
+	}
+}
+
 // A block keeps the watcher quiet: the mail is filed before it may be
 // announced.
 func TestBlockKeepsTheWatcherQuiet(t *testing.T) {

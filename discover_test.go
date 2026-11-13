@@ -181,6 +181,70 @@ func TestAccountFormDoesNotRemberFoundServers(t *testing.T) {
 	}
 }
 
+// Editing the local part of an address keeps the servers found for its
+// domain; another domain's address does not keep them.
+func TestAccountFormServersFollowTheDomain(t *testing.T) {
+	fs := newFakeService()
+	fs.discovered["example.com"] = exampleDiscovery()
+	a := newTestApp(fs)
+	a.setLocale = func(string) {}
+	a.start()
+	tt := ui.NewTester(a.view, 1220, 1200)
+	a.openAccountForm(nil)
+	a.after = promptTimer
+	a.accountForm.Email = "ann@example.com"
+	a.emailChanged()
+	a.accountForm.Email = "anna@example.com"
+	a.emailChanged()
+	tt.Frame()
+	if f := a.accountForm; f.Host != "imap.example.com" || f.SMTPHost != "smtp.example.com" {
+		t.Errorf("editing the name went with the servers: %q and %q", f.Host, f.SMTPHost)
+	}
+	// The user's own entry, then an address of another domain.
+	a.accountForm.Host = "mail.ann.example"
+	a.serversChanged()
+	a.accountForm.Email = "ann@unknown.example"
+	a.emailChanged()
+	tt.Frame()
+	if f := a.accountForm; f.Host != "" || f.SMTPHost != "" || f.disc.manual {
+		t.Errorf("another domain's address kept %q, %q, manual %v", f.Host, f.SMTPHost, f.disc.manual)
+	}
+}
+
+// A status that comes and goes under the address does not take the
+// keyboard from the fields below it.
+func TestAccountFormDiscoveryKeepsFocus(t *testing.T) {
+	a, _ := sampleApp(t)
+	tt := ui.NewTester(a.view, 1220, 800)
+	a.openAccountForm(nil)
+	tt.Frame()
+	field, ok := tt.AccessByRole(ui.RoleTextField, locales.Password())
+	if !ok {
+		t.Fatalf("no password field: %q", tt.Texts())
+	}
+	tt.ClickAt(field.Bounds.X+field.Bounds.W/2, field.Bounds.Y+field.Bounds.H/2)
+	if !tt.Focused(locales.Password()) {
+		t.Fatalf("the password field took no focus: %q", tt.Texts())
+	}
+	// A lookup under the address starts, and its word appears above.
+	a.accountForm.disc.domain = "example.com"
+	a.accountForm.disc.busy = true
+	tt.Frame()
+	if !tt.Focused(locales.Password()) {
+		t.Errorf("the status took the keyboard from the password: %q", tt.Texts())
+	}
+	tt.Type("s")
+	if f := a.accountForm; f.Password != "s" {
+		t.Errorf("the keystroke went elsewhere: %q", f.Password)
+	}
+	// And it stays when the status goes again.
+	a.accountForm.disc.busy = false
+	tt.Frame()
+	if !tt.Focused(locales.Password()) || a.accountForm.Password != "s" {
+		t.Errorf("the password field lost what it had: %q, focus %v", a.accountForm.Password, tt.Focused(locales.Password()))
+	}
+}
+
 // The discovery's words read in Simplified Chinese.
 func TestDiscoveryStringsInChinese(t *testing.T) {
 	i18n.SetLocaleFunc(func() string { return "zh-Hans" })

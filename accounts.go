@@ -360,11 +360,13 @@ func (a *app) accountFields(c *ui.Context, t *ui.Theme) {
 			OnChange(func() {
 				for _, p := range mail.Providers {
 					if p.Name == f.Provider {
+						// A preset replaces the servers; Custom keeps
+						// what the user entered.
 						a.applyProvider(p)
+						a.providerChanged()
 						break
 					}
 				}
-				a.providerChanged()
 			})
 	})
 	a.field(c, locales.AccountName(), func() ui.Element {
@@ -375,7 +377,10 @@ func (a *app) accountFields(c *ui.Context, t *ui.Theme) {
 		return ui.TextInput(c, &f.Email).Placeholder("name@example.com").Label(locales.Email()).
 			OnChange(a.emailChanged).OnSubmit(a.discoverSettings)
 	})
-	a.discoveryStatus(c, t)
+	// The status is always a sibling of the fields, even when it has
+	// nothing to say: a row that came and went would move the inputs
+	// below it and take their state, focus included, with it.
+	ui.Column(c).Children(func() { a.discoveryStatus(c, t) })
 	ui.Column(c).Gap(4).Children(func() {
 		ui.Text(c, locales.Password()).FontSize(11).Bold().TextColor(t.TextMuted)
 		pw := ui.TextInput(c, &f.Password).Password().Label(locales.Password())
@@ -420,22 +425,49 @@ func (a *app) emailChanged() {
 		return
 	}
 	a.stopDiscovery()
-	if f.disc.source != "" && !f.disc.manual {
-		// The servers on show were another domain's: clear them rather
-		// than keep them under a new address.
+	domain := typedDomain(f.Email)
+	switch {
+	case f.disc.domain != "" && domain != f.disc.domain:
+		// Another domain's address: the servers on show, and the entry
+		// the user made for them, belong to the address before this one.
+		f.Host, f.Port, f.TLS = "", "", "TLS"
+		f.SMTPHost, f.SMTPPort, f.SMTPTLS = "", "", "STARTTLS"
+		f.disc.manual = false
+	case f.disc.domain == "" && f.disc.source != "" && !f.disc.manual:
+		// The form opened with a provider's servers, which belong to no
+		// address yet.
 		f.Host, f.Port, f.TLS = "", "", "TLS"
 		f.SMTPHost, f.SMTPPort, f.SMTPTLS = "", "", "STARTTLS"
 	}
 	f.disc.note, f.disc.err, f.disc.source, f.disc.found = "", "", "", mail.Discovery{}
-	if !strings.Contains(strings.TrimSpace(f.Email), "@") {
+	if domain == "" {
 		return
 	}
 	seq := f.disc.seq
 	f.disc.timer = a.after(discoveryPause, func() {
-		if f.disc.seq == seq {
-			a.discoverSettings()
-		}
+		// The timer runs off the UI thread, and the lookup changes the
+		// form and its status.
+		a.post(func() {
+			if f.disc.seq == seq {
+				a.discoverSettings()
+			}
+		})
 	})
+}
+
+// typedDomain reads the domain of the address being typed, or "" before
+// the address has one.
+func typedDomain(email string) string {
+	email = strings.TrimSpace(email)
+	at := strings.LastIndexByte(email, '@')
+	if at < 0 || at == len(email)-1 {
+		return ""
+	}
+	domain := strings.ToLower(email[at+1:])
+	if strings.ContainsAny(domain, " \t/") {
+		return ""
+	}
+	return domain
 }
 
 // discoverSettings looks up the servers of the address entered, and
@@ -653,7 +685,7 @@ func (a *app) saveAccount() {
 		} else {
 			saveErr = a.svc.AddAccount(ctx, acc, f.Password)
 		}
-		if saveErr == nil && (f.disc.manual || !f.disc.found.Complete()) {
+		if saveErr == nil && !f.editing && (f.disc.manual || !f.disc.found.Complete()) {
 			// The servers the user entered are the domain's from now on,
 			// so that a later form does not look for others.
 			_ = a.svc.RememberDiscovery(ctx, acc.Email, acc.IMAP, acc.SMTP)

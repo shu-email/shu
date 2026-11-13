@@ -21,6 +21,10 @@ type aiService interface {
 	// CLIModels asks an installed tool which models it reports, without a
 	// model request; nil leaves the field free text.
 	CLIModels(ctx context.Context, id ai.ProviderID, path string) ([]string, error)
+	// CLIEnv reads and writes the values kept for one local tool; values
+	// live only in the keychain.
+	CLIEnv(id ai.ProviderID) ([]ai.CLIEnvVar, error)
+	SaveCLIEnv(ctx context.Context, id ai.ProviderID, list []ai.CLIEnvVar) error
 	Config(ctx context.Context) (ai.Config, error)
 	SaveConfig(ctx context.Context, cfg ai.Config) error
 	KeyStored(id ai.ProviderID) (bool, error)

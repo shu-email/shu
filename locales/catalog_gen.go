@@ -10477,3 +10477,91 @@ func AiLocalToolIsolation() string { return In(i18n.Locale()).AiLocalToolIsolati
 func (msgs Messages) AiLocalToolIsolation() string {
 	return Catalog.Format(msgs.locale, "aiLocalToolIsolation", nil)
 }
+
+// AiCliEnv says "Environment"
+// in the language the app shows.
+func AiCliEnv() string { return In(i18n.Locale()).AiCliEnv() }
+
+// AiCliEnv says "Environment"
+// in the language of msgs.
+func (msgs Messages) AiCliEnv() string {
+	return Catalog.Format(msgs.locale, "aiCliEnv", nil)
+}
+
+// AiCliEnvHint says "Set for this tool only, each time it starts. Values stay in the login Keychain."
+// in the language the app shows.
+func AiCliEnvHint() string { return In(i18n.Locale()).AiCliEnvHint() }
+
+// AiCliEnvHint says "Set for this tool only, each time it starts. Values stay in the login Keychain."
+// in the language of msgs.
+func (msgs Messages) AiCliEnvHint() string {
+	return Catalog.Format(msgs.locale, "aiCliEnvHint", nil)
+}
+
+// AiCliEnvName says "Name"
+// in the language the app shows.
+func AiCliEnvName() string { return In(i18n.Locale()).AiCliEnvName() }
+
+// AiCliEnvName says "Name"
+// in the language of msgs.
+func (msgs Messages) AiCliEnvName() string {
+	return Catalog.Format(msgs.locale, "aiCliEnvName", nil)
+}
+
+// AiCliEnvValue says "Value"
+// in the language the app shows.
+func AiCliEnvValue() string { return In(i18n.Locale()).AiCliEnvValue() }
+
+// AiCliEnvValue says "Value"
+// in the language of msgs.
+func (msgs Messages) AiCliEnvValue() string {
+	return Catalog.Format(msgs.locale, "aiCliEnvValue", nil)
+}
+
+// AiCliEnvAdd says "Add variable"
+// in the language the app shows.
+func AiCliEnvAdd() string { return In(i18n.Locale()).AiCliEnvAdd() }
+
+// AiCliEnvAdd says "Add variable"
+// in the language of msgs.
+func (msgs Messages) AiCliEnvAdd() string {
+	return Catalog.Format(msgs.locale, "aiCliEnvAdd", nil)
+}
+
+// AiCliEnvRemove says "Remove {name}"
+// in the language the app shows.
+//
+// The button that removes one environment variable.
+func AiCliEnvRemove(name string) string { return In(i18n.Locale()).AiCliEnvRemove(name) }
+
+// AiCliEnvRemove says "Remove {name}"
+// in the language of msgs.
+//
+// The button that removes one environment variable.
+func (msgs Messages) AiCliEnvRemove(name string) string {
+	return Catalog.Format(msgs.locale, "aiCliEnvRemove", map[string]any{"name": name})
+}
+
+// AiCliEnvReserved says "Shu sets that name itself, so a value is not used."
+// in the language the app shows.
+func AiCliEnvReserved() string { return In(i18n.Locale()).AiCliEnvReserved() }
+
+// AiCliEnvReserved says "Shu sets that name itself, so a value is not used."
+// in the language of msgs.
+func (msgs Messages) AiCliEnvReserved() string {
+	return Catalog.Format(msgs.locale, "aiCliEnvReserved", nil)
+}
+
+// AiCliEnvFailed says "Could not save the variables: {error}"
+// in the language the app shows.
+//
+// The error after saving a tool's environment failed.
+func AiCliEnvFailed(error string) string { return In(i18n.Locale()).AiCliEnvFailed(error) }
+
+// AiCliEnvFailed says "Could not save the variables: {error}"
+// in the language of msgs.
+//
+// The error after saving a tool's environment failed.
+func (msgs Messages) AiCliEnvFailed(error string) string {
+	return Catalog.Format(msgs.locale, "aiCliEnvFailed", map[string]any{"error": error})
+}

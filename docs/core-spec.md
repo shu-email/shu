@@ -974,9 +974,14 @@ the engine's actions, `mail.ActionKinds`, and no others.
   model field, while a typed value still wins. A failed run checks the sign-in
   state (content-free) and reports `Sign in required` rather than a generic
   failure. Codex still takes a free-text model.
-- Not yet in this slice: the separate Providers management panel, per-tool
-  environment variables, Codex app-server and removal of stored tool
-  environment values.
+- Advanced per-tool environment values live in the Settings → AI local-tool
+  section: the configuration keeps only the names (`Config.CLIEnv`), values are
+  in the keychain (`ai:cli:<provider>:env:<NAME>`), and reserved names such as
+  `PATH`, `HOME` or a tool's managed variables are refused. They are merged into
+  the child's environment after the whitelist, with reserved names filtered
+  again.
+- Not yet in this slice: the separate Providers management panel, Codex
+  app-server, and live verification on Windows and Linux.
 
 ## Testing discipline
 

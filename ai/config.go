@@ -117,6 +117,9 @@ type Config struct {
 	// providers, by provider. Empty finds the command the way a Terminal
 	// would.
 	CLIPaths map[ProviderID]string `json:"cliPaths,omitempty"`
+	// CLIEnv holds the names of the environment values a local tool gets,
+	// by provider; their values are only in the keychain.
+	CLIEnv map[ProviderID][]string `json:"cliEnv,omitempty"`
 }
 
 // DefaultConfig is what a new install starts with: AI off.
@@ -133,6 +136,18 @@ func (c Config) Clone() Config {
 	out.Models = cloneMap(c.Models)
 	out.Reviewed = cloneMap(c.Reviewed)
 	out.CLIPaths = cloneProviderMap(c.CLIPaths)
+	out.CLIEnv = cloneEnvMap(c.CLIEnv)
+	return out
+}
+
+func cloneEnvMap(m map[ProviderID][]string) map[ProviderID][]string {
+	if m == nil {
+		return nil
+	}
+	out := make(map[ProviderID][]string, len(m))
+	for k, v := range m {
+		out[k] = append([]string(nil), v...)
+	}
 	return out
 }
 

@@ -213,3 +213,59 @@ echo '{"type":"control_response","response":{"request_id":"shu-models","response
 		t.Errorf("codex models = %q, %v", models, err)
 	}
 }
+
+// A tool's own values are kept by name in the settings and by value in
+// the keychain, and reach only that tool's environment.
+func TestCLIEnvironmentValues(t *testing.T) {
+	svc, _, store, _ := newTestService(t)
+	ctx := context.Background()
+	cfg := DefaultConfig()
+	cfg.Enabled = true
+	cfg.UseProvider(ProviderClaudeCLI)
+	if err := svc.SaveConfig(ctx, cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SaveCLIEnv(ctx, ProviderClaudeCLI, []CLIEnvVar{{Name: "MY_TOKEN", Value: "env-secret"}}); err != nil {
+		t.Fatal(err)
+	}
+	env, err := svc.CLIEnv(ProviderClaudeCLI)
+	if err != nil || len(env) != 1 || env[0].Value != "env-secret" {
+		t.Fatalf("env = %+v, %v", env, err)
+	}
+	if raw, ok, _ := store.Setting(ctx, configKey); !ok || strings.Contains(raw, "env-secret") {
+		t.Errorf("the value is in the settings: %q", raw)
+	}
+	if err := svc.SaveCLIEnv(ctx, ProviderClaudeCLI, []CLIEnvVar{{Name: "PATH", Value: "x"}}); err == nil {
+		t.Error("a reserved name was accepted")
+	}
+	if err := svc.SaveCLIEnv(ctx, ProviderClaudeCLI, []CLIEnvVar{{Name: "1BAD", Value: "x"}}); err == nil {
+		t.Error("a malformed name was accepted")
+	}
+
+	dir := t.TempDir()
+	out := filepath.Join(dir, "env")
+	script := filepath.Join(dir, "claude")
+	body := "#!/bin/sh\n" +
+		"if [ \"$1\" = \"--version\" ]; then echo 2.1.323; exit 0; fi\n" +
+		"if [ \"$1\" = \"auth\" ]; then echo '{\"loggedIn\": true}'; exit 0; fi\n" +
+		"printf '%s' \"${MY_TOKEN:-}\" > " + out + "\n" +
+		"echo ok\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SaveCLIEnv(ctx, ProviderClaudeCLI, []CLIEnvVar{{Name: "MY_TOKEN", Value: "env-secret"}}); err != nil {
+		t.Fatal(err)
+	}
+	cliCfg, err := svc.Config(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cliCfg.SetCLIPath(ProviderClaudeCLI, script)
+	if _, err := svc.runCLI(ctx, cliCfg, "sonnet", request{system: "s", user: "u"}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(out)
+	if err != nil || string(data) != "env-secret" {
+		t.Errorf("the tool saw %q, %v", data, err)
+	}
+}

@@ -192,6 +192,12 @@ func (s *Service) runCLI(ctx context.Context, cfg Config, model string, req requ
 	}
 	prompt := req.system + "\n\n" + req.user
 	args, env := cliLaunch(p.CLI, model, cfg.Provider)
+	for _, item := range s.cliEnvFrom(cfg, cfg.Provider) {
+		if env == nil {
+			env = map[string]string{}
+		}
+		env[item.Name] = item.Value
+	}
 	env = cliEnvironment(env)
 	ctx, cancel := context.WithTimeout(ctx, 120*time.Second)
 	defer cancel()
@@ -295,7 +301,7 @@ func cliEnvironment(extra map[string]string) map[string]string {
 		}
 	}
 	for name, value := range extra {
-		if name == "NO_COLOR" {
+		if reservedCLIEnv(name) {
 			continue
 		}
 		out[name] = value
@@ -457,4 +463,127 @@ func claudeModels(output string) []string {
 		}
 	}
 	return models
+}
+
+// CLIEnvVar is one value set for a local tool only, each time it starts.
+type CLIEnvVar struct {
+	Name  string
+	Value string
+}
+
+// cliEnvKey is the keychain key of one of a tool's values.
+func cliEnvKey(id ProviderID, name string) string {
+	return "ai:cli:" + string(id) + ":env:" + name
+}
+
+// reservedCLIEnv reports whether a name is one Shu sets itself, which a
+// user value may not replace.
+func reservedCLIEnv(name string) bool {
+	switch name {
+	case "PATH", "HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL", "TERM", "NO_COLOR",
+		"USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "SystemRoot", "ComSpec",
+		"PATHEXT", "USERNAME", "HOMEDRIVE", "HOMEPATH",
+		"CLAUDE_CODE_SKIP_PROMPT_HISTORY", "ENABLE_CLAUDEAI_MCP_SERVERS":
+		return true
+	}
+	return false
+}
+
+// ValidCLIEnvName reports whether a name is one a tool's environment may
+// carry: letters, digits and underscores, not starting with a digit, and
+// not one Shu sets.
+func ValidCLIEnvName(name string) bool {
+	if name == "" || reservedCLIEnv(name) {
+		return false
+	}
+	for i, r := range name {
+		if i == 0 {
+			if r != '_' && (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') {
+				return false
+			}
+			continue
+		}
+		if r != '_' && (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') && (r < '0' || r > '9') {
+			return false
+		}
+	}
+	return true
+}
+
+// CLIEnvNames lists the names kept for a tool, in the reader's order.
+func (c Config) CLIEnvNames(id ProviderID) []string {
+	if c.CLIEnv == nil {
+		return nil
+	}
+	return append([]string(nil), c.CLIEnv[id]...)
+}
+
+// CLIEnv reads the values kept for a tool. Values live only in the
+// keychain; the configuration holds their names.
+func (s *Service) CLIEnv(id ProviderID) ([]CLIEnvVar, error) {
+	saved, err := s.Config(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	return s.cliEnvFrom(saved, id), nil
+}
+
+// cliEnvFrom reads the values named by one configuration, so a run does
+// not need the store again and a test can pass a bare configuration.
+func (s *Service) cliEnvFrom(cfg Config, id ProviderID) []CLIEnvVar {
+	if s.secrets == nil {
+		return nil
+	}
+	var out []CLIEnvVar
+	for _, name := range cfg.CLIEnvNames(id) {
+		data, err := s.secrets.Get(cliEnvKey(id, name))
+		if err != nil {
+			continue
+		}
+		out = append(out, CLIEnvVar{Name: name, Value: string(data)})
+	}
+	return out
+}
+
+// SaveCLIEnv replaces a tool's values: names in the configuration, values
+// in the keychain. A reserved or malformed name is refused whole.
+func (s *Service) SaveCLIEnv(ctx context.Context, id ProviderID, list []CLIEnvVar) error {
+	seen := map[string]bool{}
+	names := make([]string, 0, len(list))
+	for _, item := range list {
+		name := strings.TrimSpace(item.Name)
+		if !ValidCLIEnvName(name) {
+			return &Error{Kind: KindBadConfig}
+		}
+		if seen[name] {
+			return &Error{Kind: KindBadConfig}
+		}
+		seen[name] = true
+		names = append(names, name)
+	}
+	cfg, err := s.Config(ctx)
+	if err != nil {
+		return err
+	}
+	before := cfg.CLIEnvNames(id)
+	for _, name := range before {
+		if !seen[name] {
+			_ = s.secrets.Delete(cliEnvKey(id, name))
+		}
+	}
+	for _, item := range list {
+		name := strings.TrimSpace(item.Name)
+		if err := s.secrets.Set(cliEnvKey(id, name), []byte(item.Value)); err != nil {
+			return &Error{Kind: KindKeychain}
+		}
+	}
+	if cfg.CLIEnv == nil {
+		cfg.CLIEnv = map[ProviderID][]string{}
+	}
+	if len(names) == 0 {
+		delete(cfg.CLIEnv, id)
+	} else {
+		cfg.CLIEnv[id] = names
+	}
+	return s.SaveConfig(ctx, cfg)
 }

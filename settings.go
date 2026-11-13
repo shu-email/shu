@@ -41,6 +41,10 @@ type aiSettings struct {
 	cliBusy   bool
 	cliStatus ai.CLIStatus
 	cliModels []string
+	cliEnv    []ai.CLIEnvVar
+	envName   string
+	envValue  string
+	envErr    string
 }
 
 // settingsWindowOptions is the settings window: its own, as a system
@@ -524,6 +528,7 @@ func (a *app) loadCLIStatus() {
 		if status.Installed && status.SignedIn {
 			models, _ = a.ai.CLIModels(ctx, id, path)
 		}
+		env, _ := a.ai.CLIEnv(id)
 		a.post(func() {
 			if f.cfg.Provider != id {
 				return
@@ -531,6 +536,7 @@ func (a *app) loadCLIStatus() {
 			f.cliBusy = false
 			f.cliStatus = status
 			f.cliModels = models
+			f.cliEnv = env
 		})
 	})
 }
@@ -569,6 +575,92 @@ func (a *app) aiLocalToolSection(c *ui.Context, t *ui.Theme) {
 		ui.Text(c, f.cliStatus.Path).FontSize(10).TextColor(t.TextMuted).Selectable().SingleLine()
 	}
 	ui.Text(c, locales.AiLocalToolIsolation()).FontSize(11).TextColor(t.TextMuted).MaxLines(4)
+	a.aiCLIEnvSection(c, t)
+}
+
+// aiCLIEnvSection edits a local tool's environment values: names only are
+// in the configuration, values are in the keychain.
+func (a *app) aiCLIEnvSection(c *ui.Context, t *ui.Theme) {
+	f := &a.aiForm
+	ui.Text(c, locales.AiCliEnv()).FontSize(12).Bold().TextColor(t.TextMuted)
+	ui.Text(c, locales.AiCliEnvHint()).FontSize(11).TextColor(t.TextMuted).MaxLines(3)
+	for _, item := range f.cliEnv {
+		item := item
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, item.Name).FontSize(11).Bold()
+			ui.Text(c, "••••").FontSize(11).TextColor(t.TextMuted).Grow(1)
+			ui.Button(c, "").Label(locales.AiCliEnvRemove(item.Name)).Tooltip(locales.AiCliEnvRemove(item.Name)).
+				Padding(4, 6).OnClick(func() { a.removeCLIEnv(item.Name) }).Children(func() {
+				ui.Icon(c, closeIcon).FontSize(13)
+			})
+		})
+	}
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.TextInput(c, &f.envName).Label(locales.AiCliEnvName()).Width(180)
+		ui.TextInput(c, &f.envValue).Password().Label(locales.AiCliEnvValue()).Width(220)
+		ui.Button(c, locales.AiCliEnvAdd()).Disabled(!ai.ValidCLIEnvName(strings.TrimSpace(f.envName))).
+			OnClick(a.addCLIEnv)
+	})
+	if f.envErr != "" {
+		ui.Text(c, f.envErr).FontSize(11).TextColor(t.Warning).MaxLines(2).Role(ui.RoleStatus)
+	}
+}
+
+// addCLIEnv keeps the value just typed for the selected tool.
+func (a *app) addCLIEnv() {
+	f := &a.aiForm
+	name := strings.TrimSpace(f.envName)
+	if !ai.ValidCLIEnvName(name) {
+		f.envErr = locales.AiCliEnvReserved()
+		return
+	}
+	list := append([]ai.CLIEnvVar(nil), f.cliEnv...)
+	replaced := false
+	for i := range list {
+		if list[i].Name == name {
+			list[i].Value = f.envValue
+			replaced = true
+		}
+	}
+	if !replaced {
+		list = append(list, ai.CLIEnvVar{Name: name, Value: f.envValue})
+	}
+	a.saveCLIEnv(list, func() { f.envName, f.envValue, f.envErr = "", "", "" })
+}
+
+func (a *app) removeCLIEnv(name string) {
+	f := &a.aiForm
+	var list []ai.CLIEnvVar
+	for _, item := range f.cliEnv {
+		if item.Name != name {
+			list = append(list, item)
+		}
+	}
+	a.saveCLIEnv(list, nil)
+}
+
+func (a *app) saveCLIEnv(list []ai.CLIEnvVar, done func()) {
+	f := &a.aiForm
+	id := f.cfg.Provider
+	a.run(func() {
+		ctx, cancel := a.ctx()
+		defer cancel()
+		err := a.ai.SaveCLIEnv(ctx, id, list)
+		a.post(func() {
+			if f.cfg.Provider != id {
+				return
+			}
+			if err != nil {
+				f.envErr = locales.AiCliEnvFailed(failureText(err))
+				return
+			}
+			f.envErr = ""
+			f.cliEnv = list
+			if done != nil {
+				done()
+			}
+		})
+	})
 }
 
 // cliStatusText is the one line a tool's check shows.

@@ -230,6 +230,9 @@ type app struct {
 	folderNote string
 	// networkForm is the Network tab's editable state (network.go).
 	networkForm networkForm
+	// transfer is the import, export or backup running or just done
+	// (transfer.go).
+	transfer transferState
 	// Remote images and attachment previews (images.go): images is the
 	// senders whose pictures are allowed, imagesShown the messages the
 	// user chose to show them in, and preview the open preview.

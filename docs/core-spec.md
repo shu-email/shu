@@ -443,6 +443,24 @@ MIME: prefer `text/plain`; when only HTML exists, extract text with
 `x/net/html` (skip script/style/head, break on block elements, collapse blank
 lines). Keep the original HTML for the webview.
 
+### Import, export and the settings backup (added since)
+
+- `mail/transfer.go` streams an mbox with `readMbox` (the `From ` separators
+  dropped, `>From ` unescaped) and appends each message with APPEND to the
+  folder the user chose, counting refusals and reporting progress;
+  `ImportEML` appends one message. Import talks to that one account and no
+  other server.
+- `Service.Export` resolves chosen refs, a folder or every folder (Trash and
+  Junk left out), reads each message raw with `BODY.PEEK[]` on one read-only
+  SELECT per folder, and writes mbox (with escaped `From ` lines) or one eml.
+  Without attachments it rewrites the message as its headers and plain text.
+- `BackupConfig` writes accounts, identities and compose settings as JSON with
+  no password, token or key; `RestoreConfig` adds what a machine lacks and
+  leaves the accounts it has, and restored accounts need their sign-in once.
+- The General settings tab runs each transfer in a job with progress and a
+  Cancel action; the file dialogs open in the job, and the result names what
+  was imported, exported or skipped. All strings are in en and zh-Hans.
+
 ### Proxies and certificate authorities (added since)
 
 - `mail/network.go` reads the network settings from the store before each

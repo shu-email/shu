@@ -9647,3 +9647,215 @@ func SaveAllNoFolder() string { return In(i18n.Locale()).SaveAllNoFolder() }
 func (msgs Messages) SaveAllNoFolder() string {
 	return Catalog.Format(msgs.locale, "saveAllNoFolder", nil)
 }
+
+// TransferTitle says "Import and export"
+// in the language the app shows.
+func TransferTitle() string { return In(i18n.Locale()).TransferTitle() }
+
+// TransferTitle says "Import and export"
+// in the language of msgs.
+func (msgs Messages) TransferTitle() string {
+	return Catalog.Format(msgs.locale, "transferTitle", nil)
+}
+
+// TransferIntro says "Bring mail in from mbox or .eml files, take it out, or back up the account settings. Imports upload to the folder ope…"
+// in the language the app shows.
+func TransferIntro() string { return In(i18n.Locale()).TransferIntro() }
+
+// TransferIntro says "Bring mail in from mbox or .eml files, take it out, or back up the account settings. Imports upload to the folder ope…"
+// in the language of msgs.
+func (msgs Messages) TransferIntro() string {
+	return Catalog.Format(msgs.locale, "transferIntro", nil)
+}
+
+// ImportMbox says "Import mbox…"
+// in the language the app shows.
+func ImportMbox() string { return In(i18n.Locale()).ImportMbox() }
+
+// ImportMbox says "Import mbox…"
+// in the language of msgs.
+func (msgs Messages) ImportMbox() string {
+	return Catalog.Format(msgs.locale, "importMbox", nil)
+}
+
+// ImportEML says "Import .eml…"
+// in the language the app shows.
+func ImportEML() string { return In(i18n.Locale()).ImportEML() }
+
+// ImportEML says "Import .eml…"
+// in the language of msgs.
+func (msgs Messages) ImportEML() string {
+	return Catalog.Format(msgs.locale, "importEML", nil)
+}
+
+// ExportFolder says "Export this folder…"
+// in the language the app shows.
+func ExportFolder() string { return In(i18n.Locale()).ExportFolder() }
+
+// ExportFolder says "Export this folder…"
+// in the language of msgs.
+func (msgs Messages) ExportFolder() string {
+	return Catalog.Format(msgs.locale, "exportFolder", nil)
+}
+
+// ExportAccount says "Export the account…"
+// in the language the app shows.
+func ExportAccount() string { return In(i18n.Locale()).ExportAccount() }
+
+// ExportAccount says "Export the account…"
+// in the language of msgs.
+func (msgs Messages) ExportAccount() string {
+	return Catalog.Format(msgs.locale, "exportAccount", nil)
+}
+
+// BackupConfig says "Back up settings…"
+// in the language the app shows.
+func BackupConfig() string { return In(i18n.Locale()).BackupConfig() }
+
+// BackupConfig says "Back up settings…"
+// in the language of msgs.
+func (msgs Messages) BackupConfig() string {
+	return Catalog.Format(msgs.locale, "backupConfig", nil)
+}
+
+// RestoreConfig says "Restore settings…"
+// in the language the app shows.
+func RestoreConfig() string { return In(i18n.Locale()).RestoreConfig() }
+
+// RestoreConfig says "Restore settings…"
+// in the language of msgs.
+func (msgs Messages) RestoreConfig() string {
+	return Catalog.Format(msgs.locale, "restoreConfig", nil)
+}
+
+// TransferNoFolder says "Open a mail folder before importing or exporting."
+// in the language the app shows.
+func TransferNoFolder() string { return In(i18n.Locale()).TransferNoFolder() }
+
+// TransferNoFolder says "Open a mail folder before importing or exporting."
+// in the language of msgs.
+func (msgs Messages) TransferNoFolder() string {
+	return Catalog.Format(msgs.locale, "transferNoFolder", nil)
+}
+
+// TransferWorking says "Working…"
+// in the language the app shows.
+func TransferWorking() string { return In(i18n.Locale()).TransferWorking() }
+
+// TransferWorking says "Working…"
+// in the language of msgs.
+func (msgs Messages) TransferWorking() string {
+	return Catalog.Format(msgs.locale, "transferWorking", nil)
+}
+
+// TransferImported says "{count, plural, one {Imported # message} other {Imported # messages}}"
+// in the language the app shows.
+//
+// The note after an import finished.
+func TransferImported(count int) string { return In(i18n.Locale()).TransferImported(count) }
+
+// TransferImported says "{count, plural, one {Imported # message} other {Imported # messages}}"
+// in the language of msgs.
+//
+// The note after an import finished.
+func (msgs Messages) TransferImported(count int) string {
+	return Catalog.Format(msgs.locale, "transferImported", map[string]any{"count": count})
+}
+
+// TransferImportedSkipped says "{count, plural, one {Imported # message} other {Imported # messages}}, skipped {skipped}"
+// in the language the app shows.
+//
+// The note after an import with refusals.
+func TransferImportedSkipped(count int, skipped int) string {
+	return In(i18n.Locale()).TransferImportedSkipped(count, skipped)
+}
+
+// TransferImportedSkipped says "{count, plural, one {Imported # message} other {Imported # messages}}, skipped {skipped}"
+// in the language of msgs.
+//
+// The note after an import with refusals.
+func (msgs Messages) TransferImportedSkipped(count int, skipped int) string {
+	return Catalog.Format(msgs.locale, "transferImportedSkipped", map[string]any{"count": count, "skipped": skipped})
+}
+
+// TransferExported says "{count, plural, one {Exported # message} other {Exported # messages}}"
+// in the language the app shows.
+//
+// The note after an export finished.
+func TransferExported(count int) string { return In(i18n.Locale()).TransferExported(count) }
+
+// TransferExported says "{count, plural, one {Exported # message} other {Exported # messages}}"
+// in the language of msgs.
+//
+// The note after an export finished.
+func (msgs Messages) TransferExported(count int) string {
+	return Catalog.Format(msgs.locale, "transferExported", map[string]any{"count": count})
+}
+
+// TransferFailed says "The transfer failed: {error}"
+// in the language the app shows.
+//
+// The error after an import or export failed.
+func TransferFailed(error string) string { return In(i18n.Locale()).TransferFailed(error) }
+
+// TransferFailed says "The transfer failed: {error}"
+// in the language of msgs.
+//
+// The error after an import or export failed.
+func (msgs Messages) TransferFailed(error string) string {
+	return Catalog.Format(msgs.locale, "transferFailed", map[string]any{"error": error})
+}
+
+// TransferCancel says "Cancel"
+// in the language the app shows.
+func TransferCancel() string { return In(i18n.Locale()).TransferCancel() }
+
+// TransferCancel says "Cancel"
+// in the language of msgs.
+func (msgs Messages) TransferCancel() string {
+	return Catalog.Format(msgs.locale, "transferCancel", nil)
+}
+
+// TransferCancelled says "Cancelled"
+// in the language the app shows.
+func TransferCancelled() string { return In(i18n.Locale()).TransferCancelled() }
+
+// TransferCancelled says "Cancelled"
+// in the language of msgs.
+func (msgs Messages) TransferCancelled() string {
+	return Catalog.Format(msgs.locale, "transferCancelled", nil)
+}
+
+// BackupDone says "Saved the settings backup"
+// in the language the app shows.
+func BackupDone() string { return In(i18n.Locale()).BackupDone() }
+
+// BackupDone says "Saved the settings backup"
+// in the language of msgs.
+func (msgs Messages) BackupDone() string {
+	return Catalog.Format(msgs.locale, "backupDone", nil)
+}
+
+// RestoreDone says "Restored {count, plural, one {# account} other {# accounts}}"
+// in the language the app shows.
+//
+// The note after a configuration restore.
+func RestoreDone(count int) string { return In(i18n.Locale()).RestoreDone(count) }
+
+// RestoreDone says "Restored {count, plural, one {# account} other {# accounts}}"
+// in the language of msgs.
+//
+// The note after a configuration restore.
+func (msgs Messages) RestoreDone(count int) string {
+	return Catalog.Format(msgs.locale, "restoreDone", map[string]any{"count": count})
+}
+
+// RestoreNeedsSignIn says "Restored accounts have no password or sign-in yet: open each one to add it."
+// in the language the app shows.
+func RestoreNeedsSignIn() string { return In(i18n.Locale()).RestoreNeedsSignIn() }
+
+// RestoreNeedsSignIn says "Restored accounts have no password or sign-in yet: open each one to add it."
+// in the language of msgs.
+func (msgs Messages) RestoreNeedsSignIn() string {
+	return Catalog.Format(msgs.locale, "restoreNeedsSignIn", nil)
+}

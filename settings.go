@@ -284,6 +284,7 @@ func (a *app) settingsView(c *ui.Context) {
 				a.languageChoice(c).Width(320)
 				a.mailSettingsView(c, t)
 				a.composeSettingsView(c, t)
+				a.transferSettingsView(c, t)
 				ui.Divider(c)
 				ui.Row(c).Gap(10).Children(func() {
 					ui.Button(c, locales.ManageAccounts()).OnClick(func() {

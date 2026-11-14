@@ -941,16 +941,29 @@
   "securityShowDetails": "原因",
   "securityHideDetails": "收起原因",
   "securityLinkTitle": "打开此链接？",
-  "securityLinkMessage": "该链接指向：\n\n{url}",
+  "securityLinkMessage": "该链接指向：\n\n{domain}\n\n{url}",
   "@securityLinkMessage": {
-    "description": "Shows the real destination of a link before it opens.",
+    "description": "Shows the real destination of a link before it opens: the registrable domain first, then the address as written.",
     "placeholders": {
+      "domain": {
+        "type": "String",
+        "example": "example.com"
+      },
       "url": {
         "type": "String",
         "example": "https://example.com/path"
       }
     }
   },
+  "securityLinkWarnings": "值得注意的迹象：",
+  "securityLinkWarnScheme": "该链接不是网页地址，而是 {scheme}。",
+  "securityLinkWarnUserinfo": "@ 前的“{name}”并不是网站，真正的网站是 {host}。",
+  "securityLinkWarnIP": "网站是 IP 地址，而不是域名。",
+  "securityLinkWarnLookalike": "地址以“{name}”开头，看起来像另一个网站。真正的网站是 {domain}。",
+  "securityLinkWarnPort": "网站使用了 {port} 端口，而不是常用端口。",
+  "securityLinkWarnTrailingDot": "域名以点结尾，这可以隐藏它真正的结尾。",
+  "securityLinkWarnSubdomains": "{domain} 之前有 {count} 段名称，可能借此隐藏真实网站。",
+  "securityLinkWarnLetters": "名称“{name}”使用了可能模仿其他网站的字母。",
   "securityLinkOpen": "打开链接",
   "securityAttachmentExecutable": "可运行程序",
   "securityAttachmentDisguised": "文件名隐藏了程序",

@@ -201,24 +201,31 @@ func securityVerdictDetail(tr mail.Trust) string {
 }
 
 // askOpenLink holds a link the HTML view asked for until the user
-// confirms its real destination.
+// confirms its real destination, read locally (see linksafety.go).
 func (a *app) askOpenLink(url string) {
 	a.linkURL = url
+	a.linkInfo = examineLink(url)
 	a.linkOpen = true
 }
 
 // linkDialog asks before a link leaves the isolated view: the user sees
-// exactly where it goes, and no page can start a navigation by itself.
+// the real domain, then the address, and any sign that the two do not
+// describe the same site. No page can start a navigation by itself.
 func (a *app) linkDialog(c *ui.Context) {
 	if a.linkURL == "" {
 		return
 	}
+	report := a.linkInfo
+	if report.URL != a.linkURL {
+		report = examineLink(a.linkURL)
+	}
 	if ui.AlertDialog(c, &a.linkOpen, locales.SecurityLinkTitle(),
-		locales.SecurityLinkMessage(a.linkURL), locales.Cancel(), locales.SecurityLinkOpen()) == 1 {
+		report.text(), locales.Cancel(), locales.SecurityLinkOpen()) == 1 {
 		a.services.OpenURL(a.linkURL)
 	}
 	if !a.linkOpen {
 		a.linkURL = ""
+		a.linkInfo = linkReport{}
 	}
 }
 

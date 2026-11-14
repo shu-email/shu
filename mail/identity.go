@@ -2,8 +2,6 @@ package mail
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/mail"
@@ -46,11 +44,7 @@ func ownIdentity(a Account) Identity {
 
 // newIdentityID returns a random identity ID.
 func newIdentityID() string {
-	var b [8]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		return fmt.Sprintf("identity%d", time.Now().UnixNano())
-	}
-	return hex.EncodeToString(b[:])
+	return randomID(func() string { return fmt.Sprintf("identity%d", time.Now().UnixNano()) })
 }
 
 // Identities lists the addresses an account sends from: its own first,

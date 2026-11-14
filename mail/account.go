@@ -47,10 +47,16 @@ type Account struct {
 }
 
 // NewAccountID returns a random account ID.
-func NewAccountID() string {
+func NewAccountID() string { return randomID(func() string { return "acct" }) }
+
+// randomID is eight random bytes in hex. Randomness that is not there is
+// no reason to fail a save: the fallback names the row instead, though a
+// fallback that is one name, as an account's is, may name two rows alike
+// if it fails twice.
+func randomID(fallback func() string) string {
 	var b [8]byte
 	if _, err := rand.Read(b[:]); err != nil {
-		return "acct"
+		return fallback()
 	}
 	return hex.EncodeToString(b[:])
 }

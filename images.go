@@ -25,8 +25,9 @@ type attachmentPreview struct {
 	kind  string // "image", "text", "pdf" or "other"
 	text  string
 	image ui.ImageSource
-	// path is the temporary file a PDF is shown from, and data the bytes
-	// for Open in the default app and Save as.
+	// path is the file Open in the default app opens, written when the
+	// preview opens, and data the bytes for it and Save as. A PDF is also
+	// shown from path.
 	path string
 	data []byte
 }
@@ -150,31 +151,45 @@ func (a *app) previewAttachment(m mail.Summary, att mail.Attachment) {
 	if name == "" {
 		name = locales.Attachment()
 	}
+	kind := previewKind(att)
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
 		_, data, err := a.svc.Attachment(ctx, account, folder, uid, part)
+		// Open in the default app opens a file: it is written here, once,
+		// beside the bytes, not as the dialog draws. An empty attachment
+		// opens nothing, and writes no file.
+		var path string
+		var pathErr error
+		if err == nil && len(data) > 0 {
+			path, pathErr = a.svc.TempFile(previewExt(kind, name), data)
+		}
 		a.post(func() {
 			if a.stale(g) {
+				// The preview is no longer the one the user wants: its
+				// file goes with it.
+				if path != "" {
+					_ = os.Remove(path)
+				}
 				return
 			}
 			if err != nil {
 				a.err = locales.PreviewFailed(failureText(err))
 				return
 			}
-			p := attachmentPreview{open: true, name: name, data: data, kind: "other"}
-			switch {
-			case strings.HasPrefix(att.ContentType, "image/"):
+			if pathErr != nil {
+				a.err = locales.OpenAttachmentFailed(failureText(pathErr))
+			}
+			p := attachmentPreview{open: true, name: name, data: data, kind: "other", path: path}
+			switch kind {
+			case "image":
 				if src, err := ui.DecodeImage(data); err == nil {
 					p.kind, p.image = "image", src
 				}
-			case strings.HasPrefix(att.ContentType, "text/"), isTextName(att.Filename):
+			case "text":
 				p.kind, p.text = "text", truncateText(string(data))
-			case att.ContentType == "application/pdf", strings.HasSuffix(strings.ToLower(att.Filename), ".pdf"):
+			case "pdf":
 				p.kind = "pdf"
-				if path, err := a.svc.TempFile(".pdf", data); err == nil {
-					p.path = path
-				}
 			}
 			if p.kind == "pdf" {
 				a.showPreviewPDF(p.path)
@@ -205,8 +220,7 @@ func (a *app) showPreviewPDF(path string) {
 	_ = a.previewView.Page().LoadFile(path)
 }
 
-// closePreview closes the preview and removes the temporary file a PDF
-// was shown from.
+// closePreview closes the preview and removes its temporary file.
 func (a *app) closePreview() {
 	if p := a.preview.path; p != "" {
 		_ = os.Remove(p)
@@ -221,7 +235,7 @@ func (a *app) attachmentPreviewDialog(c *ui.Context) {
 		return
 	}
 	t := c.Theme()
-	ui.Modal(c, &p.open, func() {
+	modal := ui.Modal(c, &p.open, func() {
 		ui.Column(c).Width(760).Gap(12).Children(func() {
 			ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, p.name).FontSize(15).Bold().Grow(1).MinWidth(0).SingleLine()
@@ -237,7 +251,9 @@ func (a *app) attachmentPreviewDialog(c *ui.Context) {
 					ui.Text(c, p.text).FontSize(12).Selectable().LineHeight(1.5)
 				})
 			case "pdf":
-				if a.previewView != nil {
+				// A PDF the file could not be written for shows none of
+				// the one opened before it.
+				if a.previewView != nil && p.path != "" {
 					ui.WebView(c, a.previewView).Height(520)
 				} else {
 					ui.Text(c, locales.PreviewUnavailable()).FontSize(12).TextColor(t.TextMuted)
@@ -247,11 +263,6 @@ func (a *app) attachmentPreviewDialog(c *ui.Context) {
 			}
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				if len(p.data) > 0 {
-					if p.path == "" && a.win != nil {
-						if path, err := a.svc.TempFile(previewExt(p), p.data); err == nil {
-							p.path = path
-						}
-					}
 					ui.Button(c, locales.OpenInDefaultApp()).Disabled(p.path == "").OnClick(func() {
 						if p.path != "" {
 							_ = mygo.Shell.OpenExternal("file://" + p.path)
@@ -264,7 +275,9 @@ func (a *app) attachmentPreviewDialog(c *ui.Context) {
 			})
 		})
 	})
-	if !p.open {
+	if modal.Dismissed() {
+		// Escape or a click outside closed it: its file goes as the
+		// dialog's does.
 		a.closePreview()
 	}
 }
@@ -375,23 +388,33 @@ func truncateText(s string) string {
 	return s
 }
 
-func previewExt(p *attachmentPreview) string {
-	switch p.kind {
+// previewKind is the preview an attachment gets: "image", "text", "pdf"
+// or, for anything else, "other".
+func previewKind(att mail.Attachment) string {
+	switch {
+	case strings.HasPrefix(att.ContentType, "image/"):
+		return "image"
+	case strings.HasPrefix(att.ContentType, "text/"), isTextName(att.Filename):
+		return "text"
+	case att.ContentType == "application/pdf", strings.HasSuffix(strings.ToLower(att.Filename), ".pdf"):
+		return "pdf"
+	}
+	return "other"
+}
+
+// previewExt is the extension of the file Open in the default app opens
+// for a preview of this kind.
+func previewExt(kind, name string) string {
+	switch kind {
 	case "pdf":
 		return ".pdf"
 	case "text":
 		return ".txt"
 	}
-	return filepath.Ext(p.name)
+	return filepath.Ext(name)
 }
 
 // previewable reports whether an attachment has a preview in the app.
 func previewable(att mail.Attachment) bool {
-	if strings.HasPrefix(att.ContentType, "image/") || strings.HasPrefix(att.ContentType, "text/") {
-		return true
-	}
-	if att.ContentType == "application/pdf" || strings.HasSuffix(strings.ToLower(att.Filename), ".pdf") {
-		return true
-	}
-	return isTextName(att.Filename)
+	return previewKind(att) != "other"
 }

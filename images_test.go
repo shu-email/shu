@@ -144,3 +144,133 @@ func TestSaveAllWithoutFolderSaysSo(t *testing.T) {
 		t.Errorf("error = %q", a.err)
 	}
 }
+
+// Opening a preview writes the file Open in the default app opens once,
+// before the dialog draws, whatever the number of draws.
+func TestAttachmentPreviewWritesItsFileOnce(t *testing.T) {
+	a, fs := sampleMessageApp(t)
+	att := mail.Attachment{Part: "2", Filename: "notes.txt", ContentType: "text/plain"}
+	loadHTMLFirst(t, fs, a, `<p>See attached.</p>`, []mail.Attachment{att})
+	fs.attachment = att
+	fs.attachmentBytes = []byte("hello preview")
+	tt := ui.NewTester(a.view, 1220, 800)
+	click(t, tt, locales.PreviewAttachment("notes.txt"))
+	tt.Frame()
+	tt.Frame()
+	if fs.tempFiles != 1 {
+		t.Errorf("the preview wrote its file %d times, want once", fs.tempFiles)
+	}
+	if string(fs.tempData) != "hello preview" {
+		t.Errorf("the file holds %q", fs.tempData)
+	}
+	path := a.preview.path
+	if path == "" {
+		t.Fatal("the preview has no file to open")
+	}
+	t.Cleanup(func() { _ = os.Remove(path) })
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("the file is not there: %v", err)
+	}
+	if !tt.HasText("hello preview") {
+		t.Errorf("the preview does not show the text: %q", tt.Texts())
+	}
+}
+
+// A preview the modal dismissed, by Escape or a click outside, goes with
+// its file as one closed from the dialog does.
+func TestAttachmentPreviewDismissedRemovesItsFile(t *testing.T) {
+	a, fs := sampleMessageApp(t)
+	att := mail.Attachment{Part: "2", Filename: "notes.txt", ContentType: "text/plain"}
+	loadHTMLFirst(t, fs, a, `<p>See attached.</p>`, []mail.Attachment{att})
+	fs.attachment = att
+	fs.attachmentBytes = []byte("bye")
+	tt := ui.NewTester(a.view, 1220, 800)
+	click(t, tt, locales.PreviewAttachment("notes.txt"))
+	path := a.preview.path
+	if path == "" {
+		t.Fatal("the preview has no file to open")
+	}
+	tt.Key(0, ui.KeyEscape)
+	tt.Frame()
+	if a.preview.open {
+		t.Error("the preview stayed open")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("the file stayed: %v", err)
+	}
+	// It opens again once dismissed, with a file of its own.
+	click(t, tt, locales.PreviewAttachment("notes.txt"))
+	if !a.preview.open || a.preview.path == "" || a.preview.path == path {
+		t.Errorf("the preview opened again as %+v", a.preview)
+	}
+	t.Cleanup(func() { _ = os.Remove(a.preview.path) })
+}
+
+// A file that cannot be written is said, and the preview still shows
+// the message without it: there is nothing to open.
+func TestAttachmentPreviewSaysWhenItsFileCannotBeWritten(t *testing.T) {
+	a, fs := sampleMessageApp(t)
+	att := mail.Attachment{Part: "2", Filename: "notes.txt", ContentType: "text/plain"}
+	loadHTMLFirst(t, fs, a, `<p>See attached.</p>`, []mail.Attachment{att})
+	fs.attachment = att
+	fs.attachmentBytes = []byte("hello preview")
+	fs.tempFileErr = errors.New("the disk is full")
+	tt := ui.NewTester(a.view, 1220, 800)
+	click(t, tt, locales.PreviewAttachment("notes.txt"))
+	want := locales.OpenAttachmentFailed("the disk is full")
+	if a.err != want {
+		t.Errorf("error = %q, want %q", a.err, want)
+	}
+	if a.preview.path != "" {
+		t.Errorf("the preview names a file: %q", a.preview.path)
+	}
+	if !tt.HasText("hello preview") {
+		t.Errorf("the preview shows nothing: %q", tt.Texts())
+	}
+}
+
+// An empty attachment has nothing to open, and writes no file for it.
+func TestAttachmentPreviewOfAnEmptyFileWritesNone(t *testing.T) {
+	a, fs := sampleMessageApp(t)
+	att := mail.Attachment{Part: "2", Filename: "empty.txt", ContentType: "text/plain"}
+	loadHTMLFirst(t, fs, a, `<p>See attached.</p>`, []mail.Attachment{att})
+	fs.attachment = att
+	// The fake gives "data" to an attachment it has no bytes for.
+	fs.attachmentBytes = []byte{}
+	tt := ui.NewTester(a.view, 1220, 800)
+	click(t, tt, locales.PreviewAttachment("empty.txt"))
+	if fs.tempFiles != 0 {
+		t.Errorf("an empty attachment wrote %d files", fs.tempFiles)
+	}
+	if a.preview.path != "" || a.preview.kind != "text" {
+		t.Errorf("preview = %+v", a.preview)
+	}
+}
+
+// A preview the user has left behind by the time its bytes come writes
+// no file that stays: the message it was for is no longer the one shown.
+func TestAttachmentPreviewTheUserLeftRemovesItsFile(t *testing.T) {
+	a, fs := sampleMessageApp(t)
+	m := a.all[0]
+	att := mail.Attachment{Part: "2", Filename: "notes.txt", ContentType: "text/plain"}
+	fs.attachment = att
+	fs.attachmentBytes = []byte("late")
+	var jobs []func()
+	a.run = func(f func()) { jobs = append(jobs, f) }
+	a.previewAttachment(m, att)
+	if len(jobs) != 1 {
+		t.Fatalf("jobs = %d, want the one that reads the attachment", len(jobs))
+	}
+	// The user is on another message by the time it ends.
+	a.gen++
+	jobs[0]()
+	if a.preview.open {
+		t.Error("a preview the user left opened")
+	}
+	if fs.tempFiles != 1 || len(fs.tempPaths) != 1 {
+		t.Fatalf("files written = %d, %q", fs.tempFiles, fs.tempPaths)
+	}
+	if _, err := os.Stat(fs.tempPaths[0]); !os.IsNotExist(err) {
+		t.Errorf("the file stayed: %v", err)
+	}
+}

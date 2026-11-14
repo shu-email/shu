@@ -4026,7 +4026,7 @@
   },
   "inviteNoReply": "This invitation has no organizer to answer.",
   "aiLocalTool": "Local tool",
-  "aiLocalToolIntro": "Use a Claude Code or Codex command already signed in on this Mac. Shu never reads or stores its credentials; the mail text is sent by that tool to its vendor under their terms.",
+  "aiLocalToolIntro": "Use a Claude Code, Codex or pi command already signed in on this Mac. Shu never reads or stores its credentials; the mail text is sent by that tool to its vendor under their terms.",
   "aiLocalToolReady": "Ready",
   "aiLocalToolSignIn": "Sign in required",
   "aiLocalToolNotInstalled": "Not installed",

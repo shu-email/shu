@@ -16,12 +16,13 @@ import (
 	"time"
 )
 
-// Local AI command-line tools: Claude Code and Codex, run as the user
-// already signed in to them. Shu never reads or stores their credentials;
-// it starts the command, hands it the prompt on standard input (never in
-// argv, where ps would show mail), and reads one bounded answer. Every
-// launch runs in a private, empty working directory that is removed
-// afterwards, with tools, plugins and hooks off where the tool allows it.
+// Local AI command-line tools: Claude Code, Codex and pi, run as the
+// user already signed in to them. Shu never reads or stores their
+// credentials; it starts the command, hands it the prompt on standard
+// input (never in argv, where ps would show mail), and reads one bounded
+// answer. Every launch runs in a private, empty working directory that is
+// removed afterwards, with tools, plugins and hooks off where the tool
+// allows it.
 
 // CLIStatus is what a launch of one tool found, without a model request.
 type CLIStatus struct {
@@ -50,6 +51,10 @@ func CLISignInCommand(id ProviderID) string {
 		return "claude auth login"
 	case "codex":
 		return "codex login"
+	case "pi":
+		// pi signs in to one model provider at a time, and the command
+		// only opens its picker without one.
+		return "pi"
 	}
 	return ""
 }
@@ -61,6 +66,8 @@ func CLIInstallURL(id ProviderID) string {
 		return "https://docs.claude.com/en/docs/claude-code/setup"
 	case "codex":
 		return "https://developers.openai.com/codex/cli/"
+	case "pi":
+		return "https://pi.dev"
 	}
 	return ""
 }
@@ -134,6 +141,9 @@ func cliFind(command, explicit string) (string, bool) {
 				filepath.Join(home, ".local", "share", "mise", "shims"),
 				filepath.Join(home, ".asdf", "shims"),
 				filepath.Join(home, ".claude", "local"),
+				// pi's installer puts the command here and adds it to a shell
+				// profile, which an app launched from Finder never reads.
+				filepath.Join(home, ".pi", "agent", "bin"),
 			)
 		}
 	}
@@ -196,6 +206,11 @@ func (s *Service) CLIStatus(ctx context.Context, id ProviderID, explicit string)
 	case "codex":
 		_, err := s.runCLIProbe(ctx, path, []string{"login", "status"})
 		status.SignedIn = err == nil
+	case "pi":
+		// pi keeps no separate sign-in status: it reports the models the
+		// signed-in provider offers, and none at all while signed out.
+		models, err := s.PiModels(ctx, explicit)
+		status.SignedIn = err == nil && len(models) > 0
 	default:
 		status.SignedIn = err == nil
 	}
@@ -217,6 +232,7 @@ var versionPattern = regexp.MustCompile(`\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z.-]+)?`
 var cliMinimum = map[string]string{
 	"claude": "1.0.0",
 	"codex":  "0.20.0",
+	"pi":     "1.0.0",
 }
 
 // cliOutdated reports whether a reported version is older than the
@@ -405,6 +421,30 @@ func cliLaunch(command, model string, id ProviderID, effort string) ([]string, m
 		}
 		args = append(args, "-")
 		return args, nil
+	case "pi":
+		// --no-tools alone leaves extension and MCP tools able to run, so
+		// each resource is switched off as well: nothing pi loads could
+		// act on the mail it is only meant to read.
+		args := []string{
+			"--print",
+			"--mode", "text",
+			"--no-session",
+			"--no-tools",
+			"--no-extensions",
+			"--no-mcp",
+			"--no-skills",
+			"--no-prompt-templates",
+			"--no-context-files",
+			"--no-approve",
+		}
+		if strings.TrimSpace(model) != "" {
+			args = append(args, "--model", strings.TrimSpace(model))
+		}
+		if EffortValid(effort) {
+			args = append(args, "--thinking", effort)
+		}
+		args = append(args, "--system-prompt", cliSafety)
+		return args, nil
 	}
 	return nil, nil
 }
@@ -572,11 +612,15 @@ func (b *capBuffer) Write(p []byte) (int, error) {
 func (b *capBuffer) String() string { return b.buf.String() }
 
 // CLIModels asks an installed tool which models it offers, without a
-// model request and without spending quota. Only Claude Code answers
-// today, through its control protocol; others return nil so the field
-// stays free text.
+// model request and without spending quota. Claude Code answers through
+// its control protocol and pi through its own catalog; Codex has its own
+// call, and the rest return nil so the field stays free text.
 func (s *Service) CLIModels(ctx context.Context, id ProviderID, explicit string) ([]string, error) {
-	if CLIName(id) != "claude" {
+	switch CLIName(id) {
+	case "pi":
+		return s.PiModels(ctx, explicit)
+	case "claude":
+	default:
 		return nil, nil
 	}
 	path, ok := cliFind("claude", explicit)

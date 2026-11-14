@@ -1413,7 +1413,7 @@
   },
   "inviteNoReply": "此邀请没有可回复的组织者。",
   "aiLocalTool": "本地工具",
-  "aiLocalToolIntro": "使用这台电脑上已登录的 Claude Code 或 Codex 命令。Shu 不会读取或保存它的凭据；邮件文本会由该工具按其厂商条款发送。",
+  "aiLocalToolIntro": "使用这台电脑上已登录的 Claude Code、Codex 或 pi 命令。Shu 不会读取或保存它的凭据；邮件文本会由该工具按其厂商条款发送。",
   "aiLocalToolReady": "已就绪",
   "aiLocalToolSignIn": "需要登录",
   "aiLocalToolNotInstalled": "未安装",

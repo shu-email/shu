@@ -30,10 +30,11 @@ const (
 	ProviderLocal ProviderID = "local"
 	// ProviderCustom is any OpenAI-compatible server the user names.
 	ProviderCustom ProviderID = "custom"
-	// ProviderClaudeCLI and ProviderCodexCLI are the user's installed,
-	// already signed-in command-line tools.
+	// ProviderClaudeCLI, ProviderCodexCLI and ProviderPiCLI are the
+	// user's installed, already signed-in command-line tools.
 	ProviderClaudeCLI ProviderID = "claude-code"
 	ProviderCodexCLI  ProviderID = "codex"
+	ProviderPiCLI     ProviderID = "pi-agent"
 )
 
 // Provider is a preset of a provider's endpoint.
@@ -66,6 +67,9 @@ var Providers = []Provider{
 	{ID: ProviderCustom, EditableURL: true},
 	{ID: ProviderClaudeCLI, Name: "Claude Code", Model: "sonnet", CLI: "claude"},
 	{ID: ProviderCodexCLI, Name: "Codex", Model: "gpt-5-codex", CLI: "codex"},
+	// pi is signed in to one provider at a time and has a default of its
+	// own, so it suggests no model: the picker fills from what it reports.
+	{ID: ProviderPiCLI, Name: "pi", CLI: "pi"},
 }
 
 // ProviderByID returns a preset.

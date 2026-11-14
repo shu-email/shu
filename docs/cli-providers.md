@@ -1,9 +1,9 @@
 # Local command-line AI providers
 
-Shu can use a Claude Code or Codex command that is already installed and
-signed in on this computer as its AI provider, instead of an API key. The
-tool runs on the machine, as the user, and the mail text it is given goes
-to its vendor under the vendor's terms, not as a request from Shu.
+Shu can use a Claude Code, Codex or pi command that is already installed
+and signed in on this computer as its AI provider, instead of an API key.
+The tool runs on the machine, as the user, and the mail text it is given
+goes to its vendor under the vendor's terms, not as a request from Shu.
 
 This page says what Shu does with such a tool, what it never does, and
 what the user should expect from the vendor's side. The code is
@@ -12,10 +12,10 @@ what the user should expect from the vendor's side. The code is
 
 ## Not an official integration
 
-Shu is not affiliated with, endorsed by or supported by Anthropic or
-OpenAI. Running Claude Code or Codex from Shu is the user's own use of a
-tool they installed and signed into; it is not an integration those
-vendors provide, announce or test against.
+Shu is not affiliated with, endorsed by or supported by Anthropic,
+OpenAI or the pi coding agent's authors. Running Claude Code, Codex or pi
+from Shu is the user's own use of a tool they installed and signed into;
+it is not an integration those vendors provide, announce or test against.
 
 A subscription bought for the tool's own app is personal, and its terms may
 restrict or forbid use through another application. Shu has not been
@@ -29,10 +29,10 @@ before the first request rather than after.
 
 ## How the tool is run
 
-- **The command the user already has.** Shu finds `claude` or `codex` the
-  way a terminal would, through `PATH` as the app sees it, or at the path
-  the user set in the panel. A path that is set but does not run is an
-  error; Shu never quietly falls back to another command, so a run is
+- **The command the user already has.** Shu finds `claude`, `codex` or
+  `pi` the way a terminal would, through `PATH` as the app sees it, or at
+  the path the user set in the panel. A path that is set but does not run
+  is an error; Shu never quietly falls back to another command, so a run is
   always the tool the panel names.
 - **One prompt, on standard input.** The prompt is never an argument, so it
   does not appear in the process list of other users, and it is not
@@ -49,7 +49,9 @@ before the first request rather than after.
   `--disallowedTools "*"`, no slash commands, no session persistence, one
   turn, and a strict MCP config with no servers; `codex exec --sandbox
   read-only --ephemeral --ignore-user-config` with its apps, plugins,
-  shell, browser, multi-agent, hooks and memory features set to false. A
+  shell, browser, multi-agent, hooks and memory features set to false; `pi
+  --print --mode text` with `--no-tools --no-extensions --no-mcp
+  --no-skills --no-prompt-templates --no-context-files --no-approve`. A
   tool that offers no such switch is not given more trust: it still runs in
   the empty folder with the prompt on standard input only.
 - **An environment allowlist.** The tool gets the variables a process
@@ -72,15 +74,19 @@ authenticates itself, from its own keychain entry, exactly as it does in a
 terminal.
 
 The one thing Shu asks the tool is its own status: `claude --version`,
-`claude auth status --json` (and the Codex equivalents), which report the
-installed version and whether the tool is signed in. The account address is
-read from that answer when the tool reports one, and is masked in the panel
-until the user asks to see it. A prompt or a message never goes into a
-status command.
+`claude auth status --json`, `codex login status` and `pi --list-models`,
+which report the installed version and whether the tool is signed in. pi
+signs in to one model provider at a time, so it has no single sign-in
+status: its catalog names only the models the account can reach, and is
+empty while nothing is signed in. The account address is read from that
+answer when the tool reports one, and is masked in the panel until the
+user asks to see it. A prompt or a message never goes into a status
+command.
 
 Signing in is the user's own step. The panel offers to copy the command
-(`claude auth login`, `codex login`); Shu does not run it, because it needs
-a browser and would make the tool's credentials something Shu started.
+(`claude auth login`, `codex login`, `pi`); Shu does not run it, because it
+needs a browser and would make the tool's credentials something Shu
+started.
 
 ## Version drift
 

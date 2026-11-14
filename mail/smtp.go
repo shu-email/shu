@@ -637,11 +637,7 @@ func newMessageID(email string) string {
 }
 
 func newOutboxID() string {
-	var b [8]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		return fmt.Sprintf("outbox-%d", time.Now().UnixNano())
-	}
-	return hex.EncodeToString(b[:])
+	return randomID(func() string { return fmt.Sprintf("outbox-%d", time.Now().UnixNano()) })
 }
 
 // RetryPending resends an outbox entry the user asked to retry. It is

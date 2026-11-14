@@ -291,7 +291,7 @@ func (s *Service) unsentDraft(ctx context.Context, p PendingSend) (Draft, error)
 	defer s.draftMu.Unlock()
 	d, err := s.createDraft(ctx, a, Draft{
 		ID: NewDraftID(), AccountID: a.ID,
-		To: addressesText(out.To), Cc: addressesText(out.Cc), Bcc: addressesText(out.Bcc),
+		To: AddressesText(out.To), Cc: AddressesText(out.Cc), Bcc: AddressesText(out.Bcc),
 		Subject: out.Subject, Body: out.Text, InReplyTo: out.InReplyTo, References: out.References,
 		Identity: out.Identity, MessageID: out.MessageID,
 	})

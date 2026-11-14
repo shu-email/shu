@@ -194,9 +194,9 @@ func (a *app) openCompose(out *mail.Outgoing) *composeState {
 func (a *app) composeFrom(accountID string, out *mail.Outgoing, caret int) *composeState {
 	cs := &composeState{app: a, accountID: accountID, caret: caret, focused: focusTo}
 	if out != nil {
-		cs.to = addressesText(out.To)
-		cs.cc = addressesText(out.Cc)
-		cs.bcc = addressesText(out.Bcc)
+		cs.to = mail.AddressesText(out.To)
+		cs.cc = mail.AddressesText(out.Cc)
+		cs.bcc = mail.AddressesText(out.Bcc)
 		cs.showBcc = cs.bcc != ""
 		cs.subject = out.Subject
 		cs.body = out.Text
@@ -284,18 +284,6 @@ func (a *app) showCompose(cs *composeState) *composeState {
 		win.OnClosed(cs.close)
 	}
 	return cs
-}
-
-// addressesText joins addresses for a text field.
-func addressesText(list []mail.Address) string {
-	if len(list) == 0 {
-		return ""
-	}
-	out := make([]string, 0, len(list))
-	for _, a := range list {
-		out = append(out, a.String())
-	}
-	return strings.Join(out, ", ")
 }
 
 // view draws the compose window.

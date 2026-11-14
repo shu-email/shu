@@ -3,8 +3,6 @@ package mail
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/mail"
@@ -103,11 +101,7 @@ const draftIDHeader = "X-Shu-Draft-ID"
 
 // NewDraftID returns a random draft ID.
 func NewDraftID() string {
-	var b [8]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		return fmt.Sprintf("draft%d", time.Now().UnixNano())
-	}
-	return hex.EncodeToString(b[:])
+	return randomID(func() string { return fmt.Sprintf("draft%d", time.Now().UnixNano()) })
 }
 
 // sameDraftContent reports whether two drafts say the same. The
@@ -146,8 +140,8 @@ func draftAddresses(text string) []Address {
 	return out
 }
 
-// addressesText writes addresses as a recipient field holds them.
-func addressesText(list []Address) string {
+// AddressesText writes addresses as a recipient field holds them.
+func AddressesText(list []Address) string {
 	parts := make([]string, 0, len(list))
 	for _, a := range list {
 		parts = append(parts, a.String())
@@ -1140,9 +1134,9 @@ func (s *Service) AdoptDraft(ctx context.Context, accountID, folder string, uid 
 	d := Draft{
 		ID:          NewDraftID(),
 		AccountID:   accountID,
-		To:          addressesText(msg.To),
-		Cc:          addressesText(msg.Cc),
-		Bcc:         addressesText(bcc),
+		To:          AddressesText(msg.To),
+		Cc:          AddressesText(msg.Cc),
+		Bcc:         AddressesText(bcc),
 		Subject:     msg.Subject,
 		Body:        msg.BodyText,
 		InReplyTo:   msg.InReplyTo,

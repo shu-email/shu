@@ -379,15 +379,8 @@ func withoutAttachments(raw []byte) ([]byte, error) {
 	}
 	from := m.From.String()
 	write("From", from)
-	var to, cc []string
-	for _, a := range m.To {
-		to = append(to, a.String())
-	}
-	for _, a := range m.Cc {
-		cc = append(cc, a.String())
-	}
-	write("To", strings.Join(to, ", "))
-	write("Cc", strings.Join(cc, ", "))
+	write("To", AddressesText(m.To))
+	write("Cc", AddressesText(m.Cc))
 	write("Subject", m.Subject)
 	write("Date", m.Date.Format(time.RFC1123Z))
 	write("Message-ID", m.MessageID)

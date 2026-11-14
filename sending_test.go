@@ -63,7 +63,7 @@ func TestSendDelayCountsDownAndUndoReopens(t *testing.T) {
 		s := fs.scheduledSend(id)
 		out := s.Envelope
 		if s.delay != 10*time.Second || out.Identity != "lab" || out.Subject != "Quarterly plan" ||
-			addressesText(out.Bcc) != "Erin <erin@example.com>" || attachedNames(out.Attachments) != "plan.pdf" || out.DraftID != cs.draftID {
+			mail.AddressesText(out.Bcc) != "Erin <erin@example.com>" || attachedNames(out.Attachments) != "plan.pdf" || out.DraftID != cs.draftID {
 			t.Errorf("scheduled %+v after %v", out, s.delay)
 		}
 		// The draft says what was scheduled, which Undo gives back.
@@ -126,7 +126,7 @@ func TestSendDelayCountsDownAndUndoReopens(t *testing.T) {
 	fs.onScheduled = nil
 	click(t, bt, locales.Send())
 	if len(fs.scheduled) != 2 || len(fs.sent) != 1 || fs.sent[0].Identity != "lab" ||
-		addressesText(fs.sent[0].Bcc) != "Erin <erin@example.com>" || len(fs.drafts) != 0 || !back.closed {
+		mail.AddressesText(fs.sent[0].Bcc) != "Erin <erin@example.com>" || len(fs.drafts) != 0 || !back.closed {
 		t.Fatalf("sent again: scheduled %d, sent %+v, drafts %+v", len(fs.scheduled), fs.sent, fs.drafts)
 	}
 	main.Frame()
@@ -275,7 +275,7 @@ func TestNoDelaySendsAsBefore(t *testing.T) {
 	if len(fs.scheduled) != 0 || len(fs.sent) != 1 || !cs.closed || len(a.waiting) != 0 {
 		t.Fatalf("scheduled %d, sent %+v, closed %v", len(fs.scheduled), fs.sent, cs.closed)
 	}
-	if out := fs.sent[0]; out.Identity != "lab" || addressesText(out.Bcc) != "Erin <erin@example.com>" {
+	if out := fs.sent[0]; out.Identity != "lab" || mail.AddressesText(out.Bcc) != "Erin <erin@example.com>" {
 		t.Errorf("sent %+v", out)
 	}
 	cs, tt = writePlan(t, a)

@@ -370,8 +370,8 @@ func headerBlock(title string, m Summary, text string, words QuoteWords) string 
 		{words.From, m.From.String()},
 		{words.Date, words.date(m.Date)},
 		{words.Subject, m.Subject},
-		{words.To, addressesText(m.To)},
-		{words.Cc, addressesText(m.Cc)},
+		{words.To, AddressesText(m.To)},
+		{words.Cc, AddressesText(m.Cc)},
 	} {
 		if field[1] != "" {
 			b.WriteString("\n" + field[0] + ": " + field[1])

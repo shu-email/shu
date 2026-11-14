@@ -517,9 +517,9 @@ func (a *app) messageFields(c *ui.Context, t *ui.Theme, m mail.Summary) {
 			ui.Text(c, name+": "+value).FontSize(11).TextColor(t.TextMuted).Selectable()
 		}
 		field(locales.From(), m.From.String())
-		field(locales.To(), addressesText(m.To))
-		field(locales.Cc(), addressesText(m.Cc))
-		field(locales.ReplyTo(), addressesText(m.ReplyTo))
+		field(locales.To(), mail.AddressesText(m.To))
+		field(locales.Cc(), mail.AddressesText(m.Cc))
+		field(locales.ReplyTo(), mail.AddressesText(m.ReplyTo))
 		field(locales.MessageID(), m.MessageID)
 	})
 }

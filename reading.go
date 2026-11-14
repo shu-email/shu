@@ -331,9 +331,9 @@ func (a *app) senderHeader(c *ui.Context, t *ui.Theme, m mail.Summary) {
 			ui.Text(c, name+": "+value).FontSize(11).TextColor(t.TextMuted).Selectable()
 		}
 		detail(locales.From(), m.From.String())
-		detail(locales.To(), addressesText(m.To))
-		detail(locales.Cc(), addressesText(m.Cc))
-		detail(locales.ReplyTo(), addressesText(m.ReplyTo))
+		detail(locales.To(), mail.AddressesText(m.To))
+		detail(locales.Cc(), mail.AddressesText(m.Cc))
+		detail(locales.ReplyTo(), mail.AddressesText(m.ReplyTo))
 		detail(locales.MessageID(), m.MessageID)
 	})
 }

@@ -539,21 +539,8 @@ func (s *Service) SyncFolder(ctx context.Context, accountID, folder string, limi
 	if cacheErr == nil && (!ok || cached.LastUID == 0) {
 		kind = SyncKindFirst
 	}
-	phase := SyncPhaseConnecting
-	report := func() {
-		s.reportSync(SyncEvent{AccountID: accountID, Folder: folder, Kind: kind, Phase: phase})
-	}
-	setPhase := func(p SyncPhase) {
-		if phase == p {
-			return
-		}
-		phase = p
-		report()
-	}
-	report()
-	defer func() {
-		s.reportSync(syncEnd(ctx, accountID, folder, kind, phase, 0, 0, err))
-	}()
+	tr := s.trackSync(accountID, folder, kind)
+	defer func() { tr.end(ctx, err) }()
 	if cacheErr != nil {
 		return cacheErr
 	}
@@ -566,7 +553,7 @@ func (s *Service) SyncFolder(ctx context.Context, accountID, folder string, limi
 			return err
 		}
 	}
-	if _, err := s.syncFolder(ctx, a, password, folder, limit, setPhase); err != nil {
+	if _, err := s.syncFolder(ctx, a, password, folder, limit, tr.step); err != nil {
 		return err
 	}
 	_ = s.pruneAttachments(ctx)

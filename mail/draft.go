@@ -663,8 +663,12 @@ func (s *Service) SyncDraftEdits(ctx context.Context, accountID string) (DraftSy
 
 // syncDrafts syncs an account's drafts, those heavy with attachments
 // included or left for later.
-func (s *Service) syncDrafts(ctx context.Context, accountID string, heavy bool) (DraftSyncResult, error) {
-	var result DraftSyncResult
+func (s *Service) syncDrafts(ctx context.Context, accountID string, heavy bool) (result DraftSyncResult, err error) {
+	phase := SyncPhaseConnecting
+	s.reportSync(SyncEvent{AccountID: accountID, Kind: SyncKindDrafts, Phase: phase})
+	defer func() {
+		s.reportSync(syncEnd(ctx, accountID, "", SyncKindDrafts, phase, 0, 0, err))
+	}()
 	release, err := s.lockDraftSync(ctx)
 	if err != nil {
 		return result, err
@@ -701,6 +705,8 @@ func (s *Service) syncDrafts(ctx context.Context, accountID string, heavy bool) 
 	}
 	result.Folder = box.folder
 	box.heavy = heavy
+	phase = SyncPhaseWriting
+	s.reportSync(SyncEvent{AccountID: accountID, Kind: SyncKindDrafts, Phase: phase})
 	var failed error
 	for _, d := range drafts {
 		if err := ctx.Err(); err != nil {

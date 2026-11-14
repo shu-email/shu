@@ -563,23 +563,31 @@ func recentSeqSet(total uint32, limit int) imap.NumSet {
 
 // syncFolder implements the changeset sync described in the docs. A
 // limit above zero is how many of the newest messages a first sync
-// fetches and the sync refreshes; else the settings' window is.
-func (s *Service) syncFolder(ctx context.Context, a Account, password, folder string, limit int) error {
+// fetches and the sync refreshes; else the settings' window is. It
+// reports where it is to the window, and how it ended (see
+// sync_events.go).
+func (s *Service) syncFolder(ctx context.Context, a Account, password, folder string, limit int, kind SyncKind) (written int, err error) {
 	if limit <= 0 {
 		limit = s.firstSyncWindow(ctx)
 	}
+	phase := SyncPhaseConnecting
+	s.reportSync(SyncEvent{AccountID: a.ID, Folder: folder, Kind: kind, Phase: phase})
+	defer func() {
+		s.reportSync(syncEnd(ctx, a.ID, folder, kind, phase, written, written, err))
+	}()
 	c, err := s.dialIMAP(ctx, a, password)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer c.close()
 
 	selected, err := c.client.Select(folder, nil).Wait()
 	if err != nil {
-		return fmt.Errorf("imap: select %s: %w", folder, err)
+		return 0, fmt.Errorf("imap: select %s: %w", folder, err)
 	}
-	_, err = s.syncSelected(ctx, c, a.ID, folder, selected.UIDValidity, permanentFlags(selected), windowSpan(limit))
-	return err
+	phase = SyncPhaseReading
+	s.reportSync(SyncEvent{AccountID: a.ID, Folder: folder, Kind: kind, Phase: phase})
+	return s.syncSelected(ctx, c, a.ID, folder, selected.UIDValidity, permanentFlags(selected), windowSpan(limit))
 }
 
 // syncSpan is how much of a folder a sync reads: the newest first

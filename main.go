@@ -227,10 +227,14 @@ type app struct {
 	// are watched at all; watched is each watched account as it was when
 	// its watcher was asked for, and watch what that watcher last said.
 	// watchOps are the calls that start and stop watchers, in order.
-	watches   bool
-	watched   map[string]mail.Account
-	watch     map[string]mail.WatchStatus
-	queue     map[string]mail.QueueStatus
+	watches bool
+	watched map[string]mail.Account
+	watch   map[string]mail.WatchStatus
+	queue   map[string]mail.QueueStatus
+	// syncs is what each account's sync last said (mail.SyncEvent), by
+	// account ID: the line above the list while one runs, and why one
+	// failed until another starts.
+	syncs     map[string]mail.SyncEvent
 	watchMu   sync.Mutex
 	watchOps  []func()
 	watchTurn sync.Mutex
@@ -400,6 +404,7 @@ func newApp(svc mailService) *app {
 		watched:       map[string]mail.Account{},
 		watch:         map[string]mail.WatchStatus{},
 		queue:         map[string]mail.QueueStatus{},
+		syncs:         map[string]mail.SyncEvent{},
 		needSignIn:    map[string]bool{},
 		inboxes:       map[string]int{},
 		otherFolders:  map[string][]mail.Folder{},
@@ -540,6 +545,10 @@ func (a *app) start() {
 	// folders' counts and the log.
 	a.svc.OnRuleActivity(func(accountID string) {
 		a.post(func() { a.ruleActivity(accountID) })
+	})
+	// Each sync says where it is, for the line above the list.
+	a.svc.OnSync(func(ev mail.SyncEvent) {
+		a.post(func() { a.syncEvent(ev) })
 	})
 	// The parsed cache is brought to this build's version, and what no row
 	// names any more goes with it: older bodies and attachment files, and

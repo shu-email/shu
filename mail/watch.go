@@ -532,8 +532,16 @@ func (w *watcher) guard(c *watchConn, d time.Duration) (release func()) {
 	}
 }
 
-// checkOn runs a check on a connection and reports what it found.
-func (w *watcher) checkOn(ctx context.Context, c *watchConn, full bool) error {
+// checkOn runs a check on a connection and reports what it found. It
+// reports the step it is in to the window as a sync of the account's mail
+// does (see sync_events.go).
+func (w *watcher) checkOn(ctx context.Context, c *watchConn, full bool) (err error) {
+	kind, phase := SyncKindWatch, SyncPhaseConnecting
+	var folder string
+	w.svc.reportSync(SyncEvent{AccountID: w.accountID, Folder: folder, Kind: kind, Phase: phase})
+	defer func() {
+		w.svc.reportSync(syncEnd(ctx, w.accountID, folder, kind, phase, 0, 0, err))
+	}()
 	release := whenDone(ctx, func() { c.client.Close() })
 	defer release()
 	store := w.svc.store
@@ -569,6 +577,8 @@ func (w *watcher) checkOn(ctx context.Context, c *watchConn, full bool) error {
 	}
 	var fresh []Summary
 	if c.folder != "" {
+		folder, phase = c.folder, SyncPhaseReading
+		w.svc.reportSync(SyncEvent{AccountID: w.accountID, Folder: folder, Kind: kind, Phase: phase})
 		// What the server signalled until now, this sync covers.
 		taken(c.changed)
 		span := syncSpan{first: w.svc.firstSyncWindow(ctx), refresh: watchWindow, keep: defaultSyncCap, sorts: true}

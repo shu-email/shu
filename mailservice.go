@@ -253,6 +253,9 @@ type mailService interface {
 	// is derived from, and changes nothing (see mail.IntegrityReport).
 	CheckIntegrity(ctx context.Context) (mail.IntegrityReport, error)
 
+	// OnSync sets what hears how each sync is going (see mail.SyncEvent).
+	OnSync(report func(mail.SyncEvent))
+
 	Settings(ctx context.Context) (mail.Settings, error)
 	SaveSettings(ctx context.Context, s mail.Settings) error
 }

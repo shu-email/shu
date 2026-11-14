@@ -19,6 +19,7 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme, bar ui.TitleBar, head floa
 		if searching {
 			a.searchBar(c, t)
 		}
+		a.syncNotice(c, t)
 		if len(a.waiting) > 0 {
 			a.waitingNotice(c, t)
 		}

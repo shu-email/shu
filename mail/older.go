@@ -34,7 +34,13 @@ type OlderResult struct {
 // they are, so none of them is announced as new. n of zero or less is the
 // settings' first-sync window. The folder records whether the cache then
 // lacks none of its messages (Folder.Complete, FolderCache).
-func (s *Service) FetchOlder(ctx context.Context, accountID, folder string, n int) (OlderResult, error) {
+func (s *Service) FetchOlder(ctx context.Context, accountID, folder string, n int) (result OlderResult, err error) {
+	phase := SyncPhaseConnecting
+	var done, total int
+	s.reportSync(SyncEvent{AccountID: accountID, Folder: folder, Kind: SyncKindOlder, Phase: phase})
+	defer func() {
+		s.reportSync(syncEnd(ctx, accountID, folder, SyncKindOlder, phase, done, total, err))
+	}()
 	a, password, err := s.account(ctx, accountID)
 	if err != nil {
 		return OlderResult{}, err
@@ -68,12 +74,15 @@ func (s *Service) FetchOlder(ctx context.Context, accountID, folder string, n in
 	}
 	if !ok || cached.LastUID == 0 || cached.UIDValidity != selected.UIDValidity {
 		// What this finds was there before: none of it arrived.
+		phase = SyncPhaseReading
+		s.reportSync(SyncEvent{AccountID: accountID, Folder: folder, Kind: SyncKindOlder, Phase: phase})
 		span := windowSpan(window)
 		span.sorts = false
 		written, err := s.syncSelected(ctx, c, accountID, folder, selected.UIDValidity, nil, span)
 		if err != nil {
 			return OlderResult{}, err
 		}
+		done, total = written, written
 		synced, _, err := s.store.Folder(ctx, accountID, folder)
 		return OlderResult{Fetched: written, More: !synced.Complete, Reset: true}, err
 	}
@@ -81,6 +90,8 @@ func (s *Service) FetchOlder(ctx context.Context, accountID, folder string, n in
 	if err != nil {
 		return OlderResult{}, err
 	}
+	phase, total = SyncPhaseReading, min(n, len(missing))
+	s.reportSync(SyncEvent{AccountID: accountID, Folder: folder, Kind: SyncKindOlder, Phase: phase, Done: done, Total: total})
 	batch := OlderBatch{Folder: folder, UIDValidity: selected.UIDValidity}
 	// A fetch names at most fetchChunk UIDs: scattered ones make a long
 	// command, and a server need take no line of more than 8000 octets.
@@ -106,6 +117,8 @@ func (s *Service) FetchOlder(ctx context.Context, accountID, folder string, n in
 		}
 		addPreviews(c, set, got)
 		batch.Messages = append(batch.Messages, got...)
+		done = len(batch.Messages)
+		s.reportSync(SyncEvent{AccountID: accountID, Folder: folder, Kind: SyncKindOlder, Phase: phase, Done: done, Total: total})
 	}
 	// A message the server did not give, as one expunged meanwhile, is
 	// still lacking; the next fetch asks the server again.

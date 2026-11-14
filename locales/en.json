@@ -317,6 +317,60 @@
   "syncFailed": "Could not sync: {error}",
   "retry": "Retry",
   "syncing": "Syncing…",
+  "syncStarted": "Syncing {subject}…",
+  "syncProgress": "Syncing {subject}… {done} of {total}",
+  "syncFailedAt": "Could not sync {subject} while {phase}: {reason}",
+  "syncPhaseConnecting": "connecting",
+  "syncPhaseReading": "fetching mail",
+  "syncPhaseWriting": "saving changes",
+  "syncReasonNetwork": "the server could not be reached",
+  "syncReasonAuth": "the sign-in was refused",
+  "syncReasonSignIn": "you need to sign in again",
+  "syncReasonOther": "the server or the cache refused",
+  "syncSubjectMail": "mail",
+  "@syncStarted": {
+    "description": "The line above the list while a sync runs, naming what is synced.",
+    "placeholders": {
+      "subject": {
+        "type": "String",
+        "example": "INBOX"
+      }
+    }
+  },
+  "@syncProgress": {
+    "description": "The line above the list while a sync runs, with how many of how many it has read.",
+    "placeholders": {
+      "subject": {
+        "type": "String",
+        "example": "INBOX"
+      },
+      "done": {
+        "type": "int",
+        "example": "120"
+      },
+      "total": {
+        "type": "int",
+        "example": "300"
+      }
+    }
+  },
+  "@syncFailedAt": {
+    "description": "A sync that failed: what was synced, the step it reached and why.",
+    "placeholders": {
+      "subject": {
+        "type": "String",
+        "example": "INBOX"
+      },
+      "phase": {
+        "type": "String",
+        "example": "fetching mail"
+      },
+      "reason": {
+        "type": "String",
+        "example": "the server could not be reached"
+      }
+    }
+  },
   "attachment": "Attachment",
   "saveAs": "Save as",
   "saveFileFailed": "Could not save the file: {error}",

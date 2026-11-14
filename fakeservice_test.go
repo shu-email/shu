@@ -14,6 +14,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"shu/mail"
@@ -28,6 +29,10 @@ type fakeService struct {
 	messages map[string][]mail.Summary
 	bodies   map[string]mail.Message
 	pending  []mail.PendingSend
+
+	// syncMu guards syncReport, where the window hears how a sync goes.
+	syncMu     sync.Mutex
+	syncReport func(mail.SyncEvent)
 
 	testErr error
 	flagErr error
@@ -3058,6 +3063,23 @@ func (f *fakeService) BlockedSenders(ctx context.Context, accountID string) ([]m
 func (f *fakeService) CheckIntegrity(ctx context.Context) (mail.IntegrityReport, error) {
 	f.integrityCalls++
 	return f.integrity, f.integrityErr
+}
+
+// OnSync keeps the receiver the test fires sync events through.
+func (f *fakeService) OnSync(report func(mail.SyncEvent)) {
+	f.syncMu.Lock()
+	f.syncReport = report
+	f.syncMu.Unlock()
+}
+
+// saySync hands the window a sync event, as the engine would.
+func (f *fakeService) saySync(ev mail.SyncEvent) {
+	f.syncMu.Lock()
+	report := f.syncReport
+	f.syncMu.Unlock()
+	if report != nil {
+		report(ev)
+	}
 }
 
 // CountUnread counts the unread messages a list query reads.

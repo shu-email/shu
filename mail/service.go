@@ -54,6 +54,11 @@ type Service struct {
 	sendMu sync.Mutex
 	waits  map[string]chan struct{}
 
+	// syncMu guards the window's receiver of sync events (see
+	// sync_events.go), which OnSync sets.
+	syncMu     sync.Mutex
+	syncReport func(SyncEvent)
+
 	// The watchers, one per account watched (see watch.go). watchLife
 	// makes each start and stop of one a single step; watchMu guards the
 	// map and what the watchers share: the interval between checks and
@@ -527,14 +532,22 @@ func (s *Service) SyncFolder(ctx context.Context, accountID, folder string, limi
 	if err != nil {
 		return err
 	}
-	if _, ok, err := s.store.Folder(ctx, accountID, folder); err != nil {
+	kind := SyncKindFolder
+	cached, ok, err := s.store.Folder(ctx, accountID, folder)
+	if err != nil {
 		return err
-	} else if !ok {
-		if _, err := s.SyncAccount(ctx, accountID); err != nil {
-			return err
+	}
+	if !ok || cached.LastUID == 0 {
+		// The folder was never synced on this device or lost its cursor:
+		// this sync caches its newest messages.
+		kind = SyncKindFirst
+		if !ok {
+			if _, err := s.SyncAccount(ctx, accountID); err != nil {
+				return err
+			}
 		}
 	}
-	if err := s.syncFolder(ctx, a, password, folder, limit); err != nil {
+	if _, err := s.syncFolder(ctx, a, password, folder, limit, kind); err != nil {
 		return err
 	}
 	_ = s.pruneAttachments(ctx)

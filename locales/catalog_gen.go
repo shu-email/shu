@@ -1528,6 +1528,134 @@ func (msgs Messages) Syncing() string {
 	return Catalog.Format(msgs.locale, "syncing", nil)
 }
 
+// SyncStarted says "Syncing {subject}…"
+// in the language the app shows.
+//
+// The line above the list while a sync runs, naming what is synced.
+func SyncStarted(subject string) string { return In(i18n.Locale()).SyncStarted(subject) }
+
+// SyncStarted says "Syncing {subject}…"
+// in the language of msgs.
+//
+// The line above the list while a sync runs, naming what is synced.
+func (msgs Messages) SyncStarted(subject string) string {
+	return Catalog.Format(msgs.locale, "syncStarted", map[string]any{"subject": subject})
+}
+
+// SyncProgress says "Syncing {subject}… {done} of {total}"
+// in the language the app shows.
+//
+// The line above the list while a sync runs, with how many of how many it
+// has read.
+func SyncProgress(subject string, done int, total int) string {
+	return In(i18n.Locale()).SyncProgress(subject, done, total)
+}
+
+// SyncProgress says "Syncing {subject}… {done} of {total}"
+// in the language of msgs.
+//
+// The line above the list while a sync runs, with how many of how many it
+// has read.
+func (msgs Messages) SyncProgress(subject string, done int, total int) string {
+	return Catalog.Format(msgs.locale, "syncProgress", map[string]any{"subject": subject, "done": done, "total": total})
+}
+
+// SyncFailedAt says "Could not sync {subject} while {phase}: {reason}"
+// in the language the app shows.
+//
+// A sync that failed: what was synced, the step it reached and why.
+func SyncFailedAt(subject string, phase string, reason string) string {
+	return In(i18n.Locale()).SyncFailedAt(subject, phase, reason)
+}
+
+// SyncFailedAt says "Could not sync {subject} while {phase}: {reason}"
+// in the language of msgs.
+//
+// A sync that failed: what was synced, the step it reached and why.
+func (msgs Messages) SyncFailedAt(subject string, phase string, reason string) string {
+	return Catalog.Format(msgs.locale, "syncFailedAt", map[string]any{"subject": subject, "phase": phase, "reason": reason})
+}
+
+// SyncPhaseConnecting says "connecting"
+// in the language the app shows.
+func SyncPhaseConnecting() string { return In(i18n.Locale()).SyncPhaseConnecting() }
+
+// SyncPhaseConnecting says "connecting"
+// in the language of msgs.
+func (msgs Messages) SyncPhaseConnecting() string {
+	return Catalog.Format(msgs.locale, "syncPhaseConnecting", nil)
+}
+
+// SyncPhaseReading says "fetching mail"
+// in the language the app shows.
+func SyncPhaseReading() string { return In(i18n.Locale()).SyncPhaseReading() }
+
+// SyncPhaseReading says "fetching mail"
+// in the language of msgs.
+func (msgs Messages) SyncPhaseReading() string {
+	return Catalog.Format(msgs.locale, "syncPhaseReading", nil)
+}
+
+// SyncPhaseWriting says "saving changes"
+// in the language the app shows.
+func SyncPhaseWriting() string { return In(i18n.Locale()).SyncPhaseWriting() }
+
+// SyncPhaseWriting says "saving changes"
+// in the language of msgs.
+func (msgs Messages) SyncPhaseWriting() string {
+	return Catalog.Format(msgs.locale, "syncPhaseWriting", nil)
+}
+
+// SyncReasonNetwork says "the server could not be reached"
+// in the language the app shows.
+func SyncReasonNetwork() string { return In(i18n.Locale()).SyncReasonNetwork() }
+
+// SyncReasonNetwork says "the server could not be reached"
+// in the language of msgs.
+func (msgs Messages) SyncReasonNetwork() string {
+	return Catalog.Format(msgs.locale, "syncReasonNetwork", nil)
+}
+
+// SyncReasonAuth says "the sign-in was refused"
+// in the language the app shows.
+func SyncReasonAuth() string { return In(i18n.Locale()).SyncReasonAuth() }
+
+// SyncReasonAuth says "the sign-in was refused"
+// in the language of msgs.
+func (msgs Messages) SyncReasonAuth() string {
+	return Catalog.Format(msgs.locale, "syncReasonAuth", nil)
+}
+
+// SyncReasonSignIn says "you need to sign in again"
+// in the language the app shows.
+func SyncReasonSignIn() string { return In(i18n.Locale()).SyncReasonSignIn() }
+
+// SyncReasonSignIn says "you need to sign in again"
+// in the language of msgs.
+func (msgs Messages) SyncReasonSignIn() string {
+	return Catalog.Format(msgs.locale, "syncReasonSignIn", nil)
+}
+
+// SyncReasonOther says "the server or the cache refused"
+// in the language the app shows.
+func SyncReasonOther() string { return In(i18n.Locale()).SyncReasonOther() }
+
+// SyncReasonOther says "the server or the cache refused"
+// in the language of msgs.
+func (msgs Messages) SyncReasonOther() string {
+	return Catalog.Format(msgs.locale, "syncReasonOther", nil)
+}
+
+// SyncSubjectMail says "mail"
+// in the language the app shows.
+func SyncSubjectMail() string { return In(i18n.Locale()).SyncSubjectMail() }
+
+// SyncSubjectMail says "mail"
+// in the language of msgs.
+func (msgs Messages) SyncSubjectMail() string {
+	return Catalog.Format(msgs.locale, "syncSubjectMail", nil)
+}
+
 // Attachment says "Attachment"
 // in the language the app shows.
 func Attachment() string { return In(i18n.Locale()).Attachment() }

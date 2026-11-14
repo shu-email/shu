@@ -141,11 +141,14 @@ func cliFind(command, explicit string) (string, bool) {
 				filepath.Join(home, ".local", "share", "mise", "shims"),
 				filepath.Join(home, ".asdf", "shims"),
 				filepath.Join(home, ".claude", "local"),
-				// pi's installer puts the command here and adds it to a shell
-				// profile, which an app launched from Finder never reads.
-				filepath.Join(home, ".pi", "agent", "bin"),
 			)
 		}
+	}
+	if home != "" {
+		// pi's installer puts its command here on every platform, and adds
+		// the folder to a shell profile, which an app started from Finder or
+		// Explorer never reads.
+		dirs = append(dirs, filepath.Join(home, ".pi", "agent", "bin"))
 	}
 	for _, dir := range dirs {
 		for _, name := range commandNames(command) {

@@ -36,9 +36,11 @@ the user's own action on one message.
 
 - Writing mail works offline and survives a restart; the cache shows the
   change before the server hears of it.
-- At-most-once is a property of the store's claim, not of the network
-  call. A crash after the claim can lose an action, never repeat one; a
-  later sync settles what the cache and server disagree on.
+- One claim decides an action, so no two workers make it in one run. A
+  claim a crash left is taken back after a grace, and the kinds are ones
+  a repeat cannot make worse: a flag set again, a label added again, a
+  move whose message the folder no longer has is done. A later sync
+  settles what the cache and the server disagree on.
 - The queue has one worker per account and no parallelism inside one; a
   slow server delays later actions instead of overtaking them.
 - Undo cancels the queued actions it can (`Store.CancelOperations`,

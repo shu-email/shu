@@ -8,8 +8,8 @@ Search is local and instant, and must find a message by its subject,
 sender, recipients, body or preview. The body arrives later than the
 headers, so the index has to change when a message's body is filled in
 and when a sync refreshes a message it already holds. The engine writes
-through several paths — a sync's batch, `FetchOlder`, flag refreshes,
-moves, the queue — under a store that owns the transaction.
+messages from syncs, body fetches and older-mail fetches, often a batch
+at a time, under a store that owns the transaction.
 
 ## Decision
 

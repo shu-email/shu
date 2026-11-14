@@ -806,8 +806,9 @@ server or a model carries it, and `ai/` has no way to it.
   contact's address in place of that entry, the spaces around it kept. A field with
   problems is checked again as it changes, so an entry fixed by typing loses its
   message. Drafts keep saving whatever is typed, unvalidated.
-- The address book view: Contacts in the sidebar's menu (`main.go`, the button that
-  holds what the top of the sidebar no longer shows) opens it in a window of its own,
+- The address book view: Contacts in the sidebar's menu (`sidebar.go`, the
+  `moreMenuButton` that holds what the top of the sidebar no longer shows) opens it in
+  a window of its own,
   so that the mail stays readable beside it (Done or Escape close it); it is no mail
   folder. It says that the contacts stay on this device, has a search field, which
   takes the keyboard as the view opens and finds contacts as suggestions do, and lists

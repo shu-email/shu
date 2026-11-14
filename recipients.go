@@ -349,6 +349,7 @@ func (cs *composeState) toggleContactPicker(f recipientField) {
 	p := &cs.rcpt.picker
 	if p.open && p.field == f {
 		p.open = false
+		cs.focused = focusOf(f)
 		return
 	}
 	p.field, p.open, p.err, p.hi = f, true, "", 0
@@ -365,10 +366,13 @@ func (cs *composeState) contactPicker(c *ui.Context, t *ui.Theme, f recipientFie
 	if p.field != f {
 		return
 	}
-	ui.PopoverBase(c, anchor, &p.open, func(panel ui.Element) {
+	var active ui.Element
+	panel := ui.PopoverBase(c, anchor, &p.open, func(panel ui.Element) {
+		// The search keeps the keyboard while a contact is pressed, as
+		// the offers below a field do.
 		panel.Width(320).Margin(6, 0, 0, 0).Padding(8).Gap(8).Radius(10).
 			Background(t.Background).Border(1, t.Border).Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.18)).
-			Label(locales.ChooseRecipients())
+			Label(locales.ChooseRecipients()).KeepFocus()
 		var search ui.Element
 		ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
 			ui.Icon(c, searchIcon).FontSize(14).TextColor(t.TextMuted).Shrink(0)
@@ -377,6 +381,20 @@ func (cs *composeState) contactPicker(c *ui.Context, t *ui.Theme, f recipientFie
 				p.hi = 0
 				cs.loadContacts()
 			})
+		})
+		// Escape clears the search, then closes the list, and the
+		// keyboard goes back to the field it adds to; it never reaches
+		// the window.
+		search.OnShortcut(0, ui.KeyEscape, func() {
+			if p.query != "" {
+				p.query = ""
+				p.hi = 0
+				cs.loadContacts()
+				cs.redraw()
+				return
+			}
+			p.open = false
+			cs.focused = focusOf(p.field)
 		})
 		search.OnTextKey(func(k ui.TextKey) bool {
 			if k.Mods != 0 {
@@ -418,20 +436,36 @@ func (cs *composeState) contactPicker(c *ui.Context, t *ui.Theme, f recipientFie
 		default:
 			words := mail.ContactWords(p.query)
 			ui.Scroll(c).MaxHeight(t.Space(72)).Children(func() {
-				ui.Column(c).Gap(1).Label(locales.ChooseRecipients()).Children(func() {
+				ui.Column(c).Gap(1).Role(ui.RoleListBox).Label(locales.ChooseRecipients()).Children(func() {
 					for i, ct := range p.contacts {
-						cs.contactPickerRow(c, t, p, i, ct, words)
+						if opt := cs.contactPickerRow(c, t, p, i, ct, words); i == p.hi {
+							active = opt
+						}
 					}
 				})
 			})
 		}
+		if p.hi >= 0 && p.hi < len(p.contacts) {
+			search.ActiveDescendant(active)
+		}
 	})
+	// A Tab out of the list closes it, as a combobox's list closes when
+	// the keyboard leaves its field; the keyboard stays where it went.
+	if p.open && anchor.FocusLeft() {
+		p.open = false
+	}
+	// A press outside or Escape closes the list, and the keyboard goes
+	// back to the field it was opened for — unless the press landed on
+	// another field of the window, which keeps the focus it took.
+	if panel.Dismissed() && !p.open && ui.FocusedValue(c, &cs.focused) == "" {
+		cs.focused = focusOf(f)
+	}
 }
 
 // contactPickerRow is one contact of the + button's list: its name and
 // address, the parts the search begins in bold, and the one the arrows
 // are on in the accent color.
-func (cs *composeState) contactPickerRow(c *ui.Context, t *ui.Theme, p *contactPicker, i int, ct mail.Contact, words []string) {
+func (cs *composeState) contactPickerRow(c *ui.Context, t *ui.Theme, p *contactPicker, i int, ct mail.Contact, words []string) ui.Element {
 	chosen := i == p.hi
 	row := ui.Row(c.Key("picker/"+mail.ContactKey(ct.Email))).Gap(10).Padding(6, 8).Radius(t.Radius).
 		AlignItems(ui.Center).Role(ui.RoleOption).Checked(chosen).PositionInSet(i+1, len(p.contacts)).
@@ -453,6 +487,7 @@ func (cs *composeState) contactPickerRow(c *ui.Context, t *ui.Theme, p *contactP
 			ui.Icon(c, starFilledIcon).FontSize(11).TextColor(star)
 		}
 	})
+	return row
 }
 
 // loadContacts asks the address book, in a job, for the contacts the +
@@ -475,24 +510,26 @@ func (cs *composeState) loadContacts() {
 			err  error
 		)
 		if strings.TrimSpace(text) == "" {
+			// The book answers whole: the addresses already in the fields
+			// are left out here. Suggest leaves out its own.
 			var page mail.ContactPage
 			page, err = a.svc.Contacts(ctx, "", 0, contactPickerLimit+len(exclude))
-			list = page.Contacts
+			excluded := make(map[string]bool, len(exclude))
+			for _, email := range exclude {
+				excluded[mail.ContactKey(email)] = true
+			}
+			for _, ct := range page.Contacts {
+				if len(list) == contactPickerLimit {
+					break
+				}
+				if !excluded[mail.ContactKey(ct.Email)] {
+					list = append(list, ct)
+				}
+			}
 		} else {
 			list, err = a.svc.Suggest(ctx, text, exclude, contactPickerLimit)
 		}
 		cancel()
-		excluded := make(map[string]bool, len(exclude))
-		for _, email := range exclude {
-			excluded[mail.ContactKey(email)] = true
-		}
-		kept := list[:0]
-		for _, ct := range list {
-			if !excluded[mail.ContactKey(ct.Email)] {
-				kept = append(kept, ct)
-			}
-		}
-		list = kept[:min(len(kept), contactPickerLimit)]
 		a.post(func() {
 			p := &cs.rcpt.picker
 			if cs.closed || cs.rcpt.pseq.Load() != seq || !p.open || p.field != field || p.query != text {
@@ -705,12 +742,16 @@ func foldPrefix(s, word string) int {
 
 // recipientKey takes the keys of a field's input: the arrows move among
 // the contacts offered while the list shows, and Enter and Tab take the
-// one they are on. A comma, Enter or Tab ends the entry typed and makes a
-// chip of it, and Backspace in an empty input takes the last chip out.
-// The input keeps the other keys.
+// one they are on. In an input holding nothing and offering nothing, Down
+// opens the address book the + button does. A comma, Enter or Tab ends
+// the entry typed and makes a chip of it, and Backspace in an empty input
+// takes the last chip out. The input keeps the other keys.
 func (cs *composeState) recipientKey(f recipientField, k ui.TextKey) bool {
 	o := cs.rcpt.offer
-	if o != nil && o.field == f && k.Mods == 0 && k.Text() == o.text && o.covers(byteAt(o.text, cs.rcpt.carets[f])) {
+	// The offer list shows only for the field it was made for and the text
+	// it was made from; another field's offer asks nothing of this one.
+	shown := o != nil && o.field == f && k.Text() == o.text && o.covers(byteAt(o.text, cs.rcpt.carets[f]))
+	if shown && k.Mods == 0 {
 		switch k.Key {
 		case ui.KeyDown:
 			o.hi, o.chose = min(o.hi+1, len(o.contacts)-1), true
@@ -731,9 +772,14 @@ func (cs *composeState) recipientKey(f recipientField, k ui.TextKey) bool {
 		return false
 	}
 	switch {
-	case k.Key == ui.KeyEnter || k.Text() == ",":
+	case k.Key == ui.KeyDown && cs.rcpt.entries[f] == "" && !shown && !cs.rcpt.picker.open:
+		// The + button keeps out of the tab order, so Tab moves between
+		// fields; Down in an empty field is how the address book opens.
+		cs.toggleContactPicker(f)
+		return true
+	case k.Key == ui.KeyEnter:
 		return cs.commitEntry(f, k)
-	case k.Key == ui.KeyBackspace && strings.TrimSpace(cs.rcpt.entries[f]) == "" && len(cs.rcpt.tokens[f]) > 0:
+	case k.Key == ui.KeyBackspace && cs.rcpt.entries[f] == "" && len(cs.rcpt.tokens[f]) > 0:
 		cs.rcpt.tokens[f] = cs.rcpt.tokens[f][:len(cs.rcpt.tokens[f])-1]
 		k.SetText("")
 		cs.setJoined(f)
@@ -836,7 +882,12 @@ func (cs *composeState) splitPasted(f recipientField) bool {
 	if cut == 0 {
 		return false
 	}
-	rest := strings.TrimLeft(text[cut:], " \t\r\n")
+	// The separators after the last entry are the list's; what follows
+	// them is the entry to type on.
+	for cut < len(text) && strings.ContainsRune(" \t\r\n,", rune(text[cut])) {
+		cut++
+	}
+	rest := text[cut:]
 	cs.rcpt.edit = &recipientEdit{field: f, text: text, from: 0, to: len(text), s: rest, tokens: tokens}
 	cs.redraw()
 	return true

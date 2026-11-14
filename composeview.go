@@ -39,7 +39,7 @@ func (cs *composeState) view(c *ui.Context) {
 		// away as the files take the room: it gives no choice to make.
 		h := c.Root().Bounds().H
 		roomy := h < 1 || h >= fromRowMinHeight
-		if len(ids) > 1 || len(ids) > 0 && (len(cs.attachments) == 0 || roomy) {
+		if len(ids) > 1 || len(ids) > 0 && (!hasFiles || roomy) {
 			cs.fromRow(c, t, ids)
 		}
 		var fields [recipientFieldCount]ui.Element

@@ -113,7 +113,6 @@ func renderHTML(source string, allowRemote bool) string {
 	}
 	charset := &html.Node{Type: html.ElementNode, Data: "meta", DataAtom: atom.Meta}
 	charset.Attr = []html.Attribute{{Key: "charset", Val: "utf-8"}}
-	head.InsertBefore(charset, head.FirstChild)
 	meta := &html.Node{Type: html.ElementNode, Data: "meta", DataAtom: atom.Meta}
 	meta.Attr = []html.Attribute{
 		{Key: "http-equiv", Val: "Content-Security-Policy"},
@@ -141,9 +140,13 @@ func renderHTML(source string, allowRemote bool) string {
 		table { border-collapse: collapse; max-width: 100%; }
 		td, th { padding: 3px 6px; border: 1px solid #e4e4e7; }
 	`})
-	head.AppendChild(meta)
-	head.AppendChild(viewport)
-	head.AppendChild(style)
+	// The policy goes ahead of everything the message brought: a CSP in a
+	// meta element governs only what is parsed after it, and a message's
+	// own stylesheet would otherwise load before the policy exists.
+	first := head.FirstChild
+	for _, n := range []*html.Node{charset, meta, viewport, style} {
+		head.InsertBefore(n, first)
+	}
 	var b strings.Builder
 	if err := html.Render(&b, doc); err != nil {
 		return "<!doctype html><html><body></body></html>"
@@ -168,6 +171,11 @@ func sanitizeNode(n *html.Node, allowRemote bool) {
 			atom.Template, atom.Meta:
 			removeNode(n)
 			return
+		case atom.Svg, atom.Math:
+			// Foreign content carries script and links of its own, which
+			// the policy does not describe: none of it is a message.
+			removeNode(n)
+			return
 		}
 	}
 	for child := n.FirstChild; child != nil; {
@@ -176,37 +184,79 @@ func sanitizeNode(n *html.Node, allowRemote bool) {
 		child = next
 	}
 	if n.Type == html.ElementNode {
-		n.Attr = safeAttributes(n.Data, n.Attr, allowRemote)
+		n.Attr = safeAttributes(n.Attr, allowRemote)
 	}
 }
 
-// safeAttributes drops event handlers, form actions and unsafe links.
-func safeAttributes(tag string, attrs []html.Attribute, allowRemote bool) []html.Attribute {
+// safeAttributes drops event handlers, form actions and unsafe links, and
+// keeps a picture's address only when the message carries it or the user
+// allowed remote ones.
+func safeAttributes(attrs []html.Attribute, allowRemote bool) []html.Attribute {
 	out := attrs[:0]
 	for _, attr := range attrs {
 		key := strings.ToLower(attr.Key)
+		if strings.HasPrefix(key, "xlink:") || strings.EqualFold(attr.Namespace, "xlink") {
+			// Foreign content spells an href with a prefix; it is no
+			// prefix the message may keep, and a handler behind one is
+			// still a handler.
+			key = strings.TrimPrefix(key, "xlink:")
+			attr.Key, attr.Namespace = key, ""
+		}
 		if strings.HasPrefix(key, "on") {
 			continue
 		}
 		switch key {
 		case "srcdoc", "action", "formaction", "ping", "nonce":
 			continue
-		case "href", "src":
-			if key == "href" && isWebURL(attr.Val) {
+		case "srcset", "imagesrcset":
+			if set, ok := safeSrcset(attr.Val, allowRemote); ok {
+				attr.Val = set
 				out = append(out, attr)
-				continue
 			}
-			if key == "src" {
-				v := strings.ToLower(strings.TrimSpace(attr.Val))
-				if strings.HasPrefix(v, "data:") || (allowRemote && isWebURL(v)) {
-					out = append(out, attr)
-				}
+			continue
+		case "href":
+			if isWebURL(attr.Val) {
+				out = append(out, attr)
+			}
+			continue
+		case "src", "poster", "background":
+			v := strings.ToLower(strings.TrimSpace(attr.Val))
+			if strings.HasPrefix(v, "data:") || (allowRemote && isWebURL(v)) {
+				out = append(out, attr)
 			}
 			continue
 		}
 		out = append(out, attr)
 	}
 	return out
+}
+
+// safeSrcset keeps a candidate list when the user allowed remote images
+// and every candidate names the web: each address is checked as src is,
+// never half of a list.
+func safeSrcset(value string, allowRemote bool) (string, bool) {
+	if !allowRemote {
+		return "", false
+	}
+	var out []string
+	for _, candidate := range strings.Split(value, ",") {
+		fields := strings.Fields(candidate)
+		if len(fields) == 0 || !isHTTPURL(fields[0]) {
+			return "", false
+		}
+		out = append(out, strings.Join(fields, " "))
+	}
+	if len(out) == 0 {
+		return "", false
+	}
+	return strings.Join(out, ", "), true
+}
+
+// isHTTPURL reports whether an address is on the web. A data candidate
+// carries a comma of its own, which a candidate list has no room for.
+func isHTTPURL(raw string) bool {
+	lower := strings.ToLower(strings.TrimSpace(raw))
+	return strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://")
 }
 
 func removeNode(n *html.Node) {

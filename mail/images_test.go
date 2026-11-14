@@ -2,6 +2,7 @@ package mail
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -52,6 +53,16 @@ func TestRemoteImages(t *testing.T) {
 	}
 	if got := (Message{BodyHTML: `<img src="data:image/png;base64,AA">`}).RemoteImages(); len(got) != 0 {
 		t.Errorf("a data image is remote: %q", got)
+	}
+	// Everything the sanitizer leaves out until allowed: another
+	// candidate of a srcset, a video's poster, a background.
+	m = Message{BodyHTML: `<img src="https://a.example/1.png" srcset="https://a.example/1@2x.png 2x, https://a.example/1@3x.png 3x">
+		<video poster="https://a.example/p.jpg"></video>
+		<table background="https://a.example/bg.png"><tr><td>x</td></tr></table>`}
+	want = []string{"https://a.example/1.png", "https://a.example/1@2x.png", "https://a.example/1@3x.png",
+		"https://a.example/p.jpg", "https://a.example/bg.png"}
+	if got := m.RemoteImages(); !slices.Equal(got, want) {
+		t.Errorf("remote images = %q, want %q", got, want)
 	}
 }
 

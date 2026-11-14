@@ -1,0 +1,9 @@
+<!-- A base changes where every relative URL of the message goes: it is
+     removed, and a relative picture names nothing. -->
+<html><head><base href="https://evil.example/redirect/"></head><body>
+<!-- drop: <base -->
+<!-- drop: evil.example -->
+<!-- keep: Relative -->
+<p>Relative</p>
+<img src="logo.png" alt="relative">
+</body></html>

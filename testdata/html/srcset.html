@@ -1,0 +1,12 @@
+<!-- A responsive picture names its candidates in srcset: each address
+     is checked as src is, and the list is kept only when the user
+     allowed the sender's pictures. One bad candidate loses the list. -->
+<html><body>
+<!-- keep-allowed: a.png -->
+<!-- keep: alt="a" -->
+<!-- keep-allowed: a@2x.png -->
+<!-- drop-blocked: a@2x.png -->
+<img src="https://cdn.example/a.png" srcset="https://cdn.example/a@2x.png 2x, https://cdn.example/a@3x.png 3x" alt="a">
+<!-- drop: javascript: -->
+<img src="https://cdn.example/b.png" srcset="https://cdn.example/b@2x.png 2x, javascript:alert(1) 3x" alt="b">
+</body></html>

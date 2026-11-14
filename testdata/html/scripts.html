@@ -1,0 +1,18 @@
+<!-- Anything that runs, or embeds a document that runs, is removed
+     with what is inside it. -->
+<html><body>
+<!-- keep: Visible -->
+<!-- drop: alert(1) -->
+<!-- drop: noscript text -->
+<!-- drop: template text -->
+<!-- drop: <iframe -->
+<!-- drop: <object -->
+<!-- drop: <embed -->
+<p>Visible</p>
+<script>alert(1)</script>
+<noscript><p>noscript text</p></noscript>
+<template><p>template text</p></template>
+<iframe src="https://evil.example/frame"></iframe>
+<object data="https://evil.example/object"></object>
+<embed src="https://evil.example/embed">
+</body></html>

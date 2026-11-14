@@ -30,29 +30,6 @@ func (a Address) String() string {
 	return a.Name + " <" + a.Email + ">"
 }
 
-// ParseAddress parses one address, keeping its name.
-func ParseAddress(s string) Address {
-	s = strings.TrimSpace(s)
-	if a, err := mail.ParseAddress(s); err == nil {
-		return Address{Name: a.Name, Email: a.Address}
-	}
-	return Address{Email: s}
-}
-
-// ParseAddresses parses a comma-separated list of addresses, dropping what
-// it cannot parse.
-func ParseAddresses(list []string) []Address {
-	var out []Address
-	for _, s := range list {
-		for _, part := range strings.Split(s, ",") {
-			if a := ParseAddress(part); a.Email != "" {
-				out = append(out, a)
-			}
-		}
-	}
-	return out
-}
-
 // Folder is a mailbox folder, with its sync cursor.
 type Folder struct {
 	Name        string    `json:"name"`

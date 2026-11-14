@@ -125,14 +125,6 @@ func aiProviderName(p ai.Provider) string {
 	return p.Name
 }
 
-func aiProviderNames() []string {
-	out := make([]string, 0, len(ai.Providers))
-	for _, p := range ai.Providers {
-		out = append(out, aiProviderName(p))
-	}
-	return out
-}
-
 // setConfig fills the form from saved settings.
 func (f *aiSettings) setConfig(cfg ai.Config) {
 	f.cfg = cfg.Clone()

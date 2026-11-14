@@ -691,8 +691,3 @@ func (s *Service) RetryPending(ctx context.Context, id string) (SendResult, erro
 	}
 	return result, nil
 }
-
-// SentFolder is the name of the account's Sent folder, or "".
-func (s *Service) SentFolder(ctx context.Context, accountID string) string {
-	return s.findSent(ctx, accountID)
-}

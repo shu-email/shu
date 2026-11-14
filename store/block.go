@@ -42,24 +42,6 @@ func (s *Store) RemoveBlockedSender(ctx context.Context, accountID, value string
 	return err
 }
 
-// UnsubscribeRecord reads what the account kept of leaving one sender's
-// list.
-func (s *Store) UnsubscribeRecord(ctx context.Context, accountID, email string) (mail.UnsubscribeRecord, bool, error) {
-	rows, err := s.query(ctx, `SELECT method, destination, at FROM unsubscribes
-		WHERE account_id = ? AND email = ?`, accountID, email)
-	if err != nil {
-		return mail.UnsubscribeRecord{}, false, err
-	}
-	if len(rows.Values) == 0 {
-		return mail.UnsubscribeRecord{}, false, nil
-	}
-	r := rows.Values[0]
-	return mail.UnsubscribeRecord{
-		AccountID: accountID, Email: email, Method: mail.UnsubscribeMethod(text(r[0])),
-		Destination: text(r[1]), At: unix(r[2]),
-	}, true, nil
-}
-
 // Unsubscribes reads every list the account left from this device, the
 // most recent first.
 func (s *Store) Unsubscribes(ctx context.Context, accountID string) ([]mail.UnsubscribeRecord, error) {

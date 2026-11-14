@@ -1018,20 +1018,6 @@ func (s *Service) PendingSends(ctx context.Context, accountID string) ([]Pending
 	return s.store.PendingSends(ctx, accountID)
 }
 
-// findSent returns the account's Sent folder, or "".
-func (s *Service) findSent(ctx context.Context, accountID string) string {
-	folders, err := s.store.Folders(ctx, accountID)
-	if err != nil {
-		return ""
-	}
-	for _, f := range folders {
-		if f.SpecialUse == SpecialSent {
-			return f.Name
-		}
-	}
-	return ""
-}
-
 // cacheAttachment writes an attachment's bytes once per content hash.
 func (s *Service) cacheAttachment(a *Attachment) error {
 	if s.cacheDir == "" || len(a.Data) == 0 {

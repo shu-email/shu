@@ -885,8 +885,6 @@ func fetchRaw(c *imapSession, uid UID) (*imapclient.FetchMessageBuffer, []byte, 
 	return buf, raw, nil
 }
 
-func strips(s string) string { return strings.TrimSpace(s) }
-
 func bufFlag(buf *imapclient.FetchMessageBuffer, flag imap.Flag) bool {
 	for _, f := range buf.Flags {
 		if f == flag {

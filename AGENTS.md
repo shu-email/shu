@@ -17,6 +17,13 @@ Windows and Linux. It is written in Go with
   only after an explicit user action, and is always visible and reviewable
   by the user.
 
+## Docs
+
+- [docs/glossary.md](docs/glossary.md) names each thing the code has,
+  in the sense Shu means it, and where it lives.
+- [docs/decisions/](docs/decisions/) records why a design is what it is,
+  one file per decision, with its consequences.
+
 ## Architecture
 
 - The app starts as a single `package main`, but the mail engine is not

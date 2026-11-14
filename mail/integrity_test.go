@@ -86,6 +86,37 @@ func TestCheckIntegrityFindsAttachmentFiles(t *testing.T) {
 	}
 }
 
+// Messages that share an attachment share its one file: a file that is
+// gone is reported once, whatever number of rows name it.
+func TestCheckIntegrityCountsAMissingAttachmentOnce(t *testing.T) {
+	svc, store, cacheDir, _ := integrityService(t)
+	missing := filepath.Join(cacheDir, attachmentCacheDir, "hash-gone")
+	store.attachmentFiles = []string{missing, missing}
+	report, err := svc.CheckIntegrity(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Findings) != 1 || report.Findings[0].Kind != IntegrityAttachmentMissing ||
+		report.Findings[0].Count != 1 || !slices.Equal(report.Findings[0].IDs, []string{"hash-gone"}) {
+		t.Fatalf("findings = %+v", report.Findings)
+	}
+}
+
+// A draft another client replaced keeps its files until the window saves
+// again: they are no orphans, as the draft sweep keeps them too.
+func TestCheckIntegrityKeepsReplacedDraftFiles(t *testing.T) {
+	svc, _, _, dataDir := integrityService(t)
+	oldFile(t, filepath.Join(dataDir, draftFilesFolder), draftHashB)
+	svc.draftsReplaced["d1"] = []Attachment{{ContentHash: draftHashB}}
+	report, err := svc.CheckIntegrity(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Findings) != 0 {
+		t.Fatalf("a replaced draft's file reports %+v", report.Findings)
+	}
+}
+
 // A draft whose stored file is gone is reported, and so is a stored file
 // nothing names; a file being copied in is not.
 func TestCheckIntegrityFindsDraftFiles(t *testing.T) {

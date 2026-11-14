@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"slices"
+	"strconv"
 	"testing"
 	"time"
 
@@ -130,6 +131,29 @@ func TestCheckCacheFindsDanglingReferences(t *testing.T) {
 	}
 }
 
+// A table WITHOUT ROWID has no row to name, so its dangling rows are
+// reported by table and counted.
+func TestCheckCacheNamesRowsWithoutRowidByTable(t *testing.T) {
+	s := openTest(t)
+	integrityFixture(t, s)
+	ctx := context.Background()
+	if _, err := s.exec(ctx, `PRAGMA foreign_keys=OFF`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.exec(ctx, `INSERT INTO thread_folders (thread_id, folder_id) VALUES (999, 1)`); err != nil {
+		t.Fatal(err)
+	}
+	var refs mail.IntegrityFinding
+	for _, f := range cacheFindings(t, s) {
+		if f.Kind == mail.IntegrityReferences {
+			refs = f
+		}
+	}
+	if refs.Count != 1 || !slices.Equal(refs.IDs, []string{"thread_folders"}) {
+		t.Errorf("the finding is %+v", refs)
+	}
+}
+
 // A database whose version is not this build's is reported as the schema.
 func TestCheckCacheFindsSchemaVersionDrift(t *testing.T) {
 	s := openTest(t)
@@ -138,7 +162,10 @@ func TestCheckCacheFindsSchemaVersionDrift(t *testing.T) {
 		t.Fatal(err)
 	}
 	findings := cacheFindings(t, s)
-	if len(findings) != 1 || findings[0].Kind != mail.IntegritySchema || findings[0].IDs[0] != "v1" {
+	if len(findings) != 1 || findings[0].Kind != mail.IntegritySchema || findings[0].Count != 1 {
 		t.Fatalf("findings = %+v", findings)
+	}
+	if want := []string{"1", strconv.Itoa(SchemaVersion)}; !slices.Equal(findings[0].IDs, want) {
+		t.Errorf("the finding names %v, want %v", findings[0].IDs, want)
 	}
 }

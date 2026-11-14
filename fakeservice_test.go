@@ -3053,13 +3053,11 @@ func (f *fakeService) BlockedSenders(ctx context.Context, accountID string) ([]m
 	return append([]mail.BlockedSender(nil), f.blocks[accountID]...), nil
 }
 
-// CheckIntegrity reports what the test set the cache check to find.
+// CheckIntegrity reports what the test set the cache check to find: a run
+// that fails reports what it found before it failed beside the error.
 func (f *fakeService) CheckIntegrity(ctx context.Context) (mail.IntegrityReport, error) {
 	f.integrityCalls++
-	if f.integrityErr != nil {
-		return mail.IntegrityReport{}, f.integrityErr
-	}
-	return f.integrity, nil
+	return f.integrity, f.integrityErr
 }
 
 // CountUnread counts the unread messages a list query reads.

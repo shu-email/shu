@@ -33,6 +33,7 @@ func TestCacheCheckReportsASoundCache(t *testing.T) {
 func TestCacheCheckListsFindings(t *testing.T) {
 	a, fs := sampleMessageApp(t)
 	fs.integrity = mail.IntegrityReport{Findings: []mail.IntegrityFinding{
+		{Kind: mail.IntegritySchema, Count: 1, IDs: []string{"3", "24"}},
 		{Kind: mail.IntegrityThreads, Count: 2, IDs: []string{"7", "9"}},
 		{Kind: mail.IntegrityAttachmentMissing, Count: 1, IDs: []string{"ab12"}},
 		{Kind: mail.IntegritySearchIndex, Count: 1},
@@ -44,6 +45,7 @@ func TestCacheCheckListsFindings(t *testing.T) {
 	}
 	tt.Frame()
 	for _, want := range []string{
+		"Schema version 3, this build expects 24",
 		"Conversation counts out of step: 2 (7, 9)",
 		"Attachment files missing: 1 (ab12)",
 		"Search index out of step: 1",
@@ -70,6 +72,7 @@ func TestCacheCheckFailure(t *testing.T) {
 	if !tt.HasText("Conversation counts out of step") {
 		t.Fatalf("the first check did not show: %q", tt.Texts())
 	}
+	fs.integrity = mail.IntegrityReport{}
 	fs.integrityErr = errors.New("store: the database gave no schema version")
 	if err := tt.Click("Check Cache"); err != nil {
 		t.Fatal(err)
@@ -80,5 +83,28 @@ func TestCacheCheckFailure(t *testing.T) {
 	}
 	if tt.HasText("Conversation counts out of step") {
 		t.Error("the earlier findings stayed after a failed run")
+	}
+}
+
+// What a run proved before it failed is shown beside the reason.
+func TestCacheCheckKeepsPartialFindings(t *testing.T) {
+	a, fs := sampleMessageApp(t)
+	fs.integrity = mail.IntegrityReport{Findings: []mail.IntegrityFinding{
+		{Kind: mail.IntegrityThreads, Count: 1, IDs: []string{"7"}},
+	}}
+	fs.integrityErr = errors.New("mail: the draft files are unreadable")
+	a.openSettings(settingsTabGeneral)
+	tt := ui.NewTester(a.view, 1220, 1500)
+	if err := tt.Click("Check Cache"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	for _, want := range []string{
+		"The check could not run: mail: the draft files are unreadable",
+		"Conversation counts out of step: 1 (7)",
+	} {
+		if !tt.HasText(want) {
+			t.Errorf("missing %q in %q", want, tt.Texts())
+		}
 	}
 }

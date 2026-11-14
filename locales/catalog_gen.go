@@ -12324,14 +12324,22 @@ func (msgs Messages) CacheCheckHealthy() string {
 	return Catalog.Format(msgs.locale, "cacheCheckHealthy", nil)
 }
 
-// CacheProblemSchema says "Database schema version"
+// CacheProblemSchema says "Schema version {found}, this build expects {want}"
 // in the language the app shows.
-func CacheProblemSchema() string { return In(i18n.Locale()).CacheProblemSchema() }
+//
+// The schema version the database says it is, and the one this build
+// writes.
+func CacheProblemSchema(found string, want string) string {
+	return In(i18n.Locale()).CacheProblemSchema(found, want)
+}
 
-// CacheProblemSchema says "Database schema version"
+// CacheProblemSchema says "Schema version {found}, this build expects {want}"
 // in the language of msgs.
-func (msgs Messages) CacheProblemSchema() string {
-	return Catalog.Format(msgs.locale, "cacheProblemSchema", nil)
+//
+// The schema version the database says it is, and the one this build
+// writes.
+func (msgs Messages) CacheProblemSchema(found string, want string) string {
+	return Catalog.Format(msgs.locale, "cacheProblemSchema", map[string]any{"found": found, "want": want})
 }
 
 // CacheProblemReferences says "Rows that point at missing rows"

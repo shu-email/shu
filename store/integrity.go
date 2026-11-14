@@ -19,16 +19,28 @@ func (s *Store) CheckCache(ctx context.Context) ([]mail.IntegrityFinding, error)
 		return nil, err
 	}
 	if version != SchemaVersion {
-		out = append(out, mail.IntegrityOf(mail.IntegritySchema, []string{"v" + strconv.Itoa(version)}))
+		// The finding carries both versions, the one the database says and
+		// the one this build writes, so that the report says what to do.
+		f := mail.IntegrityOf(mail.IntegritySchema, []string{strconv.Itoa(version), strconv.Itoa(SchemaVersion)})
+		f.Count = 1
+		out = append(out, f)
 	}
-	refs, err := s.danglingReferences(ctx)
+	refs, broken, err := s.danglingReferences(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if len(refs) > 0 {
-		out = append(out, mail.IntegrityOf(mail.IntegrityReferences, refs))
+	if broken > 0 {
+		f := mail.IntegrityOf(mail.IntegrityReferences, refs)
+		f.Count = broken
+		out = append(out, f)
 	}
 	if err := s.CheckSearchIndex(ctx); err != nil {
+		// The check writes to the index. A database that no longer takes
+		// a statement at all (busy, gone) is a check that could not run,
+		// not an index out of step; the read says which.
+		if _, probe := s.userVersion(ctx); probe != nil {
+			return nil, fmt.Errorf("store: the search index check could not run: %w", err)
+		}
 		out = append(out, mail.IntegrityOf(mail.IntegritySearchIndex, []string{"messages_fts"}))
 	}
 	threads, err := s.threadAggregateDrift(ctx)
@@ -58,20 +70,32 @@ func (s *Store) userVersion(ctx context.Context) (int, error) {
 }
 
 // danglingReferences names the rows that point at rows which are not
-// there, as "table/rowid", by the foreign keys the schema declares.
-func (s *Store) danglingReferences(ctx context.Context) ([]string, error) {
+// there, as "table/rowid", by the foreign keys the schema declares, and
+// says how many violations there are: a table WITHOUT ROWID has no rowid
+// to name a row by, so its rows are counted but only the table is named,
+// and a row that breaks more than one foreign key is named once.
+func (s *Store) danglingReferences(ctx context.Context) ([]string, int, error) {
 	rows, err := s.query(ctx, "PRAGMA foreign_key_check")
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
+	seen := make(map[string]bool, len(rows.Values))
 	out := make([]string, 0, len(rows.Values))
 	for _, r := range rows.Values {
 		if len(r) < 2 {
 			continue
 		}
-		out = append(out, fmt.Sprintf("%v/%v", r[0], r[1]))
+		id := text(r[0])
+		if r[1] != nil {
+			id += "/" + text(r[1])
+		}
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
 	}
-	return out, nil
+	return out, len(rows.Values), nil
 }
 
 // threadAggregateDrift lists the conversations whose aggregates are not

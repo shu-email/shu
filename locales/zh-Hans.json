@@ -1522,7 +1522,7 @@
   "cacheChecking": "正在检查缓存…",
   "cacheCheckFailed": "无法运行检查：{error}",
   "cacheCheckHealthy": "未发现问题。",
-  "cacheProblemSchema": "数据库架构版本",
+  "cacheProblemSchema": "架构版本为 {found}，此版本需要 {want}",
   "cacheProblemReferences": "指向缺失记录的行",
   "cacheProblemSearchIndex": "搜索索引不同步",
   "cacheProblemThreads": "会话计数不同步",

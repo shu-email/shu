@@ -4179,7 +4179,20 @@
     }
   },
   "cacheCheckHealthy": "No problems found.",
-  "cacheProblemSchema": "Database schema version",
+  "cacheProblemSchema": "Schema version {found}, this build expects {want}",
+  "@cacheProblemSchema": {
+    "description": "The schema version the database says it is, and the one this build writes.",
+    "placeholders": {
+      "found": {
+        "type": "String",
+        "example": "3"
+      },
+      "want": {
+        "type": "String",
+        "example": "24"
+      }
+    }
+  },
   "cacheProblemReferences": "Rows that point at missing rows",
   "cacheProblemSearchIndex": "Search index out of step",
   "cacheProblemThreads": "Conversation counts out of step",

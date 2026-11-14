@@ -37,13 +37,14 @@ func (a *app) checkCache() {
 		a.post(func() {
 			a.cache.running = false
 			a.cache.done = true
+			// A run that fails part way still reports what it proved
+			// before it stopped, beside the reason.
+			a.cache.findings = report.Findings
 			if err != nil {
-				a.cache.findings = nil
 				a.cache.err = locales.CacheCheckFailed(failureText(err))
 				return
 			}
 			a.cache.err = ""
-			a.cache.findings = report.Findings
 		})
 	})
 }
@@ -58,9 +59,12 @@ func (a *app) cacheCheckView(c *ui.Context, t *ui.Theme) {
 		})
 		ui.Button(c, locales.CheckCache()).Disabled(a.cache.running).OnClick(a.checkCache)
 	})
-	switch {
-	case a.cache.err != "":
+	if a.cache.err != "" {
+		// The reason comes first, and what a run stopped part way still
+		// proved comes under it.
 		a.cacheResultLine(c, t, alertIcon, t.Warning, a.cache.err)
+	}
+	switch {
 	case a.cache.running:
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Spinner(c).Size(14, 14)
@@ -69,7 +73,9 @@ func (a *app) cacheCheckView(c *ui.Context, t *ui.Theme) {
 	case !a.cache.done:
 		return
 	case len(a.cache.findings) == 0:
-		a.cacheResultLine(c, t, checkIcon, t.Success, locales.CacheCheckHealthy())
+		if a.cache.err == "" {
+			a.cacheResultLine(c, t, checkIcon, t.Success, locales.CacheCheckHealthy())
+		}
 	default:
 		for _, f := range a.cache.findings {
 			a.cacheResultLine(c, t, alertIcon, t.Warning, cacheFindingText(f))
@@ -92,7 +98,10 @@ func cacheFindingText(f mail.IntegrityFinding) string {
 	var title string
 	switch f.Kind {
 	case mail.IntegritySchema:
-		title = locales.CacheProblemSchema()
+		if len(f.IDs) != 2 {
+			return string(f.Kind)
+		}
+		return locales.CacheProblemSchema(f.IDs[0], f.IDs[1])
 	case mail.IntegrityReferences:
 		title = locales.CacheProblemReferences()
 	case mail.IntegritySearchIndex:

@@ -72,6 +72,14 @@ func IntegrityOf(kind IntegrityKind, ids []string) IntegrityFinding {
 	return f
 }
 
+// partialFindings is what a check proved before it could not go on.
+func partialFindings(kind IntegrityKind, ids []string) []IntegrityFinding {
+	if len(ids) == 0 {
+		return nil
+	}
+	return []IntegrityFinding{IntegrityOf(kind, ids)}
+}
+
 // integrityOrder is the order findings are reported in: the store's
 // derived state first, then the files.
 var integrityOrder = []IntegrityKind{
@@ -90,17 +98,23 @@ func (s *Service) CheckIntegrity(ctx context.Context) (IntegrityReport, error) {
 	if err != nil {
 		return IntegrityReport{}, err
 	}
+	sortFindings := func() {
+		rank := func(kind IntegrityKind) int { return slices.Index(integrityOrder, kind) }
+		slices.SortStableFunc(findings, func(a, b IntegrityFinding) int { return rank(a.Kind) - rank(b.Kind) })
+	}
 	for _, check := range []func(context.Context) ([]IntegrityFinding, error){
 		s.attachmentFiles, s.draftFiles,
 	} {
 		more, err := check(ctx)
-		if err != nil {
-			return IntegrityReport{}, err
-		}
 		findings = append(findings, more...)
+		if err != nil {
+			// What the check proved before it could not go on is still
+			// what the user asked for: the failure comes with it.
+			sortFindings()
+			return IntegrityReport{Findings: findings}, err
+		}
 	}
-	rank := func(kind IntegrityKind) int { return slices.Index(integrityOrder, kind) }
-	slices.SortStableFunc(findings, func(a, b IntegrityFinding) int { return rank(a.Kind) - rank(b.Kind) })
+	sortFindings()
 	return IntegrityReport{Findings: findings}, nil
 }
 
@@ -115,24 +129,37 @@ func (s *Service) attachmentFiles(ctx context.Context) ([]IntegrityFinding, erro
 		return nil, err
 	}
 	named := make(map[string]bool, len(paths))
+	seen := make(map[string]bool, len(paths))
 	var missing []string
-	for _, path := range paths {
+	for i, path := range paths {
+		if i%sweepStep == 0 {
+			if err := ctx.Err(); err != nil {
+				return partialFindings(IntegrityAttachmentMissing, missing), err
+			}
+		}
+		// Messages that share an attachment share its one file, so the
+		// same path arrives once per row: it is reported once.
+		name := filepath.Base(path)
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
 		if _, err := os.Stat(path); err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
-				missing = append(missing, filepath.Base(path))
+				missing = append(missing, name)
 				continue
 			}
-			return nil, err
+			return partialFindings(IntegrityAttachmentMissing, missing), err
 		}
-		named[filepath.Base(path)] = true
+		named[name] = true
 	}
 	var out []IntegrityFinding
 	if len(missing) > 0 {
 		out = append(out, IntegrityOf(IntegrityAttachmentMissing, missing))
 	}
-	orphans, err := s.orphanFiles(ctx, filepath.Join(s.cacheDir, attachmentCacheDir), named, nil)
+	orphans, err := s.orphanFiles(ctx, filepath.Join(s.cacheDir, attachmentCacheDir), named)
 	if err != nil {
-		return nil, err
+		return out, err
 	}
 	if len(orphans) > 0 {
 		out = append(out, IntegrityOf(IntegrityAttachmentOrphans, orphans))
@@ -147,13 +174,34 @@ func (s *Service) draftFiles(ctx context.Context) ([]IntegrityFinding, error) {
 	if dir == "" {
 		return nil, nil
 	}
+	// A draft another client replaced keeps its files for the next save of
+	// its window, as the draft sweep keeps them.
+	s.draftMu.Lock()
 	refs, err := s.store.DraftFileRefs(ctx)
+	keep := make(map[string]bool, len(refs))
+	for _, list := range s.draftsReplaced {
+		for _, a := range list {
+			keep[a.ContentHash] = true
+		}
+	}
+	s.draftMu.Unlock()
 	if err != nil {
 		return nil, err
 	}
 	named := make(map[string]bool, len(refs))
+	seen := make(map[string]bool, len(refs))
 	var missing []string
-	for _, hash := range refs {
+	for i, hash := range refs {
+		if i%sweepStep == 0 {
+			if err := ctx.Err(); err != nil {
+				return partialFindings(IntegrityDraftMissing, missing), err
+			}
+		}
+		// A draft and its unsent message name the same file.
+		if seen[hash] {
+			continue
+		}
+		seen[hash] = true
 		path, err := s.draftFilePath(hash)
 		if err != nil {
 			missing = append(missing, hash)
@@ -164,24 +212,26 @@ func (s *Service) draftFiles(ctx context.Context) ([]IntegrityFinding, error) {
 				missing = append(missing, hash)
 				continue
 			}
-			return nil, err
+			return partialFindings(IntegrityDraftMissing, missing), err
 		}
 		named[hash] = true
 	}
+	for hash := range keep {
+		named[hash] = true
+	}
+	// A file being copied in has a name in incoming, as the sweep reads it.
+	s.fileMu.Lock()
+	for name := range s.incoming {
+		named[name] = true
+	}
+	s.fileMu.Unlock()
 	var out []IntegrityFinding
 	if len(missing) > 0 {
 		out = append(out, IntegrityOf(IntegrityDraftMissing, missing))
 	}
-	// A file being copied in has a name in incoming, as the sweep reads it.
-	s.fileMu.Lock()
-	inFlight := make(map[string]bool, len(s.incoming))
-	for name := range s.incoming {
-		inFlight[name] = true
-	}
-	s.fileMu.Unlock()
-	orphans, err := s.orphanFiles(ctx, dir, named, inFlight)
+	orphans, err := s.orphanFiles(ctx, dir, named)
 	if err != nil {
-		return nil, err
+		return out, err
 	}
 	if len(orphans) > 0 {
 		out = append(out, IntegrityOf(IntegrityDraftOrphans, orphans))
@@ -189,38 +239,16 @@ func (s *Service) draftFiles(ctx context.Context) ([]IntegrityFinding, error) {
 	return out, nil
 }
 
-// orphanFiles names the files of a directory that nothing names and no
-// copy in progress wrote. A file younger than the grace the sweep keeps
-// may be one being copied in, and is not reported: the same rule the
-// sweep takes.
-func (s *Service) orphanFiles(ctx context.Context, dir string, named, inFlight map[string]bool) ([]string, error) {
-	entries, err := os.ReadDir(dir)
-	if errors.Is(err, fs.ErrNotExist) || (err == nil && len(entries) == 0) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	cutoff := s.now().Add(-cacheGrace)
+// orphanFiles names the files of a cache directory that nothing keeps and
+// that no writer is still making: the same rule the sweeps take, so that a
+// file the sweep left is never reported and one it would remove is.
+func (s *Service) orphanFiles(ctx context.Context, dir string, keep map[string]bool) ([]string, error) {
 	var out []string
-	for i, e := range entries {
-		if i%sweepStep == 0 {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
+	err := s.walkCacheFiles(ctx, dir, s.now().Add(-cacheGrace), func(name string) error {
+		if !keep[name] {
+			out = append(out, name)
 		}
-		if e.IsDir() {
-			continue
-		}
-		name := e.Name()
-		if named[name] || inFlight[name] {
-			continue
-		}
-		info, err := e.Info()
-		if err != nil || info.ModTime().After(cutoff) {
-			continue
-		}
-		out = append(out, name)
-	}
-	return out, nil
+		return nil
+	})
+	return out, err
 }

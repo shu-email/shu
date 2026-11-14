@@ -76,3 +76,32 @@ func TestPrepareCacheVersionsTheParsedCache(t *testing.T) {
 		t.Errorf("a newer version = %v, %v; want it to clear", cleared, err)
 	}
 }
+
+// The files a prune removed lose their cache paths; their rows stay, as
+// the messages they belong to stay.
+func TestForgetAttachmentFilesClearsPaths(t *testing.T) {
+	ctx := context.Background()
+	s := openTest(t)
+	addAccount(t, s, "a1")
+	addFolder(t, s, "a1", "INBOX")
+	if err := s.SaveMessage(ctx, "a1", "INBOX", mail.Message{
+		Summary: mail.Summary{UID: 1, MessageID: "one@example.com", Subject: "Plan",
+			Date: time.Unix(1_700_000_000, 0)},
+		Attachments: []mail.Attachment{
+			{Part: "1", Filename: "a.pdf", ContentHash: "a", CachePath: "/cache/attachments/a"},
+			{Part: "2", Filename: "b.pdf", ContentHash: "b", CachePath: "/cache/attachments/b"},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ForgetAttachmentFiles(ctx, []string{"/cache/attachments/a"}); err != nil {
+		t.Fatal(err)
+	}
+	refs, err := s.AttachmentFileRefs(ctx)
+	if err != nil || len(refs) != 1 || refs[0] != "/cache/attachments/b" {
+		t.Errorf("attachment files = %v, %v", refs, err)
+	}
+	if got := countRows(t, s, `SELECT COUNT(*) FROM attachments`); got != 2 {
+		t.Errorf("attachments = %d, want both rows kept", got)
+	}
+}

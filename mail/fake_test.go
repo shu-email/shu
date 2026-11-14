@@ -1689,6 +1689,23 @@ func (s *memStore) AttachmentFileRefs(ctx context.Context) ([]string, error) {
 	return slices.Clone(s.attachmentFiles), nil
 }
 
+func (s *memStore) ForgetAttachmentFiles(ctx context.Context, paths []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	gone := make(map[string]bool, len(paths))
+	for _, path := range paths {
+		gone[path] = true
+	}
+	kept := s.attachmentFiles[:0]
+	for _, path := range s.attachmentFiles {
+		if !gone[path] {
+			kept = append(kept, path)
+		}
+	}
+	s.attachmentFiles = kept
+	return nil
+}
+
 func (s *memStore) CheckCache(ctx context.Context) ([]IntegrityFinding, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

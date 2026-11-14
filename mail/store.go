@@ -67,6 +67,10 @@ type Store interface {
 	// AttachmentFileRefs lists the files the cached attachments' bytes are
 	// in, for the sweep that keeps them and removes the rest.
 	AttachmentFileRefs(ctx context.Context) ([]string, error)
+	// ForgetAttachmentFiles clears the cache paths of the attachment files
+	// the prune removed, so that no row names a file the cache no longer
+	// holds.
+	ForgetAttachmentFiles(ctx context.Context, paths []string) error
 	// PrepareCache clears the parsed bodies and attachment rows when
 	// version differs from the one that wrote them, and reports whether it
 	// did. Nothing the server cannot give again is touched.

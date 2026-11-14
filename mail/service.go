@@ -96,7 +96,7 @@ type Service struct {
 	tokenMu        sync.Mutex
 	tokens         map[string]*oauthToken
 
-	// Rules (rules.go, arrivals.go, ruleapply.go, ruleundo.go).
+	// Rules (rules.go, rulematch.go, arrivals.go, ruleapply.go, ruleundo.go).
 	// arrivalMu makes the write of a sync's mail and the sorting of what
 	// arrived one step, which the watcher's taking of the mail to announce
 	// waits for. movedIn is the messages a sync found that this app moved

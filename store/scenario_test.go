@@ -242,8 +242,8 @@ func TestWriteScenariosSurviveRestart(t *testing.T) {
 	}
 }
 
-// One outbox entry is sent or taken back by one claim: every worker may
-// try, and exactly one wins.
+// One outbox entry is sent or taken back by one claim: the send and the
+// undo race, every worker may try, and exactly one wins.
 func TestOutboxClaimHasOneWinner(t *testing.T) {
 	ctx := context.Background()
 	s := openTest(t)
@@ -256,20 +256,28 @@ func TestOutboxClaimHasOneWinner(t *testing.T) {
 	if err := s.EnqueueOutbox(ctx, p); err != nil {
 		t.Fatal(err)
 	}
+	type win struct {
+		won bool
+		to  string
+	}
 	var wg sync.WaitGroup
 	errs := make(chan error, 8)
-	wins := make(chan bool, 8)
+	wins := make(chan win, 8)
 	for i := 0; i < 8; i++ {
+		to := mail.StateSending
+		if i%2 == 1 {
+			to = mail.StateCancelled
+		}
 		wg.Add(1)
-		go func() {
+		go func(to string) {
 			defer wg.Done()
-			won, err := s.ClaimOutbox(ctx, "o1", mail.StatePending, mail.StateSending)
+			won, err := s.ClaimOutbox(ctx, "o1", mail.StatePending, to)
 			if err != nil {
 				errs <- err
 				return
 			}
-			wins <- won
-		}()
+			wins <- win{won: won, to: to}
+		}(to)
 	}
 	wg.Wait()
 	close(errs)
@@ -278,16 +286,18 @@ func TestOutboxClaimHasOneWinner(t *testing.T) {
 		t.Fatalf("claim: %v", err)
 	}
 	var won int
-	for ok := range wins {
-		if ok {
+	var winner string
+	for w := range wins {
+		if w.won {
 			won++
+			winner = w.to
 		}
 	}
 	if won != 1 {
 		t.Errorf("%d claims won, want 1", won)
 	}
-	if got, err := s.Outbox(ctx, "o1"); err != nil || got.State != mail.StateSending {
-		t.Errorf("outbox after the claims = %+v, %v", got, err)
+	if got, err := s.Outbox(ctx, "o1"); err != nil || got.State != winner {
+		t.Errorf("outbox after the claims = %+v, %v; want the winner's %q", got, err, winner)
 	}
 	scenarioInvariants(t, s)
 }

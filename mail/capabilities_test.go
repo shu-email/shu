@@ -33,7 +33,10 @@ func TestCapabilitiesOf(t *testing.T) {
 		{"esearch", with(imap.CapESearch), Capabilities{ESearch: true}},
 		{"utf8", with(imap.CapUTF8Accept), Capabilities{UTF8: true}},
 		{"utf8 only", with(imap.CapUTF8Only), Capabilities{UTF8: true}},
-		{"sort", with(imap.CapSort, imap.Cap("THREAD")), Capabilities{Sort: true, Thread: true}},
+		{"sort", with(imap.CapSort), Capabilities{Sort: true}},
+		{"sort display", with(imap.Cap("SORT=DISPLAY")), Capabilities{Sort: true}},
+		{"thread references", with(imap.Cap("THREAD=REFERENCES")), Capabilities{Thread: true}},
+		{"thread ordered subject", with(imap.Cap("THREAD=ORDEREDSUBJECT")), Capabilities{Thread: true}},
 		// IMAP4rev2 makes IDLE, MOVE, UIDPLUS, LIST-EXTENDED,
 		// LIST-STATUS and ESEARCH mandatory. SPECIAL-USE, UTF-8, SORT
 		// and THREAD are not part of that set.
@@ -44,7 +47,7 @@ func TestCapabilitiesOf(t *testing.T) {
 		{"everything", with(
 			imap.CapIdle, imap.CapMove, imap.CapUIDPlus, imap.CapListExtended,
 			imap.CapListStatus, imap.CapSpecialUse, imap.CapUTF8Accept,
-			imap.CapSort, imap.Cap("THREAD"), imap.CapESearch,
+			imap.CapSort, imap.Cap("THREAD=REFERENCES"), imap.CapESearch,
 		), Capabilities{
 			IDLE: true, Move: true, UIDPlus: true, ListExtended: true,
 			ListStatus: true, SpecialUse: true, UTF8: true, Sort: true,

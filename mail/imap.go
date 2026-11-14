@@ -185,16 +185,17 @@ func (s *imapSession) close() {
 // uses.
 func (s *Service) listFolders(c *imapSession) ([]Folder, error) {
 	// LIST-STATUS and SPECIAL-USE are one request when the server has
-	// them; otherwise a plain LIST and a STATUS per mailbox.
-	extended := c.caps.ListStatus || c.caps.SpecialUse
+	// them; otherwise a plain LIST and a STATUS per mailbox. A server is
+	// asked only for the return options it advertised.
+	options := &imap.ListOptions{ReturnSpecialUse: c.caps.SpecialUse}
+	if c.caps.ListStatus {
+		options.ReturnStatus = &imap.StatusOptions{
+			NumMessages: true, NumUnseen: true, UIDValidity: true,
+		}
+	}
 	var data []*imap.ListData
-	if extended {
-		cmd := c.client.List("", "*", &imap.ListOptions{
-			ReturnSpecialUse: true,
-			ReturnStatus: &imap.StatusOptions{
-				NumMessages: true, NumUnseen: true, UIDValidity: true,
-			},
-		})
+	if options.ReturnSpecialUse || options.ReturnStatus != nil {
+		cmd := c.client.List("", "*", options)
 		var err error
 		data, err = cmd.Collect()
 		if err != nil {

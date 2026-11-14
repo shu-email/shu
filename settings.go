@@ -43,9 +43,12 @@ type aiSettings struct {
 	cliStatus ai.CLIStatus
 	cliModels []string
 	cliEnv    []ai.CLIEnvVar
-	envName   string
-	envValue  string
-	envErr    string
+	// cliGen numbers the checks of the selected tool: one that ends after
+	// a later check began says nothing of the tool as it is now.
+	cliGen   uint64
+	envName  string
+	envValue string
+	envErr   string
 }
 
 // settingsWindowOptions is the settings window: its own, as a system
@@ -478,6 +481,8 @@ func (a *app) loadCLIStatus() {
 	f := &a.aiForm
 	id := f.cfg.Provider
 	path := f.cfg.CLIPath(id)
+	f.cliGen++
+	g := f.cliGen
 	f.cliBusy, f.cliStatus = true, ai.CLIStatus{}
 	a.run(func() {
 		ctx, cancel := a.ctx()
@@ -493,7 +498,7 @@ func (a *app) loadCLIStatus() {
 		}
 		env, _ := a.ai.CLIEnv(id)
 		a.post(func() {
-			if f.cfg.Provider != id {
+			if f.cliGen != g || f.cfg.Provider != id {
 				return
 			}
 			f.cliBusy = false

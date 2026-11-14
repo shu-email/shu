@@ -26,6 +26,9 @@ type providersPanel struct {
 	statuses map[ai.ProviderID]ai.CLIStatus
 	keys     map[ai.ProviderID]bool
 	loaded   bool
+	// gen numbers the loads of the two: one that ends after a later load
+	// began says nothing of the panel as it is now.
+	gen uint64
 	// revealAccount shows the address a tool reports; it is masked until
 	// the user asks, so a screenshot of the panel gives no account away.
 	revealAccount bool
@@ -80,6 +83,8 @@ func (a *app) openProviders() {
 // key is stored. No model request is made.
 func (a *app) loadProviderStates() {
 	p := &a.providers
+	p.gen++
+	g := p.gen
 	cfg := a.aiForm.cfg.Clone()
 	a.run(func() {
 		ctx, cancel := a.ctx()
@@ -96,6 +101,9 @@ func (a *app) loadProviderStates() {
 			keys[ai.ConnectionKeyID(conn)] = stored
 		}
 		a.post(func() {
+			if p.gen != g {
+				return
+			}
 			p.statuses, p.keys, p.loaded = statuses, keys, true
 		})
 	})

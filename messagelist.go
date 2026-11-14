@@ -372,8 +372,7 @@ func (a *app) emptyState() string {
 // undoBanner offers to take back the last change: a move, a label, or a
 // flag.
 func (a *app) undoBanner(c *ui.Context, t *ui.Theme) {
-	ui.Row(c.Key("banner/undo")).Shrink(0).Gap(8).AlignItems(ui.Center).Padding(8, 14).
-		Background(t.Success.Alpha(0.10)).Transition(bannerMotion).Children(func() {
+	bannerRow(c, "banner/undo", t.Success.Alpha(0.10)).Children(func() {
 		ui.Icon(c, checkIcon).FontSize(14).TextColor(t.Success)
 		ui.Text(c, a.undo.label).FontSize(12).Bold().Grow(1)
 		ui.Button(c, locales.Undo()).Label(locales.Undo()).
@@ -385,8 +384,7 @@ func (a *app) undoBanner(c *ui.Context, t *ui.Theme) {
 
 // errorBanner shows the last failure with a retry action.
 func (a *app) errorBanner(c *ui.Context, t *ui.Theme) {
-	ui.Row(c.Key("banner/error")).Shrink(0).Gap(8).AlignItems(ui.Center).Padding(8, 14).
-		Background(t.Warning.Alpha(0.12)).Transition(bannerMotion).Children(func() {
+	bannerRow(c, "banner/error", t.Warning.Alpha(0.12)).Children(func() {
 		ui.Icon(c, alertIcon).FontSize(14).TextColor(t.Warning)
 		ui.Text(c, a.err).FontSize(12).TextColor(t.Text).Grow(1).MaxLines(2)
 		if ui.Button(c, locales.Retry()).OnClick(func() {
@@ -410,8 +408,7 @@ func (a *app) pendingBanner(c *ui.Context, t *ui.Theme) {
 	if unknown {
 		message = locales.DeliveryUnknown(len(a.pending))
 	}
-	ui.Column(c.Key("banner/pending")).Shrink(0).Gap(6).Padding(8, 14).
-		Background(t.Warning.Alpha(0.10)).Transition(bannerMotion).Children(func() {
+	bannerColumn(c, "banner/pending", t.Warning.Alpha(0.10)).Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Icon(c, alertIcon).FontSize(14).TextColor(t.Warning)
 			ui.Text(c, message).FontSize(12).Bold().Grow(1)

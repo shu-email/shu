@@ -508,8 +508,7 @@ func (a *app) moveConvsToFolder(all []mail.Conversation, dest string) {
 // folderNoteBanner says what the last folder action did, and lets the
 // note go.
 func (a *app) folderNoteBanner(c *ui.Context, t *ui.Theme) {
-	ui.Row(c.Key("banner/folder-note")).Shrink(0).Gap(8).AlignItems(ui.Center).Padding(8, 14).
-		Background(t.Accent.Alpha(0.08)).Transition(bannerMotion).Children(func() {
+	bannerRow(c, "banner/folder-note", t.Accent.Alpha(0.08)).Children(func() {
 		ui.Icon(c, checkIcon).FontSize(14).TextColor(t.Accent)
 		ui.Text(c, a.folderNote).FontSize(12).TextColor(t.Text).Grow(1).MinWidth(0).MaxLines(2).Role(ui.RoleStatus)
 		a.iconButton(c, closeIcon, locales.DismissFolderNote(), locales.DismissFolderNote()).

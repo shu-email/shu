@@ -107,9 +107,8 @@ func (a *app) syncNotice(c *ui.Context, t *ui.Theme) {
 		return
 	}
 	failed := ev.Failure != mail.SyncFailNone
-	ui.Row(c.Key("sync/notice")).Shrink(0).Gap(8).AlignItems(ui.Center).Padding(8, 14).
-		Background(syncNoticeBackground(t, failed)).BorderWidth(0, 0, 1, 0).
-		BorderColor(t.Border).Transition(bannerMotion).Children(func() {
+	bannerRow(c, "sync/notice", syncNoticeBackground(t, failed)).
+		BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
 		if failed {
 			ui.Icon(c, alertIcon).FontSize(14).TextColor(t.Warning)
 			ui.Text(c, syncFailureText(ev)).FontSize(12).Grow(1).MinWidth(0).MaxLines(2).

@@ -66,12 +66,12 @@ jobs:
       - name: Check release builds leave out the dev seed
         run: |
           for tags in "" "e2e,mygo_nodownload,mygo_noinspector" "e2e,mygo_nodownload"; do
-            if go list -deps -tags "$tags" . | grep -qx 'shu/internal/fakemail'; then
+            if go list -deps -tags "$tags" ./cmd/shu | grep -qx 'shu/internal/fakemail'; then
               echo "::error::a build with tags '$tags' links shu/internal/fakemail"
               exit 1
             fi
           done
-          go list -deps -tags e2e . | grep -qx 'shu/internal/fakemail' || {
+          go list -deps -tags e2e ./cmd/shu | grep -qx 'shu/internal/fakemail' || {
             echo "::error::the e2e dev build no longer links the seed; fix this check"
             exit 1
           }

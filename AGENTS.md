@@ -26,11 +26,19 @@ Windows and Linux. It is written in Go with
 
 ## Architecture
 
-- The app starts as a single `package main`, but the mail engine is not
-  UI code. Protocol (IMAP/SMTP), sync, storage and AI code must never
+- The app's one executable starts at `cmd/shu/`, whose `main` only calls
+  `app.Run`. The window, its state and every view live in `app/`, one
+  `app` struct with files split by concern; `mygo.json` points `main` at
+  `./cmd/shu`. The mail engine is not UI code. Protocol (IMAP/SMTP),
+  sync, storage and AI code must never
   import `github.com/egoist/mygo/ui`; the UI reaches the engine through a
   plain service value it calls, and the engine reports back with data,
   not elements.
+- The tree reads as its layers: `cmd/shu/` the entry (and the e2e
+  automation plugin), `app/` the UI, `mail/` the engine, `store/` the
+  SQLite cache, `ai/` the AI layer, `locales/` the catalogs, and
+  `internal/` the test helpers. New Go code goes in one of these, never
+  in the repository root.
 - When a subsystem (sync, store, ai) grows past a file or two, move it
   into its own package in the same change, keep the boundary above, and
   update this section to describe the new layout.
@@ -132,7 +140,7 @@ Windows and Linux. It is written in Go with
   into, so the window says its own words rather than the server's).
   `Service.OnSync` sets the one receiver, which runs on the syncing
   goroutine; the window posts each event to the UI thread and keeps the
-  last word of each of an account's syncs (`syncstatus.go`), drawing the
+  last word of each of an account's syncs (`app/syncstatus.go`), drawing the
   account on show above the list. A sync that finishes or is cancelled
   takes its own line away; a failed one stays until that sync runs again,
   and a sync still running keeps its line when another of the account
@@ -179,7 +187,7 @@ Windows and Linux. It is written in Go with
   the account's own address; its cache and settings are never touched.
   Client IDs are set at build time (`-X shu/mail.GoogleClientID=…`).
 - The account form finds a domain's servers before the user types them
-  (`mail/discover.go`, `store/discover.go`, `accounts.go`): the entry
+  (`mail/discover.go`, `store/discover.go`, `app/accounts.go`): the entry
   the user made for the domain, a provider's preset
   (`mail.ProviderFor`), what an earlier lookup kept, then Thunderbird's
   autoconfig at `autoconfig.<domain>` and its well-known path,
@@ -254,7 +262,7 @@ Windows and Linux. It is written in Go with
   user asks. Its keys of rows, bodies and summaries include the account,
   and an action takes the account from the row it acts on.
 - A smart mailbox is a named search this device keeps (`mail/smart.go`,
-  `store/smart.go`, `smart.go`): a name, the list it was saved from (an
+  `store/smart.go`, `app/smart.go`): a name, the list it was saved from (an
   account's folder, a label, Starred, or the folder of a special use),
   the search text and the scope it covered, from `mail.SmartScope*`.
   `Service.SaveSmartMailbox` trims and checks them and a name is one per
@@ -363,7 +371,7 @@ Windows and Linux. It is written in Go with
   newest `mail.MaxRuleActivity` entries and every pending one.
 - Leaving a mailing list and blocking a sender are the user's own choices,
   kept on this device (`mail/unsubscribe.go`, `mail/block.go`,
-  `store/block.go`, and the window's `block.go`). What a message's
+  `store/block.go`, and the window's `app/block.go`). What a message's
   `List-Unsubscribe` headers offer is read from the cached headers alone
   (`mail.ParseUnsubscribeOffer`); the window offers an unsubscribe only
   when one exists, and the confirmation names the exact URL or address
@@ -387,10 +395,10 @@ Windows and Linux. It is written in Go with
   `UnblockSender`, `blocked_senders`).
 - HTML mail is untrusted and shown only in an isolated web view that
   calls no Go method: `renderHTML` strips everything that runs or loads
-  and wraps the message with a CSP (`htmlview.go`), and remote pictures
+  and wraps the message with a CSP (`app/htmlview.go`), and remote pictures
   stay out until the user allows them for the sender
   (`mail/images.go`). A link never opens by itself: the navigation is
-  held and confirmed, and `examineLink` (`linksafety.go`) reads the
+  held and confirmed, and `examineLink` (`app/linksafety.go`) reads the
   address locally first — its registrable domain from the public suffix
   list embedded in `golang.org/x/net`, its userinfo, IP host, port,
   trailing dot, subdomains and lookalike letters — so the dialog names
@@ -429,7 +437,7 @@ Windows and Linux. It is written in Go with
   the full-text index, the conversations' aggregates, and the
   attachment and draft files, with counts and a few IDs and never a
   message's content. The settings' General tab runs it
-  (`integrity.go`); it repairs nothing.
+  (`app/integrity.go`); it repairs nothing.
 
 ## Before changing MyGo UI
 
@@ -468,8 +476,8 @@ real clock.
 - Write comments and identifiers in English, as the rest of the code is.
   Comments explain why, not what the next line does.
 - Keep the package small: prefer plain functions, data and a single `app`
-  struct over abstraction layers. Split files by concern (`icons.go`,
-  `main.go`) rather than by layer.
+  struct over abstraction layers. Split files by concern (`app/icons.go`,
+  `app/app.go`) rather than by layer.
 - Do not add a dependency for something the standard library or MyGo
   already does. Ask before adding one that affects the build, the app's
   size or its network access.
@@ -515,16 +523,16 @@ real clock.
 - Do not draw SVG icons by hand or inline paths in Go code.
 - Use [Lucide](https://lucide.dev) icons only: download the SVG file from
   Lucide (for example `https://unpkg.com/lucide-static@<version>/icons/<name>.svg`)
-  and put it in `icons/`.
+  and put it in `app/icons/`.
 - Embed the directory and parse each icon once at startup, then reuse the
-  package-level `*ui.SVG` values, as `icons.go` does with
+  package-level `*ui.SVG` values, as `app/icons.go` does with
   `//go:embed icons/*.svg` and `mustIcon`.
 - Keep the files as Lucide ships them: keep the license header and
   `currentColor`, and do not edit the artwork. Name the Go variable after
   the Lucide icon, adding `Icon` (`chevron-down.svg` → `chevronDownIcon`).
-- Add icons at the Lucide version already in `icons/` unless the change is
+- Add icons at the Lucide version already in `app/icons/` unless the change is
   a deliberate upgrade of all of them. The version in use is recorded in
-  the header comment of `icons.go`; update it in the same change whenever
+  the header comment of `app/icons.go`; update it in the same change whenever
   icons are added from a newer Lucide release.
 
 ## Testing
@@ -545,7 +553,7 @@ real clock.
   to the policy. A new dangerous case is a new fixture.
 - Mail tests run against fake IMAP/SMTP servers only (`internal/fakemail`)
   — never a real account, not even a test mailbox on a real provider.
-  The dev build's seeded account (`seed_e2e.go`) runs on the same
+  The dev build's seeded account (`app/seed_e2e.go`) runs on the same
   servers; only test files and e2e-tagged files may import that package,
   and CI checks that release builds leave it out. Development builds
   use a separate data directory from any real install, so a dev run can

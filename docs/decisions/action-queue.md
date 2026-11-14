@@ -20,8 +20,9 @@ the action to `pending_operations` before the server is touched, show it
 in the cache and return (`mail/queue.go`, `store/pending.go`). An
 account's one queue worker, which runs beside its watcher, makes the
 actions oldest first and takes each with one state change
-(`Store.ClaimOperation`), so no action is made twice. Actions one
-command can do together are claimed together (`Store.ClaimOperationsByKey`).
+(`Store.ClaimOperation`), so two workers never make the same action at
+once. Actions one command can do together are claimed together
+(`Store.ClaimOperationsByKey`).
 A server that cannot be reached is retried with a growing wait; one that
 refuses an action leaves it `failed` with its reason for the window, and
 a refused move puts the message's row back. A folder whose UIDVALIDITY

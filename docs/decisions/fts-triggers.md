@@ -1,6 +1,7 @@
 # Full-text search: an external-content FTS5 index kept by triggers
 
-Status: accepted, in use since migration v7, widened in v8.
+Status: accepted, in use since migration v1; the preview joined the
+index in v7 and the recipients in v8.
 
 ## Context
 

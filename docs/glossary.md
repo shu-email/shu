@@ -3,7 +3,8 @@
 Shu's words, in the sense this repository means them. The architecture
 is in [AGENTS.md](../AGENTS.md) and the behaviour in
 [core-spec.md](core-spec.md); this page names the things those describe,
-and says where each lives in the code. It repeats no prose from them.
+and says where each lives in the code, rather than restating how they
+work.
 
 Each entry also names what not to call the thing, so that code, issues
 and reviews stay readable together.
@@ -52,9 +53,8 @@ The window says "conversation"; the schema's column is `thread_id`.
 
 ## draft
 
-A message the user is writing, kept in the database as the truth. The
-copy in the account's Drafts folder mirrors it for other mail clients
-and is brought in step by its own sync.
+A message the user is writing; the cache's copy is the truth, and the
+one in the account's Drafts folder is what other mail clients see.
 `mail.Draft`, `Service.SaveDraft` and `Service.SyncDrafts`
 ([mail/draft.go](../mail/draft.go)), `drafts` and `draft_attachments`
 ([store/drafts.go](../store/drafts.go)).
@@ -63,9 +63,9 @@ and is brought in step by its own sync.
 
 ## outbox
 
-The queue of messages the user sent that have not left yet, each an
-entry that survives a restart. Sending again is safe because one state
-change of the entry decides whether it leaves at all.
+The queue of messages the user sent that have not left yet; an entry
+outlives the app, and one state change of it decides whether it leaves
+or is taken back.
 `mail.PendingSend` ([mail/message.go](../mail/message.go)),
 `Service.Send` and `Service.DeliverScheduled`
 ([mail/smtp.go](../mail/smtp.go), [mail/schedule.go](../mail/schedule.go)),
@@ -78,19 +78,17 @@ An outbox entry with a time it is due, written when the user asks for a
 delay so that the waiting outlives the app. Until it is due, `Unsend`
 takes it back and returns its draft; `DeliverScheduled` sends those an
 earlier run left waiting.
-`StateScheduled`, `Service.Schedule`, `Service.SendScheduled`,
-`Service.Unsend`, `Service.DeliverScheduled`
-([mail/schedule.go](../mail/schedule.go)).
+`StateScheduled` ([mail/message.go](../mail/message.go)),
+`Service.Schedule`, `Service.SendScheduled`, `Service.Unsend` and
+`Service.DeliverScheduled` ([mail/schedule.go](../mail/schedule.go)).
 *Not:* "delayed delivery" (the SMTP feature), and it is not a draft
 while it waits to leave: the draft stays a draft.
 
 ## arrival
 
-Mail that arrived, as opposed to mail already there: what an incremental
-sync fetched above a folder's cursor, in a folder synced before under the
-same UIDVALIDITY. A first sync, `FetchOlder`, and a sync after the
-server changed UIDVALIDITY bring none, and neither does a message this
-app moved into the folder itself.
+Mail an incremental sync fetched above a folder's cursor, in a folder
+synced before under the same UIDVALIDITY. A first sync, `FetchOlder`, a
+reset UIDVALIDITY and a message this app moved in are not arrivals.
 `mail/arrivals.go`, `Store.ExpectArrivals` and `Store.TakeArrivals`
 ([mail/store.go](../mail/store.go), [store/rules.go](../store/rules.go)).
 *Not:* "new mail" (that is what the watcher announces, which leaves out
@@ -99,9 +97,8 @@ what a rule moved or kept quiet).
 ## watermark
 
 A folder's mark of how far mail has been handed to the window to
-announce: `Store.TakeNew` moves it in the same step that returns the
-messages above it, so a message is announced at most once. It is not the
-sync cursor, which says what is cached.
+announce; `Store.TakeNew` moves it as it returns the messages above it,
+so a message is announced at most once. Not the sync cursor.
 `watermarks` and `Store.TakeNew`
 ([store/watermarks.go](../store/watermarks.go)), called by the watcher
 ([mail/watch.go](../mail/watch.go)).
@@ -152,10 +149,10 @@ this device's bookkeeping) or "soft delete" in user-facing text.
 ## cache
 
 The SQLite database of mail this device has seen: folders, headers,
-bodies, conversations, contacts, labels and the derived state a list
-reads. The engine is its only writer. It is not the truth for drafts,
-the outbox, contacts, labels or rules, which the server cannot give
-again.
+bodies, conversations, contacts, labels, drafts, the outbox, rules and
+the derived state a list reads. The engine is its only writer. Some of
+it the server can give again; drafts, the outbox, contacts, labels and
+rules it cannot, so the cache's preparation never drops them.
 `store/` ([store/store.go](../store/store.go)), opened by `store.Open`
 and prepared at startup by `Service.PrepareCache`
 ([mail/cache.go](../mail/cache.go)); its form is `mail.CacheVersion`.
@@ -170,7 +167,7 @@ received mail's attachment bytes live in the cache directory instead.
 The files are the user's data: a stored file goes only when no draft and
 no outbox entry names it.
 `Service.AttachFile`, `Service.RemoveAttachment`
-([mail/attach.go](../mail/attach.go)), `draft_files`
+([mail/attach.go](../mail/attach.go)), `draft_attachments`
 ([store/drafts.go](../store/drafts.go)).
 *Not:* "cache" (a draft's files survive the cache's sweep), and not
 "uploads" (nothing has been uploaded until the message is sent).

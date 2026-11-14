@@ -24,8 +24,9 @@ including a move's tombstone and its removal (`store/thread_aggregates.go`,
 recomputes them from `messages`, and `Service.CheckIntegrity` verifies
 them without changing anything.
 
-The trigger body and the rebuild share one SQL fragment, so the two
-cannot mean different things.
+The whole-thread trigger body and the rebuild share one SQL fragment, so
+those two cannot mean different things. The per-folder insert and the
+per-folder rebuild are two queries that must be changed together.
 
 ## Consequences
 

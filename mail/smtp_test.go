@@ -35,6 +35,9 @@ type fakeSMTP struct {
 	// reading the message: a server that stalls, or does anything else.
 	refuse error
 	onData func(r io.Reader) error
+	// refuseMail is the server's answer to MAIL FROM, as a provider that
+	// will not take mail from the sender gives it.
+	refuseMail error
 }
 
 type smtpBackend struct{ f *fakeSMTP }
@@ -70,8 +73,9 @@ func (s *smtpSession) Mail(from string, opts *smtp.MailOptions) error {
 	}
 	s.f.mu.Lock()
 	s.f.froms = append(s.f.froms, from)
+	refuse := s.f.refuseMail
 	s.f.mu.Unlock()
-	return nil
+	return refuse
 }
 
 func (s *smtpSession) Rcpt(to string, opts *smtp.RcptOptions) error {
@@ -322,5 +326,42 @@ func TestTestConnectionSucceedsWithBothServers(t *testing.T) {
 	}
 	if err := svc.TestConnection(ctx, a, "wrong"); err == nil {
 		t.Error("wrong password accepted")
+	}
+}
+
+// A server that refuses the message's sender answers with its reason: the
+// send fails with that answer and is not reported as possibly delivered,
+// and the outbox entry waits as failed rather than unknown.
+func TestSendRejectedByTheServerFailsTheEntry(t *testing.T) {
+	ctx := context.Background()
+	imapServer := startFakeIMAP(t, allCaps())
+	imapServer.create(t, "INBOX", "Sent")
+	smtpServer := startFakeSMTP(t)
+	smtpServer.mu.Lock()
+	smtpServer.refuseMail = &smtp.SMTPError{Code: 550, EnhancedCode: smtp.EnhancedCode{5, 7, 1}, Message: "sender rejected"}
+	smtpServer.mu.Unlock()
+	svc, store, _ := newTestService()
+	svc.SetTLSConfig(insecureTLS())
+	a := combinedAccount(t, imapServer, smtpServer)
+	if err := svc.AddAccount(ctx, a, "secret"); err != nil {
+		t.Fatal(err)
+	}
+	_, err := svc.Send(ctx, a.ID, Outgoing{To: []Address{{Email: "bob@example.com"}}, Subject: "x", Text: "y"})
+	var rejected *RejectedError
+	if !errors.As(err, &rejected) || rejected.Code != 550 {
+		t.Fatalf("send error = %v, want the server's rejection", err)
+	}
+	if errors.Is(err, ErrDeliveryUnknown) {
+		t.Error("a refused sender was reported as possibly delivered")
+	}
+	if len(smtpServer.received()) != 0 {
+		t.Error("a message was delivered despite the rejection")
+	}
+	pending, err := store.PendingSends(ctx, a.ID)
+	if err != nil || len(pending) != 1 {
+		t.Fatalf("pending = %+v, %v", pending, err)
+	}
+	if pending[0].State != StateFailed || !strings.Contains(pending[0].LastError, "sender rejected") {
+		t.Errorf("outbox entry = state %q, error %q", pending[0].State, pending[0].LastError)
 	}
 }

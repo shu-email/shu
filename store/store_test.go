@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -341,5 +343,126 @@ func TestAICache(t *testing.T) {
 	}
 	if _, ok, _ := s.AICached(ctx, "k1"); ok {
 		t.Error("a cached answer outlived its account")
+	}
+}
+
+// A sync's flag refresh writes every pair of values the server reports,
+// and the conversations' totals follow the messages it changed.
+func TestSyncBatchRefreshesFlagsInGroups(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	addAccount(t, s, "a1")
+	addFolder(t, s, "a1", "INBOX")
+	now := time.Unix(1_700_000_000, 0)
+	msg := func(uid mail.UID) mail.Message {
+		return mail.Message{Summary: mail.Summary{
+			UID: uid, Subject: "m", From: mail.Address{Email: "ann@example.com"}, Date: now,
+		}}
+	}
+	if err := s.ApplySync(ctx, "a1", mail.SyncBatch{
+		Folder:   mail.Folder{Name: "INBOX", UIDValidity: 42, LastUID: 3, Total: 3, Unread: 3},
+		Messages: []mail.Message{msg(1), msg(2), msg(3)},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// One is left as it was, one is read and starred, one is read.
+	if err := s.ApplySync(ctx, "a1", mail.SyncBatch{
+		Folder: mail.Folder{Name: "INBOX", UIDValidity: 42, LastUID: 3, Total: 3, Unread: 2},
+		Flags: []mail.FlagUpdate{
+			{UID: 1},
+			{UID: 2, Seen: true, Flagged: true},
+			{UID: 3, Seen: true},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := s.ListMessages(ctx, "a1", "INBOX", "", 10)
+	if err != nil || len(msgs) != 3 {
+		t.Fatalf("messages = %v, %v", msgs, err)
+	}
+	got := map[mail.UID]mail.Summary{}
+	for _, m := range msgs {
+		got[m.UID] = m
+	}
+	if m := got[1]; m.Seen || m.Flagged {
+		t.Errorf("message 1 = %+v, want it as it was", m)
+	}
+	if m := got[2]; !m.Seen || !m.Flagged {
+		t.Errorf("message 2 = %+v, want read and starred", m)
+	}
+	if m := got[3]; !m.Seen || m.Flagged {
+		t.Errorf("message 3 = %+v, want read and not starred", m)
+	}
+	// A message without a key is a conversation of its own.
+	if row := threadRow(t, s, threadOf(t, s, "a1", "INBOX", 1)); row[1] != "1" || row[2] != "0" {
+		t.Errorf("conversation of 1: unread %s, starred %s; want 1 and 0", row[1], row[2])
+	}
+	if row := threadRow(t, s, threadOf(t, s, "a1", "INBOX", 2)); row[1] != "0" || row[2] != "1" {
+		t.Errorf("conversation of 2: unread %s, starred %s; want 0 and 1", row[1], row[2])
+	}
+}
+
+// The flags a sync refreshes go to the rows the server changed, and to no
+// other: a window whose flags did not change costs no write. The test
+// counts the writes with a trigger of its own, as the store's keep the
+// conversations.
+func TestSyncFlagRefreshWritesOnlyChangedRows(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	addAccount(t, s, "a1")
+	addFolder(t, s, "a1", "INBOX")
+	now := time.Unix(1_700_000_000, 0)
+	msg := func(uid mail.UID) mail.Message {
+		return mail.Message{Summary: mail.Summary{UID: uid, Subject: "m", Date: now}}
+	}
+	if err := s.ApplySync(ctx, "a1", mail.SyncBatch{
+		Folder:   mail.Folder{Name: "INBOX", UIDValidity: 42, LastUID: 3, Total: 3, Unread: 3},
+		Messages: []mail.Message{msg(1), msg(2), msg(3)},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`CREATE TABLE flag_writes (n INTEGER)`,
+		`INSERT INTO flag_writes VALUES (0)`,
+		`CREATE TRIGGER test_flag_writes AFTER UPDATE OF seen, flagged ON messages
+			BEGIN UPDATE flag_writes SET n = n + 1; END`,
+	} {
+		if _, err := s.exec(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// One is left as it was; the two others are read.
+	if err := s.ApplySync(ctx, "a1", mail.SyncBatch{
+		Folder: mail.Folder{Name: "INBOX", UIDValidity: 42, LastUID: 3, Total: 3, Unread: 2},
+		Flags: []mail.FlagUpdate{
+			{UID: 1},
+			{UID: 2, Seen: true},
+			{UID: 3, Seen: true},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := s.query(ctx, `SELECT n FROM flag_writes`)
+	if err != nil || len(rows.Values) != 1 {
+		t.Fatalf("writes = %v, %v", rows.Values, err)
+	}
+	if n := number(rows.Values[0][0]); n != 2 {
+		t.Errorf("flag writes = %d, want 2: only the rows the server changed", n)
+	}
+}
+
+// The refresh writes every boolean of mail.FlagUpdate: one added to it
+// must reach the grouping in ApplySync, and this test says so rather than
+// leaving it out of the cache.
+func TestFlagUpdateBooleansAreAllWritten(t *testing.T) {
+	typ := reflect.TypeOf(mail.FlagUpdate{})
+	var bools []string
+	for i := 0; i < typ.NumField(); i++ {
+		if typ.Field(i).Type.Kind() == reflect.Bool {
+			bools = append(bools, typ.Field(i).Name)
+		}
+	}
+	if want := []string{"Seen", "Flagged"}; !slices.Equal(bools, want) {
+		t.Errorf("mail.FlagUpdate holds %v; ApplySync groups and writes %v", bools, want)
 	}
 }

@@ -297,3 +297,32 @@ func btoi(b bool) int {
 	}
 	return 0
 }
+
+// A flag change writes its conversation once. The message did not move,
+// so the conversation it "left" is the one it is in, and writing that
+// again is the same write over.
+func TestAFlagChangeWritesItsThreadOnce(t *testing.T) {
+	s := openTest(t)
+	aggregateFixture(t, s)
+	ctx := context.Background()
+	for _, q := range []string{
+		`CREATE TABLE thread_writes (n INTEGER)`,
+		`INSERT INTO thread_writes VALUES (0)`,
+		`CREATE TRIGGER test_thread_writes AFTER UPDATE ON threads
+			BEGIN UPDATE thread_writes SET n = n + 1; END`,
+	} {
+		if _, err := s.exec(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.SetFlag(ctx, "a1", "INBOX", 1, mail.FlagFlagged, true); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := s.query(ctx, `SELECT n FROM thread_writes`)
+	if err != nil || len(rows.Values) != 1 {
+		t.Fatalf("writes = %v, %v", rows.Values, err)
+	}
+	if n := number(rows.Values[0][0]); n != 1 {
+		t.Errorf("thread writes = %d, want 1: a flag changes one conversation", n)
+	}
+}

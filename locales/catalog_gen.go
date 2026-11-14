@@ -11430,11 +11430,11 @@ func (msgs Messages) AiLocalTool() string {
 	return Catalog.Format(msgs.locale, "aiLocalTool", nil)
 }
 
-// AiLocalToolIntro says "Use a Claude Code or Codex command already signed in on this Mac. Shu never reads or stores its credentials; the mail…"
+// AiLocalToolIntro says "Use a Claude Code, Codex or pi command already signed in on this Mac. Shu never reads or stores its credentials; the …"
 // in the language the app shows.
 func AiLocalToolIntro() string { return In(i18n.Locale()).AiLocalToolIntro() }
 
-// AiLocalToolIntro says "Use a Claude Code or Codex command already signed in on this Mac. Shu never reads or stores its credentials; the mail…"
+// AiLocalToolIntro says "Use a Claude Code, Codex or pi command already signed in on this Mac. Shu never reads or stores its credentials; the …"
 // in the language of msgs.
 func (msgs Messages) AiLocalToolIntro() string {
 	return Catalog.Format(msgs.locale, "aiLocalToolIntro", nil)

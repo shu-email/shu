@@ -109,3 +109,24 @@ func TestRunProcessCancelWindows(t *testing.T) {
 		t.Errorf("cancel took %s", took)
 	}
 }
+
+// pi's installer puts its command in the user's profile on Windows too, and
+// adds that folder to PATH only for a shell: an app started from Explorer
+// finds nothing there.
+func TestFindPiInstallWindows(t *testing.T) {
+	home := t.TempDir()
+	bin := filepath.Join(home, ".pi", "agent", "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	script := filepath.Join(bin, "pi.cmd")
+	if err := os.WriteFile(script, []byte("@echo off\r\nexit /b 0\r\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("PATH", "")
+	path, ok := cliFind("pi", "")
+	if !ok || path != script {
+		t.Errorf("pi found at %q, %v", path, ok)
+	}
+}

@@ -450,3 +450,41 @@ func TestAIToolPathChangedWhileItIsChecked(t *testing.T) {
 		t.Errorf("the old path's models landed: %q", a.aiForm.cliModels)
 	}
 }
+
+// pi is one local tool like the others: the panel checks it with its own
+// catalog, and its model field suggests what that catalog reports.
+func TestAISettingsPiTool(t *testing.T) {
+	a, _, _, _ := aiMessageApp(t, true)
+	dir := t.TempDir()
+	script := filepath.Join(dir, "pi")
+	body := "#!/bin/sh\n" +
+		"if [ \"$1\" = \"--version\" ]; then echo '1.5.2'; exit 0; fi\n" +
+		"if [ \"$1\" = \"--list-models\" ]; then\n" +
+		"  echo 'provider    model          context  max-out  thinking  images'\n" +
+		"  echo 'magpie      auto/beam-free 1.0M     131.1K   yes       yes'\n" +
+		"  exit 0\n" +
+		"fi\n" +
+		"exit 1\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := ai.DefaultConfig()
+	cfg.Enabled = true
+	cfg.UseProvider(ai.ProviderPiCLI)
+	cfg.SetCLIPath(ai.ProviderPiCLI, script)
+	if err := a.ai.SaveConfig(context.Background(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	a.openSettings(settingsTabAI)
+	tt := ui.NewTester(a.view, 1220, 900)
+	a.openProviders()
+	tt.Frame()
+	for _, text := range []string{locales.AiLocalToolVersion("1.5.2"), script, locales.AiLocalToolIsolation()} {
+		if !tt.HasText(text) {
+			t.Errorf("missing %q in %q", text, tt.Texts())
+		}
+	}
+	if len(a.aiForm.cliModels) != 1 || a.aiForm.cliModels[0] != "magpie/auto/beam-free" {
+		t.Errorf("models = %q", a.aiForm.cliModels)
+	}
+}

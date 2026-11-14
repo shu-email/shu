@@ -295,3 +295,123 @@ done
 		t.Errorf("models = %q", models)
 	}
 }
+
+// pi reports no sign-in status of its own: its catalog lists the models the
+// signed-in provider offers, and nothing at all while signed out.
+func TestPiStatusAndModels(t *testing.T) {
+	const table = `echo "provider    model          context  max-out  thinking  images"
+echo "magpie      auto/beam-free 1.0M     131.1K   yes       yes"
+echo "magpie      tokenflows/gpt 1.1M     128K     yes       yes"
+echo "magpie      auto/beam-free 1.0M     131.1K   yes       yes"
+echo "minimax-cn  MiniMax-M3     1M       128K     yes       yes"
+`
+	script, _, _ := fakeCLI(t, `if [ "$1" = "--version" ]; then echo "1.5.2"; exit 0; fi
+if [ "$1" = "--list-models" ]; then `+table+`exit 0; fi
+exit 1
+`)
+	svc := NewService(nil, nil)
+	status := svc.CLIStatus(context.Background(), ProviderPiCLI, script)
+	if !status.Installed || !status.SignedIn || status.Version != "1.5.2" {
+		t.Fatalf("status = %+v", status)
+	}
+	models, err := svc.CLIModels(context.Background(), ProviderPiCLI, script)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"magpie/auto/beam-free", "magpie/tokenflows/gpt", "minimax-cn/MiniMax-M3"}
+	if strings.Join(models, ",") != strings.Join(want, ",") {
+		t.Errorf("models = %q, want %q", models, want)
+	}
+
+	// Signed out, pi prints a notice where the table would be.
+	script, _, _ = fakeCLI(t, `if [ "$1" = "--version" ]; then echo "1.5.2"; exit 0; fi
+if [ "$1" = "--list-models" ]; then echo "No models available. Use /login to log into a provider."; exit 0; fi
+exit 1
+`)
+	status = svc.CLIStatus(context.Background(), ProviderPiCLI, script)
+	if !status.Installed || status.SignedIn || status.Version != "1.5.2" {
+		t.Errorf("signed out status = %+v", status)
+	}
+	if models, err := svc.CLIModels(context.Background(), ProviderPiCLI, script); err != nil || len(models) != 0 {
+		t.Errorf("signed out models = %q, %v", models, err)
+	}
+
+	// An older build is named before a launch fails on a flag it lacks.
+	script, _, _ = fakeCLI(t, `if [ "$1" = "--version" ]; then echo "0.9.0"; exit 0; fi
+if [ "$1" = "--list-models" ]; then echo "provider model"; exit 0; fi
+exit 1
+`)
+	if status := svc.CLIStatus(context.Background(), ProviderPiCLI, script); !status.Outdated {
+		t.Errorf("old pi status = %+v", status)
+	}
+}
+
+// A pi launch keeps every resource that could act switched off, and hands
+// it the prompt on standard input only.
+func TestPiLaunchIsIsolated(t *testing.T) {
+	dir := t.TempDir()
+	script := filepath.Join(dir, "pi")
+	log := filepath.Join(dir, "log")
+	stdinPath := filepath.Join(dir, "stdin")
+	body := "#!/bin/sh\n" +
+		"{ echo \"args:$@\"; echo \"pwd:$PWD\"; } > " + log + "\n" +
+		"if [ \"$1\" = \"--version\" ]; then echo 1.5.2; exit 0; fi\n" +
+		"if [ \"$1\" = \"--list-models\" ]; then echo 'provider model'; echo 'magpie gpt'; exit 0; fi\n" +
+		"cat > " + stdinPath + "\n" +
+		"printf 'Hello from pi\\n'\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := Config{Provider: ProviderPiCLI, Model: "magpie/gpt"}
+	cfg.SetCLIPath(ProviderPiCLI, script)
+	cfg.SetEffort(ProviderPiCLI, "high")
+	svc := NewService(nil, nil)
+	out, err := svc.runCLI(context.Background(), cfg, "magpie/gpt", request{
+		system: "SYSTEM-INSTRUCTION", user: "MAIL-TEXT",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != "Hello from pi" {
+		t.Errorf("output = %q", out)
+	}
+	args, pwd, _, stdin := readLog(t, log, stdinPath)
+	for _, want := range []string{
+		"--print", "--mode text", "--no-session", "--no-tools", "--no-extensions",
+		"--no-mcp", "--no-skills", "--no-prompt-templates", "--no-context-files",
+		"--no-approve", "--system-prompt", "--model magpie/gpt", "--thinking high",
+	} {
+		if !strings.Contains(args, want) {
+			t.Errorf("args miss %q: %q", want, args)
+		}
+	}
+	if strings.Contains(args, "SYSTEM-INSTRUCTION") || strings.Contains(args, "MAIL-TEXT") {
+		t.Errorf("the prompt is in argv: %q", args)
+	}
+	if !strings.Contains(stdin, "MAIL-TEXT") {
+		t.Errorf("stdin = %q", stdin)
+	}
+	if !strings.Contains(pwd, "shu-cli-") {
+		t.Errorf("working directory = %q", pwd)
+	}
+}
+
+// A Finder launch never reads a shell profile, so pi's own install
+// location is looked in as well as PATH.
+func TestFindPiInstall(t *testing.T) {
+	home := t.TempDir()
+	bin := filepath.Join(home, ".pi", "agent", "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	script := filepath.Join(bin, "pi")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", "")
+	path, ok := cliFind("pi", "")
+	if !ok || path != script {
+		t.Errorf("pi found at %q, %v", path, ok)
+	}
+}

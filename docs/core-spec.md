@@ -969,11 +969,11 @@ the engine's actions, `mail.ActionKinds`, and no others.
 
 ### Local AI command-line tools (added since)
 
-- `ai/cli.go` adds Claude Code and Codex as providers beside the HTTP ones. A
-  request to one runs the user's already signed-in command; Shu never reads or
-  stores its credentials. The prompt goes in on standard input, never argv, and
-  the working directory is a fresh `0700` folder under the system temporary
-  directory, removed when the run ends.
+- `ai/cli.go` adds Claude Code, Codex and pi as providers beside the HTTP
+  ones. A request to one runs the user's already signed-in command; Shu never
+  reads or stores its credentials. The prompt goes in on standard input, never
+  argv, and the working directory is a fresh `0700` folder under the system
+  temporary directory, removed when the run ends.
 - Claude runs `-p --output-format text --no-session-persistence
   --disable-slash-commands --tools "" --no-chrome --disallowedTools "*"
   --max-turns 1 --strict-mcp-config --mcp-config {"mcpServers":{}}` with a
@@ -983,17 +983,27 @@ the engine's actions, `mail.ActionKinds`, and no others.
 - Codex runs `codex exec --sandbox read-only --ephemeral --ignore-user-config
   --skip-git-repo-check --color never`, with the feature flags that turn off
   apps, plugins, hooks, shell, browser, computer use, multi-agent and memories.
+- pi runs `pi --print --mode text --no-session` with `--no-tools`,
+  `--no-extensions`, `--no-mcp`, `--no-skills`, `--no-prompt-templates`,
+  `--no-context-files` and `--no-approve`, so no resource it loads at startup
+  can act; `--no-tools` alone would leave extension and MCP tools able to run.
+  Effort becomes `--thinking`.
 - The child gets only what it needs (`PATH`, home, user, locale, `NO_COLOR`), not
   the app's API keys or proxy secrets. Output is capped, ANSI is stripped, and a
   cancel kills the whole process group (`Setpgid` on Unix, `taskkill /T` on
   Windows). Errors are classified and never quote the prompt or tool output.
 - `Service.CLIStatus` checks a tool with `--version` and its own sign-in command
-  (`claude auth status --json`, `codex login status`): no prompt and no quota. A
+  (`claude auth status --json`, `codex login status`, `pi --list-models`): no
+  prompt and no quota. pi has no single sign-in status, so its catalog, which
+  lists only what the signed-in provider offers, is asked instead: empty means
+  signed out. A
   set command path that does not run is an error, never a fallback. The AI
   settings tab shows the status, version, path, model and the isolation note.
 - `Service.CLIModels` asks Claude, through its `initialize` control request, which
   models it offers; the AI settings use them as autocomplete suggestions for the
-  model field, while a typed value still wins. A failed run checks the sign-in
+  model field, while a typed value still wins. pi answers `--list-models` from
+  its own catalog and credentials, as `provider/id`, so a model two providers
+  share names the one the user picked. A failed run checks the sign-in
   state (content-free) and reports `Sign in required` rather than a generic
   failure. Codex still takes a free-text model.
 - Advanced per-tool environment values live in the Settings → AI local-tool

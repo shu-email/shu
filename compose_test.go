@@ -208,6 +208,15 @@ func TestFromRowFoldsAwayForFilesInASmallWindow(t *testing.T) {
 	if from, ok := tt.AccessByRole(ui.RolePopUpButton, locales.From()); ok {
 		t.Errorf("a single sender with files in a 520x420 window shows %+v", from)
 	}
+	// A file still being copied takes the room as one copied does: the
+	// row does not wait for it to land and jump away.
+	cs.attachments, cs.attaching = nil, 1
+	tt.Frame()
+	if from, ok := tt.AccessByRole(ui.RolePopUpButton, locales.From()); ok {
+		t.Errorf("a single sender with a file copying shows %+v", from)
+	}
+	cs.attachments, cs.attaching = []mail.Attachment{{Filename: "report.pdf", Size: 3 << 10}}, 0
+	tt.Frame()
 	if tt2 := ui.NewTester(cs.view, 720, 620); func() bool {
 		from, ok := tt2.AccessByRole(ui.RolePopUpButton, locales.From())
 		return !ok || from.Value != "Shu Mail <me@example.com>"

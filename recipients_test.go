@@ -602,3 +602,142 @@ func TestRecipientsAtMinimumSizeAndDark(t *testing.T) {
 		}
 	}
 }
+
+// Backspace in an input holding only a space takes the space, not the
+// chip before it.
+func TestBackspaceInASpaceKeepsTheChip(t *testing.T) {
+	_, _, cs, tt := contactsApp(t)
+	typeIn(t, tt, locales.To(), "Bob <bob@example.com>, ")
+	tt.Type(" ")
+	tt.Key(0, ui.KeyBackspace)
+	if want := "Bob <bob@example.com>, "; cs.to != want || !tt.HasText("Bob") {
+		t.Errorf("Backspace over a space left %q, want %q", cs.to, want)
+	}
+}
+
+// A comma typed alone is the user's to move through: it commits nothing
+// and does not take the caret's keys.
+func TestALoneCommaTakesNoKeys(t *testing.T) {
+	_, _, cs, tt := contactsApp(t)
+	typeIn(t, tt, locales.To(), "bob@example.com, ")
+	tt.Type(",")
+	tt.Key(0, ui.KeyLeft)
+	if !slices.Contains(fieldValues(tt), ",") {
+		t.Errorf("the input after a comma and Left = %q", fieldValues(tt))
+	}
+	if want := "bob@example.com, ,"; cs.to != want {
+		t.Errorf("To = %q, want %q", cs.to, want)
+	}
+}
+
+// A pasted list with empty entries between its commas leaves no separator
+// behind: they are the list's, not the text's.
+func TestPastedEmptyEntriesLeaveNoSeparator(t *testing.T) {
+	_, _, cs, tt := contactsApp(t)
+	typeIn(t, tt, locales.To(), "bob@example.com,, maya@example.com")
+	if want := "bob@example.com, maya@example.com"; cs.to != want {
+		t.Errorf("To = %q, want %q", cs.to, want)
+	}
+}
+
+// Down in an empty field opens the + button's list, as the + does: the
+// search takes the keyboard, a click adds a contact without taking it,
+// and Escape closes the list and puts it back in the field.
+func TestThePickerTakesTheKeyboardAndGivesItBack(t *testing.T) {
+	_, _, cs, tt := contactsApp(t)
+	typeIn(t, tt, locales.To(), "")
+	if !tt.Focused(locales.To()) {
+		t.Fatal("the field did not take the keyboard")
+	}
+	tt.Key(0, ui.KeyDown)
+	tt.Frame()
+	if !tt.Focused(locales.SearchContacts()) || !cs.rcpt.picker.open {
+		t.Fatalf("Down: search focused %v, list open %v", tt.Focused(locales.SearchContacts()), cs.rcpt.picker.open)
+	}
+	if _, ok := tt.AccessByRole(ui.RoleListBox, locales.ChooseRecipients()); !ok {
+		t.Errorf("the list is no list box: %q", tt.Texts())
+	}
+	click(t, tt, "Maya Chen")
+	if !tt.Focused(locales.SearchContacts()) {
+		t.Error("adding a contact took the keyboard from the search")
+	}
+	tt.Key(0, ui.KeyEscape)
+	if cs.rcpt.picker.open || !tt.Focused(locales.To()) {
+		t.Errorf("Escape: list open %v, To focused %v", cs.rcpt.picker.open, tt.Focused(locales.To()))
+	}
+	if cs.closed {
+		t.Error("Escape in the list closed the window")
+	}
+}
+
+// A press outside the list puts the keyboard back in the field it was
+// opened for only when it landed on nothing: a press on another field
+// keeps the focus it took.
+func TestAPressOutsideThePickerKeepsTheFieldItLandedOn(t *testing.T) {
+	_, _, cs, tt := contactsApp(t)
+	typeIn(t, tt, locales.To(), "")
+	tt.Key(0, ui.KeyDown)
+	tt.Frame()
+	if !cs.rcpt.picker.open {
+		t.Fatal("Down did not open the list")
+	}
+	box, ok := tt.AccessByRole(ui.RoleComboBox, locales.Cc())
+	if !ok {
+		t.Fatalf("no Cc field: %q", tt.Texts())
+	}
+	tt.ClickAt(box.Bounds.X+box.Bounds.W/2, box.Bounds.Y+box.Bounds.H/2)
+	tt.Frame()
+	if cs.rcpt.picker.open {
+		t.Error("the list stayed open")
+	}
+	if !tt.Focused(locales.Cc()) {
+		t.Errorf("the press moved to Cc but the keyboard went elsewhere: %q", tt.Texts())
+	}
+
+	// Opened again, a press on nothing puts the keyboard back in To.
+	click(t, tt, locales.To())
+	tt.Key(0, ui.KeyDown)
+	tt.Frame()
+	if !cs.rcpt.picker.open {
+		t.Fatal("Down did not open the list again")
+	}
+	tt.ClickAt(4, 4)
+	tt.Frame()
+	if cs.rcpt.picker.open || !tt.Focused(locales.To()) {
+		t.Errorf("press on nothing: list open %v, To focused %v", cs.rcpt.picker.open, tt.Focused(locales.To()))
+	}
+}
+
+// Tab out of the list closes it, and the keyboard moves on as Tab does
+// rather than going back to the field.
+func TestTabOutOfThePickerClosesIt(t *testing.T) {
+	_, _, cs, tt := contactsApp(t)
+	typeIn(t, tt, locales.To(), "")
+	tt.Key(0, ui.KeyDown)
+	tt.Frame()
+	if !cs.rcpt.picker.open {
+		t.Fatal("Down did not open the list")
+	}
+	tt.Key(0, ui.KeyTab)
+	tt.Frame()
+	tt.Frame()
+	if cs.rcpt.picker.open {
+		t.Error("Tab left the list open")
+	}
+	if !tt.Focused(locales.Cc()) {
+		t.Errorf("Tab did not move on to Cc: %q", tt.Texts())
+	}
+}
+
+// Down opens the address book in an empty field even while another
+// field has an offer of its own.
+func TestDownOpensTheBookThoughAnotherFieldOffers(t *testing.T) {
+	_, _, cs, tt := contactsApp(t)
+	typeIn(t, tt, locales.Cc(), "ma")
+	click(t, tt, locales.To())
+	tt.Key(0, ui.KeyDown)
+	tt.Frame()
+	if !cs.rcpt.picker.open || cs.rcpt.picker.field != fieldTo {
+		t.Errorf("Down in the empty To: list open %v for field %v", cs.rcpt.picker.open, cs.rcpt.picker.field)
+	}
+}

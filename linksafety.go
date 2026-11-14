@@ -3,6 +3,7 @@ package main
 import (
 	"net"
 	"net/url"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -93,6 +94,10 @@ func examineLink(raw string) linkReport {
 			r.Destination = u.Opaque
 		}
 		return r
+	case "":
+		// A relative address names no scheme to explain. The window only
+		// asks about addresses it opens, which have one.
+		return r
 	default:
 		r.Warnings = append(r.Warnings, linkWarning{kind: linkWarnScheme, name: scheme})
 		return r
@@ -103,8 +108,16 @@ func examineLink(raw string) linkReport {
 	}
 	r.Host = host
 	r.Destination, r.Domain = host, host
-	bare := strings.TrimSuffix(host, ".")
-	if domain, err := publicsuffix.EffectiveTLDPlusOne(bare); err == nil {
+	// DNS, the public suffix list and IDNA all read a name in lower case;
+	// an upper-case host would otherwise be read as another suffix, or
+	// its punycode left undecoded.
+	bare := strings.ToLower(strings.TrimSuffix(host, "."))
+	numeric := isNumericHost(bare)
+	if numeric {
+		// A numeric host has no domain to name: the address itself is
+		// the destination, without the trailing dot DNS allows.
+		r.Destination, r.Domain = bare, bare
+	} else if domain, err := publicsuffix.EffectiveTLDPlusOne(bare); err == nil {
 		r.Domain = domain
 		r.Destination = domain
 	}
@@ -113,13 +126,13 @@ func examineLink(raw string) linkReport {
 			r.Warnings = append(r.Warnings, linkWarning{kind: linkWarnUserinfo, name: name})
 		}
 	}
-	if net.ParseIP(host) != nil {
+	if numeric {
 		r.Warnings = append(r.Warnings, linkWarning{kind: linkWarnIP})
 	} else {
 		if name := lookalikePrefix(bare, r.Domain); name != "" {
 			r.Warnings = append(r.Warnings, linkWarning{kind: linkWarnLookalike, name: name})
 		}
-		if count := strings.Count(host, ".") + 1 - strings.Count(r.Domain, ".") - 1; count >= 3 {
+		if count := strings.Count(bare, ".") - strings.Count(r.Domain, "."); count >= 3 {
 			r.Warnings = append(r.Warnings, linkWarning{kind: linkWarnSubdomains, count: count})
 		}
 	}
@@ -129,7 +142,7 @@ func examineLink(raw string) linkReport {
 	if strings.HasSuffix(host, ".") {
 		r.Warnings = append(r.Warnings, linkWarning{kind: linkWarnTrailingDot})
 	}
-	if display := unicodeHost(host); lookalikeLetters(display) {
+	if display := unicodeHost(bare); lookalikeLetters(display) {
 		r.Warnings = append(r.Warnings, linkWarning{kind: linkWarnLetters, name: display})
 	}
 	return r
@@ -186,7 +199,12 @@ func lookalikePrefix(host, domain string) string {
 		if !strings.Contains(name, ".") {
 			continue
 		}
-		if _, icann := publicsuffix.PublicSuffix(name); icann {
+		// A private suffix counts too: a name under github.io or
+		// herokuapp.com is a real site whose name can be the bait. The
+		// list answers a name it does not know with the last label
+		// alone, which never names a site.
+		suffix, icann := publicsuffix.PublicSuffix(name)
+		if suffix != name && (icann || strings.Contains(suffix, ".")) {
 			return name
 		}
 	}
@@ -204,13 +222,51 @@ func defaultPort(scheme, port string) bool {
 	return false
 }
 
+// isNumericHost reports whether a host is an IPv4 address in any of the
+// forms browsers still open: 127.0.0.1, 2130706433, 0x7f000001, and
+// short or octal parts, as 0x7f.1. A host of digits alone is never a
+// site, whatever it resolves to.
+func isNumericHost(host string) bool {
+	if net.ParseIP(host) != nil {
+		return true
+	}
+	parts := strings.Split(host, ".")
+	if len(parts) > 4 {
+		return false
+	}
+	for _, part := range parts {
+		if !numericPart(part) {
+			return false
+		}
+	}
+	return true
+}
+
+// numericPart reports whether a host part is a number browsers read as
+// one of an address: decimal, octal with a leading 0, or hexadecimal
+// with 0x.
+func numericPart(s string) bool {
+	base := 10
+	switch {
+	case strings.HasPrefix(s, "0x"), strings.HasPrefix(s, "0X"):
+		base, s = 16, s[2:]
+	case len(s) > 1 && s[0] == '0':
+		base, s = 8, s[1:]
+	}
+	if s == "" {
+		return false
+	}
+	_, err := strconv.ParseUint(s, base, 32)
+	return err == nil
+}
+
 // unicodeHost is a host as a person reads it, with its punycode labels
-// decoded.
+// decoded. DNS names are read in lower case, as the IDNA profile does.
 func unicodeHost(host string) string {
-	if !strings.Contains(strings.ToLower(host), "xn--") {
+	if !strings.Contains(host, "xn--") {
 		return host
 	}
-	display, err := idna.ToUnicode(host)
+	display, err := idna.ToUnicode(strings.ToLower(host))
 	if err != nil {
 		return host
 	}
@@ -218,16 +274,29 @@ func unicodeHost(host string) string {
 }
 
 // lookalikeLetters reports whether a host name is written with letters
-// other than the plain Latin ones an ASCII name uses: a name that can
-// pass for another site, whether it mixes alphabets or is all one other
-// script.
+// that can pass for another site: a letter outside the Latin script,
+// whichever script that is, or a Latin one that stands in for an ASCII
+// letter without being an accented form of it. Accented names such as
+// bücher.de stay silent: their letters are the same letters. The list of
+// Latin stand-ins is not exhaustive; it names the ones a mail client can
+// reasonably explain.
 func lookalikeLetters(host string) bool {
 	for _, label := range strings.Split(host, ".") {
 		for _, r := range label {
-			if unicode.IsLetter(r) && !unicode.Is(unicode.Latin, r) {
+			if r <= unicode.MaxASCII {
+				continue
+			}
+			if latinLookalike[r] || (unicode.IsLetter(r) && !unicode.Is(unicode.Latin, r)) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// latinLookalike are Latin-script letters that copy an ASCII one.
+var latinLookalike = map[rune]bool{
+	'ɑ': true, // LATIN SMALL LETTER ALPHA, for a
+	'ı': true, // LATIN SMALL LETTER DOTLESS I, for i
+	'ɡ': true, // LATIN SMALL LETTER SCRIPT G, for g
 }

@@ -215,12 +215,8 @@ func (a *app) linkDialog(c *ui.Context) {
 	if a.linkURL == "" {
 		return
 	}
-	report := a.linkInfo
-	if report.URL != a.linkURL {
-		report = examineLink(a.linkURL)
-	}
 	if ui.AlertDialog(c, &a.linkOpen, locales.SecurityLinkTitle(),
-		report.text(), locales.Cancel(), locales.SecurityLinkOpen()) == 1 {
+		a.linkInfo.text(), locales.Cancel(), locales.SecurityLinkOpen()) == 1 {
 		a.services.OpenURL(a.linkURL)
 	}
 	if !a.linkOpen {

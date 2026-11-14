@@ -593,3 +593,20 @@ func addAIConnection(t *testing.T, a *app, preset ai.ProviderID, baseURL, key st
 	t.Fatal("the connection was not saved")
 	return ai.AIConnection{}
 }
+
+// A provider the user switched off, and a key saved for another server,
+// are said as what to do, not as a bare failure.
+func TestAIErrorTextNamesTheProviderAndTheKey(t *testing.T) {
+	for _, tc := range []struct {
+		kind ai.Kind
+		want string
+	}{
+		{ai.KindProviderOff, locales.AiErrProviderOff()},
+		{ai.KindKeyEndpoint, locales.AiErrKeyEndpoint()},
+	} {
+		text, setup := aiErrorText(&ai.Error{Kind: tc.kind})
+		if text != tc.want || !setup {
+			t.Errorf("kind %v = %q, setup %v; want %q and a setup step", tc.kind, text, setup, tc.want)
+		}
+	}
+}

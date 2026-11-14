@@ -82,6 +82,10 @@ func aiErrorText(err error) (text string, setup bool) {
 		return locales.AiErrConfig(), true
 	case ai.KindInvalidKey:
 		return locales.AiErrInvalidKey(), true
+	case ai.KindProviderOff:
+		return locales.AiErrProviderOff(), true
+	case ai.KindKeyEndpoint:
+		return locales.AiErrKeyEndpoint(), true
 	case ai.KindUnsupportedModel:
 		return locales.AiErrModel(), true
 	case ai.KindRateLimit:

@@ -491,6 +491,10 @@ func (b *draftBox) confirm(uids []UID, d Draft, own bool) ([]UID, error) {
 	if err != nil {
 		return nil, fmt.Errorf("imap: fetch headers of %s: %w", b.folder, err)
 	}
+	asked := make(map[UID]bool, len(uids))
+	for _, uid := range uids {
+		asked[uid] = true
+	}
 	var out []UID
 	for _, buf := range fetched {
 		msg, err := mail.ReadMessage(bytes.NewReader(buf.FindBodySection(section)))
@@ -505,7 +509,7 @@ func (b *draftBox) confirm(uids []UID, d Draft, own bool) ([]UID, error) {
 			continue
 		}
 		// The server answers for what it has; only UIDs asked for count.
-		if uid := UID(buf.UID); slices.Contains(uids, uid) {
+		if uid := UID(buf.UID); asked[uid] {
 			out = append(out, uid)
 		}
 	}

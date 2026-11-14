@@ -532,8 +532,26 @@ func (w *watcher) guard(c *watchConn, d time.Duration) (release func()) {
 	}
 }
 
-// checkOn runs a check on a connection and reports what it found.
-func (w *watcher) checkOn(ctx context.Context, c *watchConn, full bool) error {
+// checkOn runs a check on a connection and reports what it found. It
+// reports the step it is in to the window as a sync of the account's mail
+// does (see sync_events.go).
+func (w *watcher) checkOn(ctx context.Context, c *watchConn, full bool) (err error) {
+	kind, phase := SyncKindWatch, SyncPhaseConnecting
+	folder := c.folder
+	report := func() {
+		w.svc.reportSync(SyncEvent{AccountID: w.accountID, Folder: folder, Kind: kind, Phase: phase})
+	}
+	setPhase := func(p SyncPhase) {
+		if phase == p {
+			return
+		}
+		phase = p
+		report()
+	}
+	report()
+	defer func() {
+		w.svc.reportSync(syncEnd(ctx, w.accountID, folder, kind, phase, 0, 0, err))
+	}()
 	release := whenDone(ctx, func() { c.client.Close() })
 	defer release()
 	store := w.svc.store
@@ -569,10 +587,13 @@ func (w *watcher) checkOn(ctx context.Context, c *watchConn, full bool) error {
 	}
 	var fresh []Summary
 	if c.folder != "" {
+		// The connection may have opened the inbox during this check.
+		folder = c.folder
+		setPhase(SyncPhaseReading)
 		// What the server signalled until now, this sync covers.
 		taken(c.changed)
 		span := syncSpan{first: w.svc.firstSyncWindow(ctx), refresh: watchWindow, keep: defaultSyncCap, sorts: true}
-		if _, err := w.svc.syncSelected(ctx, c.imapSession, w.accountID, c.folder, c.uidValidity, nil, span); err != nil {
+		if _, err := w.svc.syncSelected(ctx, c.imapSession, w.accountID, c.folder, c.uidValidity, nil, span, setPhase); err != nil {
 			return err
 		}
 		var err error

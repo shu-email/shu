@@ -54,6 +54,11 @@ type Service struct {
 	sendMu sync.Mutex
 	waits  map[string]chan struct{}
 
+	// syncMu guards the window's receiver of sync events (see
+	// sync_events.go), which OnSync sets.
+	syncMu     sync.Mutex
+	syncReport func(SyncEvent)
+
 	// The watchers, one per account watched (see watch.go). watchLife
 	// makes each start and stop of one a single step; watchMu guards the
 	// map and what the watchers share: the interval between checks and
@@ -522,19 +527,43 @@ func (s *Service) SyncAccount(ctx context.Context, accountID string) ([]Folder, 
 // many, and of the messages that arrived since the last it keeps the
 // newest 2000, or limit if that is more. What it leaves out FetchOlder
 // fetches.
-func (s *Service) SyncFolder(ctx context.Context, accountID, folder string, limit int) error {
+func (s *Service) SyncFolder(ctx context.Context, accountID, folder string, limit int) (err error) {
+	// The kind is read from the cache first, so that a failure before the
+	// conversation with the server, as an account that has to sign in
+	// again, still says what this sync was.
+	kind := SyncKindFolder
+	cached, ok, cacheErr := s.store.Folder(ctx, accountID, folder)
+	if cacheErr == nil && (!ok || cached.LastUID == 0) {
+		kind = SyncKindFirst
+	}
+	phase := SyncPhaseConnecting
+	report := func() {
+		s.reportSync(SyncEvent{AccountID: accountID, Folder: folder, Kind: kind, Phase: phase})
+	}
+	setPhase := func(p SyncPhase) {
+		if phase == p {
+			return
+		}
+		phase = p
+		report()
+	}
+	report()
+	defer func() {
+		s.reportSync(syncEnd(ctx, accountID, folder, kind, phase, 0, 0, err))
+	}()
+	if cacheErr != nil {
+		return cacheErr
+	}
 	a, password, err := s.account(ctx, accountID)
 	if err != nil {
 		return err
 	}
-	if _, ok, err := s.store.Folder(ctx, accountID, folder); err != nil {
-		return err
-	} else if !ok {
+	if kind == SyncKindFirst && !ok {
 		if _, err := s.SyncAccount(ctx, accountID); err != nil {
 			return err
 		}
 	}
-	if err := s.syncFolder(ctx, a, password, folder, limit); err != nil {
+	if _, err := s.syncFolder(ctx, a, password, folder, limit, setPhase); err != nil {
 		return err
 	}
 	_ = s.pruneAttachments(ctx)

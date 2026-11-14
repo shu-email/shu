@@ -409,6 +409,9 @@ RuleActivity(ctx, q ActivityQuery) (ActivityPage, error)              // the log
 UndoActivity(ctx, id ActivityID) error                                // ErrRuleMessageGone when the message is not where the rule left it
 UndoRule(ctx, id RuleID) (int, error)                                 // every entry of a rule's
 OnRuleActivity(report func(accountID string))                         // actions applied in the background
+
+// How each sync is going, added since: a report, not a poll (see AGENTS.md)
+OnSync(report func(SyncEvent))                                        // step, progress and why a sync stopped; SyncKind, SyncPhase, SyncFailure
 ```
 
 IMAP details:

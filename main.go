@@ -227,13 +227,23 @@ type app struct {
 	// are watched at all; watched is each watched account as it was when
 	// its watcher was asked for, and watch what that watcher last said.
 	// watchOps are the calls that start and stop watchers, in order.
-	watches   bool
-	watched   map[string]mail.Account
-	watch     map[string]mail.WatchStatus
-	queue     map[string]mail.QueueStatus
-	watchMu   sync.Mutex
-	watchOps  []func()
-	watchTurn sync.Mutex
+	watches bool
+	watched map[string]mail.Account
+	watch   map[string]mail.WatchStatus
+	queue   map[string]mail.QueueStatus
+	// syncs is what each account's syncs last said (mail.SyncEvent): by
+	// account ID and then by run, the line above the list while one
+	// runs, and why one failed until that sync starts again. syncSeq
+	// orders those runs. syncPostMu guards syncPosted, which remembers a
+	// background check or an older-mail fetch whose failure the notice
+	// shows, so that its end, which changes nothing, is not posted.
+	syncs      map[string]map[string]syncStatus
+	syncSeq    uint64
+	syncPostMu sync.Mutex
+	syncPosted map[string]bool
+	watchMu    sync.Mutex
+	watchOps   []func()
+	watchTurn  sync.Mutex
 	// inboxes is the inbox's unread count of each account, by its ID, and
 	// foldersOf the account whose folders a.folders are: after a switch
 	// they are the last account's until the cache is read. otherFolders
@@ -400,6 +410,8 @@ func newApp(svc mailService) *app {
 		watched:       map[string]mail.Account{},
 		watch:         map[string]mail.WatchStatus{},
 		queue:         map[string]mail.QueueStatus{},
+		syncs:         map[string]map[string]syncStatus{},
+		syncPosted:    map[string]bool{},
 		needSignIn:    map[string]bool{},
 		inboxes:       map[string]int{},
 		otherFolders:  map[string][]mail.Folder{},
@@ -540,6 +552,15 @@ func (a *app) start() {
 	// folders' counts and the log.
 	a.svc.OnRuleActivity(func(accountID string) {
 		a.post(func() { a.ruleActivity(accountID) })
+	})
+	// Each sync says where it is, for the line above the list. A
+	// background check or an older-mail fetch has its own line already;
+	// only a failure of theirs takes this one.
+	a.svc.OnSync(func(ev mail.SyncEvent) {
+		if !a.syncWorthPosting(ev) {
+			return
+		}
+		a.post(func() { a.syncEvent(ev) })
 	})
 	// The parsed cache is brought to this build's version, and what no row
 	// names any more goes with it: older bodies and attachment files, and

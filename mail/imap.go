@@ -563,23 +563,24 @@ func recentSeqSet(total uint32, limit int) imap.NumSet {
 
 // syncFolder implements the changeset sync described in the docs. A
 // limit above zero is how many of the newest messages a first sync
-// fetches and the sync refreshes; else the settings' window is.
-func (s *Service) syncFolder(ctx context.Context, a Account, password, folder string, limit int) error {
+// fetches and the sync refreshes; else the settings' window is. The
+// caller reports the steps to the window (see sync_events.go).
+func (s *Service) syncFolder(ctx context.Context, a Account, password, folder string, limit int, setPhase func(SyncPhase)) (written int, err error) {
 	if limit <= 0 {
 		limit = s.firstSyncWindow(ctx)
 	}
 	c, err := s.dialIMAP(ctx, a, password)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer c.close()
 
 	selected, err := c.client.Select(folder, nil).Wait()
 	if err != nil {
-		return fmt.Errorf("imap: select %s: %w", folder, err)
+		return 0, fmt.Errorf("imap: select %s: %w", folder, err)
 	}
-	_, err = s.syncSelected(ctx, c, a.ID, folder, selected.UIDValidity, permanentFlags(selected), windowSpan(limit))
-	return err
+	setPhase(SyncPhaseReading)
+	return s.syncSelected(ctx, c, a.ID, folder, selected.UIDValidity, permanentFlags(selected), windowSpan(limit), setPhase)
 }
 
 // syncSpan is how much of a folder a sync reads: the newest first
@@ -606,7 +607,7 @@ func windowSpan(window int) syncSpan {
 // read-only. permanent is what a SELECT said of the flags the folder
 // keeps, which the batch records; it is nil for a folder opened
 // read-only, which says nothing of them.
-func (s *Service) syncSelected(ctx context.Context, c *imapSession, accountID, folder string, uidValidity uint32, permanent []string, span syncSpan) (int, error) {
+func (s *Service) syncSelected(ctx context.Context, c *imapSession, accountID, folder string, uidValidity uint32, permanent []string, span syncSpan, setPhase func(SyncPhase)) (int, error) {
 	status, err := c.client.Status(folder, &imap.StatusOptions{
 		NumMessages: true, NumUnseen: true, UIDValidity: true,
 	}).Wait()
@@ -708,6 +709,9 @@ func (s *Service) syncSelected(ctx context.Context, c *imapSession, accountID, f
 	}
 	if span.sorts && !reset && hasCached && !cached.SyncedAt.IsZero() && len(batch.Messages) > 0 {
 		s.addRuleHeaders(ctx, c, accountID, cached, batch.Messages)
+	}
+	if setPhase != nil {
+		setPhase(SyncPhaseWriting)
 	}
 	return len(batch.Messages), s.writeSync(ctx, accountID, batch, span.sorts)
 }

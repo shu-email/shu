@@ -112,6 +112,22 @@ Windows and Linux. It is written in Go with
   network reach the window through hook fields on `app` that `attach`
   sets. The target of a notification travels in its ID, which is parsed
   as untrusted input.
+- How each sync is going is reported, not polled: `mail.SyncEvent`
+  (`mail/sync_events.go`) names the account, the folder (empty for
+  drafts), what kind of sync it is (`mail.SyncKind`), the step it is in
+  (`mail.SyncPhase`), how many of how many it has done when the server
+  said, and, when it ends, whether the app cancelled it or why it failed
+  (`mail.SyncFailure`, the classes `failureOf` sorts a watcher's failures
+  into, so the window says its own words rather than the server's).
+  `Service.OnSync` sets the one receiver, which runs on the syncing
+  goroutine; the window posts each event to the UI thread and keeps the
+  last word of each of an account's syncs (`syncstatus.go`), drawing the
+  account on show above the list. A sync that finishes or is cancelled
+  takes its own line away; a failed one stays until that sync runs again,
+  and a sync still running keeps its line when another of the account
+  ends. A watcher's check and an older-mail fetch have lines of their own
+  (the state above the list and the list's footer), so only a failure of
+  theirs takes this one. A sync never waits for the window.
 - An action on mail the server cannot be reached for is neither lost nor
   a failure: `Service.SetFlags`, `Service.SetLabel` and
   `Service.MoveMessages` (and so `Move`) write it to

@@ -535,7 +535,7 @@ func (b *draftBox) append(raw []byte, d Draft, at time.Time) (UID, error) {
 	if err != nil {
 		return 0, err
 	}
-	if (b.c.capHas(imap.CapUIDPlus) || b.c.capHas(imap.CapIMAP4rev2)) && data.UID != 0 &&
+	if b.c.caps.UIDPlus && data.UID != 0 &&
 		(data.UIDValidity == 0 || data.UIDValidity == b.uidValidity) {
 		b.present[UID(data.UID)] = true
 		return UID(data.UID), nil

@@ -157,7 +157,7 @@ func (s *Service) missingUIDs(ctx context.Context, c *imapSession, accountID, fo
 	var upTo imap.UIDSet
 	upTo.AddRange(1, imap.UID(last))
 	var options *imap.SearchOptions
-	if c.capHas(imap.CapESearch) {
+	if c.caps.ESearch {
 		// ESEARCH answers with ranges; a plain SEARCH lists every UID.
 		options = &imap.SearchOptions{ReturnAll: true}
 	}

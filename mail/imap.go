@@ -22,7 +22,7 @@ import (
 // lasting one for a watcher.
 type imapSession struct {
 	client *imapclient.Client
-	caps   imap.CapSet
+	caps   Capabilities
 	// release ends the closing of the connection with the context it was
 	// dialed under. Only a connection that outlives one operation needs
 	// it called.
@@ -43,9 +43,6 @@ func whenDone(ctx context.Context, fn func()) (release func()) {
 		}
 	}
 }
-
-// capHas reports whether the server advertised a capability.
-func (s *imapSession) capHas(c imap.Cap) bool { return s.caps.Has(c) }
 
 // dialTimeout bounds reaching a server and its TLS handshake.
 const dialTimeout = 30 * time.Second
@@ -159,7 +156,7 @@ func (s *Service) dialIMAPAs(ctx context.Context, a Account, secret string, hand
 		return nil, fmt.Errorf("imap: capabilities: %w", err)
 	}
 	ok = true
-	return &imapSession{client: c, caps: caps, release: release}, nil
+	return &imapSession{client: c, caps: capabilitiesOf(caps), release: release}, nil
 }
 
 // signIn logs in with the password, or authenticates with XOAUTH2 and
@@ -189,7 +186,7 @@ func (s *imapSession) close() {
 func (s *Service) listFolders(c *imapSession) ([]Folder, error) {
 	// LIST-STATUS and SPECIAL-USE are one request when the server has
 	// them; otherwise a plain LIST and a STATUS per mailbox.
-	extended := c.capHas(imap.CapListStatus) || c.capHas(imap.CapIMAP4rev2) || c.capHas(imap.CapSpecialUse)
+	extended := c.caps.ListStatus || c.caps.SpecialUse
 	var data []*imap.ListData
 	if extended {
 		cmd := c.client.List("", "*", &imap.ListOptions{
@@ -253,7 +250,7 @@ func (s *Service) listFolders(c *imapSession) ([]Folder, error) {
 // subscribed to. A server without LIST-EXTENDED keeps them all, and the
 // second value says so.
 func subscribedFolders(c *imapSession) (map[string]bool, bool) {
-	if !c.capHas(imap.CapListExtended) && !c.capHas(imap.CapIMAP4rev2) {
+	if !c.caps.ListExtended {
 		return nil, false
 	}
 	cmd := c.client.List("", "*", &imap.ListOptions{SelectSubscribed: true})
@@ -939,7 +936,7 @@ func (s *Service) moveOnServer(ctx context.Context, a Account, password, folder 
 		set.AddNum(imap.UID(uid))
 	}
 	forget := s.expectArrivals(ctx, c, a.ID, uids, dest)
-	if c.capHas(imap.CapMove) {
+	if c.caps.Move {
 		data, err := c.client.Move(set, dest).Wait()
 		if err != nil {
 			forget()
@@ -992,7 +989,7 @@ func uidList(set imap.NumSet) []imap.UID {
 // removes those and no others; a server without it gets expungeOnly.
 func expunge(c *imapSession, folder string, set imap.UIDSet) error {
 	deleted := &imap.StoreFlags{Op: imap.StoreFlagsAdd, Silent: true, Flags: []imap.Flag{imap.FlagDeleted}}
-	if !c.capHas(imap.CapUIDPlus) && !c.capHas(imap.CapIMAP4rev2) {
+	if !c.caps.UIDPlus {
 		return expungeOnly(c, folder, set, deleted)
 	}
 	if err := c.client.Store(set, deleted, nil).Close(); err != nil {

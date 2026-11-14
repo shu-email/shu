@@ -2,7 +2,13 @@
      removed: no attribute beginning with "on" survives. -->
 <html><body onload="steal()" onpageshow="steal()">
 <!-- drop: steal() -->
+<!-- drop: xlink: -->
+<!-- keep: href="https://ok.example/x" -->
+<!-- drop: ping= -->
+<!-- drop: nonce= -->
 <!-- keep: Handled -->
 <p onclick="steal()" onmouseover="steal()">Handled</p>
 <img src="data:image/png;base64,AAAA" onerror="steal()" alt="ok">
+<p xlink:onload="steal()" xlink:href="https://ok.example/x">Prefixed</p>
+<a href="https://ok.example/x" ping="https://tracker.example/ping" nonce="n">Link</a>
 </body></html>

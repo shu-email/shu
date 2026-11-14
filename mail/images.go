@@ -29,11 +29,13 @@ func (m Message) RemoteImages() []string {
 	seen := map[string]bool{}
 	var walk func(*htmlnode.Node)
 	walk = func(n *htmlnode.Node) {
-		if n.Type == htmlnode.ElementNode && n.DataAtom == atom.Img {
+		if n.Type == htmlnode.ElementNode {
 			for _, attr := range n.Attr {
-				if strings.EqualFold(attr.Key, "src") && isRemoteURL(attr.Val) && !seen[attr.Val] {
-					seen[attr.Val] = true
-					out = append(out, attr.Val)
+				for _, url := range remoteImageURLs(n.DataAtom, attr) {
+					if !seen[url] {
+						seen[url] = true
+						out = append(out, url)
+					}
 				}
 			}
 		}
@@ -42,6 +44,40 @@ func (m Message) RemoteImages() []string {
 		}
 	}
 	walk(doc)
+	return out
+}
+
+// remoteImageURLs reads an attribute as the sanitizer does when it decides
+// what an image may load: a picture's address, a candidate of its srcset,
+// a video's poster or an element's background. The window must offer to
+// allow exactly what the render would otherwise leave out.
+func remoteImageURLs(tag atom.Atom, attr htmlnode.Attribute) []string {
+	key := strings.ToLower(attr.Key)
+	var raw []string
+	switch key {
+	case "src":
+		if tag == atom.Img {
+			raw = []string{attr.Val}
+		}
+	case "srcset", "imagesrcset":
+		for _, candidate := range strings.Split(attr.Val, ",") {
+			if fields := strings.Fields(candidate); len(fields) > 0 {
+				raw = append(raw, fields[0])
+			}
+		}
+	case "poster":
+		if tag == atom.Video {
+			raw = []string{attr.Val}
+		}
+	case "background":
+		raw = []string{attr.Val}
+	}
+	var out []string
+	for _, url := range raw {
+		if isRemoteURL(url) {
+			out = append(out, url)
+		}
+	}
 	return out
 }
 

@@ -1242,16 +1242,25 @@ func (s *memStore) ApplySync(ctx context.Context, accountID string, b SyncBatch)
 }
 
 func (s *memStore) SetFlag(ctx context.Context, accountID, folder string, uid UID, flag Flag, on bool) error {
+	return s.SetFlags(ctx, accountID, folder, []UID{uid}, flag, on)
+}
+
+func (s *memStore) SetFlags(ctx context.Context, accountID, folder string, uids []UID, flag Flag, on bool) error {
+	if flag != FlagSeen && flag != FlagFlagged {
+		return fmt.Errorf("unsupported flag %q", flag)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	key := msgKey(accountID, folder)
-	m, ok := s.messages[key][uid]
-	if !ok {
+	if !s.hasFolderLocked(accountID, folder) {
 		return ErrNotFound
 	}
-	switch flag {
-	case FlagSeen:
-		if m.Seen != on {
+	key := msgKey(accountID, folder)
+	for _, uid := range uids {
+		m, ok := s.messages[key][uid]
+		if !ok {
+			continue
+		}
+		if flag == FlagSeen && m.Seen != on {
 			for i := range s.folders[accountID] {
 				if s.folders[accountID][i].Name == folder {
 					if on {
@@ -1262,13 +1271,13 @@ func (s *memStore) SetFlag(ctx context.Context, accountID, folder string, uid UI
 				}
 			}
 		}
-		m.Seen = on
-	case FlagFlagged:
-		m.Flagged = on
-	default:
-		return fmt.Errorf("unsupported flag %q", flag)
+		if flag == FlagSeen {
+			m.Seen = on
+		} else {
+			m.Flagged = on
+		}
+		s.messages[key][uid] = m
 	}
-	s.messages[key][uid] = m
 	return nil
 }
 
@@ -1289,11 +1298,36 @@ func tombKey(accountID, folder string, uid UID) string {
 }
 
 func (s *memStore) DeleteMessage(ctx context.Context, accountID, folder string, uid UID) error {
+	return s.DeleteMessages(ctx, accountID, folder, []UID{uid})
+}
+
+func (s *memStore) DeleteMessages(ctx context.Context, accountID, folder string, uids []UID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	delete(s.messages[msgKey(accountID, folder)], uid)
-	delete(s.tombs, tombKey(accountID, folder, uid))
-	delete(s.msgLabels, tombKey(accountID, folder, uid))
+	if !s.hasFolderLocked(accountID, folder) {
+		return ErrNotFound
+	}
+	key := msgKey(accountID, folder)
+	// The folder's counts move by the rows removed, as the real store's do.
+	for _, uid := range uids {
+		m, ok := s.messages[key][uid]
+		if !ok {
+			continue
+		}
+		for i := range s.folders[accountID] {
+			if s.folders[accountID][i].Name == folder {
+				s.folders[accountID][i].Total = max(0, s.folders[accountID][i].Total-1)
+				if !m.Seen {
+					s.folders[accountID][i].Unread = max(0, s.folders[accountID][i].Unread-1)
+				}
+			}
+		}
+	}
+	for _, uid := range uids {
+		delete(s.messages[key], uid)
+		delete(s.tombs, tombKey(accountID, folder, uid))
+		delete(s.msgLabels, tombKey(accountID, folder, uid))
+	}
 	return nil
 }
 

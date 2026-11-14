@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 
 	"shu/locales"
@@ -47,6 +48,83 @@ func TestCalendarCardShowsTheInvitation(t *testing.T) {
 		if !tt.HasText(text) {
 			t.Errorf("missing %q in %q", text, tt.Texts())
 		}
+	}
+}
+
+// The card writes the time in the user's locale and time zone, not in
+// one language's layout: the day once, the times as a range of the
+// locale's own, and the zone where the locale puts it.
+func TestInviteWhenWritesTheUserLocale(t *testing.T) {
+	inv := testInvite()
+	timed := i18n.DateOptions{Skeleton: "yMMMdEjmz"}
+	start, end := inv.Start.Local(), inv.End.Local()
+	for _, locale := range []string{"en", "zh-Hans"} {
+		if got, want := inviteWhen(locale, inv), i18n.FormatDateRange(locale, start, end, timed); got != want {
+			t.Errorf("%s: %q, want %q", locale, got, want)
+		}
+
+		// A range over two days names both.
+		multi := *inv
+		multi.End = inv.End.Add(24 * time.Hour)
+		if got, want := inviteWhen(locale, &multi), i18n.FormatDateRange(locale, start, multi.End.Local(), timed); got != want {
+			t.Errorf("%s over two days: %q, want %q", locale, got, want)
+		}
+
+		// One with no end names its start alone, not a year-one end.
+		noEnd := *inv
+		noEnd.End = time.Time{}
+		if got, want := inviteWhen(locale, &noEnd), i18n.FormatDate(locale, start, timed); got != want {
+			t.Errorf("%s with no end: %q, want %q", locale, got, want)
+		}
+	}
+}
+
+// An all-day event is the date the organizer wrote, which no zone moves,
+// and a floating time is the reader's own clock, with no zone to name.
+func TestInviteWhenKeepsTheEventsOwnTime(t *testing.T) {
+	inv := testInvite()
+	inv.AllDay = true
+	// The parser reads an all-day start as midnight in a zone of its own;
+	// a card that moved it to the machine's zone would show the day before.
+	inv.Start = time.Date(2026, 3, 5, 0, 0, 0, 0, time.FixedZone("", 11*3600))
+	for _, locale := range []string{"en", "zh-Hans"} {
+		want := i18n.FormatDate(locale, inv.Start, i18n.DateOptions{Skeleton: "yMMMdE"})
+		if got := inviteWhen(locale, inv); got != want {
+			t.Errorf("%s all-day = %q, want %q", locale, got, want)
+		}
+		if got := inviteWhen(locale, inv); strings.Contains(got, ":") {
+			t.Errorf("%s all-day shows a time: %q", locale, got)
+		}
+	}
+
+	floating := *testInvite()
+	floating.Floating = true
+	floating.Start = time.Date(2026, 3, 5, 10, 0, 0, 0, time.UTC)
+	floating.End = floating.Start.Add(time.Hour)
+	for _, locale := range []string{"en", "zh-Hans"} {
+		want := i18n.FormatDateRange(locale, floating.Start, floating.End, i18n.DateOptions{Skeleton: "yMMMdEjm"})
+		got := inviteWhen(locale, &floating)
+		if got != want {
+			t.Errorf("%s floating = %q, want %q", locale, got, want)
+		}
+		for _, zone := range []string{"GMT", "UTC"} {
+			if strings.Contains(got, zone) {
+				t.Errorf("%s floating names a zone: %q", locale, got)
+			}
+		}
+	}
+}
+
+// The card takes its language from the window, as the rest of it does.
+func TestCalendarCardUsesTheWindowLocale(t *testing.T) {
+	a, fs := sampleMessageApp(t)
+	inv := testInvite()
+	loadCalendarFirst(t, fs, a, inv)
+	tt := ui.NewTester(a.view, 1220, 800)
+	tt.SetLocale("zh-Hans")
+	want := i18n.FormatDateRange("zh-Hans", inv.Start.Local(), inv.End.Local(), i18n.DateOptions{Skeleton: "yMMMdEjmz"})
+	if !tt.HasText(want) {
+		t.Errorf("the card lacks %q: %q", want, tt.Texts())
 	}
 }
 

@@ -3,9 +3,9 @@ package main
 import (
 	"os"
 	"strings"
-	"time"
 
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 
 	"shu/locales"
@@ -72,7 +72,7 @@ func (a *app) calendarCard(c *ui.Context, t *ui.Theme, m mail.Summary, msg *mail
 			ui.Icon(c, clockIcon).FontSize(15).TextColor(t.Accent)
 			ui.Text(c, inv.Summary).FontSize(14).Bold().Grow(1).MinWidth(0).MaxLines(2)
 		})
-		ui.Text(c, a.inviteWhen(c, inv)).FontSize(12).TextColor(t.Text)
+		ui.Text(c, inviteWhen(c.Locale(), inv)).FontSize(12).TextColor(t.Text)
 		if inv.Location != "" {
 			ui.Text(c, locales.InviteLocation(inv.Location)).FontSize(11).TextColor(t.TextMuted).MaxLines(2)
 		}
@@ -118,27 +118,29 @@ func (a *app) calendarCard(c *ui.Context, t *ui.Theme, m mail.Summary, msg *mail
 	})
 }
 
-// inviteWhen says the time range in the user's own time zone.
-func (a *app) inviteWhen(c *ui.Context, inv *mail.CalendarInvite) string {
+// inviteWhen says the time range in the user's own time zone and in the
+// user's locale: an all-day event is a date of its own, which no time
+// zone moves, and a floating one is the reader's own clock, with no zone
+// to move it to or name.
+func inviteWhen(locale string, inv *mail.CalendarInvite) string {
 	if inv.Start.IsZero() {
 		return ""
 	}
-	start := inv.Start.Local()
 	if inv.AllDay {
-		return start.Format("Mon, Jan 2, 2006")
+		return i18n.FormatDate(locale, inv.Start, i18n.DateOptions{Skeleton: "yMMMdE"})
 	}
-	end := inv.End.Local()
-	date := start.Format("Mon, Jan 2, 2006")
-	if sameDay(start, end) {
-		return date + " " + start.Format("15:04") + "–" + end.Format("15:04 "+"MST")
+	skeleton := "yMMMdEjmz"
+	start, end := inv.Start.Local(), inv.End.Local()
+	if inv.Floating {
+		skeleton = "yMMMdEjm"
+		start, end = inv.Start, inv.End
 	}
-	return date + " " + start.Format("15:04 MST") + " – " + end.Format("Mon, Jan 2, 15:04 MST")
-}
-
-func sameDay(a, b time.Time) bool {
-	y1, m1, d1 := a.Date()
-	y2, m2, d2 := b.Date()
-	return y1 == y2 && m1 == m2 && d1 == d2
+	if inv.End.IsZero() {
+		// DTEND is optional, and a missing one leaves the start alone
+		// rather than a year-one end.
+		return i18n.FormatDate(locale, start, i18n.DateOptions{Skeleton: skeleton})
+	}
+	return i18n.FormatDateRange(locale, start, end, i18n.DateOptions{Skeleton: skeleton})
 }
 
 // replyInvite sends an iMIP answer to the organizer. Nothing is sent

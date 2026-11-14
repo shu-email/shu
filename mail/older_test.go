@@ -258,7 +258,7 @@ func TestFetchOlderFillsGaps(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.syncSelected(ctx, c, a.ID, "INBOX", selected.UIDValidity, permanentFlags(selected), syncSpan{first: 20, refresh: 20, keep: 10}); err != nil {
+	if _, err := svc.syncSelected(ctx, c, a.ID, "INBOX", selected.UIDValidity, permanentFlags(selected), syncSpan{first: 20, refresh: 20, keep: 10}, nil); err != nil {
 		t.Fatal(err)
 	}
 	c.close()

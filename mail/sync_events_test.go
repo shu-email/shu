@@ -3,6 +3,7 @@ package mail
 import (
 	"context"
 	"errors"
+	"net"
 	"sync"
 	"testing"
 )
@@ -31,8 +32,9 @@ func (r *syncRecorder) reset() {
 	r.events = nil
 }
 
-// A folder's sync says it connects, then reads, then finishes, naming the
-// account and folder each time. A folder synced before is no first sync.
+// A folder's sync says it connects, reads, writes the cache and finishes,
+// naming the account and folder each time. A folder synced before is no
+// first sync.
 func TestSyncFolderReportsItsSteps(t *testing.T) {
 	ctx := context.Background()
 	f := startFakeIMAP(t, allCaps())
@@ -53,7 +55,7 @@ func TestSyncFolderReportsItsSteps(t *testing.T) {
 		}
 		phases = append(phases, ev.Phase)
 	}
-	want := []SyncPhase{SyncPhaseConnecting, SyncPhaseReading, SyncPhaseFinished}
+	want := []SyncPhase{SyncPhaseConnecting, SyncPhaseReading, SyncPhaseWriting, SyncPhaseFinished}
 	if len(phases) != len(want) {
 		t.Fatalf("phases = %v, want %v", phases, want)
 	}
@@ -71,6 +73,27 @@ func TestSyncFolderReportsItsSteps(t *testing.T) {
 		if ev.Kind != SyncKindFolder {
 			t.Errorf("a later sync reports %+v, want SyncKindFolder", ev)
 		}
+	}
+}
+
+// A sync that fails before it reaches the server, as one of an account
+// that has to sign in again, still says where it stopped and why.
+func TestSyncFolderReportsAFailureBeforeTheServer(t *testing.T) {
+	f := startFakeIMAP(t, allCaps())
+	svc, _, _ := newIMAPService(t, f, "secret")
+	rec := &syncRecorder{}
+	svc.OnSync(rec.report)
+	if err := svc.SyncFolder(context.Background(), "missing", "INBOX", 10); err == nil {
+		t.Fatal("a sync of no account worked")
+	}
+	events := rec.all()
+	if len(events) == 0 {
+		t.Fatal("no events")
+	}
+	last := events[len(events)-1]
+	if last.AccountID != "missing" || last.Folder != "INBOX" ||
+		last.Phase != SyncPhaseConnecting || last.Failure == SyncFailNone {
+		t.Errorf("the failure = %+v", last)
 	}
 }
 
@@ -141,5 +164,15 @@ func TestSyncEndTellsCancellationFromFailure(t *testing.T) {
 	done := syncEnd(context.Background(), "a1", "INBOX", SyncKindFolder, SyncPhaseReading, 0, 0, nil)
 	if done.Phase != SyncPhaseFinished || done.Failure != SyncFailNone || done.Cancelled {
 		t.Errorf("a sync that worked = %+v", done)
+	}
+	// A connection the app closed is the cancellation; a server that
+	// refused in the same moment is no cancellation.
+	closed := syncEnd(ctx, "a1", "INBOX", SyncKindFolder, SyncPhaseReading, 0, 0, net.ErrClosed)
+	if !closed.Cancelled {
+		t.Errorf("a connection closed by the app = %+v, want cancelled", closed)
+	}
+	refused := syncEnd(ctx, "a1", "INBOX", SyncKindFolder, SyncPhaseReading, 0, 0, errors.New("the server said no"))
+	if refused.Cancelled || refused.Failure != SyncFailOther {
+		t.Errorf("a refusal during a cancellation = %+v, want a failure", refused)
 	}
 }

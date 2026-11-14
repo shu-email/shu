@@ -1,6 +1,8 @@
 package main
 
 import (
+	"strconv"
+
 	"github.com/egoist/mygo/ui"
 
 	"shu/locales"
@@ -8,29 +10,99 @@ import (
 )
 
 // How a sync is going, above the list (issue: sync progress). The engine
-// reports each step (mail.SyncEvent); the window keeps the last one for
-// each account and draws the account on show. Nothing here polls.
+// reports each step (mail.SyncEvent); the window keeps the last word of
+// each of an account's syncs and draws the account on show. Nothing here
+// polls, and one sync finishing does not take another's line.
+
+// syncStatus is what one sync last said, and when, so that the account
+// shows its newest running sync, or, with none running, its newest
+// failure.
+type syncStatus struct {
+	event mail.SyncEvent
+	seq   uint64
+}
+
+// syncKey names a sync of an account: what kind, and of which folder. A
+// watcher checks one folder and reports before it knows which; its run is
+// the account's alone.
+func syncKey(ev mail.SyncEvent) string {
+	if ev.Kind == mail.SyncKindWatch {
+		return "watch"
+	}
+	return strconv.Itoa(int(ev.Kind)) + "/" + ev.Folder
+}
+
+// syncWorthPosting tells whether an event may change the notice. A
+// watcher's check and FetchOlder already have their lines (the first
+// above the list, the second in the list's footer), so only a failure of
+// theirs takes the notice, and its end is posted only when it clears one:
+// otherwise every check at the interval would rebuild the window though
+// nothing on it changed.
+func (a *app) syncWorthPosting(ev mail.SyncEvent) bool {
+	if ev.Kind != mail.SyncKindWatch && ev.Kind != mail.SyncKindOlder {
+		return true
+	}
+	key := ev.AccountID + "/" + syncKey(ev)
+	a.syncPostMu.Lock()
+	defer a.syncPostMu.Unlock()
+	if ev.Failure != mail.SyncFailNone {
+		a.syncPosted[key] = true
+		return true
+	}
+	if ev.Phase != mail.SyncPhaseFinished && !ev.Cancelled {
+		return false
+	}
+	if !a.syncPosted[key] {
+		return false
+	}
+	delete(a.syncPosted, key)
+	return true
+}
 
 // syncEvent takes a sync's report: a run that ends, well or stopped, takes
-// its line away; one that fails keeps it, with the step it reached and
-// why, until another sync starts.
+// its own line away; one that fails keeps it, with the step it reached and
+// why, until that sync starts again. Another run of the account keeps its
+// own line meanwhile, so a watcher's check is not the folder sync's.
 func (a *app) syncEvent(ev mail.SyncEvent) {
 	if ev.AccountID == "" {
 		return
 	}
-	switch {
-	case ev.Phase == mail.SyncPhaseFinished, ev.Cancelled:
-		delete(a.syncs, ev.AccountID)
-	default:
-		a.syncs[ev.AccountID] = ev
+	key := syncKey(ev)
+	if ev.Phase == mail.SyncPhaseFinished || ev.Cancelled {
+		if runs := a.syncs[ev.AccountID]; runs != nil {
+			delete(runs, key)
+			if len(runs) == 0 {
+				delete(a.syncs, ev.AccountID)
+			}
+		}
+		return
 	}
+	a.syncSeq++
+	if a.syncs[ev.AccountID] == nil {
+		a.syncs[ev.AccountID] = map[string]syncStatus{}
+	}
+	a.syncs[ev.AccountID][key] = syncStatus{event: ev, seq: a.syncSeq}
 }
 
 // syncNotice draws how the account on show is syncing: a spinner and what
 // it is reading while it runs, or, when it stopped, the step that failed
 // and why.
 func (a *app) syncNotice(c *ui.Context, t *ui.Theme) {
-	ev, ok := a.syncs[a.active]
+	var running, failedStatus syncStatus
+	haveRunning, haveFailed := false, false
+	for _, s := range a.syncs[a.active] {
+		if s.event.Failure == mail.SyncFailNone {
+			if !haveRunning || s.seq > running.seq {
+				running, haveRunning = s, true
+			}
+		} else if !haveFailed || s.seq > failedStatus.seq {
+			failedStatus, haveFailed = s, true
+		}
+	}
+	ev, ok := running.event, haveRunning
+	if !ok {
+		ev, ok = failedStatus.event, haveFailed
+	}
 	if !ok {
 		return
 	}

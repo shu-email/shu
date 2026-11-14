@@ -3,6 +3,8 @@ package mail
 import (
 	"context"
 	"errors"
+	"io"
+	"net"
 )
 
 // Syncing is a report to the window, not a state of the engine: what a
@@ -44,21 +46,22 @@ const (
 	SyncPhaseFinished
 )
 
-// SyncFailure is why a sync failed, in a form the window can say in its
-// own words. The error itself, which may quote the server, stays here.
-type SyncFailure int
+// SyncFailure is why a sync failed: the classes a watcher sorts its own
+// failures into, so the window says them in one set of words. The error
+// itself, which may quote the server, stays here.
+type SyncFailure = WatchFailure
 
 const (
 	// SyncFailNone is no failure.
-	SyncFailNone SyncFailure = iota
+	SyncFailNone = WatchFailNone
 	// SyncFailNetwork is a server that cannot be reached.
-	SyncFailNetwork
+	SyncFailNetwork = WatchFailNetwork
 	// SyncFailAuth is a sign-in the server refused.
-	SyncFailAuth
+	SyncFailAuth = WatchFailAuth
 	// SyncFailSignIn is an account that has to sign in again.
-	SyncFailSignIn
+	SyncFailSignIn = WatchFailSignIn
 	// SyncFailOther is anything else: the server or the cache refusing.
-	SyncFailOther
+	SyncFailOther = WatchFailOther
 )
 
 // SyncEvent reports a sync of one folder of one account: the step it is
@@ -111,24 +114,24 @@ func syncEnd(ctx context.Context, accountID, folder string, kind SyncKind, phase
 	switch {
 	case err == nil:
 		ev.Phase = SyncPhaseFinished
-	case errors.Is(err, context.Canceled), errors.Is(ctx.Err(), context.Canceled):
+	case errors.Is(err, context.Canceled):
+		ev.Cancelled = true
+	case syncStopped(ctx, err):
 		ev.Cancelled = true
 	default:
-		ev.Failure = syncFailureOf(err)
+		ev.Failure = failureOf(err)
 	}
 	return ev
 }
 
-// syncFailureOf classifies a failed sync as a watcher classifies a failed
-// check: the window says each in its own words.
-func syncFailureOf(err error) SyncFailure {
-	switch failureOf(err) {
-	case WatchFailNetwork:
-		return SyncFailNetwork
-	case WatchFailAuth:
-		return SyncFailAuth
-	case WatchFailSignIn:
-		return SyncFailSignIn
+// syncStopped tells a sync the app stopped from one that failed. A
+// cancelled context closes the connection under the sync, which errs with
+// a closed connection rather than a context error; a server that refused
+// in the same moment is no cancellation.
+func syncStopped(ctx context.Context, err error) bool {
+	if !errors.Is(ctx.Err(), context.Canceled) {
+		return false
 	}
-	return SyncFailOther
+	return errors.Is(err, net.ErrClosed) || errors.Is(err, io.EOF) ||
+		errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.ErrClosedPipe)
 }

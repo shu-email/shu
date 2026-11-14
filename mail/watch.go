@@ -486,7 +486,7 @@ func (w *watcher) dial(ctx context.Context) (*watchConn, error) {
 		return nil, context.Canceled
 	}
 	c.imapSession = session
-	c.idles = !w.svc.watchNoIdle && (session.capHas(imap.CapIdle) || session.capHas(imap.CapIMAP4rev2))
+	c.idles = !w.svc.watchNoIdle && session.caps.IDLE
 	return c, nil
 }
 

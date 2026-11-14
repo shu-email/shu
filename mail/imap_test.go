@@ -68,6 +68,14 @@ type fakeIMAP struct {
 	// headerFetches records the header fields each FETCH of some asked
 	// for (see rules_imap_test.go).
 	headerFetches [][]string
+	// lists records each LIST's return options, as the client asked for
+	// them: a server must be asked only for what it advertised.
+	lists []fakeList
+}
+
+// fakeList is one LIST as a client asked it.
+type fakeList struct {
+	status, specialUse, subscribed bool
 }
 
 // afterStatus has do run once the next STATUS is answered.
@@ -124,6 +132,19 @@ func (s *fakeSession) Status(mailbox string, options *imap.StatusOptions) (*imap
 		done()
 	}
 	return data, err
+}
+
+// List records the return options a LIST asked for, then answers as the
+// in-memory server does.
+func (s *fakeSession) List(w *imapserver.ListWriter, ref string, patterns []string, options *imap.ListOptions) error {
+	s.f.mu.Lock()
+	s.f.lists = append(s.f.lists, fakeList{
+		status:     options != nil && options.ReturnStatus != nil,
+		specialUse: options != nil && options.ReturnSpecialUse,
+		subscribed: options != nil && options.SelectSubscribed,
+	})
+	s.f.mu.Unlock()
+	return s.SessionIMAP4rev2.List(w, ref, patterns, options)
 }
 
 // Idle reports the selected mailbox's changes while the client idles. The

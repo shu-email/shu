@@ -3,6 +3,7 @@ package mail
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/emersion/go-imap/v2"
@@ -168,5 +169,65 @@ func TestSystemFolders(t *testing.T) {
 		if got := (Folder{SpecialUse: c.special}).IsSystem(); got != c.system {
 			t.Errorf("%q: %v, want %v", c.special, got, c.system)
 		}
+	}
+}
+
+// A server is asked only for the LIST return options it advertised:
+// counts (LIST-STATUS), special uses (SPECIAL-USE), both or neither.
+// Every combination lists the folders and their mail as before.
+func TestFolderListAsksOnlyForWhatTheServerAdvertised(t *testing.T) {
+	ctx := context.Background()
+	cases := []struct {
+		name string
+		caps imap.CapSet
+	}{
+		{"plain", imap.CapSet{imap.CapIMAP4rev1: {}}},
+		{"list-status", imap.CapSet{imap.CapIMAP4rev1: {}, imap.CapListStatus: {}}},
+		{"special-use", imap.CapSet{imap.CapIMAP4rev1: {}, imap.CapSpecialUse: {}}},
+		{"both", imap.CapSet{imap.CapIMAP4rev1: {}, imap.CapListStatus: {}, imap.CapSpecialUse: {}}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := startFakeIMAP(t, c.caps)
+			f.create(t, "INBOX", "Sent")
+			f.append(t, "INBOX", readFixture(t, "plain.eml"))
+			svc, store, a := newIMAPService(t, f, "secret")
+			if _, err := svc.SyncAccount(ctx, a.ID); err != nil {
+				t.Fatal(err)
+			}
+			folders, err := store.Folders(ctx, a.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			names := make([]string, 0, len(folders))
+			for _, folder := range folders {
+				names = append(names, folder.Name)
+			}
+			if !slices.Contains(names, "INBOX") || !slices.Contains(names, "Sent") {
+				t.Errorf("folders = %q, want INBOX and Sent", names)
+			}
+			var inbox Folder
+			for _, folder := range folders {
+				if folder.Name == "INBOX" {
+					inbox = folder
+				}
+			}
+			if inbox.Total != 1 {
+				t.Errorf("inbox = %+v, want one message", inbox)
+			}
+			f.mu.Lock()
+			lists := slices.Clone(f.lists)
+			f.mu.Unlock()
+			if len(lists) == 0 {
+				t.Fatal("no LIST was asked")
+			}
+			list := lists[0]
+			if want := c.caps.Has(imap.CapListStatus); list.status != want {
+				t.Errorf("STATUS return = %v, want %v", list.status, want)
+			}
+			if want := c.caps.Has(imap.CapSpecialUse); list.specialUse != want {
+				t.Errorf("SPECIAL-USE return = %v, want %v", list.specialUse, want)
+			}
+		})
 	}
 }

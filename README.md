@@ -37,7 +37,7 @@ CGO_ENABLED=0 go test ./... # run the tests
 
 ## Contributing
 
-Issues and pull requests are welcome. If you plan a large change, please open an issue first so we can agree on the direction. The house rules live in [AGENTS.md](AGENTS.md) — humans and agents alike follow them.
+Issues and pull requests are welcome. If you plan a large change, please open an issue first so we can agree on the direction. The house rules live in [AGENTS.md](AGENTS.md) — humans and agents alike follow them. The [glossary](docs/glossary.md) names the vocabulary, and [docs/decisions](docs/decisions/) records why the design is what it is.
 
 ## License
 

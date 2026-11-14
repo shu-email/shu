@@ -170,7 +170,7 @@ func (a *app) readingBar(c *ui.Context, label string, fn func()) {
 					Placeholder(placeholder).
 					Label(locales.SearchMailLabel()).Tooltip(locales.SearchMailLabel()).Bind(&a.searchField).
 					OnClick(a.openSearch).
-					OnChange(func() { a.search() })
+					OnChange(func() { a.searchSoon() })
 				// Cmd+K gives the field the keys once it opened.
 				if a.searchFocus {
 					a.searchFocus = false

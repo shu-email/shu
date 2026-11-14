@@ -279,6 +279,7 @@ type fakeService struct {
 	suggested       []string
 	onSuggest       func(typed string)
 	recipientChecks []string
+	contactReads    int
 	contactErr      error
 
 	// Labels, kept as the engine keeps them. labels are each account's,
@@ -2175,6 +2176,7 @@ func (f *fakeService) Suggest(ctx context.Context, typed string, exclude []strin
 }
 
 func (f *fakeService) Contacts(ctx context.Context, search string, offset, limit int) (mail.ContactPage, error) {
+	f.contactReads++
 	if limit <= 0 {
 		limit = mail.DefaultPageSize
 	}

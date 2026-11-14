@@ -102,7 +102,7 @@ func (a *app) toggleFilters(now time.Time) {
 // those drop reports, and searches again.
 func (a *app) writeFilter(drop func(searchQuery) bool, add string) {
 	a.query = withFilter(a.query, drop, add)
-	a.search()
+	a.searchSoon()
 }
 
 // filterPanel is what the filter control opens: a field for each filter,

@@ -107,6 +107,48 @@ func TestAddressBookSearch(t *testing.T) {
 	}
 }
 
+// A word typed a letter at a time in the search field asks the book once,
+// when the typing pauses: each keystroke retires the search before it.
+func TestAddressBookSearchWaitsForTheTypingToPause(t *testing.T) {
+	fs := contactsService()
+	a, tt := bookApp(t, fs)
+	ti := &searchTimers{}
+	a.after = ti.after
+	reads := fs.contactReads
+	tt.TypeKey(0, ui.KeyL, "l")
+	tt.TypeKey(0, ui.KeyE, "e")
+	if len(ti.armed) != 2 {
+		t.Fatalf("two keystrokes armed %d searches", len(ti.armed))
+	}
+	if fs.contactReads != reads {
+		t.Errorf("the book read before the typing paused: %d reads", fs.contactReads-reads)
+	}
+	ti.fire()
+	if got := fs.contactReads - reads; got != 1 {
+		t.Errorf("reads = %d, want one", got)
+	}
+	tt.Frame()
+	if got := rows(tt); !slices.Equal(got, []string{"Lena Lee lena.lee@example.com", "Bob Lee bob.lee@example.com"}) {
+		t.Errorf("“le” finds %q", got)
+	}
+}
+
+// Closing the address book while a search waits for the pause reads
+// nothing: the book the user left is not read again.
+func TestAddressBookClosedWhileItWaitsReadsNothing(t *testing.T) {
+	fs := contactsService()
+	a, tt := bookApp(t, fs)
+	ti := &searchTimers{}
+	a.after = ti.after
+	tt.TypeKey(0, ui.KeyL, "l")
+	reads := fs.contactReads
+	a.closeContacts()
+	ti.fire()
+	if fs.contactReads != reads {
+		t.Errorf("the closed book read again: %d reads", fs.contactReads-reads)
+	}
+}
+
 // A long book is read a page at a time, the next one as the list nears
 // the end of those read, each contact once; an edit reads it again for
 // as many as it shows, so that the list keeps its length.

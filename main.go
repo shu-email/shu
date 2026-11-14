@@ -140,8 +140,11 @@ type app struct {
 	// (readingBar), and searchFocus gives it the keys as it is next built;
 	// readingWidth is the reading pane's last width.
 	searchOpen, searchFocus bool
-	readingWidth            float32
-	focusList               bool
+	// searchTimer holds the search the last keystroke in the search field
+	// armed; a search asked for another way retires it.
+	searchTimer  searchDebounce
+	readingWidth float32
+	focusList    bool
 	// scope is the scope chosen for the list's searches, when scopeSet;
 	// scopeSeg is the scope control's choice as it draws it. filters is
 	// the filter control beside the search field.
@@ -537,6 +540,7 @@ func (a *app) attach(win *mygo.Window) {
 	win.OnClosed(func() {
 		// A sign-in waiting for the browser has nowhere left to end.
 		a.cancelSignIn()
+		a.searchTimer.stop()
 		a.closed = true
 	})
 	mygo.App.OnLocaleChanged(func(string) { win.SetTitle(locales.AppName()) })
@@ -1224,11 +1228,64 @@ func (a *app) loadPending(g uint64) {
 }
 
 // search re-reads the list with the search field's text. Other rows show
-// from their top.
+// from their top. A search the user asked for takes the place of one the
+// typing armed.
 func (a *app) search() {
+	a.searchTimer.stop()
 	a.sel.Clear()
 	a.list.ScrollTo(0, ui.Start)
 	a.loadMessages(a.gen)
+}
+
+// searchDelay is how long a search field waits after a keystroke: a word
+// typed a letter at a time asks the cache once.
+const searchDelay = 150 * time.Millisecond
+
+// searchDebounce is the search a pause in typing will run: the timer the
+// last keystroke armed and the number of that search. A later keystroke,
+// or a search asked for another way, stops the timer and outnumbers it,
+// so the one that waited runs nothing.
+type searchDebounce struct {
+	timer *time.Timer
+	seq   uint64
+}
+
+// stop retires the search armed before, if any: what it would have read
+// is read by whatever asks for a list now.
+func (d *searchDebounce) stop() {
+	if d.timer != nil {
+		d.timer.Stop()
+		d.timer = nil
+	}
+	d.seq++
+}
+
+// armSearch runs do once the typing in a field pauses, for the text the
+// field holds as do runs rather than for every word on the way there: a
+// keystroke after this one replaces it. A test app arms no timers and
+// runs it at once.
+func (a *app) armSearch(d *searchDebounce, text func() string, do func()) {
+	d.stop()
+	if a.after == nil {
+		do()
+		return
+	}
+	seq, wanted := d.seq, text()
+	d.timer = a.after(searchDelay, func() {
+		a.post(func() {
+			// The user may have asked for another search, or opened
+			// another list, while this one waited.
+			if d.seq != seq || text() != wanted {
+				return
+			}
+			do()
+		})
+	})
+}
+
+// searchSoon searches the list once the typing pauses.
+func (a *app) searchSoon() {
+	a.armSearch(&a.searchTimer, func() string { return a.query }, a.search)
 }
 
 // selectFolder switches the list to a folder and syncs it.

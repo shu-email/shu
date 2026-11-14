@@ -65,6 +65,9 @@ type addressBook struct {
 	// focus is the control the keyboard is on, among the add button and
 	// the buttons of the rows, which an edit moves it back to.
 	focus string
+	// searchTimer holds the search the last keystroke in the search field
+	// armed; the list scrolls to a read asked for another way at once.
+	searchTimer searchDebounce
 }
 
 // contactFocus names a button of a contact's row among the controls
@@ -123,6 +126,7 @@ func (a *app) openContacts() {
 // closeContacts closes the address book, or leaves its view in the main
 // window. Reads and edits still under way change nothing once they answer.
 func (a *app) closeContacts() {
+	a.book.searchTimer.stop()
 	a.book = addressBook{reads: a.book.reads + 1}
 	if win := a.contactsWin; win != nil {
 		a.contactsWin = nil
@@ -192,10 +196,17 @@ func (a *app) readMoreContacts() {
 }
 
 // searchContacts reads the book for what the search field holds, from the
-// top.
+// top. A search asked for another way takes the place of one the typing
+// armed.
 func (a *app) searchContacts() {
+	a.book.searchTimer.stop()
 	a.book.list.ScrollTo(0, ui.Start)
 	a.readContacts(0)
+}
+
+// searchContactsSoon reads the book once the typing pauses.
+func (a *app) searchContactsSoon() {
+	a.armSearch(&a.book.searchTimer, func() string { return a.book.search }, a.searchContacts)
 }
 
 // openAddContact opens the form of a contact added by hand.
@@ -353,7 +364,7 @@ func (a *app) contactsView(c *ui.Context) {
 			ui.Text(c, locales.ContactsDetail()).FontSize(12).TextColor(t.TextMuted)
 			ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
 				ui.SearchField(c, &b.search).Grow(1).Placeholder(locales.SearchContacts()).
-					Label(locales.SearchContacts()).AutoFocus().OnChange(a.searchContacts)
+					Label(locales.SearchContacts()).AutoFocus().OnChange(a.searchContactsSoon)
 				ui.Button(c, "").Label(locales.AddContact()).FocusBind(&b.focus, focusAddContact).
 					OnClick(a.openAddContact).Children(func() {
 					ui.Icon(c, plusIcon).FontSize(14)

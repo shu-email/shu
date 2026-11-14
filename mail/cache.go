@@ -71,28 +71,53 @@ func (s *Service) SweepCache(ctx context.Context) error {
 // about to have one.
 func (s *Service) sweepAttachmentFiles(ctx context.Context) (int, error) {
 	dir := filepath.Join(s.cacheDir, attachmentCacheDir)
+	var named map[string]bool
+	removed := 0
+	err := s.walkCacheFiles(ctx, dir, s.now().Add(-cacheGrace), func(name string) error {
+		if named == nil {
+			paths, err := s.store.AttachmentFileRefs(ctx)
+			if err != nil {
+				// Without the whole list, any file may be in use.
+				return err
+			}
+			named = make(map[string]bool, len(paths))
+			for _, path := range paths {
+				named[filepath.Base(path)] = true
+			}
+		}
+		if named[name] {
+			return nil
+		}
+		switch err := os.Remove(filepath.Join(dir, name)); {
+		case err == nil:
+			removed++
+			return nil
+		case errors.Is(err, fs.ErrNotExist):
+			return nil
+		default:
+			return err
+		}
+	})
+	return removed, err
+}
+
+// walkCacheFiles calls visit for each file of a cache directory that is
+// older than cutoff: younger ones may be a copy in progress, and the
+// checks that read these directories and the sweeps that empty them agree
+// on what an orphan is this way. It checks ctx between entries, so a
+// large cache can be walked a part at a time.
+func (s *Service) walkCacheFiles(ctx context.Context, dir string, cutoff time.Time, visit func(name string) error) error {
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) || (err == nil && len(entries) == 0) {
-		return 0, nil
+		return nil
 	}
 	if err != nil {
-		return 0, err
+		return err
 	}
-	paths, err := s.store.AttachmentFileRefs(ctx)
-	if err != nil {
-		// Without the whole list, any file may be in use.
-		return 0, err
-	}
-	named := make(map[string]bool, len(paths))
-	for _, path := range paths {
-		named[filepath.Base(path)] = true
-	}
-	cutoff := s.now().Add(-cacheGrace)
-	removed := 0
 	for i, e := range entries {
 		if i%sweepStep == 0 {
 			if err := ctx.Err(); err != nil {
-				return removed, err
+				return err
 			}
 		}
 		if e.IsDir() {
@@ -102,19 +127,11 @@ func (s *Service) sweepAttachmentFiles(ctx context.Context) (int, error) {
 		if err != nil || !info.ModTime().Before(cutoff) {
 			continue
 		}
-		name := e.Name()
-		if named[name] {
-			continue
+		if err := visit(e.Name()); err != nil {
+			return err
 		}
-		if err := os.Remove(filepath.Join(dir, name)); err != nil {
-			if !errors.Is(err, fs.ErrNotExist) {
-				return removed, err
-			}
-			continue
-		}
-		removed++
 	}
-	return removed, nil
+	return nil
 }
 
 // sweepPreviewFiles removes the temporary files of earlier runs. One this
@@ -124,36 +141,19 @@ func (s *Service) sweepAttachmentFiles(ctx context.Context) (int, error) {
 // gives that up rather than remove a file of this run.
 func (s *Service) sweepPreviewFiles(ctx context.Context) (int, error) {
 	dir := filepath.Join(s.cacheDir, previewCacheDir)
-	entries, err := os.ReadDir(dir)
-	if errors.Is(err, fs.ErrNotExist) || (err == nil && len(entries) == 0) {
-		return 0, nil
-	}
-	if err != nil {
-		return 0, err
-	}
 	removed := 0
-	for i, e := range entries {
-		if i%sweepStep == 0 {
-			if err := ctx.Err(); err != nil {
-				return removed, err
-			}
+	err := s.walkCacheFiles(ctx, dir, s.started.Add(-time.Second), func(name string) error {
+		switch err := os.Remove(filepath.Join(dir, name)); {
+		case err == nil:
+			removed++
+			return nil
+		case errors.Is(err, fs.ErrNotExist):
+			return nil
+		default:
+			return err
 		}
-		if e.IsDir() {
-			continue
-		}
-		info, err := e.Info()
-		if err != nil || !info.ModTime().Before(s.started.Add(-time.Second)) {
-			continue
-		}
-		if err := os.Remove(filepath.Join(dir, e.Name())); err != nil {
-			if !errors.Is(err, fs.ErrNotExist) {
-				return removed, err
-			}
-			continue
-		}
-		removed++
-	}
-	return removed, nil
+	})
+	return removed, err
 }
 
 // TempFile writes data to a temporary file of the cache for the window to

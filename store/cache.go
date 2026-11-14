@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"slices"
 	"strconv"
 )
 
@@ -49,4 +50,18 @@ func (s *Store) AttachmentFileRefs(ctx context.Context) ([]string, error) {
 		out = append(out, text(r[0]))
 	}
 	return out, nil
+}
+
+// ForgetAttachmentFiles clears the cache paths of attachment files the
+// prune removed. The rows stay, as the messages they belong to stay: their
+// bytes are the server's to give again. It writes in chunks, as a large
+// cache has many files.
+func (s *Store) ForgetAttachmentFiles(ctx context.Context, paths []string) error {
+	for chunk := range slices.Chunk(paths, contactChunk) {
+		if _, err := s.exec(ctx, `UPDATE attachments SET cache_path = NULL
+			WHERE cache_path IN (SELECT value FROM json_each(?))`, jsonText(chunk)); err != nil {
+			return err
+		}
+	}
+	return nil
 }

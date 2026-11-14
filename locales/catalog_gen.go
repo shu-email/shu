@@ -12259,3 +12259,189 @@ func UnblockFailed(error string) string { return In(i18n.Locale()).UnblockFailed
 func (msgs Messages) UnblockFailed(error string) string {
 	return Catalog.Format(msgs.locale, "unblockFailed", map[string]any{"error": error})
 }
+
+// CacheCheck says "Cache check"
+// in the language the app shows.
+func CacheCheck() string { return In(i18n.Locale()).CacheCheck() }
+
+// CacheCheck says "Cache check"
+// in the language of msgs.
+func (msgs Messages) CacheCheck() string {
+	return Catalog.Format(msgs.locale, "cacheCheck", nil)
+}
+
+// CacheCheckHint says "Checks the search index, the conversation counts and the attachment and draft files against the database. It reads on…"
+// in the language the app shows.
+func CacheCheckHint() string { return In(i18n.Locale()).CacheCheckHint() }
+
+// CacheCheckHint says "Checks the search index, the conversation counts and the attachment and draft files against the database. It reads on…"
+// in the language of msgs.
+func (msgs Messages) CacheCheckHint() string {
+	return Catalog.Format(msgs.locale, "cacheCheckHint", nil)
+}
+
+// CheckCache says "Check Cache"
+// in the language the app shows.
+func CheckCache() string { return In(i18n.Locale()).CheckCache() }
+
+// CheckCache says "Check Cache"
+// in the language of msgs.
+func (msgs Messages) CheckCache() string {
+	return Catalog.Format(msgs.locale, "checkCache", nil)
+}
+
+// CacheChecking says "Checking the cache…"
+// in the language the app shows.
+func CacheChecking() string { return In(i18n.Locale()).CacheChecking() }
+
+// CacheChecking says "Checking the cache…"
+// in the language of msgs.
+func (msgs Messages) CacheChecking() string {
+	return Catalog.Format(msgs.locale, "cacheChecking", nil)
+}
+
+// CacheCheckFailed says "The check could not run: {error}"
+// in the language the app shows.
+//
+// Says that the cache check failed and why.
+func CacheCheckFailed(error string) string { return In(i18n.Locale()).CacheCheckFailed(error) }
+
+// CacheCheckFailed says "The check could not run: {error}"
+// in the language of msgs.
+//
+// Says that the cache check failed and why.
+func (msgs Messages) CacheCheckFailed(error string) string {
+	return Catalog.Format(msgs.locale, "cacheCheckFailed", map[string]any{"error": error})
+}
+
+// CacheCheckHealthy says "No problems found."
+// in the language the app shows.
+func CacheCheckHealthy() string { return In(i18n.Locale()).CacheCheckHealthy() }
+
+// CacheCheckHealthy says "No problems found."
+// in the language of msgs.
+func (msgs Messages) CacheCheckHealthy() string {
+	return Catalog.Format(msgs.locale, "cacheCheckHealthy", nil)
+}
+
+// CacheProblemSchema says "Schema version {found}, this build expects {want}"
+// in the language the app shows.
+//
+// The schema version the database says it is, and the one this build
+// writes.
+func CacheProblemSchema(found string, want string) string {
+	return In(i18n.Locale()).CacheProblemSchema(found, want)
+}
+
+// CacheProblemSchema says "Schema version {found}, this build expects {want}"
+// in the language of msgs.
+//
+// The schema version the database says it is, and the one this build
+// writes.
+func (msgs Messages) CacheProblemSchema(found string, want string) string {
+	return Catalog.Format(msgs.locale, "cacheProblemSchema", map[string]any{"found": found, "want": want})
+}
+
+// CacheProblemReferences says "Rows that point at missing rows"
+// in the language the app shows.
+func CacheProblemReferences() string { return In(i18n.Locale()).CacheProblemReferences() }
+
+// CacheProblemReferences says "Rows that point at missing rows"
+// in the language of msgs.
+func (msgs Messages) CacheProblemReferences() string {
+	return Catalog.Format(msgs.locale, "cacheProblemReferences", nil)
+}
+
+// CacheProblemSearchIndex says "Search index out of step"
+// in the language the app shows.
+func CacheProblemSearchIndex() string { return In(i18n.Locale()).CacheProblemSearchIndex() }
+
+// CacheProblemSearchIndex says "Search index out of step"
+// in the language of msgs.
+func (msgs Messages) CacheProblemSearchIndex() string {
+	return Catalog.Format(msgs.locale, "cacheProblemSearchIndex", nil)
+}
+
+// CacheProblemThreads says "Conversation counts out of step"
+// in the language the app shows.
+func CacheProblemThreads() string { return In(i18n.Locale()).CacheProblemThreads() }
+
+// CacheProblemThreads says "Conversation counts out of step"
+// in the language of msgs.
+func (msgs Messages) CacheProblemThreads() string {
+	return Catalog.Format(msgs.locale, "cacheProblemThreads", nil)
+}
+
+// CacheProblemAttachmentMissing says "Attachment files missing"
+// in the language the app shows.
+func CacheProblemAttachmentMissing() string { return In(i18n.Locale()).CacheProblemAttachmentMissing() }
+
+// CacheProblemAttachmentMissing says "Attachment files missing"
+// in the language of msgs.
+func (msgs Messages) CacheProblemAttachmentMissing() string {
+	return Catalog.Format(msgs.locale, "cacheProblemAttachmentMissing", nil)
+}
+
+// CacheProblemAttachmentOrphans says "Attachment files nothing names"
+// in the language the app shows.
+func CacheProblemAttachmentOrphans() string { return In(i18n.Locale()).CacheProblemAttachmentOrphans() }
+
+// CacheProblemAttachmentOrphans says "Attachment files nothing names"
+// in the language of msgs.
+func (msgs Messages) CacheProblemAttachmentOrphans() string {
+	return Catalog.Format(msgs.locale, "cacheProblemAttachmentOrphans", nil)
+}
+
+// CacheProblemDraftMissing says "Draft files missing"
+// in the language the app shows.
+func CacheProblemDraftMissing() string { return In(i18n.Locale()).CacheProblemDraftMissing() }
+
+// CacheProblemDraftMissing says "Draft files missing"
+// in the language of msgs.
+func (msgs Messages) CacheProblemDraftMissing() string {
+	return Catalog.Format(msgs.locale, "cacheProblemDraftMissing", nil)
+}
+
+// CacheProblemDraftOrphans says "Draft files nothing names"
+// in the language the app shows.
+func CacheProblemDraftOrphans() string { return In(i18n.Locale()).CacheProblemDraftOrphans() }
+
+// CacheProblemDraftOrphans says "Draft files nothing names"
+// in the language of msgs.
+func (msgs Messages) CacheProblemDraftOrphans() string {
+	return Catalog.Format(msgs.locale, "cacheProblemDraftOrphans", nil)
+}
+
+// CacheProblem says "{title}: {count}"
+// in the language the app shows.
+//
+// One kind of problem the cache check found, with how many.
+func CacheProblem(title string, count int) string {
+	return In(i18n.Locale()).CacheProblem(title, count)
+}
+
+// CacheProblem says "{title}: {count}"
+// in the language of msgs.
+//
+// One kind of problem the cache check found, with how many.
+func (msgs Messages) CacheProblem(title string, count int) string {
+	return Catalog.Format(msgs.locale, "cacheProblem", map[string]any{"title": title, "count": count})
+}
+
+// CacheProblemIDs says "{title}: {count} ({ids})"
+// in the language the app shows.
+//
+// One kind of problem the cache check found, with how many and a few of
+// their IDs.
+func CacheProblemIDs(title string, count int, ids string) string {
+	return In(i18n.Locale()).CacheProblemIDs(title, count, ids)
+}
+
+// CacheProblemIDs says "{title}: {count} ({ids})"
+// in the language of msgs.
+//
+// One kind of problem the cache check found, with how many and a few of
+// their IDs.
+func (msgs Messages) CacheProblemIDs(title string, count int, ids string) string {
+	return Catalog.Format(msgs.locale, "cacheProblemIDs", map[string]any{"title": title, "count": count, "ids": ids})
+}

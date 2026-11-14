@@ -4163,5 +4163,73 @@
         "example": "mail: not found"
       }
     }
+  },
+  "cacheCheck": "Cache check",
+  "cacheCheckHint": "Checks the search index, the conversation counts and the attachment and draft files against the database. It reads only; nothing is changed.",
+  "checkCache": "Check Cache",
+  "cacheChecking": "Checking the cache…",
+  "cacheCheckFailed": "The check could not run: {error}",
+  "@cacheCheckFailed": {
+    "description": "Says that the cache check failed and why.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "store: the database gave no schema version"
+      }
+    }
+  },
+  "cacheCheckHealthy": "No problems found.",
+  "cacheProblemSchema": "Schema version {found}, this build expects {want}",
+  "@cacheProblemSchema": {
+    "description": "The schema version the database says it is, and the one this build writes.",
+    "placeholders": {
+      "found": {
+        "type": "String",
+        "example": "3"
+      },
+      "want": {
+        "type": "String",
+        "example": "24"
+      }
+    }
+  },
+  "cacheProblemReferences": "Rows that point at missing rows",
+  "cacheProblemSearchIndex": "Search index out of step",
+  "cacheProblemThreads": "Conversation counts out of step",
+  "cacheProblemAttachmentMissing": "Attachment files missing",
+  "cacheProblemAttachmentOrphans": "Attachment files nothing names",
+  "cacheProblemDraftMissing": "Draft files missing",
+  "cacheProblemDraftOrphans": "Draft files nothing names",
+  "cacheProblem": "{title}: {count}",
+  "@cacheProblem": {
+    "description": "One kind of problem the cache check found, with how many.",
+    "placeholders": {
+      "title": {
+        "type": "String",
+        "example": "Attachment files missing"
+      },
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "cacheProblemIDs": "{title}: {count} ({ids})",
+  "@cacheProblemIDs": {
+    "description": "One kind of problem the cache check found, with how many and a few of their IDs.",
+    "placeholders": {
+      "title": {
+        "type": "String",
+        "example": "Conversation counts out of step"
+      },
+      "count": {
+        "type": "int",
+        "example": "2"
+      },
+      "ids": {
+        "type": "String",
+        "example": "12, 18"
+      }
+    }
   }
 }

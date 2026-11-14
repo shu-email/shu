@@ -537,8 +537,20 @@ func (s *Service) SyncFolder(ctx context.Context, accountID, folder string, limi
 	if err := s.syncFolder(ctx, a, password, folder, limit); err != nil {
 		return err
 	}
-	_ = PruneAttachments(s.cacheDir, defaultAttachmentBudget)
+	_ = s.pruneAttachments(ctx)
 	return nil
+}
+
+// pruneAttachments bounds the attachment cache, and forgets the files it
+// removed so that no row names a file the cache no longer holds. The cache
+// is the store's to record: a file gone without its row cleared would read
+// as a body cached and an attachment that cannot be opened.
+func (s *Service) pruneAttachments(ctx context.Context) error {
+	removed, err := PruneAttachments(s.cacheDir, defaultAttachmentBudget)
+	if err != nil || len(removed) == 0 {
+		return err
+	}
+	return s.store.ForgetAttachmentFiles(ctx, removed)
 }
 
 // FetchMessage fetches a body on demand and caches it.
@@ -1024,18 +1036,20 @@ func (s *Service) cacheAttachment(a *Attachment) error {
 const defaultAttachmentBudget = 200 << 20
 
 // PruneAttachments removes the least recently used attachment files until
-// the cache fits maxBytes.
-func PruneAttachments(dir string, maxBytes int64) error {
+// the cache fits maxBytes, and returns the paths it removed: the rows that
+// name them are cleared, so that no row names a file the cache no longer
+// holds.
+func PruneAttachments(dir string, maxBytes int64) ([]string, error) {
 	if dir == "" {
-		return nil
+		return nil, nil
 	}
 	root := filepath.Join(dir, "attachments")
 	entries, err := os.ReadDir(root)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil
+		return nil, nil
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 	type file struct {
 		path  string
@@ -1056,7 +1070,7 @@ func PruneAttachments(dir string, maxBytes int64) error {
 		total += info.Size()
 	}
 	if total <= maxBytes {
-		return nil
+		return nil, nil
 	}
 	// Oldest first, as the LRU policy wants.
 	for i := 1; i < len(files); i++ {
@@ -1064,13 +1078,15 @@ func PruneAttachments(dir string, maxBytes int64) error {
 			files[j], files[j-1] = files[j-1], files[j]
 		}
 	}
+	var removed []string
 	for _, f := range files {
 		if total <= maxBytes {
 			break
 		}
 		if err := os.Remove(f.path); err == nil {
 			total -= f.size
+			removed = append(removed, f.path)
 		}
 	}
-	return nil
+	return removed, nil
 }

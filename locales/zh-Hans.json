@@ -1515,5 +1515,21 @@
   "blockedFiledTo": "新邮件进入 {folder}",
   "noBlockedSenders": "没有已屏蔽的发件人。",
   "unblock": "取消屏蔽",
-  "unblockFailed": "取消屏蔽失败：{error}"
+  "unblockFailed": "取消屏蔽失败：{error}",
+  "cacheCheck": "缓存检查",
+  "cacheCheckHint": "对照数据库检查搜索索引、会话计数以及附件与草稿文件。只读取，不做任何修改。",
+  "checkCache": "检查缓存",
+  "cacheChecking": "正在检查缓存…",
+  "cacheCheckFailed": "无法运行检查：{error}",
+  "cacheCheckHealthy": "未发现问题。",
+  "cacheProblemSchema": "架构版本为 {found}，此版本需要 {want}",
+  "cacheProblemReferences": "指向缺失记录的行",
+  "cacheProblemSearchIndex": "搜索索引不同步",
+  "cacheProblemThreads": "会话计数不同步",
+  "cacheProblemAttachmentMissing": "缺失的附件文件",
+  "cacheProblemAttachmentOrphans": "没有记录引用的附件文件",
+  "cacheProblemDraftMissing": "缺失的草稿文件",
+  "cacheProblemDraftOrphans": "没有记录引用的草稿文件",
+  "cacheProblem": "{title}：{count}",
+  "cacheProblemIDs": "{title}：{count}（{ids}）"
 }

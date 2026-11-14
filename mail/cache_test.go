@@ -101,6 +101,27 @@ func TestSweepCacheStopsWhenItsContextEnds(t *testing.T) {
 
 // A temporary file for the user is written in the cache, and what an
 // earlier run left goes at the next start.
+// The prune keeps the attachment cache within its budget, oldest first,
+// and reports the files it removed so that the store can forget them.
+func TestPruneAttachmentsReportsWhatItRemoved(t *testing.T) {
+	dir := t.TempDir()
+	attachments := filepath.Join(dir, attachmentCacheDir)
+	oldest := filepath.Join(attachments, "oldest")
+	writeCacheFile(t, oldest, time.Now().Add(-time.Hour))
+	newest := filepath.Join(attachments, "newest")
+	writeCacheFile(t, newest, time.Now())
+	removed, err := PruneAttachments(dir, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(removed) != 1 || removed[0] != oldest {
+		t.Fatalf("removed = %v, want the oldest file", removed)
+	}
+	if exists(oldest) || !exists(newest) {
+		t.Errorf("the prune took the wrong file: oldest %v, newest %v", exists(oldest), exists(newest))
+	}
+}
+
 func TestTempFileIsInTheCache(t *testing.T) {
 	svc, _, dir := cacheEnv(t)
 	path, err := svc.TempFile(".pdf", []byte("document"))

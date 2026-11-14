@@ -348,6 +348,9 @@ type app struct {
 	lists     map[string]mail.UnsubscribeRecord
 	unsubForm unsubForm
 	blocks    blockState
+	// cache is the settings' cache check (integrity.go): the run in flight
+	// and what the last one found.
+	cache cacheCheck
 
 	// Hooks the window sets; tests leave them nil.
 	newWindow func(mygo.WindowOptions) *mygo.Window

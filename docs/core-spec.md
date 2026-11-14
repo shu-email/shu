@@ -58,6 +58,10 @@ Following the new `AGENTS.md`: protocol/storage/sync do not import
 `github.com/egoist/mygo/ui`; the UI calls the engine through plain service values,
 and the engine returns data only.
 
+The tree below is the one this round proposed. The app's Go files have
+since moved from the root into `app/`, and the binary's entry into
+`cmd/shu/`; the boundaries it describes still hold.
+
 ```
 shu/
   main.go              app struct, window assembly, root view

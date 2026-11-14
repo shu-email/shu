@@ -1,6 +1,7 @@
 {
   "name": "shu",
   "identifier": "com.example.shu",
+  "main": "./cmd/shu",
   "version": "0.1.0",
   "out": "build",
   "i18n": {

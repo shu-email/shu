@@ -1,0 +1,278 @@
+package app
+
+import (
+	"strings"
+
+	"github.com/egoist/mygo"
+	"golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
+)
+
+// contentSecurityPolicy forbids everything an email does not need: no
+// scripts, no network, no forms, only inline styles and data images.
+const contentSecurityPolicy = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; form-action 'none'; base-uri 'none'"
+
+// contentSecurityPolicyImages is the policy once the user allowed the
+// message's remote images: those may load, and nothing else changed.
+const contentSecurityPolicyImages = "default-src 'none'; style-src 'unsafe-inline'; img-src data: http: https:; font-src data:; form-action 'none'; base-uri 'none'"
+
+// ensureWebView creates the isolated web view the first time HTML mail is
+// shown. The page is untrusted: it calls no Go method and navigates
+// nowhere.
+func (a *app) ensureWebView() {
+	if a.webview != nil || a.win == nil {
+		return
+	}
+	v, err := a.win.NewWebView(mygo.WebViewOptions{
+		Page:            mygo.PageOptions{Untrusted: true},
+		BackgroundColor: "light-dark(#ffffff, #18181b)",
+	})
+	if err != nil {
+		return
+	}
+	v.Page().OnWillNavigate(func(e *mygo.NavigateEvent) {
+		e.PreventDefault()
+		if !isWebURL(e.URL) {
+			return
+		}
+		// The page never opens a link itself: the window asks the user
+		// first and shows the real destination (security.go).
+		url := e.URL
+		a.post(func() { a.askOpenLink(url) })
+	})
+	a.webview = v
+}
+
+// syncHTMLView loads the chosen message's HTML once, and only when it
+// changes.
+func (a *app) syncHTMLView() {
+	if a.threaded() {
+		a.syncThreadHTML()
+		return
+	}
+	if !a.htmlOn || a.webview == nil {
+		return
+	}
+	m, msg := a.current()
+	if m == nil || msg == nil || msg.BodyHTML == "" {
+		return
+	}
+	key := summaryKey(*m) + "/html"
+	if a.htmlKey == key {
+		return
+	}
+	a.htmlKey = key
+	a.webview.Page().LoadHTML(renderHTML(msg.BodyHTML, a.imageAllowed(*m)), "about:blank")
+}
+
+// syncThreadHTML loads the HTML of the message of the conversation on
+// show that is to show as HTML, once.
+func (a *app) syncThreadHTML() {
+	cv := a.conv
+	if cv == nil || cv.html == "" || a.webview == nil {
+		return
+	}
+	b, ok := a.bodies[cv.html]
+	if !ok || b.Message.BodyHTML == "" {
+		return
+	}
+	key := cv.html + "/html"
+	if a.htmlKey == key {
+		return
+	}
+	a.htmlKey = key
+	allowed := false
+	if m, ok := cv.message(cv.html); ok {
+		allowed = a.imageAllowed(m)
+	}
+	a.webview.Page().LoadHTML(renderHTML(b.Message.BodyHTML, allowed), "about:blank")
+}
+
+// isWebURL reports whether a link may leave the reading pane.
+func isWebURL(raw string) bool {
+	lower := strings.ToLower(strings.TrimSpace(raw))
+	return strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") || strings.HasPrefix(lower, "mailto:")
+}
+
+// renderHTML sanitizes a message's HTML and wraps it with the CSP and a
+// readable base style.
+func renderHTML(source string, allowRemote bool) string {
+	doc, err := html.Parse(strings.NewReader(source))
+	if err != nil {
+		return "<!doctype html><html><body></body></html>"
+	}
+	sanitizeNode(doc, allowRemote)
+	head := findElement(doc, atom.Head)
+	if head == nil {
+		head = &html.Node{Type: html.ElementNode, Data: "head"}
+		if doc.FirstChild != nil {
+			doc.InsertBefore(head, doc.FirstChild)
+		} else {
+			doc.AppendChild(head)
+		}
+	}
+	charset := &html.Node{Type: html.ElementNode, Data: "meta", DataAtom: atom.Meta}
+	charset.Attr = []html.Attribute{{Key: "charset", Val: "utf-8"}}
+	meta := &html.Node{Type: html.ElementNode, Data: "meta", DataAtom: atom.Meta}
+	meta.Attr = []html.Attribute{
+		{Key: "http-equiv", Val: "Content-Security-Policy"},
+		{Key: "content", Val: contentSecurityPolicyOf(allowRemote)},
+	}
+	viewport := &html.Node{Type: html.ElementNode, Data: "meta", DataAtom: atom.Meta}
+	viewport.Attr = []html.Attribute{
+		{Key: "name", Val: "viewport"},
+		{Key: "content", Val: "width=device-width, initial-scale=1"},
+	}
+	style := &html.Node{Type: html.ElementNode, Data: "style", DataAtom: atom.Style}
+	style.AppendChild(&html.Node{Type: html.TextNode, Data: `
+		html, body { background: transparent; }
+		body {
+			margin: 0; padding: 4px 2px 24px;
+			font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+			color: light-dark(#18181b, #e4e4e7);
+			overflow-wrap: anywhere;
+		}
+		a { color: #2563eb; }
+		img { max-width: 100%; height: auto; }
+		blockquote { margin: 0 0 0 12px; padding-left: 12px; border-left: 2px solid #d4d4d8; color: #71717a; }
+		pre, code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+		pre { white-space: pre-wrap; }
+		table { border-collapse: collapse; max-width: 100%; }
+		td, th { padding: 3px 6px; border: 1px solid #e4e4e7; }
+	`})
+	// The policy goes ahead of everything the message brought: a CSP in a
+	// meta element governs only what is parsed after it, and a message's
+	// own stylesheet would otherwise load before the policy exists.
+	first := head.FirstChild
+	for _, n := range []*html.Node{charset, meta, viewport, style} {
+		head.InsertBefore(n, first)
+	}
+	var b strings.Builder
+	if err := html.Render(&b, doc); err != nil {
+		return "<!doctype html><html><body></body></html>"
+	}
+	return b.String()
+}
+
+// sanitizeNode removes what a message may not run or load.
+func contentSecurityPolicyOf(allowRemote bool) string {
+	if allowRemote {
+		return contentSecurityPolicyImages
+	}
+	return contentSecurityPolicy
+}
+
+func sanitizeNode(n *html.Node, allowRemote bool) {
+	if n.Type == html.ElementNode {
+		switch n.DataAtom {
+		case atom.Script, atom.Noscript, atom.Iframe, atom.Object, atom.Embed,
+			atom.Frame, atom.Frameset, atom.Form, atom.Input, atom.Button,
+			atom.Textarea, atom.Select, atom.Option, atom.Link, atom.Base,
+			atom.Template, atom.Meta:
+			removeNode(n)
+			return
+		case atom.Svg, atom.Math:
+			// Foreign content carries script and links of its own, which
+			// the policy does not describe: none of it is a message.
+			removeNode(n)
+			return
+		}
+	}
+	for child := n.FirstChild; child != nil; {
+		next := child.NextSibling
+		sanitizeNode(child, allowRemote)
+		child = next
+	}
+	if n.Type == html.ElementNode {
+		n.Attr = safeAttributes(n.Attr, allowRemote)
+	}
+}
+
+// safeAttributes drops event handlers, form actions and unsafe links, and
+// keeps a picture's address only when the message carries it or the user
+// allowed remote ones.
+func safeAttributes(attrs []html.Attribute, allowRemote bool) []html.Attribute {
+	out := attrs[:0]
+	for _, attr := range attrs {
+		key := strings.ToLower(attr.Key)
+		if strings.HasPrefix(key, "xlink:") || strings.EqualFold(attr.Namespace, "xlink") {
+			// Foreign content spells an href with a prefix; it is no
+			// prefix the message may keep, and a handler behind one is
+			// still a handler.
+			key = strings.TrimPrefix(key, "xlink:")
+			attr.Key, attr.Namespace = key, ""
+		}
+		if strings.HasPrefix(key, "on") {
+			continue
+		}
+		switch key {
+		case "srcdoc", "action", "formaction", "ping", "nonce":
+			continue
+		case "srcset", "imagesrcset":
+			if set, ok := safeSrcset(attr.Val, allowRemote); ok {
+				attr.Val = set
+				out = append(out, attr)
+			}
+			continue
+		case "href":
+			if isWebURL(attr.Val) {
+				out = append(out, attr)
+			}
+			continue
+		case "src", "poster", "background":
+			v := strings.ToLower(strings.TrimSpace(attr.Val))
+			if strings.HasPrefix(v, "data:") || (allowRemote && isWebURL(v)) {
+				out = append(out, attr)
+			}
+			continue
+		}
+		out = append(out, attr)
+	}
+	return out
+}
+
+// safeSrcset keeps a candidate list when the user allowed remote images
+// and every candidate names the web: each address is checked as src is,
+// never half of a list.
+func safeSrcset(value string, allowRemote bool) (string, bool) {
+	if !allowRemote {
+		return "", false
+	}
+	var out []string
+	for _, candidate := range strings.Split(value, ",") {
+		fields := strings.Fields(candidate)
+		if len(fields) == 0 || !isHTTPURL(fields[0]) {
+			return "", false
+		}
+		out = append(out, strings.Join(fields, " "))
+	}
+	if len(out) == 0 {
+		return "", false
+	}
+	return strings.Join(out, ", "), true
+}
+
+// isHTTPURL reports whether an address is on the web. A data candidate
+// carries a comma of its own, which a candidate list has no room for.
+func isHTTPURL(raw string) bool {
+	lower := strings.ToLower(strings.TrimSpace(raw))
+	return strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://")
+}
+
+func removeNode(n *html.Node) {
+	if n.Parent != nil {
+		n.Parent.RemoveChild(n)
+	}
+}
+
+func findElement(root *html.Node, a atom.Atom) *html.Node {
+	if root.Type == html.ElementNode && root.DataAtom == a {
+		return root
+	}
+	for c := root.FirstChild; c != nil; c = c.NextSibling {
+		if found := findElement(c, a); found != nil {
+			return found
+		}
+	}
+	return nil
+}

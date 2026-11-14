@@ -74,7 +74,8 @@ shu/
     message.go         Summary/Message/Folder/Outgoing and other models
     store.go           Store interface (the cache, outbox and account boundary)
     service.go         Service: account CRUD, cache-first reads, sync, send
-    imap.go            LIST/STATUS, SELECT, FETCH, STORE, MOVE/COPY, APPEND
+    imap.go            the connection, LIST/STATUS, SELECT, the sync loop, STORE, MOVE/COPY, APPEND
+    imap_fetch.go      FETCH: what it asks for and how its answer is read
     smtp.go            go-mail send + the raw message back
     mime.go            go-message parsing, bodies/attachments, HTML→text
     specialuse.go      special-use mapping and name fallback

@@ -643,9 +643,12 @@ lines). Keep the original HTML for the webview.
   (or the same with `img-src data: http: https:` once the user allowed that
   message's remote images),
   strip `<script>` and event attributes; `Page.OnWillNavigate` cancels navigation
-  and asks before opening an http(s) link, showing its real destination
-  (`security.go`); the user's `Open link` calls `c.Services().OpenURL`. Windowless
-  tests only check the toggle state and the sanitizing function, not rendering.
+  and asks before opening an http(s) link, naming its registrable domain first
+  and explaining a local reading of the address (`security.go`,
+  `linksafety.go`: userinfo, IP host, lookalike subdomains, port, trailing dot,
+  lookalike letters); the user's `Open link` calls `c.Services().OpenURL`.
+  Windowless tests only check the toggle state and the sanitizing function, not
+  rendering.
 - Remote images and previews (`mail/images.go`, `images.go`): an inline image a
   message names by `Content-ID` is embedded at parse time as a data URI, so it
   shows with no request and is not listed as an attachment. Remote `img` sources

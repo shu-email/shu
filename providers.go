@@ -149,8 +149,8 @@ func (a *app) providerStatusLine(id ai.ProviderID) string {
 	}
 	switch {
 	case !status.Installed:
-		if status.Err != "" {
-			return status.Err
+		if status.Problem != 0 {
+			return cliProblemText(status.Problem)
 		}
 		return locales.AiLocalToolNotInstalled()
 	case status.Outdated:

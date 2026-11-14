@@ -38,8 +38,10 @@ type CLIStatus struct {
 	// when the tool keeps it to itself. It comes from the tool's own
 	// status command, never from its credentials.
 	Account string
-	// Err names a failure without any prompt or credential.
-	Err string
+	// Problem is why the check could not read the tool's state, when it
+	// could not: a path that does not run, or a command that is not one
+	// of the tools. Zero when the check read it.
+	Problem Kind
 }
 
 // CLISignInCommand is the command that signs a tool in, for the user to
@@ -184,12 +186,12 @@ func isExecutable(path string) bool {
 func (s *Service) CLIStatus(ctx context.Context, id ProviderID, explicit string) CLIStatus {
 	command := CLIName(id)
 	if command == "" {
-		return CLIStatus{Err: "not a local tool"}
+		return CLIStatus{Problem: KindBadConfig}
 	}
 	path, ok := cliFind(command, explicit)
 	if !ok {
 		if strings.TrimSpace(explicit) != "" {
-			return CLIStatus{Err: "the command path does not run"}
+			return CLIStatus{Problem: KindCLIBadPath}
 		}
 		return CLIStatus{}
 	}
@@ -486,6 +488,12 @@ func stripANSI(s string) string { return ansiPattern.ReplaceAllString(s, "") }
 // cliError classifies a failed launch without quoting its output, which
 // may contain the prompt or mail text.
 func cliError(ctx context.Context, err error) error {
+	// A run that already said why keeps its own kind, as a run whose
+	// output overran what Shu reads.
+	var said *Error
+	if errors.As(err, &said) {
+		return said
+	}
 	switch {
 	case errors.Is(ctx.Err(), context.Canceled) || errors.Is(err, context.Canceled):
 		return &Error{Kind: KindCancelled}

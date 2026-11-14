@@ -610,3 +610,50 @@ func TestAIErrorTextNamesTheProviderAndTheKey(t *testing.T) {
 		}
 	}
 }
+
+// A local tool's failures say what to do with the tool rather than that
+// the request failed, and the ones the user fixes in the settings lead
+// there.
+func TestAIErrorTextExplainsTheLocalTool(t *testing.T) {
+	for _, tc := range []struct {
+		kind  ai.Kind
+		want  string
+		setup bool
+	}{
+		{ai.KindCLINotInstalled, locales.AiErrToolNotInstalled(), true},
+		{ai.KindCLIBadPath, locales.AiErrToolBadPath(), true},
+		{ai.KindCLISignIn, locales.AiErrToolSignIn(), true},
+		{ai.KindCLIOutdated, locales.AiErrToolOutdated(), true},
+		{ai.KindCLIFailed, locales.AiErrToolFailed(), false},
+		{ai.KindCLIOutput, locales.AiErrToolOutput(), false},
+	} {
+		text, setup := aiErrorText(&ai.Error{Kind: tc.kind})
+		if text != tc.want || setup != tc.setup {
+			t.Errorf("kind %v = %q, setup %v; want %q and setup %v", tc.kind, text, setup, tc.want, tc.setup)
+		}
+		if text == locales.AiErrOther() {
+			t.Errorf("kind %v falls through to the generic failure", tc.kind)
+		}
+	}
+	// Each kind says something of its own: a catalog entry copied from
+	// another kind would otherwise pass.
+	seen := map[string]ai.Kind{}
+	for _, kind := range []ai.Kind{ai.KindCLINotInstalled, ai.KindCLIBadPath, ai.KindCLISignIn, ai.KindCLIOutdated, ai.KindCLIFailed, ai.KindCLIOutput} {
+		text, _ := aiErrorText(&ai.Error{Kind: kind})
+		if other, ok := seen[text]; ok {
+			t.Errorf("kind %v says what kind %v says: %q", kind, other, text)
+		}
+		seen[text] = kind
+	}
+}
+
+// A sign-in failure keeps a retry even though the settings also fix it:
+// the check that read the tool may have been the one that failed.
+func TestASignInFailureOffersARetry(t *testing.T) {
+	if j := aiFailed(&ai.Error{Kind: ai.KindCLISignIn}); !j.setup || !j.canRetry {
+		t.Errorf("sign-in = %+v, want a setup step and a retry", j)
+	}
+	if j := aiFailed(&ai.Error{Kind: ai.KindCLINotInstalled}); !j.setup || j.canRetry {
+		t.Errorf("not installed = %+v, want a setup step alone", j)
+	}
+}

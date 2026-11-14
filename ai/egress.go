@@ -166,6 +166,8 @@ func (s *Service) Check(ctx context.Context, f Feature) error {
 	if CLIProvider(cfg.Provider) {
 		status := s.CLIStatus(ctx, cfg.Provider, cfg.CLIPath(cfg.Provider))
 		switch {
+		case status.Problem != 0:
+			return &Error{Kind: status.Problem}
 		case !status.Installed:
 			return &Error{Kind: KindCLINotInstalled}
 		case !status.SignedIn:
@@ -428,6 +430,8 @@ func (s *Service) Test(ctx context.Context, cfg Config, typedKey string) error {
 		// and so no model quota.
 		status := s.CLIStatus(ctx, cfg.Provider, cfg.CLIPath(cfg.Provider))
 		switch {
+		case status.Problem != 0:
+			return &Error{Kind: status.Problem}
 		case !status.Installed:
 			return &Error{Kind: KindCLINotInstalled}
 		case !status.SignedIn:

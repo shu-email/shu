@@ -22,10 +22,12 @@ type aiJob struct {
 	text   string
 	cached bool
 	// err is the failure in the user's language. setup marks a failure
-	// the AI settings fix, which the notice links to.
-	err    string
-	setup  bool
-	copied bool
+	// the AI settings fix, which the notice links to; canRetry marks one
+	// that a second try may still fix without a change there.
+	err      string
+	setup    bool
+	canRetry bool
+	copied   bool
 	// sent rebuilds the payload of a request whose input the window does
 	// not keep, as a conversation's, for "What was sent".
 	sent func(context.Context) (ai.Payload, error)
@@ -102,13 +104,28 @@ func aiErrorText(err error) (text string, setup bool) {
 		return locales.AiErrEmpty(), false
 	case ai.KindKeychain:
 		return locales.AiErrKeychain(), false
+	case ai.KindCLINotInstalled:
+		return locales.AiErrToolNotInstalled(), true
+	case ai.KindCLIBadPath:
+		return locales.AiErrToolBadPath(), true
+	case ai.KindCLISignIn:
+		return locales.AiErrToolSignIn(), true
+	case ai.KindCLIFailed:
+		return locales.AiErrToolFailed(), false
+	case ai.KindCLIOutput:
+		return locales.AiErrToolOutput(), false
+	case ai.KindCLIOutdated:
+		return locales.AiErrToolOutdated(), true
 	}
 	return locales.AiErrOther(), false
 }
 
 func aiFailed(err error) *aiJob {
 	text, setup := aiErrorText(err)
-	return &aiJob{err: text, setup: setup}
+	// A sign-in check that did not answer is read as signed out: the tool
+	// may be signed in already, or sign in elsewhere, so the notice keeps
+	// the retry it offers for failures the settings do not fix.
+	return &aiJob{err: text, setup: setup, canRetry: setup && ai.KindOf(err) == ai.KindCLISignIn}
 }
 
 // aiBegin is the front half of every AI action. Without any network call
@@ -450,7 +467,8 @@ func (a *app) aiNotice(c *ui.Context, t *ui.Theme, job *aiJob, dismissLabel stri
 				dismiss()
 				a.openAISettings()
 			})
-		} else if retry != nil {
+		}
+		if retry != nil && (!job.setup || job.canRetry) {
 			ui.Button(c, locales.Retry()).OnClick(retry)
 		}
 		a.iconButton(c, closeIcon, dismissLabel, dismissLabel).OnClick(dismiss)

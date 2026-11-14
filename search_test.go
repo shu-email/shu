@@ -169,3 +169,63 @@ func TestMatchedLines(t *testing.T) {
 		t.Errorf("one message = %q", got)
 	}
 }
+
+// A build asks what the search text means from its list, its title and
+// its toolbar; the text is read once, and read again when it changes.
+func TestSearchTextIsReadOnceUntilItChanges(t *testing.T) {
+	a := &app{query: "from:ann account:ann", accounts: []mail.Account{
+		{ID: "a1", Name: "Ann", Email: "ann@example.com"},
+	}}
+	first := a.parsedQuery()
+	if len(first.Accounts) != 1 || len(first.From) != 1 {
+		t.Fatalf("search = %+v", first)
+	}
+	// The read hands back lists of its own: changing one changes no
+	// later read of the same text.
+	first.From[0] = "changed"
+	if again := a.parsedQuery(); again.From[0] != "ann" {
+		t.Errorf("a read changed by its caller = %q", again.From[0])
+	}
+	// A read asks back the one it kept, not a new one: give the kept one
+	// a word no read of the text makes, and that is the word it asks.
+	a.queryMemo.query.From = []string{"kept"}
+	if kept := a.parsedQuery(); kept.From[0] != "kept" {
+		t.Error("the search text was read twice without changing")
+	}
+
+	a.query = "is:unread"
+	if unread := a.parsedQuery(); !unread.Unread || len(unread.Accounts) != 0 {
+		t.Errorf("after the text changed, search = %+v", unread)
+	}
+}
+
+// The scope of a saved search is read off the UI thread, so it takes its
+// text already read and writes no view state.
+func TestScopeOfASavedSearchReadsNoWindowState(t *testing.T) {
+	a := &app{query: "from:ann", accounts: []mail.Account{
+		{ID: "a1", Name: "Ann", Email: "ann@example.com"},
+	}}
+	a.parsedQuery()
+	a.scopeFor("INBOX", scopeHere, true, parseQuery("is:unread"))
+	if a.queryMemo.text != "from:ann" || a.queryMemo.query.Unread {
+		t.Error("reading a saved search's scope touched the window's search")
+	}
+}
+
+// Typed days are read in the zone the list writes its dates in, so a
+// change of zone reads the same text anew.
+func TestSearchTextIsReadAgainInAnotherZone(t *testing.T) {
+	zone := searchZone
+	defer func() { searchZone = zone }()
+	a := &app{query: "after:2026-03-01"}
+	searchZone = time.UTC
+	utc := a.parsedQuery()
+	searchZone = time.FixedZone("Elsewhere", 8*60*60)
+	elsewhere := a.parsedQuery()
+	if utc.Since.IsZero() || elsewhere.Since.IsZero() {
+		t.Fatalf("since = %v, %v", utc.Since, elsewhere.Since)
+	}
+	if utc.Since.Equal(elsewhere.Since) {
+		t.Errorf("a day read in %v = %v, also in the other zone", utc.Since, elsewhere.Since)
+	}
+}

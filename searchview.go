@@ -40,9 +40,12 @@ func (a *app) searchPlaceholder() string {
 }
 
 // filterCount is how many filters the search field's text holds.
-func filterCount(text string) int {
+func filterCount(text string) int { return countFilters(splitQuery(text)) }
+
+// countFilters counts the filters among parts already split.
+func countFilters(parts []queryPart) int {
 	n := 0
-	for _, p := range splitQuery(text) {
+	for _, p := range parts {
 		if p.filter() {
 			n++
 		}
@@ -473,7 +476,7 @@ func (a *app) searchBar(c *ui.Context, t *ui.Theme) {
 // it out of the search field's text.
 func (a *app) filterChips(c *ui.Context, t *ui.Theme) {
 	parts := splitQuery(a.query)
-	if filterCount(a.query) == 0 {
+	if countFilters(parts) == 0 {
 		return
 	}
 	text := a.query

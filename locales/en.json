@@ -2238,6 +2238,16 @@
       }
     }
   },
+  "removeRecipient": "Remove {name}",
+  "@removeRecipient": {
+    "description": "The button that takes a recipient out of a field of the compose window.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Maya Chen"
+      }
+    }
+  },
   "recipientsCheckFailed": "Couldn't check the recipients: {error}",
   "@recipientsCheckFailed": {
     "placeholders": {

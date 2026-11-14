@@ -182,10 +182,13 @@ func TestCloseAndReopenRestoresDraft(t *testing.T) {
 	}
 	tt := ui.NewTester(got.view, 720, 620)
 	values := fieldValues(tt)
-	for _, text := range []string{"Bob <bob@example.com>, carol@exa", "dave@", "Quarterly plan", "First thoughts, unfinished"} {
+	for _, text := range []string{"carol@exa", "dave@", "Quarterly plan", "First thoughts, unfinished"} {
 		if !slices.Contains(values, text) {
 			t.Errorf("restored window does not show %q: %q", text, values)
 		}
+	}
+	if !tt.HasText("Bob") {
+		t.Errorf("restored window does not show the chip of Bob: %q", tt.Texts())
 	}
 	if !tt.HasText(locales.DraftSynced()) {
 		t.Errorf("restored window's status: %q", tt.Texts())

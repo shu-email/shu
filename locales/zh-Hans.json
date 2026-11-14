@@ -616,6 +616,7 @@
   "recipientMatch": "“{entry}”不是邮箱地址。你是指 {name} 吗？",
   "useContact": "使用 {address}",
   "useContactFor": "用 {address} 替换“{entry}”",
+  "removeRecipient": "移除 {name}",
   "recipientsCheckFailed": "无法检查收件人：{error}",
   "contacts": "联系人",
   "contactsDetail": "与你通信往来的人。他们只保存在这台设备上，不会发给任何服务器或 AI 模型。",

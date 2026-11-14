@@ -3488,13 +3488,92 @@
   "securityShowDetails": "Why?",
   "securityHideDetails": "Hide reason",
   "securityLinkTitle": "Open this link?",
-  "securityLinkMessage": "The link goes to:\n\n{url}",
+  "securityLinkMessage": "The link goes to:\n\n{domain}\n\n{url}",
   "@securityLinkMessage": {
-    "description": "Shows the real destination of a link before it opens.",
+    "description": "Shows the real destination of a link before it opens: the registrable domain first, then the address as written.",
     "placeholders": {
+      "domain": {
+        "type": "String",
+        "example": "example.com"
+      },
       "url": {
         "type": "String",
         "example": "https://example.com/path"
+      }
+    }
+  },
+  "securityLinkWarnings": "Signs worth checking:",
+  "securityLinkWarnScheme": "The link is not a web address but {scheme}.",
+  "@securityLinkWarnScheme": {
+    "description": "A link that would not open a web page.",
+    "placeholders": {
+      "scheme": {
+        "type": "String",
+        "example": "javascript"
+      }
+    }
+  },
+  "securityLinkWarnUserinfo": "“{name}” before @ is not the site. The site is {host}.",
+  "@securityLinkWarnUserinfo": {
+    "description": "A name before @ in the address, which is not the host the link goes to.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "bank.com"
+      },
+      "host": {
+        "type": "String",
+        "example": "evil.example"
+      }
+    }
+  },
+  "securityLinkWarnIP": "The site is an IP address, not a name.",
+  "securityLinkWarnLookalike": "The address starts with “{name}”, which looks like another site. The site is {domain}.",
+  "@securityLinkWarnLookalike": {
+    "description": "A site name buried in the subdomain labels before the real registrable domain.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "bank.com"
+      },
+      "domain": {
+        "type": "String",
+        "example": "evil.example"
+      }
+    }
+  },
+  "securityLinkWarnPort": "The site uses port {port}, not the usual one.",
+  "@securityLinkWarnPort": {
+    "description": "A link on a port other than 80 or 443.",
+    "placeholders": {
+      "port": {
+        "type": "String",
+        "example": "8443"
+      }
+    }
+  },
+  "securityLinkWarnTrailingDot": "The site name ends with a dot, which can hide where it ends.",
+  "securityLinkWarnSubdomains": "{count} parts of the name come before {domain}, which can hide the real site.",
+  "@securityLinkWarnSubdomains": {
+    "description": "A host name with many labels before its registrable domain.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "4"
+      },
+      "domain": {
+        "type": "String",
+        "example": "example.com"
+      }
+    }
+  },
+  "securityLinkWarnLetters": "The name “{name}” is written with letters that can imitate another site.",
+  "@securityLinkWarnLetters": {
+    "description": "A host name written with letters other than the plain Latin ones, as lookalike letters are.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "аpple.com"
       }
     }
   },

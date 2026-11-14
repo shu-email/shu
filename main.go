@@ -186,6 +186,7 @@ type app struct {
 	securityOpen map[string]bool
 	linkOpen     bool
 	linkURL      string
+	linkInfo     linkReport
 	accountForm  accountForm
 	accountBusy  bool
 	accountErr   string

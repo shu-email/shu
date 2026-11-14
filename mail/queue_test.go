@@ -11,7 +11,9 @@ import (
 )
 
 // startQueueRun runs an account's queue worker as Watch does, and
-// collects its reports.
+// collects its reports. It is registered as Watch registers it, so an
+// action queued while the tests run wakes it; a test that watches the
+// account as well must not call it.
 func startQueueRun(t *testing.T, svc *Service, accountID string) (*queueWorker, chan WatchEvent) {
 	t.Helper()
 	events := make(chan WatchEvent, 64)
@@ -21,11 +23,23 @@ func startQueueRun(t *testing.T, svc *Service, accountID string) (*queueWorker, 
 		default:
 		}
 	})
+	svc.watchMu.Lock()
+	if svc.queues[accountID] != nil {
+		svc.watchMu.Unlock()
+		t.Fatalf("account %s has a queue worker already", accountID)
+	}
+	svc.queues[accountID] = q
+	svc.watchMu.Unlock()
 	done := make(chan struct{})
 	go func() { q.run(); close(done) }()
 	t.Cleanup(func() {
 		q.cancel()
 		<-done
+		svc.watchMu.Lock()
+		if svc.queues[accountID] == q {
+			delete(svc.queues, accountID)
+		}
+		svc.watchMu.Unlock()
 	})
 	return q, events
 }

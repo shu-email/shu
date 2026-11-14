@@ -269,10 +269,11 @@ type Store interface {
 	// server made, RetryOperation puts one back for a later try, and
 	// FailOperation keeps one the server refused, with its reason.
 	// Operations reads an account's, ReclaimOperations gives back those a
-	// run that ended left claimed before a time, CancelOperations drops
-	// those the user took back before the server made them and returns
-	// the ones it did, and RetryFailedOperations puts those the server
-	// refused back in the queue.
+	// run that ended left claimed before a time, ReleaseOperations puts
+	// back those a call held for itself but makes none of, and
+	// CancelOperations drops those the user took back before the server
+	// made them and returns the ones it did. RetryFailedOperations puts
+	// those the server refused back in the queue.
 	EnqueueOperations(ctx context.Context, ops []PendingOperation) ([]int64, error)
 	ClaimOperation(ctx context.Context, accountID string, now time.Time) (PendingOperation, bool, error)
 	ClaimOperationsByKey(ctx context.Context, op PendingOperation, now time.Time) ([]PendingOperation, error)
@@ -281,6 +282,7 @@ type Store interface {
 	FailOperation(ctx context.Context, id int64, reason string) error
 	Operations(ctx context.Context, accountID string) ([]PendingOperation, error)
 	ReclaimOperations(ctx context.Context, accountID string, before time.Time) error
+	ReleaseOperations(ctx context.Context, ids []int64, now time.Time) error
 	CancelOperations(ctx context.Context, ids []int64) ([]int64, error)
 	RetryFailedOperations(ctx context.Context, accountID string, nextTry time.Time) (int, error)
 

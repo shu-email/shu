@@ -61,6 +61,9 @@ type fakeIMAP struct {
 	// the client hears the answer: the moment a sync has read a folder's
 	// counts and not yet fetched its new mail.
 	statusDone func()
+	// onMove runs once, as the next MOVE reaches the server: a test that
+	// holds the call to see what else may run meanwhile.
+	onMove func()
 	// keywords says how a mailbox, by name, keeps keywords (see
 	// fakeKeywords); one not named keeps any, as the in-memory server
 	// does. stores records each STORE, in the mailbox it changed.
@@ -171,6 +174,19 @@ func (s *fakeSession) Idle(w *imapserver.UpdateWriter, stop <-chan struct{}) err
 		case <-tick.C:
 		}
 	}
+}
+
+// Move runs the hook a test set as the command reaches the server, then
+// moves the mail as the in-memory server does.
+func (s *fakeSession) Move(w *imapserver.MoveWriter, numSet imap.NumSet, dest string) error {
+	s.f.mu.Lock()
+	hook := s.f.onMove
+	s.f.onMove = nil
+	s.f.mu.Unlock()
+	if hook != nil {
+		hook()
+	}
+	return s.SessionIMAP4rev2.Move(w, numSet, dest)
 }
 
 func (s *fakeSession) Close() error {

@@ -29,9 +29,17 @@ a refused move puts the message's row back. A folder whose UIDVALIDITY
 changed since the action was queued is not touched, and a move whose
 message the folder no longer has is done.
 
+A block queues the move that files a blocked sender's mail
+(`planBlocked`), though the block, not the arrival, is the user's
+action: the mail must leave the check's path, so a server out of reach
+delays neither the check nor what it announces. Its move is a queued
+move like any other, made by the same worker and shown in the same
+line.
+
 Rules and their undo keep their own log of what has not happened, and a
 reminder waits for its next run, so neither is queued: the queue is for
-the user's own action on one message.
+mail the user asked the server to change, one message at a time, made
+now or by the worker.
 
 ## Consequences
 

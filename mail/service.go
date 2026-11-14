@@ -108,9 +108,10 @@ type Service struct {
 	// quits, and the window's hook.
 	arrivalMu sync.Mutex
 	movedIn   map[string]map[UID]bool
-	// heldBack is the mail a block took out of a folder as a check found
-	// it, by account and folder, which the watcher announces none of
-	// (see fileBlocked).
+	// heldBack is the mail a block queued to file as a check found it, by
+	// account and folder, which the watcher announces none of (see
+	// planBlocked). A move the server refuses brings the row back to the
+	// list, but the mail stays unannounced: the user blocked its sender.
 	heldBack    map[string]map[UID]bool
 	ruleMu      sync.Mutex
 	ruleLocks   map[string]*sync.Mutex
@@ -797,22 +798,9 @@ func (s *Service) moveMessages(ctx context.Context, accountID string, msgs []Mes
 		}
 	}
 	// The rows come back even when the move failed because ctx ended.
-	restore := func(groups []uidGroup) {
-		for _, g := range groups {
-			for _, uid := range g.uids {
-				_ = s.store.MarkDeleted(context.WithoutCancel(ctx), accountID, g.folder, uid, false)
-			}
-		}
-	}
-	for i, g := range groups {
-		for j, uid := range g.uids {
-			if err := s.store.MarkDeleted(ctx, accountID, g.folder, uid, true); err != nil {
-				s.dropOperations(ctx, allIDs(opIDs))
-				restore(groups[:i])
-				restore([]uidGroup{{g.folder, g.uids[:j]}})
-				return nil, err
-			}
-		}
+	restore := func(groups []uidGroup) { s.showQueued(ctx, accountID, groups) }
+	if err := s.hideQueued(ctx, accountID, groups, allIDs(opIDs)); err != nil {
+		return nil, err
 	}
 	var results []MoveResult
 	var cacheErr error

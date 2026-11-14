@@ -375,7 +375,8 @@ func (s *Service) uidsGone(ctx context.Context, a Account, password, folder stri
 
 // enqueueOperations writes actions under the account, claimed by the call
 // that is about to make them: no worker takes them first, and a run that
-// ends before they are dropped leaves them to be reclaimed.
+// ends before they are dropped leaves them to be reclaimed. A call that
+// does not make them after all gives them back with ReleaseOperations.
 func (s *Service) enqueueOperations(ctx context.Context, accountID string, ops []PendingOperation) ([]int64, error) {
 	now := s.now()
 	for i := range ops {
@@ -442,6 +443,42 @@ func (s *Service) wakeQueue(accountID string) {
 // dropOperations drops actions by ID, once the server made them.
 func (s *Service) dropOperations(ctx context.Context, ids []int64) {
 	_ = s.store.FinishOperations(context.WithoutCancel(ctx), ids)
+}
+
+// hideQueued shows the messages of a move as gone from their folders, so
+// that a list stops showing them while the server is told. A row that
+// cannot be hidden drops the queued actions and puts back the rows hidden
+// before it, so that no action names mail the list still shows; the error
+// says why.
+func (s *Service) hideQueued(ctx context.Context, accountID string, groups []uidGroup, ids []int64) error {
+	for i, g := range groups {
+		for j, uid := range g.uids {
+			if err := s.store.MarkDeleted(ctx, accountID, g.folder, uid, true); err != nil {
+				s.dropOperations(ctx, ids)
+				s.showQueued(ctx, accountID, groups[:i])
+				s.showQueued(ctx, accountID, []uidGroup{{folder: g.folder, uids: g.uids[:j]}})
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// showQueued puts back the rows hideQueued hid.
+func (s *Service) showQueued(ctx context.Context, accountID string, groups []uidGroup) {
+	for _, g := range groups {
+		for _, uid := range g.uids {
+			_ = s.store.MarkDeleted(context.WithoutCancel(ctx), accountID, g.folder, uid, false)
+		}
+	}
+}
+
+// queueRunning reports whether an account has the worker that makes its
+// queued actions (see Watch).
+func (s *Service) queueRunning(accountID string) bool {
+	s.watchMu.Lock()
+	defer s.watchMu.Unlock()
+	return s.queues[accountID] != nil
 }
 
 // allIDs flattens the IDs of several groups.

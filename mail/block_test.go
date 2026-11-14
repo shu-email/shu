@@ -5,6 +5,7 @@ import (
 	"errors"
 	"slices"
 	"testing"
+	"time"
 )
 
 // A block names an address or a domain, and matches what it names,
@@ -63,6 +64,7 @@ func TestBlockedMatchesAddressAndDomain(t *testing.T) {
 // that was there: the old newsletter stays in the inbox.
 func TestBlockFilesTheMailThatArrives(t *testing.T) {
 	r := newRuleRig(t, allCaps())
+	startQueueRun(t, r.svc, r.a.ID)
 	r.deliver("INBOX", news("Weekly news 1", "n1@shop.example", 1))
 	r.sync("INBOX")
 	if _, err := r.svc.BlockSender(r.ctx, r.a.ID, "News <news@shop.example>", false, "Trash"); err != nil {
@@ -151,6 +153,119 @@ func TestBlockKeepsTheWatcherQuiet(t *testing.T) {
 			}
 		}
 		return false
+	})
+}
+
+// A block's move runs on the account's worker, so the check that found
+// the mail ends without waiting for the server.
+func TestBlockedFilingRunsOutsideTheArrivalLock(t *testing.T) {
+	ctx := context.Background()
+	f := startFakeIMAP(t, allCaps())
+	f.create(t, "INBOX", "Trash")
+	svc, _, a := newIMAPService(t, f, "secret")
+	if _, err := svc.SyncAccount(ctx, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	// A first sync caches the folder; only mail that arrives after it is
+	// sorted and filed.
+	if err := svc.SyncFolder(ctx, a.ID, "INBOX", 50); err != nil {
+		t.Fatal(err)
+	}
+	startQueueRun(t, svc, a.ID)
+	if _, err := svc.BlockSender(ctx, a.ID, "shop.example", true, "Trash"); err != nil {
+		t.Fatal(err)
+	}
+	deliver(t, f, "INBOX", news("Sale", "s1@shop.example", 1))
+	started := make(chan struct{})
+	release := make(chan struct{})
+	f.mu.Lock()
+	f.onMove = func() {
+		close(started)
+		<-release
+	}
+	f.mu.Unlock()
+	done := make(chan error, 1)
+	go func() { done <- svc.SyncFolder(ctx, a.ID, "INBOX", 50) }()
+	// The move waits at the server here; the check must end all the same.
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the check waited for the blocked move")
+	}
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the blocked move never reached the server")
+	}
+	if !svc.arrivalMu.TryLock() {
+		t.Error("the arrival lock was held while the block moved the mail")
+	} else {
+		svc.arrivalMu.Unlock()
+	}
+	close(release)
+	waitFor(t, "the filed mail", func() bool {
+		return slices.Contains(serverSubjects(f.messages(t, "Trash")), "Sale")
+	})
+}
+
+// serverSubjects names the messages of a folder of the server.
+func serverSubjects(list []serverMessage) []string {
+	out := make([]string, 0, len(list))
+	for _, m := range list {
+		out = append(out, m.Subject)
+	}
+	return out
+}
+
+// A move the server refuses comes back to the list and stays in the queue
+// as failed, with its reason, for the window to show.
+func TestBlockedMoveTheServerRefusesIsShown(t *testing.T) {
+	r := newRuleRig(t, allCaps())
+	startQueueRun(t, r.svc, r.a.ID)
+	r.sync("INBOX")
+	if _, err := r.svc.BlockSender(r.ctx, r.a.ID, "shop.example", true, "Lists"); err != nil {
+		t.Fatal(err)
+	}
+	// The block's folder goes on the server after the block was made.
+	if err := r.f.user.Delete("Lists"); err != nil {
+		t.Fatal(err)
+	}
+	r.deliver("INBOX", news("Sale", "s1@shop.example", 1))
+	r.sync("INBOX")
+	waitFor(t, "the refused move", func() bool {
+		ops, err := r.svc.store.Operations(r.ctx, r.a.ID)
+		if err != nil || len(ops) != 1 || ops[0].State != OperationFailed || ops[0].LastError == "" {
+			return false
+		}
+		return slices.Contains(r.cached("INBOX"), "Sale")
+	})
+}
+
+// A sync of an account no watcher runs on leaves the blocked mail in the
+// list: with no worker to file it, the move waits in the queue instead of
+// hiding a row nothing would bring back.
+func TestBlockWaitsForAWorkerWithoutAWatcher(t *testing.T) {
+	r := newRuleRig(t, allCaps())
+	r.sync("INBOX")
+	if _, err := r.svc.BlockSender(r.ctx, r.a.ID, "shop.example", true, "Trash"); err != nil {
+		t.Fatal(err)
+	}
+	r.deliver("INBOX", news("Sale", "s1@shop.example", 1))
+	r.sync("INBOX")
+	if got := r.cached("INBOX"); !slices.Contains(got, "Sale") {
+		t.Errorf("the block hid mail no worker would file: %v", got)
+	}
+	if ops, err := r.svc.store.Operations(r.ctx, r.a.ID); err != nil || len(ops) != 1 ||
+		ops[0].State != OperationPending || ops[0].Kind != OpMove {
+		t.Errorf("queue = %+v, %v", ops, err)
+	}
+	// The worker a watcher starts files the mail it waited for.
+	startQueueRun(t, r.svc, r.a.ID)
+	waitFor(t, "the filed mail", func() bool {
+		return slices.Contains(r.onServer("Trash"), "Sale")
 	})
 }
 

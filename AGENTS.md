@@ -367,6 +367,17 @@ Windows and Linux. It is written in Go with
   the block and puts back the one it replaced, and the settings' Privacy
   tab lists the blocks to unblock (`Service.BlockedSenders`,
   `UnblockSender`, `blocked_senders`).
+- HTML mail is untrusted and shown only in an isolated web view that
+  calls no Go method: `renderHTML` strips everything that runs or loads
+  and wraps the message with a CSP (`htmlview.go`), and remote pictures
+  stay out until the user allows them for the sender
+  (`mail/images.go`). A link never opens by itself: the navigation is
+  held and confirmed, and `examineLink` (`linksafety.go`) reads the
+  address locally first — its registrable domain from the public suffix
+  list embedded in `golang.org/x/net`, its userinfo, IP host, port,
+  trailing dot, subdomains and lookalike letters — so the dialog names
+  the real domain before the address and explains each sign in plain
+  words. It makes no request, keeps no score and blocks nothing.
 - `ai/` is the AI layer: provider settings, the excerpt that decides what
   part of a message may leave the device, the features (summary of a
   message or a conversation, triage, draft reply) and `Service.send`, the

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/i18n"
@@ -177,6 +178,61 @@ func TestLinkNeedsConfirmation(t *testing.T) {
 	}
 	if a.linkOpen || a.linkURL != "" {
 		t.Errorf("link still pending: open=%v url=%q", a.linkOpen, a.linkURL)
+	}
+}
+
+// The dialog names the real domain before the full address, and explains
+// a deceptive one in plain words, in both languages.
+func TestLinkDialogExplainsDeception(t *testing.T) {
+	a, _ := sampleMessageApp(t)
+	tt := ui.NewTester(a.view, 1220, 800)
+	a.askOpenLink("https://bank.com@evil.example/login")
+	tt.Frame()
+	var message string
+	for _, text := range tt.Texts() {
+		if strings.Contains(text, "bank.com@evil.example") {
+			message = text
+			break
+		}
+	}
+	if message == "" {
+		t.Fatalf("no destination shown: %q", tt.Texts())
+	}
+	domain, address := strings.Index(message, "evil.example"), strings.Index(message, "https://bank.com@evil.example/login")
+	if domain < 0 || address < 0 || domain > address {
+		t.Errorf("the real domain does not come first: %q", message)
+	}
+	if !strings.Contains(message, "before @ is not the site") {
+		t.Errorf("no plain-language reason: %q", message)
+	}
+
+	i18n.SetLocaleFunc(func() string { return "zh-Hans" })
+	defer i18n.SetLocaleFunc(func() string { return "en" })
+	tt.SetLocale("zh-Hans")
+	tt.Frame()
+	found := false
+	for _, text := range tt.Texts() {
+		if strings.Contains(text, "值得注意的迹象") && strings.Contains(text, "@ 前的") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("the Chinese dialog does not explain it: %q", tt.Texts())
+	}
+}
+
+// A benign link names its domain and says nothing more.
+func TestLinkDialogBenign(t *testing.T) {
+	a, _ := sampleMessageApp(t)
+	tt := ui.NewTester(a.view, 1220, 800)
+	a.askOpenLink("https://example.com/about")
+	tt.Frame()
+	if !tt.HasText("example.com") || !tt.HasText("https://example.com/about") {
+		t.Fatalf("the destination is not shown: %q", tt.Texts())
+	}
+	if tt.HasText("Signs worth checking") {
+		t.Errorf("a benign link warns: %q", tt.Texts())
 	}
 }
 

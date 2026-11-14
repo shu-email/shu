@@ -11,6 +11,7 @@ import (
 	"net/mail"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/emersion/go-imap/v2"
@@ -24,23 +25,30 @@ type imapSession struct {
 	client *imapclient.Client
 	caps   Capabilities
 	// release ends the closing of the connection with the context it was
-	// dialed under. Only a connection that outlives one operation needs
-	// it called.
+	// dialed under, and waits for a closing that has begun. close calls
+	// it; a watcher's connection, which ends its context when it hangs up
+	// or logs out, calls it alone.
 	release func()
+	closed  sync.Once
 }
 
 // whenDone runs fn when ctx ends, until release is called. release waits
-// for a call of fn that has begun, so none is left running behind it.
+// for a call of fn that has begun, so none is left running behind it, and
+// a second call changes nothing: the connection closes as many times as
+// its places of closing meet.
 func whenDone(ctx context.Context, fn func()) (release func()) {
+	var once sync.Once
 	done := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() {
 		defer close(done)
 		fn()
 	})
 	return func() {
-		if !stop() {
-			<-done
-		}
+		once.Do(func() {
+			if !stop() {
+				<-done
+			}
+		})
 	}
 }
 
@@ -171,14 +179,25 @@ func signIn(c *imapclient.Client, a Account, secret string) error {
 	return c.Authenticate(&xoauth2Client{user: a.Username, token: secret})
 }
 
-// close logs out, or just hangs up when that is not possible.
+// close logs out, or just hangs up when that is not possible, and ends the
+// hook that would close the connection with the context it was dialed
+// under: a connection closed here is done with, whatever ends next. A
+// second close, of a connection another path already hung up, does
+// nothing: the logout is said once.
 func (s *imapSession) close() {
-	if s == nil || s.client == nil {
+	if s == nil {
 		return
 	}
-	if err := s.client.Logout().Wait(); err != nil {
-		s.client.Close()
-	}
+	s.closed.Do(func() {
+		if s.client != nil {
+			if err := s.client.Logout().Wait(); err != nil {
+				s.client.Close()
+			}
+		}
+		if s.release != nil {
+			s.release()
+		}
+	})
 }
 
 // listFolders reads the account's mailboxes, their counts and special

@@ -879,13 +879,9 @@ func (s *Service) removeCopies(ctx context.Context, accountID string, box *draft
 	if err := box.remove(uids); err != nil {
 		return err
 	}
-	for _, uid := range uids {
-		// DeleteMessage lowers the folder's count, so it is only for rows
-		// the cache has.
-		if _, ok, err := s.store.GetMessage(ctx, accountID, box.folder, uid); err == nil && ok {
-			_ = s.store.DeleteMessage(ctx, accountID, box.folder, uid)
-		}
-	}
+	// DeleteMessages moves the folder's counts by the rows it removes; a
+	// row a sync removed meanwhile counts for nothing.
+	_ = s.store.DeleteMessages(ctx, accountID, box.folder, uids)
 	return nil
 }
 

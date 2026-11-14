@@ -61,8 +61,14 @@ type Store interface {
 	SaveMessage(ctx context.Context, accountID, folder string, m Message) error
 	ApplySync(ctx context.Context, accountID string, batch SyncBatch) error
 	SetFlag(ctx context.Context, accountID, folder string, uid UID, flag Flag, on bool) error
+	// SetFlags changes a flag on messages of one folder in one step, and
+	// moves its unread count by the messages it changed.
+	SetFlags(ctx context.Context, accountID, folder string, uids []UID, flag Flag, on bool) error
 	MarkDeleted(ctx context.Context, accountID, folder string, uid UID, deleted bool) error
 	DeleteMessage(ctx context.Context, accountID, folder string, uid UID) error
+	// DeleteMessages removes the messages of one folder once the server
+	// confirmed they moved, and moves its counts by what they were.
+	DeleteMessages(ctx context.Context, accountID, folder string, uids []UID) error
 	SetAttachmentCache(ctx context.Context, accountID, folder string, uid UID, part, hash, path string) error
 	// AttachmentFileRefs lists the files the cached attachments' bytes are
 	// in, for the sweep that keeps them and removes the rest.

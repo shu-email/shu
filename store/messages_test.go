@@ -133,3 +133,133 @@ func TestHeaderOnlyMessageHasNoBody(t *testing.T) {
 		t.Error("a header-only message reports a cached body")
 	}
 }
+
+// A flag change on messages of a folder moves its unread count by the
+// messages whose flag it changed, and one the cache no longer holds
+// changes nothing.
+func TestSetFlagsMovesTheUnreadCountByWhatChanged(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	addAccount(t, s, "a1")
+	addFolder(t, s, "a1", "INBOX")
+	if err := s.ApplySync(ctx, "a1", mail.SyncBatch{
+		Folder: mail.Folder{Name: "INBOX", UIDValidity: 1, LastUID: 3, Unread: 2, Total: 3},
+		Messages: []mail.Message{
+			{Summary: mail.Summary{UID: 1, Subject: "read", Seen: true}},
+			{Summary: mail.Summary{UID: 2, Subject: "unread"}},
+			{Summary: mail.Summary{UID: 3, Subject: "also unread"}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	unread := func() int64 {
+		f, _, err := s.Folder(ctx, "a1", "INBOX")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return int64(f.Unread)
+	}
+	if got := unread(); got != 2 {
+		t.Fatalf("unread = %d, want 2", got)
+	}
+	// One already read, one unread, one the cache does not hold: the
+	// count moves by the one.
+	if err := s.SetFlags(ctx, "a1", "INBOX", []mail.UID{1, 2, 9}, mail.FlagSeen, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := unread(); got != 1 {
+		t.Errorf("unread = %d after marking two read, want 1", got)
+	}
+	// Unread again only where it was not: 3 stayed unread through the
+	// change above, so only 2 moves the count back.
+	if err := s.SetFlags(ctx, "a1", "INBOX", []mail.UID{2, 3}, mail.FlagSeen, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := unread(); got != 2 {
+		t.Errorf("unread = %d after marking two unread, want 2", got)
+	}
+	// A star moves no count.
+	if err := s.SetFlags(ctx, "a1", "INBOX", []mail.UID{1, 2, 3}, mail.FlagFlagged, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := unread(); got != 2 {
+		t.Errorf("unread = %d after starring, want 2", got)
+	}
+	for _, uid := range []mail.UID{1, 2, 3} {
+		m, _, err := s.GetMessage(ctx, "a1", "INBOX", uid)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !m.Flagged || m.Seen != (uid == 1) {
+			t.Errorf("message %d flags = seen %v, flagged %v", uid, m.Seen, m.Flagged)
+		}
+	}
+}
+
+// Removing the messages a move took moves the folder's counts by what
+// they were, and a message the cache no longer holds counts for nothing.
+func TestDeleteMessagesMovesTheCountsByWhatGone(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	addAccount(t, s, "a1")
+	addFolder(t, s, "a1", "INBOX")
+	if err := s.ApplySync(ctx, "a1", mail.SyncBatch{
+		Folder: mail.Folder{Name: "INBOX", UIDValidity: 1, LastUID: 3, Unread: 2, Total: 3},
+		Messages: []mail.Message{
+			{Summary: mail.Summary{UID: 1, Subject: "stays"}},
+			{Summary: mail.Summary{UID: 2, Subject: "unread"}},
+			{Summary: mail.Summary{UID: 3, Subject: "read", Seen: true}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteMessages(ctx, "a1", "INBOX", []mail.UID{2, 3, 9}); err != nil {
+		t.Fatal(err)
+	}
+	f, _, err := s.Folder(ctx, "a1", "INBOX")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Total != 1 || f.Unread != 1 {
+		t.Errorf("counts = %d total, %d unread; want 1 and 1", f.Total, f.Unread)
+	}
+	if msgs, _ := s.ListMessages(ctx, "a1", "INBOX", "", 10); len(msgs) != 1 || msgs[0].UID != 1 {
+		t.Errorf("messages left = %+v", msgs)
+	}
+}
+
+// A count already at zero stays there, and a message the cache does not
+// hold moves nothing, through the single-message calls too.
+func TestFlagsAndDeletesClampTheCountsAtZero(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	addAccount(t, s, "a1")
+	addFolder(t, s, "a1", "INBOX")
+	// The server says no unread mail though one message is unseen: a
+	// count the cache cannot make match the rows.
+	if err := s.ApplySync(ctx, "a1", mail.SyncBatch{
+		Folder: mail.Folder{Name: "INBOX", UIDValidity: 1, LastUID: 2, Unread: 0, Total: 2},
+		Messages: []mail.Message{
+			{Summary: mail.Summary{UID: 1, Subject: "unseen"}},
+			{Summary: mail.Summary{UID: 2, Subject: "seen", Seen: true}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteMessage(ctx, "a1", "INBOX", 9); err != nil {
+		t.Fatalf("delete of a message the cache lacks: %v", err)
+	}
+	if err := s.SetFlags(ctx, "a1", "INBOX", []mail.UID{9}, mail.FlagSeen, true); err != nil {
+		t.Fatalf("flags of a message the cache lacks: %v", err)
+	}
+	if err := s.DeleteMessages(ctx, "a1", "INBOX", []mail.UID{1, 2}); err != nil {
+		t.Fatal(err)
+	}
+	f, _, err := s.Folder(ctx, "a1", "INBOX")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Total != 0 || f.Unread != 0 {
+		t.Errorf("counts = %d total, %d unread; want 0 and 0", f.Total, f.Unread)
+	}
+}

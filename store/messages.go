@@ -487,13 +487,18 @@ func (s *Store) ApplyOlder(ctx context.Context, accountID string, b mail.OlderBa
 	})
 }
 
-// SetFlag updates a flag and, for \Seen, adjusts the folder's unread
-// count in the same transaction.
+// SetFlag updates a flag on one message of a folder.
 func (s *Store) SetFlag(ctx context.Context, accountID, folder string, uid mail.UID, flag mail.Flag, on bool) error {
-	folderID, err := s.folderID(ctx, accountID, folder)
-	if err != nil {
-		return err
-	}
+	return s.SetFlags(ctx, accountID, folder, []mail.UID{uid}, flag, on)
+}
+
+// SetFlags updates a flag on messages of one folder in one transaction and,
+// for \Seen, adjusts the folder's unread count in the same transaction,
+// by the messages whose flag it actually changed: the count is computed
+// from the rows rather than read and written back, so that two changes of
+// it at once cannot lose one. A message the cache no longer holds changes
+// nothing.
+func (s *Store) SetFlags(ctx context.Context, accountID, folder string, uids []mail.UID, flag mail.Flag, on bool) error {
 	column := ""
 	switch flag {
 	case mail.FlagSeen:
@@ -503,23 +508,32 @@ func (s *Store) SetFlag(ctx context.Context, accountID, folder string, uid mail.
 	default:
 		return fmt.Errorf("store: flag %q is not cached", flag)
 	}
-	stmts := []stmtType{
-		stmt(`UPDATE messages SET `+column+` = ? WHERE folder_id = ? AND server_uid = ?`,
-			boolInt(on), folderID, int64(uid)),
+	if len(uids) == 0 {
+		return nil
 	}
+	folderID, err := s.folderID(ctx, accountID, folder)
+	if err != nil {
+		return err
+	}
+	var stmts []stmtType
 	if flag == mail.FlagSeen {
-		rows, err := s.query(ctx, `SELECT seen FROM messages WHERE folder_id = ? AND server_uid = ?`, folderID, int64(uid))
-		if err != nil {
-			return err
-		}
-		if len(rows.Values) == 1 && truth(rows.Values[0][0]) != on {
-			if on {
-				stmts = append(stmts, stmt(`UPDATE folders SET unread = MAX(0, unread - 1) WHERE id = ?`, folderID))
-			} else {
-				stmts = append(stmts, stmt(`UPDATE folders SET unread = unread + 1 WHERE id = ?`, folderID))
-			}
+		// Before the update below, so that it reads the flags it moves.
+		if on {
+			stmts = append(stmts, stmt(`UPDATE folders SET unread = MAX(0, unread - (
+				SELECT COUNT(*) FROM messages WHERE folder_id = ? AND seen = 0
+					AND server_uid IN (SELECT value FROM json_each(?)))) WHERE id = ?`,
+				folderID, jsonText(uids), folderID))
+		} else {
+			stmts = append(stmts, stmt(`UPDATE folders SET unread = unread + (
+				SELECT COUNT(*) FROM messages WHERE folder_id = ? AND seen = 1
+					AND server_uid IN (SELECT value FROM json_each(?))) WHERE id = ?`,
+				folderID, jsonText(uids), folderID))
 		}
 	}
+	// Only the rows whose flag changes: a row already so writes nothing
+	// and recomputes no conversation's aggregates.
+	stmts = append(stmts, stmt(`UPDATE messages SET `+column+` = ? WHERE folder_id = ? AND `+column+` <> ?
+		AND server_uid IN (SELECT value FROM json_each(?))`, boolInt(on), folderID, boolInt(on), jsonText(uids)))
 	return s.transaction(ctx, stmts)
 }
 
@@ -537,19 +551,33 @@ func (s *Store) MarkDeleted(ctx context.Context, accountID, folder string, uid m
 
 // DeleteMessage removes a message once the server confirmed it moved.
 func (s *Store) DeleteMessage(ctx context.Context, accountID, folder string, uid mail.UID) error {
+	return s.DeleteMessages(ctx, accountID, folder, []mail.UID{uid})
+}
+
+// DeleteMessages removes messages of one folder once the server confirmed
+// they moved, in one transaction, moving the folder's counts by the
+// messages it removes: its total by each, its unread by those not seen. A
+// message the cache no longer holds counts for nothing.
+func (s *Store) DeleteMessages(ctx context.Context, accountID, folder string, uids []mail.UID) error {
+	if len(uids) == 0 {
+		return nil
+	}
 	folderID, err := s.folderID(ctx, accountID, folder)
 	if err != nil {
 		return err
 	}
-	stmts := []stmtType{stmt(`DELETE FROM messages WHERE folder_id = ? AND server_uid = ?`, folderID, int64(uid))}
-	rows, err := s.query(ctx, `SELECT seen FROM messages WHERE folder_id = ? AND server_uid = ?`, folderID, int64(uid))
-	if err != nil {
-		return err
-	}
-	if len(rows.Values) == 1 && !truth(rows.Values[0][0]) {
-		stmts = append(stmts, stmt(`UPDATE folders SET unread = MAX(0, unread - 1), total = MAX(0, total - 1) WHERE id = ?`, folderID))
-	} else {
-		stmts = append(stmts, stmt(`UPDATE folders SET total = MAX(0, total - 1) WHERE id = ?`, folderID))
+	gone := jsonText(uids)
+	stmts := []stmtType{
+		// Before the delete below, so that it reads the rows it moves.
+		stmt(`UPDATE folders SET
+				total = MAX(0, total - (SELECT COUNT(*) FROM messages
+					WHERE folder_id = ? AND server_uid IN (SELECT value FROM json_each(?)))),
+				unread = MAX(0, unread - (SELECT COUNT(*) FROM messages
+					WHERE folder_id = ? AND seen = 0 AND server_uid IN (SELECT value FROM json_each(?))))
+			WHERE id = ?`,
+			folderID, gone, folderID, gone, folderID),
+		stmt(`DELETE FROM messages WHERE folder_id = ?
+			AND server_uid IN (SELECT value FROM json_each(?))`, folderID, gone),
 	}
 	return s.transaction(ctx, stmts)
 }

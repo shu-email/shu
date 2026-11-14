@@ -298,12 +298,10 @@ func (s *Service) applyOperations(ctx context.Context, ops []PendingOperation) e
 				return err
 			}
 		}
-		for _, uid := range uids {
-			// The move is made: the row goes, and a sync of dest brings
-			// the message there.
-			if err := s.store.DeleteMessage(ctx, first.AccountID, first.Folder, uid); err != nil && !errors.Is(err, ErrNotFound) {
-				return err
-			}
+		// The move is made: the rows go, and a sync of dest brings the
+		// messages there.
+		if err := s.store.DeleteMessages(ctx, first.AccountID, first.Folder, uids); err != nil && !errors.Is(err, ErrNotFound) {
+			return err
 		}
 		return nil
 	case OpFlags:

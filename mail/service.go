@@ -680,11 +680,9 @@ func (s *Service) setFlags(ctx context.Context, accountID string, msgs []Message
 			s.dropOperations(ctx, allIDs(ids[i:]))
 			return err
 		}
-		for _, uid := range g.uids {
-			// A row a sync removed meanwhile has nothing to change.
-			if err := s.store.SetFlag(ctx, accountID, g.folder, uid, flag, on); err != nil && !errors.Is(err, ErrNotFound) {
-				return err
-			}
+		// A row a sync removed meanwhile has nothing to change.
+		if err := s.store.SetFlags(ctx, accountID, g.folder, g.uids, flag, on); err != nil && !errors.Is(err, ErrNotFound) {
+			return err
 		}
 		s.dropOperations(ctx, ids[i])
 	}
@@ -697,10 +695,8 @@ func (s *Service) setFlags(ctx context.Context, accountID string, msgs []Message
 func (s *Service) setFlagsInCache(ctx context.Context, accountID string, groups []uidGroup, flag Flag, on bool) error {
 	bg := context.WithoutCancel(ctx)
 	for _, g := range groups {
-		for _, uid := range g.uids {
-			if err := s.store.SetFlag(bg, accountID, g.folder, uid, flag, on); err != nil && !errors.Is(err, ErrNotFound) {
-				return err
-			}
+		if err := s.store.SetFlags(bg, accountID, g.folder, g.uids, flag, on); err != nil && !errors.Is(err, ErrNotFound) {
+			return err
 		}
 	}
 	return nil
@@ -813,10 +809,8 @@ func (s *Service) moveMessages(ctx context.Context, accountID string, msgs []Mes
 		}
 		results = append(results, moved...)
 		s.dropOperations(ctx, opIDs[i])
-		for _, uid := range g.uids {
-			if err := s.store.DeleteMessage(ctx, accountID, g.folder, uid); err != nil && cacheErr == nil {
-				cacheErr = err
-			}
+		if err := s.store.DeleteMessages(ctx, accountID, g.folder, g.uids); err != nil && cacheErr == nil {
+			cacheErr = err
 		}
 	}
 	if len(results) >= cacheSweepAfter {

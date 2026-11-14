@@ -45,7 +45,10 @@ type aiSettings struct {
 	cliEnv    []ai.CLIEnvVar
 	// cliGen numbers the checks of the selected tool: one that ends after
 	// a later check began says nothing of the tool as it is now.
-	cliGen   uint64
+	cliGen uint64
+	// loadGen numbers the reads of the saved settings: one that ends after
+	// the user changed them would put the old ones back over the form.
+	loadGen  uint64
 	envName  string
 	envValue string
 	envErr   string
@@ -158,6 +161,9 @@ func (a *app) loadAISettings() {
 	if a.ai == nil {
 		return
 	}
+	f := &a.aiForm
+	f.loadGen++
+	g := f.loadGen
 	a.run(func() {
 		ctx, cancel := a.ctx()
 		defer cancel()
@@ -172,6 +178,9 @@ func (a *app) loadAISettings() {
 		}
 		a.post(func() {
 			f := &a.aiForm
+			if f.loadGen != g {
+				return
+			}
 			f.setConfig(cfg)
 			f.keyStored = stored
 			f.loaded = true
@@ -193,6 +202,9 @@ func (a *app) loadAISettings() {
 // so what the tab shows is what is saved.
 func (a *app) saveAI() {
 	f := &a.aiForm
+	// The form is what the user chose now: a read that began before this
+	// says nothing of it, and is dropped when it ends.
+	f.loadGen++
 	cfg := f.config()
 	// A text field saves on every keystroke, each in a job of its own.
 	// The jobs take turns, and one that a later save has overtaken does
@@ -234,6 +246,8 @@ func (a *app) chooseAIProvider() {
 		f.cliPath = f.cfg.CLIPath(p.ID)
 		f.cliStatus = ai.CLIStatus{}
 		f.cliModels = nil
+		f.cliEnv = nil
+		f.envName, f.envValue, f.envErr = "", "", ""
 		a.saveAI()
 		if ai.CLIProvider(p.ID) {
 			a.loadCLIStatus()
@@ -499,6 +513,14 @@ func (a *app) loadCLIStatus() {
 		env, _ := a.ai.CLIEnv(id)
 		a.post(func() {
 			if f.cliGen != g || f.cfg.Provider != id {
+				return
+			}
+			if f.cfg.CLIPath(id) != path {
+				// The user changed the path while it was checked: what the
+				// old one said is not the tool's now, and no check is
+				// running any more.
+				f.cliBusy = false
+				f.cliModels = nil
 				return
 			}
 			f.cliBusy = false

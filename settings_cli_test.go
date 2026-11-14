@@ -343,3 +343,110 @@ func TestProviderOutdated(t *testing.T) {
 		t.Errorf("the panel does not say it is not an official integration: %q", tt.Texts())
 	}
 }
+
+// A read of the saved settings that ends after the user changed them
+// puts nothing back: the form keeps what the user chose.
+func TestAISettingsALoadTheUserOvertookChangesNothing(t *testing.T) {
+	a, _, _, _ := aiMessageApp(t, true)
+	a.openSettings(settingsTabAI)
+	if !a.aiForm.loaded || !a.aiForm.cfg.Enabled {
+		t.Fatalf("the tab did not load the settings: %+v", a.aiForm.cfg)
+	}
+	// The read is made now, and its answer waits for the UI thread.
+	var posts []func()
+	a.update = func(f func()) { posts = append(posts, f) }
+	a.loadAISettings()
+	// Meanwhile the user switches AI off, which saves.
+	a.aiForm.cfg.Enabled = false
+	a.saveAI()
+	a.update = nil
+	for _, f := range posts {
+		f()
+	}
+	if a.aiForm.cfg.Enabled {
+		t.Error("the load put the old settings back over the form")
+	}
+	saved, err := a.ai.Config(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.Enabled {
+		t.Error("the save was lost")
+	}
+}
+
+// Switching provider leaves the tool state of the one before it: its
+// check, its models and the environment values it was given are none of
+// the new provider's.
+func TestAIProviderSwitchClearsTheOldToolsState(t *testing.T) {
+	a, _, _, _ := aiMessageApp(t, true)
+	f := &a.aiForm
+	f.cfg.UseProvider(ai.ProviderClaudeCLI)
+	f.cliPath = "/usr/local/bin/claude"
+	f.cliModels = []string{"sonnet"}
+	f.cliEnv = []ai.CLIEnvVar{{Name: "MY_TOKEN"}}
+	f.envName, f.envValue, f.envErr = "OTHER", "value", "bad"
+	p, ok := ai.ProviderByID(ai.ProviderOpenAI)
+	if !ok {
+		t.Fatal("no OpenAI preset")
+	}
+	f.provider = aiProviderName(p)
+	a.chooseAIProvider()
+	if f.cfg.Provider != ai.ProviderOpenAI {
+		t.Fatalf("provider = %q", f.cfg.Provider)
+	}
+	if f.cliModels != nil || f.cliEnv != nil {
+		t.Errorf("the old tool's check stayed: %q, %+v", f.cliModels, f.cliEnv)
+	}
+	if f.envName != "" || f.envValue != "" || f.envErr != "" {
+		t.Errorf("the old tool's env edit stayed: %q %q %q", f.envName, f.envValue, f.envErr)
+	}
+}
+
+// A check of a command path the user changed meanwhile says nothing of
+// the path there is now, and leaves no check running.
+func TestAIToolPathChangedWhileItIsChecked(t *testing.T) {
+	a, _, _, _ := aiMessageApp(t, true)
+	dir := t.TempDir()
+	script := filepath.Join(dir, "claude")
+	body := "#!/bin/sh\n" +
+		"if [ \"$1\" = \"--version\" ]; then echo '2.1.323 (Claude Code)'; exit 0; fi\n" +
+		"if [ \"$1\" = \"auth\" ]; then echo '{\"loggedIn\": true}'; exit 0; fi\n" +
+		"echo '{\"type\":\"control_response\",\"response\":{\"request_id\":\"shu-models\",\"response\":{\"models\":[{\"value\":\"sonnet\"}]}}}'\n" +
+		"exit 0\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := ai.DefaultConfig()
+	cfg.Enabled = true
+	cfg.UseProvider(ai.ProviderClaudeCLI)
+	cfg.SetCLIPath(ai.ProviderClaudeCLI, script)
+	if err := a.ai.SaveConfig(context.Background(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	a.openSettings(settingsTabAI)
+	if !a.aiForm.cliStatus.Installed || a.aiForm.cliStatus.Path == "" {
+		t.Fatalf("the tool was not found at first: %+v", a.aiForm.cliStatus)
+	}
+	// The user types another path while the first one is checked.
+	var posts []func()
+	a.update = func(f func()) { posts = append(posts, f) }
+	a.loadCLIStatus()
+	const other = "/does/not/exist"
+	a.aiForm.cliPath = other
+	a.aiForm.cfg.SetCLIPath(ai.ProviderClaudeCLI, other)
+	a.saveAI()
+	a.update = nil
+	for _, f := range posts {
+		f()
+	}
+	if a.aiForm.cliBusy {
+		t.Error("a check of a path no longer the tool's is still running")
+	}
+	if a.aiForm.cliStatus.Installed || a.aiForm.cliStatus.Path != "" {
+		t.Errorf("the old path's check landed: %+v", a.aiForm.cliStatus)
+	}
+	if a.aiForm.cliModels != nil {
+		t.Errorf("the old path's models landed: %q", a.aiForm.cliModels)
+	}
+}

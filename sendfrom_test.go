@@ -208,8 +208,11 @@ func TestAccountEditorIdentities(t *testing.T) {
 		t.Fatalf("after removing: %+v: %q", fs.identities["a1"], tt.Texts())
 	}
 	cs := a.openCompose(nil)
-	if ct := ui.NewTester(cs.view, 720, 620); ct.HasText(ownLabel) {
-		t.Errorf("compose offers a choice of one address: %q", ct.Texts())
+	if ct := ui.NewTester(cs.view, 720, 620); func() bool {
+		from, ok := ct.AccessByRole(ui.RolePopUpButton, locales.From())
+		return !ok || from.Value != ownLabel
+	}() {
+		t.Errorf("compose shows the one address as a choice: %q", ct.Texts())
 	}
 
 	// The editor of an account that signs in with Google has them too.

@@ -313,8 +313,10 @@ func (cs *composeState) view(c *ui.Context) {
 	ids := cs.app.identitiesOf(cs.accountID)
 	drafting := cs.source != nil && cs.app.ai != nil
 	root.Children(func() {
-		// The account's own address alone needs no choice.
-		if len(ids) > 1 {
+		// The sender is one of the account's addresses, the account's own
+		// first; it stays on show with one, so the window says whom the
+		// message goes from.
+		if len(ids) > 0 {
 			cs.fromRow(c, t, ids)
 		}
 		var fields [recipientFieldCount]ui.Element

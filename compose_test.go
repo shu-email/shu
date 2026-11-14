@@ -187,12 +187,12 @@ func TestFromPickerKeptInDraft(t *testing.T) {
 		t.Fatalf("back to the own address: identity %q", cs.identity)
 	}
 
-	// Its own address alone.
+	// Its own address alone is still shown, as the sender.
 	a.aliases["a1"] = nil
 	single := a.openCompose(nil)
 	st := ui.NewTester(single.view, 720, 620)
-	if _, ok := st.AccessByRole(ui.RolePopUpButton, locales.From()); ok || st.HasText(ownLabel) {
-		t.Errorf("an account with one address offers a choice: %q", st.Texts())
+	if from, ok := st.AccessByRole(ui.RolePopUpButton, locales.From()); !ok || from.Value != ownLabel {
+		t.Errorf("an account with one address shows %+v, found %v: %q", from, ok, st.Texts())
 	}
 }
 

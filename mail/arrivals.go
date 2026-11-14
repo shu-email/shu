@@ -15,7 +15,7 @@ import (
 
 // Mail that arrives. A sync of a folder synced before fetches the messages
 // above its cursor: those arrived since, and are the mail the rules sort
-// (rules.go) before the watcher may announce any of it. The first sync of
+// (rulematch.go) before the watcher may announce any of it. The first sync of
 // a folder, FetchOlder, and a sync after the server gave the folder
 // another UIDVALIDITY bring none: what they fetch was there before. Nor is
 // a message this app moved into the folder one that arrived: an undo, the

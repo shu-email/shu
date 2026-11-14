@@ -329,8 +329,9 @@ Windows and Linux. It is written in Go with
   folder but Junk, Trash and Drafts, with its unread count in
   `Label.Unread`; a conversation's row carries the labels of its messages
   in the list's scope, and `label:` searches by name.
-- Rules sort the mail that arrives (`mail/rules.go`, `mail/arrivals.go`,
-  `mail/ruleapply.go`, `mail/ruleundo.go`, `store/rules.go`). A rule is
+- Rules sort the mail that arrives (`mail/rules.go`, `mail/rulematch.go`,
+  `mail/arrivals.go`, `mail/ruleapply.go`, `mail/ruleundo.go`,
+  `store/rules.go`). A rule is
   in an order, enabled or paused, with conditions all or any of which a
   message meets (sender, recipients, subject and a named header contain a
   text in any case; attachments; account, folder, label) and actions of a

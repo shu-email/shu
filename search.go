@@ -47,7 +47,11 @@ func (s searchQuery) IsZero() bool { return s.Search.IsZero() && len(s.Accounts)
 // parseQuery reads a search's text: its account: parts taken out, the
 // rest as the engine reads it.
 func parseQuery(text string) searchQuery {
-	parts := splitQuery(text)
+	return queryOf(text, splitQuery(text))
+}
+
+// queryOf reads a search's text with the parts it is already split into.
+func queryOf(text string, parts []queryPart) searchQuery {
 	rest := parts[:0:0]
 	var q searchQuery
 	for _, p := range parts {
@@ -65,8 +69,44 @@ func parseQuery(text string) searchQuery {
 	return q
 }
 
+// clone is the query with lists of its own, so that a caller cannot
+// change the one a read kept.
+func (q searchQuery) clone() searchQuery {
+	q.Text = slices.Clone(q.Text)
+	q.From = slices.Clone(q.From)
+	q.To = slices.Clone(q.To)
+	q.Subject = slices.Clone(q.Subject)
+	q.Body = slices.Clone(q.Body)
+	q.Labels = slices.Clone(q.Labels)
+	q.Accounts = slices.Clone(q.Accounts)
+	return q
+}
+
+// parseMemo keeps the last read of a search's text. A build asks what
+// the text means from the list, its title and its toolbar, and the answer
+// is the same until the text changes; the zone is part of the key, as
+// typed days are read in it.
+//
+// It belongs to the window: a background job reads the text of a saved
+// search with parseQuery and writes no view state.
+type parseMemo struct {
+	text  string
+	zone  *time.Location
+	query searchQuery
+	ok    bool
+}
+
+// parse is what a search's text asks, read once per text.
+func (a *app) parse(text string) searchQuery {
+	m := &a.queryMemo
+	if !m.ok || m.text != text || m.zone != searchZone {
+		*m = parseMemo{text: text, zone: searchZone, query: parseQuery(text), ok: true}
+	}
+	return m.query.clone()
+}
+
 // parsedQuery is what the search field asks.
-func (a *app) parsedQuery() searchQuery { return parseQuery(a.query) }
+func (a *app) parsedQuery() searchQuery { return a.parse(a.query) }
 
 // accountsNamed are the accounts, by ID, whose name or address contains
 // value in any case, as from: finds a sender.
@@ -127,7 +167,7 @@ func (a *app) defaultScopeFor(folder string) searchScope {
 // as the list it shows: a smart mailbox's is the list it was saved from,
 // not its entry in the sidebar.
 func (a *app) searchScope() searchScope {
-	return a.scopeFor(a.smartSaveFolder(), a.scope, a.scopeSet, a.query)
+	return a.scopeFor(a.smartSaveFolder(), a.scope, a.scopeSet, a.parsedQuery())
 }
 
 // scopeFor is the scope a search of a list covers: the one chosen, widened
@@ -136,7 +176,7 @@ func (a *app) searchScope() searchScope {
 // together, as would the account on screen and an account: that leaves it
 // out; the drafts' search knows their text alone. A smart mailbox reads
 // its list by the same rules, though it is not that list.
-func (a *app) scopeFor(folder string, scope searchScope, chosen bool, query string) searchScope {
+func (a *app) scopeFor(folder string, scope searchScope, chosen bool, q searchQuery) searchScope {
 	// The reminders' and follow-ups' lists are their own scope: no other
 	// widens them.
 	if folder == remindersFolder || folder == followUpFolder {
@@ -152,10 +192,9 @@ func (a *app) scopeFor(folder string, scope searchScope, chosen bool, query stri
 	if s == scopeAccount && folder == allInboxes {
 		s = scopeHere
 	}
-	if s == scopeAll || strings.TrimSpace(query) == "" {
+	if s == scopeAll || q.IsZero() {
 		return s
 	}
-	q := parseQuery(query)
 	if folder != allInboxes && len(a.accounts) > 1 && a.leavesOutShown(q) {
 		return scopeAll
 	}

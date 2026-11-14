@@ -112,8 +112,9 @@ func (a *app) smartListQuery(mb mail.SmartMailbox) listQuery {
 	if q.search != "" {
 		// The scope is the saved list's, not the sidebar entry's: the
 		// unified inbox's and the reminders' rules apply as they did.
-		q.scope = a.scopeFor(mb.Folder, scopeOfName(mb.Scope), true, mb.Query)
-		ids, narrowed := a.queryAccounts(parseQuery(q.search))
+		saved := parseQuery(mb.Query)
+		q.scope = a.scopeFor(mb.Folder, scopeOfName(mb.Scope), true, saved)
+		ids, narrowed := a.queryAccounts(saved)
 		q.narrowed, q.accounts = narrowed, strings.Join(ids, "\n")
 	}
 	return q

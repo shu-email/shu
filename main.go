@@ -121,6 +121,9 @@ type app struct {
 	folders  []mail.Folder
 	folder   string
 	query    string
+	// queryMemo is the last read of query (search.go), shared by the parts
+	// of a build that ask what the search text means.
+	queryMemo parseMemo
 
 	all      []mail.Summary
 	selected int

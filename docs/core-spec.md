@@ -65,7 +65,8 @@ shu/
   messagelist.go       list header, search, virtual list and rows
   reading.go           reading pane, header, attachments, actions
   accounts.go          account settings/first-run views
-  compose.go           compose window (mygo.NewWindow)
+  compose.go           compose state: drafts, sending, attachments
+  composeview.go       compose window (mygo.NewWindow), its form and notices
   htmlview.go          webview lifecycle + HTML sanitizing/CSP
   icons.go             icons (add the Lucide v1.72.0 version comment)
   locales/             en.json, zh-Hans.json, catalog_gen.go (generated)
@@ -1067,6 +1068,7 @@ New: `mail/` (models/Store interface/Service/IMAP/SMTP/MIME/special-use + tests)
 `store/` (SQLite open and migrations, accounts/kv, folders, messages,
 attachments, FTS search, outbox + tests), `testdata/` fixtures, and under package
 main `sidebar.go`, `messagelist.go`, `reading.go`, `accounts.go`, `compose.go`,
+`composeview.go`,
 `htmlview.go`, `mailservice.go` (the interface and fake may live in tests),
 `locales/en.json`, `locales/zh-Hans.json`, the generated `locales/catalog_gen.go`,
 and 5 `icons/*.svg`.

@@ -96,9 +96,14 @@ func seedAtVersion(v int) []string {
 		values += `, '` + encodeJSON(mail.ParseSecurity(baselineHeaders)) + `'`
 	}
 	// An outbox entry sent by an older build, which kept the raw message
-	// it delivered with until v25 dropped it.
-	stmts = append(stmts, `INSERT INTO outbox (id, account_id, raw, envelope_json, state, attempts, created_at)
-		VALUES ('o1', 'a1', 'Subject: old', '{"to":[{"email":"bob@example.org"}]}', 'sent', 1, 1700000000)`)
+	// it delivered with until v25 dropped it; an installation at v25 or
+	// later holds it without.
+	raw := "'Subject: old'"
+	if v >= 25 {
+		raw = "''"
+	}
+	stmts = append(stmts, fmt.Sprintf(`INSERT INTO outbox (id, account_id, raw, envelope_json, state, attempts, created_at)
+		VALUES ('o1', 'a1', %s, '{"to":[{"email":"bob@example.org"}]}', 'sent', 1, 1700000000)`, raw))
 	return append(stmts, fmt.Sprintf(`INSERT INTO messages (%s) VALUES (%s)`, columns, values))
 }
 
@@ -393,9 +398,17 @@ func TestMigrationsFromEmpty(t *testing.T) {
 	for _, r := range rows.Values {
 		have[text(r[0])] = true
 	}
+	// Each of these was kept on every write of a message or a folder, and
+	// no query ever read it (see v26).
+	for _, name := range []string{"messages_message_id", "folders_account"} {
+		if have[name] {
+			t.Errorf("index %q kept though nothing reads it", name)
+		}
+	}
 	for _, name := range []string{
 		"accounts", "kv", "folders", "messages", "attachments", "outbox",
-		"messages_fts", "messages_list", "messages_message_id", "folders_account",
+		"messages_fts", "messages_list",
+		"attachments_cache_path", "outbox_state_due",
 		"messages_ai", "messages_ad", "messages_au", "outbox_account",
 		"ai_cache", "ai_cache_account",
 		"drafts", "drafts_account",

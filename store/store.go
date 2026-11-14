@@ -563,6 +563,22 @@ var migrations = [][]string{
 	{
 		`UPDATE outbox SET raw = '' WHERE raw <> '' AND state IN ('sent', 'cancelled')`,
 	},
+	// v26: the indexes the cache reads by, and none it only keeps. Two
+	// were never read: a message is found by its conversation and its
+	// folder (messages_thread, UNIQUE (folder_id, server_uid)), never by
+	// its Message-ID, and a folder's account is the first column of
+	// UNIQUE (account_id, name), which also serves the read that asked
+	// for an order it only put into a list of membership. An attachment's
+	// file is found by its path, which a sweep of the cache directory
+	// reads and the prune clears, and a send left waiting by its state,
+	// its time and the order the sweep of those an earlier run left
+	// reads them in, which it otherwise sorts itself.
+	{
+		`DROP INDEX IF EXISTS messages_message_id`,
+		`DROP INDEX IF EXISTS folders_account`,
+		`CREATE INDEX attachments_cache_path ON attachments (cache_path)`,
+		`CREATE INDEX outbox_state_due ON outbox (state, due_at, created_at)`,
+	},
 }
 
 // backfills compute, from the rows of the version before, statements a

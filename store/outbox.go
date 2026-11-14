@@ -101,11 +101,15 @@ func (s *Store) PendingSends(ctx context.Context, accountID string) ([]mail.Pend
 	return out, nil
 }
 
+// scheduledSendsSQL is the read of the sends left waiting, which v26's
+// index drives in the order it asks for.
+const scheduledSendsSQL = `SELECT ` + outboxColumns + `
+	FROM outbox WHERE state = ? ORDER BY due_at, created_at, rowid`
+
 // ScheduledSends lists the entries waiting out their send delay, of every
 // account, the soonest due first.
 func (s *Store) ScheduledSends(ctx context.Context) ([]mail.PendingSend, error) {
-	return s.outboxRows(ctx, `SELECT `+outboxColumns+`
-		FROM outbox WHERE state = ? ORDER BY due_at, created_at, rowid`, mail.StateScheduled)
+	return s.outboxRows(ctx, scheduledSendsSQL, mail.StateScheduled)
 }
 
 // SetOutboxState records a state transition. Recording a message as sent

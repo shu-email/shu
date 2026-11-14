@@ -11,9 +11,10 @@ import (
 )
 
 // startQueueRun runs an account's queue worker as Watch does, and
-// collects its reports. It is registered as Watch registers it, so an
-// action queued while the tests run wakes it; a test that watches the
-// account as well must not call it.
+// collects its reports. It is registered as Watch registers it, so the
+// service wakes it as it wakes a watched account's; a test that watches
+// the account must not call it, as Watch would then start a second worker
+// that claims from the same queue.
 func startQueueRun(t *testing.T, svc *Service, accountID string) (*queueWorker, chan WatchEvent) {
 	t.Helper()
 	events := make(chan WatchEvent, 64)
@@ -360,7 +361,7 @@ func TestAQueuedActionTheServerRefusesIsKept(t *testing.T) {
 
 	f.restart(t)
 	clock.advance(time.Minute)
-	q, events := startQueueRun(t, svc, a.ID)
+	_, events := startQueueRun(t, svc, a.ID)
 	waitFor(t, "the refusal", func() bool {
 		ops := queued(t, store, a.ID)
 		return len(ops) == 1 && ops[0].State == OperationFailed
@@ -369,22 +370,25 @@ func TestAQueuedActionTheServerRefusesIsKept(t *testing.T) {
 	if ops[0].LastError == "" {
 		t.Error("the refusal kept no reason")
 	}
-	if got, _, _ := store.GetMessage(ctx, a.ID, "INBOX", msgs[0].UID); got.UID == 0 {
-		t.Error("the cache lost the message the server refused to move")
-	}
-	if st, ok := reportedQueue(events); !ok || st.Failed != 1 || st.Reason == "" {
-		t.Errorf("status = %+v, %v; want the refusal", st, ok)
-	}
+	waitFor(t, "the cache to show the message again", func() bool {
+		got, err := svc.CachedMessages(ctx, a.ID, "INBOX", "", 50)
+		return err == nil && slices.ContainsFunc(got, func(m Summary) bool { return m.UID == msgs[0].UID })
+	})
+	// The worker says so after the row does.
+	waitFor(t, "the refusal to be reported", func() bool {
+		st, ok := reportedQueue(events)
+		return ok && st.Failed == 1 && st.Reason != ""
+	})
 
 	// The user puts the folder back and asks for another try.
 	f.create(t, "Archive")
 	if n, err := svc.RetryFailedActions(ctx, a.ID); err != nil || n != 1 {
 		t.Fatalf("retry = %d, %v; want one action", n, err)
 	}
-	if ops := queued(t, store, a.ID); len(ops) != 1 || ops[0].State != OperationPending {
+	// The worker the retry wakes may take the action at once.
+	if ops := queued(t, store, a.ID); len(ops) > 1 || (len(ops) == 1 && ops[0].State == OperationFailed) {
 		t.Fatalf("after asking again = %+v", ops)
 	}
-	signal(q.wake)
 	waitFor(t, "the move asked for again", func() bool { return len(queued(t, store, a.ID)) == 0 })
 	if got := f.messages(t, "Archive"); len(got) != 1 {
 		t.Errorf("archive on the server = %d messages, want 1", len(got))

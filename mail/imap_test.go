@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -423,6 +424,95 @@ func TestSyncAccountAndFolder(t *testing.T) {
 	}
 	if msgs, _ := svc.CachedMessages(ctx, a.ID, "INBOX", "", 50); len(msgs) != 3 {
 		t.Errorf("second sync changed the list: %d", len(msgs))
+	}
+}
+
+// A pruned attachment's bytes come back from the server. The prune clears
+// the file's path and keeps the message's body cached, so a read that
+// trusted BodyCached alone would never fetch them again.
+func TestAttachmentAfterPruneIsFetchedAgain(t *testing.T) {
+	ctx := context.Background()
+	f := startFakeIMAP(t, allCaps())
+	f.create(t, "INBOX")
+	f.append(t, "INBOX", readFixture(t, "attachment.eml"))
+	svc, store, a := newIMAPService(t, f, "secret")
+	svc.cacheDir = t.TempDir()
+	if _, err := svc.SyncAccount(ctx, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SyncFolder(ctx, a.ID, "INBOX", 50); err != nil {
+		t.Fatal(err)
+	}
+	msgs, _ := svc.CachedMessages(ctx, a.ID, "INBOX", "", 50)
+	if len(msgs) != 1 {
+		t.Fatalf("messages = %+v", msgs)
+	}
+	uid := msgs[0].UID
+	result, err := svc.FetchMessage(ctx, a.ID, "INBOX", uid, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Message.Attachments) != 1 || result.Message.Attachments[0].CachePath == "" {
+		t.Fatalf("attachments = %+v", result.Message.Attachments)
+	}
+	part := result.Message.Attachments[0].Part
+	if _, data, err := svc.Attachment(ctx, a.ID, "INBOX", uid, part); err != nil || string(data) != "%PDF-1.4 test" {
+		t.Fatalf("before the prune = %q, %v", data, err)
+	}
+	removed, err := PruneAttachments(svc.cacheDir, 0)
+	if err != nil || len(removed) != 1 {
+		t.Fatalf("prune = %v, %v", removed, err)
+	}
+	if err := store.ForgetAttachmentFiles(ctx, removed); err != nil {
+		t.Fatal(err)
+	}
+	got, data, err := svc.Attachment(ctx, a.ID, "INBOX", uid, part)
+	if err != nil {
+		t.Fatalf("after the prune: %v", err)
+	}
+	if string(data) != "%PDF-1.4 test" {
+		t.Errorf("after the prune = %q", data)
+	}
+	// The file was cached again, so the next read needs no connection.
+	if got.CachePath == "" {
+		t.Error("the refetched attachment was not cached")
+	} else if _, err := os.Stat(got.CachePath); err != nil {
+		t.Errorf("the refetched attachment's file: %v", err)
+	}
+}
+
+// An attachment of zero bytes is whole without a file: reading it asks
+// the server for nothing.
+func TestAttachmentOfZeroBytesIsWhole(t *testing.T) {
+	ctx := context.Background()
+	f := startFakeIMAP(t, allCaps())
+	f.create(t, "INBOX")
+	f.append(t, "INBOX", messageWithFiles("empty-1@example.com", mailFile{name: "empty.txt", contentType: "text/plain"}))
+	svc, _, a := newIMAPService(t, f, "secret")
+	svc.cacheDir = t.TempDir()
+	if _, err := svc.SyncAccount(ctx, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SyncFolder(ctx, a.ID, "INBOX", 50); err != nil {
+		t.Fatal(err)
+	}
+	msgs, _ := svc.CachedMessages(ctx, a.ID, "INBOX", "", 50)
+	if len(msgs) != 1 {
+		t.Fatalf("messages = %+v", msgs)
+	}
+	uid := msgs[0].UID
+	fetched, err := svc.FetchMessage(ctx, a.ID, "INBOX", uid, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fetched.Message.Attachments) != 1 {
+		t.Fatalf("attachments = %+v", fetched.Message.Attachments)
+	}
+	part := fetched.Message.Attachments[0].Part
+	f.stop()
+	_, data, err := svc.Attachment(ctx, a.ID, "INBOX", uid, part)
+	if err != nil || len(data) != 0 {
+		t.Fatalf("a zero-byte attachment = %q, %v", data, err)
 	}
 }
 

@@ -1703,6 +1703,22 @@ func (s *memStore) ForgetAttachmentFiles(ctx context.Context, paths []string) er
 		}
 	}
 	s.attachmentFiles = kept
+	// The rows that named the files keep their attachments and lose the
+	// paths, as the real store's do.
+	for _, msgs := range s.messages {
+		for uid, m := range msgs {
+			for i := range m.Attachments {
+				if gone[m.Attachments[i].CachePath] {
+					// The real store keeps metadata only; bytes held in
+					// memory here must go too, or a test reads bytes the
+					// cache no longer has.
+					m.Attachments[i].CachePath = ""
+					m.Attachments[i].Data = nil
+				}
+			}
+			msgs[uid] = m
+		}
+	}
 	return nil
 }
 

@@ -2,7 +2,9 @@ package mail
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -959,7 +961,8 @@ func byFolder(msgs []MessageRef, skip string) []uidGroup {
 }
 
 // Attachment returns an attachment's bytes, from the disk cache or by
-// fetching the message again.
+// fetching the message again. A path that names no file, or one whose
+// bytes are not the attachment's, is no cache: the server has them.
 func (s *Service) Attachment(ctx context.Context, accountID, folder string, uid UID, part string) (Attachment, []byte, error) {
 	m, ok, err := s.store.GetMessage(ctx, accountID, folder, uid)
 	if err != nil {
@@ -976,30 +979,62 @@ func (s *Service) Attachment(ctx context.Context, accountID, folder string, uid 
 		}
 		return Attachment{}, false
 	}
-	a, found := find(m.Attachments)
-	if !found || (a.CachePath == "" && !m.BodyCached) {
-		result, err := s.FetchMessage(ctx, accountID, folder, uid, false)
-		if err != nil {
-			return Attachment{}, nil, err
+	// cached reads the bytes a row's path names, when they are the
+	// attachment's own.
+	cached := func(a Attachment) ([]byte, bool) {
+		if a.CachePath == "" {
+			return nil, false
 		}
-		a, found = find(result.Message.Attachments)
-		if !found {
-			return Attachment{}, nil, ErrNotFound
-		}
-		if a.CachePath == "" && len(a.Data) > 0 {
-			return a, a.Data, nil
-		}
-	}
-	if a.CachePath != "" {
 		data, err := os.ReadFile(a.CachePath)
-		if err == nil {
+		if err != nil {
+			return nil, false
+		}
+		if a.ContentHash != "" && contentHashOf(data) != a.ContentHash {
+			return nil, false
+		}
+		return data, true
+	}
+	a, found := find(m.Attachments)
+	if found {
+		if data, ok := cached(a); ok {
 			return a, data, nil
 		}
+		if len(a.Data) > 0 {
+			return a, a.Data, nil
+		}
+		if a.Size == 0 {
+			// Nothing to read, and nothing to fetch: the attachment is
+			// empty.
+			return a, []byte{}, nil
+		}
+	}
+	// The bytes are not on disk: the body was never fetched, or a prune
+	// removed the file and cleared the path, or the file is damaged. A
+	// cached body does not say otherwise, so ask the server.
+	result, err := s.FetchMessage(ctx, accountID, folder, uid, false)
+	if err != nil {
+		return Attachment{}, nil, err
+	}
+	a, found = find(result.Message.Attachments)
+	if !found {
+		return Attachment{}, nil, ErrNotFound
+	}
+	if data, ok := cached(a); ok {
+		return a, data, nil
 	}
 	if len(a.Data) > 0 {
 		return a, a.Data, nil
 	}
+	if a.Size == 0 {
+		return a, []byte{}, nil
+	}
 	return Attachment{}, nil, ErrNotFound
+}
+
+// contentHashOf is the hash a cached attachment file is stored under.
+func contentHashOf(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
 }
 
 // PendingSends lists unsent outbox entries, including sends whose outcome

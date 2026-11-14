@@ -216,14 +216,3 @@ func (s *Service) checkFolderName(ctx context.Context, accountID, name string) e
 	}
 	return nil
 }
-
-// folderDelimiter returns the hierarchy delimiter an account's folders
-// use, "/" when the server said none.
-func folderDelimiter(folders []Folder) string {
-	for _, f := range folders {
-		if f.Delimiter != "" {
-			return f.Delimiter
-		}
-	}
-	return "/"
-}

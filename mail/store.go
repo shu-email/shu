@@ -292,10 +292,9 @@ type Store interface {
 	BlockedSenders(ctx context.Context, accountID string) ([]BlockedSender, error)
 	SaveBlockedSender(ctx context.Context, b BlockedSender) error
 	RemoveBlockedSender(ctx context.Context, accountID, value string, domain bool) error
-	// UnsubscribeRecord reads what the account kept of leaving one
-	// sender's list, and Unsubscribes all of them, newest first;
-	// SaveUnsubscribe keeps one, replacing what the sender had.
-	UnsubscribeRecord(ctx context.Context, accountID, email string) (UnsubscribeRecord, bool, error)
+	// Unsubscribes reads every list the account left from this device,
+	// newest first; SaveUnsubscribe keeps one, replacing what the sender
+	// had.
 	Unsubscribes(ctx context.Context, accountID string) ([]UnsubscribeRecord, error)
 	SaveUnsubscribe(ctx context.Context, r UnsubscribeRecord) error
 

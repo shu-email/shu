@@ -1113,13 +1113,6 @@ func (s *memStore) RemoveBlockedSender(ctx context.Context, accountID, value str
 	return nil
 }
 
-func (s *memStore) UnsubscribeRecord(ctx context.Context, accountID, email string) (UnsubscribeRecord, bool, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	r, ok := s.unsubs[accountID+"\x00"+email]
-	return r, ok, nil
-}
-
 func (s *memStore) Unsubscribes(ctx context.Context, accountID string) ([]UnsubscribeRecord, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -338,16 +338,6 @@ func (s *Service) postUnsubscribe(ctx context.Context, link string) error {
 	return nil
 }
 
-// Unsubscribed reads what the account kept of leaving this sender's list,
-// nil when it never did.
-func (s *Service) Unsubscribed(ctx context.Context, accountID, email string) (*UnsubscribeRecord, error) {
-	rec, ok, err := s.store.UnsubscribeRecord(ctx, accountID, strings.ToLower(strings.TrimSpace(email)))
-	if err != nil || !ok {
-		return nil, err
-	}
-	return &rec, nil
-}
-
 // Unsubscribes reads every list the account left from this device, the
 // most recent first.
 func (s *Service) Unsubscribes(ctx context.Context, accountID string) ([]UnsubscribeRecord, error) {

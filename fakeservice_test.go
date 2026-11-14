@@ -2999,15 +2999,6 @@ func (f *fakeService) Unsubscribe(ctx context.Context, accountID, folder string,
 	return rec, nil
 }
 
-// Unsubscribed reads what the account kept of leaving a sender's list.
-func (f *fakeService) Unsubscribed(ctx context.Context, accountID, email string) (*mail.UnsubscribeRecord, error) {
-	rec, ok := f.lists[accountID][strings.ToLower(strings.TrimSpace(email))]
-	if !ok {
-		return nil, nil
-	}
-	return &rec, nil
-}
-
 // Unsubscribes lists every list the account left, newest first.
 func (f *fakeService) Unsubscribes(ctx context.Context, accountID string) ([]mail.UnsubscribeRecord, error) {
 	out := make([]mail.UnsubscribeRecord, 0, len(f.lists[accountID]))

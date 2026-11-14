@@ -11,6 +11,22 @@ import (
 	"testing"
 )
 
+// keptUnsubscribe is what the store saved of leaving one sender's list,
+// read through the list the engine reads.
+func keptUnsubscribe(t *testing.T, store Store, accountID, email string) (UnsubscribeRecord, bool) {
+	t.Helper()
+	list, err := store.Unsubscribes(context.Background(), accountID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range list {
+		if r.Email == email {
+			return r, true
+		}
+	}
+	return UnsubscribeRecord{}, false
+}
+
 // What List-Unsubscribe says of a list: its links, its addresses, and
 // whether it takes a one-click request.
 func TestParseUnsubscribeOffer(t *testing.T) {
@@ -182,9 +198,9 @@ func TestUnsubscribeOneClick(t *testing.T) {
 	if rec.Email != "news@shop.example" || rec.Method != UnsubscribeOneClick || rec.Destination != server.URL+"/unsub?id=1" || rec.At.IsZero() {
 		t.Errorf("record = %+v", rec)
 	}
-	saved, ok, err := store.UnsubscribeRecord(ctx, "a1", "news@shop.example")
-	if err != nil || !ok || saved != rec {
-		t.Errorf("the store kept %+v, %v, %v", saved, ok, err)
+	saved, ok := keptUnsubscribe(t, store, "a1", "news@shop.example")
+	if !ok || saved != rec {
+		t.Errorf("the store kept %+v, %v", saved, ok)
 	}
 }
 
@@ -202,8 +218,8 @@ func TestUnsubscribeOneClickFailure(t *testing.T) {
 	if _, err := svc.Unsubscribe(ctx, "a1", "INBOX", 1, UnsubscribeOneClick, server.URL+"/unsub"); err == nil {
 		t.Fatal("a refused request was taken for made")
 	}
-	if _, ok, err := store.UnsubscribeRecord(ctx, "a1", "news@shop.example"); err != nil || ok {
-		t.Errorf("a refused request was kept: %v, %v", ok, err)
+	if _, ok := keptUnsubscribe(t, store, "a1", "news@shop.example"); ok {
+		t.Error("a refused request was kept")
 	}
 }
 
@@ -255,8 +271,8 @@ func TestUnsubscribeOneClickRefusesARedirect(t *testing.T) {
 	if target != 0 {
 		t.Errorf("the redirect's host was asked %d times", target)
 	}
-	if _, ok, err := store.UnsubscribeRecord(ctx, "a1", "news@shop.example"); err != nil || ok {
-		t.Errorf("a refused request was kept: %v, %v", ok, err)
+	if _, ok := keptUnsubscribe(t, store, "a1", "news@shop.example"); ok {
+		t.Error("a refused request was kept")
 	}
 }
 

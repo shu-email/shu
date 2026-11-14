@@ -860,3 +860,89 @@ func TestMoveLeavesWhatIsThere(t *testing.T) {
 		}
 	}
 }
+
+// searchTimers arms real timers that fire only when the test says so,
+// and tells a timer the app stopped from one it did not.
+type searchTimers struct {
+	armed []*time.Timer
+	fns   []func()
+}
+
+func (s *searchTimers) after(d time.Duration, fn func()) *time.Timer {
+	t := time.AfterFunc(time.Hour, func() {})
+	s.armed = append(s.armed, t)
+	s.fns = append(s.fns, fn)
+	return t
+}
+
+// fire runs the handlers of the timers the app did not stop.
+func (s *searchTimers) fire() {
+	armed, fns := s.armed, s.fns
+	s.armed, s.fns = nil, nil
+	for i, t := range armed {
+		if !t.Stop() {
+			continue
+		}
+		fns[i]()
+	}
+}
+
+// A word typed a letter at a time asks the cache once, when the typing
+// pauses: each keystroke retires the search the one before it armed.
+func TestSearchWaitsForTheTypingToPause(t *testing.T) {
+	a, _, tt := startTwo(t, false)
+	ti := &searchTimers{}
+	a.after = ti.after
+	click(t, tt, "Search mail")
+	reads := a.pager.reads
+	tt.TypeKey(0, ui.KeyP, "p")
+	tt.TypeKey(0, ui.KeyI, "i")
+	if len(ti.armed) != 2 {
+		t.Fatalf("two keystrokes armed %d searches", len(ti.armed))
+	}
+	if a.pager.reads != reads {
+		t.Errorf("the list read before the typing paused: %d reads", a.pager.reads-reads)
+	}
+	ti.fire()
+	if got := a.pager.reads - reads; got != 1 {
+		t.Errorf("reads = %d, want one", got)
+	}
+	if a.query != "pi" {
+		t.Errorf("query = %q", a.query)
+	}
+}
+
+// A search the user asks for takes the place of one the typing armed: a
+// filter chip taken off searches once, not again when the pause comes.
+func TestASearchRetiresTheTypingTimer(t *testing.T) {
+	a, _, tt := startTwo(t, false)
+	ti := &searchTimers{}
+	a.after = ti.after
+	click(t, tt, "Search mail")
+	tt.TypeKey(0, ui.KeyP, "p")
+	reads := a.pager.reads
+	a.search()
+	if got := a.pager.reads - reads; got != 1 {
+		t.Fatalf("the search read %d times, want once", got)
+	}
+	ti.fire()
+	if got := a.pager.reads - reads; got != 1 {
+		t.Errorf("reads = %d: the retired search read again", got)
+	}
+}
+
+// A list opened while the typing paused is not searched for: the text the
+// timer was armed with is no longer the one on screen.
+func TestSearchOfAnotherListIsNotSearchedFor(t *testing.T) {
+	a, _, tt := startTwo(t, false)
+	ti := &searchTimers{}
+	a.after = ti.after
+	click(t, tt, "Search mail")
+	tt.TypeKey(0, ui.KeyP, "p")
+	reads := a.pager.reads
+	a.query = ""
+	ti.fire()
+	if a.pager.reads != reads {
+		t.Errorf("the timer searched a list the user opened: %d reads", a.pager.reads-reads)
+	}
+}

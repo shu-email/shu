@@ -55,6 +55,13 @@ type fakeService struct {
 	changeErr       error
 	attachment      mail.Attachment
 	attachmentBytes []byte
+	// tempFiles counts the preview files written, tempPaths names them,
+	// tempData is what the last held, and tempFileErr makes the write
+	// fail.
+	tempFiles   int
+	tempPaths   []string
+	tempData    []byte
+	tempFileErr error
 	// folderCalls records the folder actions taken, in order, and
 	// folderErr makes them fail.
 	folderCalls []string
@@ -1234,6 +1241,11 @@ func (f *fakeService) PrepareCache(ctx context.Context) error {
 }
 
 func (f *fakeService) TempFile(ext string, data []byte) (string, error) {
+	f.tempFiles++
+	f.tempData = append([]byte(nil), data...)
+	if f.tempFileErr != nil {
+		return "", f.tempFileErr
+	}
 	file, err := os.CreateTemp("", "shu-*"+filepath.Ext(ext))
 	if err != nil {
 		return "", err
@@ -1248,6 +1260,7 @@ func (f *fakeService) TempFile(ext string, data []byte) (string, error) {
 		os.Remove(name)
 		return "", err
 	}
+	f.tempPaths = append(f.tempPaths, name)
 	return name, nil
 }
 

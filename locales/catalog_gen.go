@@ -10650,6 +10650,20 @@ func (msgs Messages) PreviewFailed(error string) string {
 	return Catalog.Format(msgs.locale, "previewFailed", map[string]any{"error": error})
 }
 
+// OpenAttachmentFailed says "Could not prepare the attachment to open: {error}"
+// in the language the app shows.
+//
+// The error after writing the file Open in the default app opens failed.
+func OpenAttachmentFailed(error string) string { return In(i18n.Locale()).OpenAttachmentFailed(error) }
+
+// OpenAttachmentFailed says "Could not prepare the attachment to open: {error}"
+// in the language of msgs.
+//
+// The error after writing the file Open in the default app opens failed.
+func (msgs Messages) OpenAttachmentFailed(error string) string {
+	return Catalog.Format(msgs.locale, "openAttachmentFailed", map[string]any{"error": error})
+}
+
 // SaveAllDone says "Saved {count} files"
 // in the language the app shows.
 //

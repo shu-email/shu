@@ -3799,6 +3799,16 @@
       }
     }
   },
+  "openAttachmentFailed": "Could not prepare the attachment to open: {error}",
+  "@openAttachmentFailed": {
+    "description": "The error after writing the file Open in the default app opens failed.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "the disk is full"
+      }
+    }
+  },
   "saveAllDone": "Saved {count} files",
   "@saveAllDone": {
     "description": "The note after Save all wrote the attachments.",

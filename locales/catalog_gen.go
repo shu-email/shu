@@ -44,16 +44,6 @@ func (msgs Messages) AppName() string {
 	return Catalog.Format(msgs.locale, "appName", nil)
 }
 
-// SearchMail says "Search mail"
-// in the language the app shows.
-func SearchMail() string { return In(i18n.Locale()).SearchMail() }
-
-// SearchMail says "Search mail"
-// in the language of msgs.
-func (msgs Messages) SearchMail() string {
-	return Catalog.Format(msgs.locale, "searchMail", nil)
-}
-
 // SearchMailLabel says "Search mail"
 // in the language the app shows.
 func SearchMailLabel() string { return In(i18n.Locale()).SearchMailLabel() }
@@ -746,66 +736,6 @@ func (msgs Messages) Labels() string {
 	return Catalog.Format(msgs.locale, "labels", nil)
 }
 
-// Work says "Work"
-// in the language the app shows.
-func Work() string { return In(i18n.Locale()).Work() }
-
-// Work says "Work"
-// in the language of msgs.
-func (msgs Messages) Work() string {
-	return Catalog.Format(msgs.locale, "work", nil)
-}
-
-// Personal says "Personal"
-// in the language the app shows.
-func Personal() string { return In(i18n.Locale()).Personal() }
-
-// Personal says "Personal"
-// in the language of msgs.
-func (msgs Messages) Personal() string {
-	return Catalog.Format(msgs.locale, "personal", nil)
-}
-
-// Receipts says "Receipts"
-// in the language the app shows.
-func Receipts() string { return In(i18n.Locale()).Receipts() }
-
-// Receipts says "Receipts"
-// in the language of msgs.
-func (msgs Messages) Receipts() string {
-	return Catalog.Format(msgs.locale, "receipts", nil)
-}
-
-// Travel says "Travel"
-// in the language the app shows.
-func Travel() string { return In(i18n.Locale()).Travel() }
-
-// Travel says "Travel"
-// in the language of msgs.
-func (msgs Messages) Travel() string {
-	return Catalog.Format(msgs.locale, "travel", nil)
-}
-
-// Filter says "Filter"
-// in the language the app shows.
-func Filter() string { return In(i18n.Locale()).Filter() }
-
-// Filter says "Filter"
-// in the language of msgs.
-func (msgs Messages) Filter() string {
-	return Catalog.Format(msgs.locale, "filter", nil)
-}
-
-// FilterMessages says "Filter messages"
-// in the language the app shows.
-func FilterMessages() string { return In(i18n.Locale()).FilterMessages() }
-
-// FilterMessages says "Filter messages"
-// in the language of msgs.
-func (msgs Messages) FilterMessages() string {
-	return Catalog.Format(msgs.locale, "filterMessages", nil)
-}
-
 // More says "More"
 // in the language the app shows.
 func More() string { return In(i18n.Locale()).More() }
@@ -960,20 +890,6 @@ func (msgs Messages) ToMe() string {
 	return Catalog.Format(msgs.locale, "toMe", nil)
 }
 
-// UnreadCount says "{count, plural, =0 {No unread messages} one {# unread message} other {# unread messages}}"
-// in the language the app shows.
-//
-// The unread badge of a folder.
-func UnreadCount(count int) string { return In(i18n.Locale()).UnreadCount(count) }
-
-// UnreadCount says "{count, plural, =0 {No unread messages} one {# unread message} other {# unread messages}}"
-// in the language of msgs.
-//
-// The unread badge of a folder.
-func (msgs Messages) UnreadCount(count int) string {
-	return Catalog.Format(msgs.locale, "unreadCount", map[string]any{"count": count})
-}
-
 // MessageCount says "{count, plural, =0 {No messages} one {# message} other {# messages}}"
 // in the language the app shows.
 //
@@ -1116,26 +1032,6 @@ func Security() string { return In(i18n.Locale()).Security() }
 // in the language of msgs.
 func (msgs Messages) Security() string {
 	return Catalog.Format(msgs.locale, "security", nil)
-}
-
-// TlsImplicit says "TLS"
-// in the language the app shows.
-func TlsImplicit() string { return In(i18n.Locale()).TlsImplicit() }
-
-// TlsImplicit says "TLS"
-// in the language of msgs.
-func (msgs Messages) TlsImplicit() string {
-	return Catalog.Format(msgs.locale, "tlsImplicit", nil)
-}
-
-// TlsStartTLS says "STARTTLS"
-// in the language the app shows.
-func TlsStartTLS() string { return In(i18n.Locale()).TlsStartTLS() }
-
-// TlsStartTLS says "STARTTLS"
-// in the language of msgs.
-func (msgs Messages) TlsStartTLS() string {
-	return Catalog.Format(msgs.locale, "tlsStartTLS", nil)
 }
 
 // Provider says "Provider"
@@ -1866,16 +1762,6 @@ func (msgs Messages) ReplyTitle() string {
 	return Catalog.Format(msgs.locale, "replyTitle", nil)
 }
 
-// ReplyAllTitle says "Reply all"
-// in the language the app shows.
-func ReplyAllTitle() string { return In(i18n.Locale()).ReplyAllTitle() }
-
-// ReplyAllTitle says "Reply all"
-// in the language of msgs.
-func (msgs Messages) ReplyAllTitle() string {
-	return Catalog.Format(msgs.locale, "replyAllTitle", nil)
-}
-
 // ForwardTitle says "Forward"
 // in the language the app shows.
 func ForwardTitle() string { return In(i18n.Locale()).ForwardTitle() }
@@ -1936,36 +1822,6 @@ func (msgs Messages) Dismiss() string {
 	return Catalog.Format(msgs.locale, "dismiss", nil)
 }
 
-// Star says "Star"
-// in the language the app shows.
-func Star() string { return In(i18n.Locale()).Star() }
-
-// Star says "Star"
-// in the language of msgs.
-func (msgs Messages) Star() string {
-	return Catalog.Format(msgs.locale, "star", nil)
-}
-
-// Unstar says "Unstar"
-// in the language the app shows.
-func Unstar() string { return In(i18n.Locale()).Unstar() }
-
-// Unstar says "Unstar"
-// in the language of msgs.
-func (msgs Messages) Unstar() string {
-	return Catalog.Format(msgs.locale, "unstar", nil)
-}
-
-// SearchMessages says "Search messages"
-// in the language the app shows.
-func SearchMessages() string { return In(i18n.Locale()).SearchMessages() }
-
-// SearchMessages says "Search messages"
-// in the language of msgs.
-func (msgs Messages) SearchMessages() string {
-	return Catalog.Format(msgs.locale, "searchMessages", nil)
-}
-
 // Read says "Read"
 // in the language the app shows.
 func Read() string { return In(i18n.Locale()).Read() }
@@ -1974,16 +1830,6 @@ func Read() string { return In(i18n.Locale()).Read() }
 // in the language of msgs.
 func (msgs Messages) Read() string {
 	return Catalog.Format(msgs.locale, "read", nil)
-}
-
-// Unread says "Unread"
-// in the language the app shows.
-func Unread() string { return In(i18n.Locale()).Unread() }
-
-// Unread says "Unread"
-// in the language of msgs.
-func (msgs Messages) Unread() string {
-	return Catalog.Format(msgs.locale, "unread", nil)
 }
 
 // Folders says "Folders"
@@ -7598,16 +7444,6 @@ func (msgs Messages) Rules() string {
 	return Catalog.Format(msgs.locale, "rules", nil)
 }
 
-// RulesTip says "Rules that sort new mail"
-// in the language the app shows.
-func RulesTip() string { return In(i18n.Locale()).RulesTip() }
-
-// RulesTip says "Rules that sort new mail"
-// in the language of msgs.
-func (msgs Messages) RulesTip() string {
-	return Catalog.Format(msgs.locale, "rulesTip", nil)
-}
-
 // MailRules says "Mail rules"
 // in the language the app shows.
 func MailRules() string { return In(i18n.Locale()).MailRules() }
@@ -10142,16 +9978,6 @@ func (msgs Messages) MoveToFolder() string {
 	return Catalog.Format(msgs.locale, "moveToFolder", nil)
 }
 
-// MoveToFolderEllipsis says "Move to folder…"
-// in the language the app shows.
-func MoveToFolderEllipsis() string { return In(i18n.Locale()).MoveToFolderEllipsis() }
-
-// MoveToFolderEllipsis says "Move to folder…"
-// in the language of msgs.
-func (msgs Messages) MoveToFolderEllipsis() string {
-	return Catalog.Format(msgs.locale, "moveToFolderEllipsis", nil)
-}
-
 // MovedToFolder says "Moved to {name}"
 // in the language the app shows.
 //
@@ -10604,16 +10430,6 @@ func SaveAllAttachments() string { return In(i18n.Locale()).SaveAllAttachments()
 // in the language of msgs.
 func (msgs Messages) SaveAllAttachments() string {
 	return Catalog.Format(msgs.locale, "saveAllAttachments", nil)
-}
-
-// AttachmentPreviewTitle says "Preview"
-// in the language the app shows.
-func AttachmentPreviewTitle() string { return In(i18n.Locale()).AttachmentPreviewTitle() }
-
-// AttachmentPreviewTitle says "Preview"
-// in the language of msgs.
-func (msgs Messages) AttachmentPreviewTitle() string {
-	return Catalog.Format(msgs.locale, "attachmentPreviewTitle", nil)
 }
 
 // PreviewUnavailable says "There is no preview for this kind of file."
@@ -11166,16 +10982,6 @@ func (msgs Messages) ShortcutClose() string {
 	return Catalog.Format(msgs.locale, "shortcutClose", nil)
 }
 
-// InviteTitle says "Meeting invitation"
-// in the language the app shows.
-func InviteTitle() string { return In(i18n.Locale()).InviteTitle() }
-
-// InviteTitle says "Meeting invitation"
-// in the language of msgs.
-func (msgs Messages) InviteTitle() string {
-	return Catalog.Format(msgs.locale, "inviteTitle", nil)
-}
-
 // InviteCanceled says "This meeting was canceled"
 // in the language the app shows.
 func InviteCanceled() string { return In(i18n.Locale()).InviteCanceled() }
@@ -11194,30 +11000,6 @@ func InviteUpdated() string { return In(i18n.Locale()).InviteUpdated() }
 // in the language of msgs.
 func (msgs Messages) InviteUpdated() string {
 	return Catalog.Format(msgs.locale, "inviteUpdated", nil)
-}
-
-// InviteAllDay says "All day"
-// in the language the app shows.
-func InviteAllDay() string { return In(i18n.Locale()).InviteAllDay() }
-
-// InviteAllDay says "All day"
-// in the language of msgs.
-func (msgs Messages) InviteAllDay() string {
-	return Catalog.Format(msgs.locale, "inviteAllDay", nil)
-}
-
-// InviteWhen says "{start} – {end}"
-// in the language the app shows.
-//
-// The time range of a meeting.
-func InviteWhen(start string, end string) string { return In(i18n.Locale()).InviteWhen(start, end) }
-
-// InviteWhen says "{start} – {end}"
-// in the language of msgs.
-//
-// The time range of a meeting.
-func (msgs Messages) InviteWhen(start string, end string) string {
-	return Catalog.Format(msgs.locale, "inviteWhen", map[string]any{"start": start, "end": end})
 }
 
 // InviteOrganizer says "Organizer: {name}"
@@ -11762,16 +11544,6 @@ func (msgs Messages) AiProviderModelHint() string {
 	return Catalog.Format(msgs.locale, "aiProviderModelHint", nil)
 }
 
-// AiProviderOff says "Off"
-// in the language the app shows.
-func AiProviderOff() string { return In(i18n.Locale()).AiProviderOff() }
-
-// AiProviderOff says "Off"
-// in the language of msgs.
-func (msgs Messages) AiProviderOff() string {
-	return Catalog.Format(msgs.locale, "aiProviderOff", nil)
-}
-
 // AiProviderOffHint says "Its models leave the pickers. Its setup and key are kept."
 // in the language the app shows.
 func AiProviderOffHint() string { return In(i18n.Locale()).AiProviderOffHint() }
@@ -12002,16 +11774,6 @@ func AiLocalToolNotOfficial() string { return In(i18n.Locale()).AiLocalToolNotOf
 // in the language of msgs.
 func (msgs Messages) AiLocalToolNotOfficial() string {
 	return Catalog.Format(msgs.locale, "aiLocalToolNotOfficial", nil)
-}
-
-// AiProviderNeedsURL says "Server URL needed"
-// in the language the app shows.
-func AiProviderNeedsURL() string { return In(i18n.Locale()).AiProviderNeedsURL() }
-
-// AiProviderNeedsURL says "Server URL needed"
-// in the language of msgs.
-func (msgs Messages) AiProviderNeedsURL() string {
-	return Catalog.Format(msgs.locale, "aiProviderNeedsURL", nil)
 }
 
 // AiProviderNoConnection says "No provider selected"

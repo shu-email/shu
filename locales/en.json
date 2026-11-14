@@ -1,7 +1,6 @@
 {
   "@@locale": "en",
   "appName": "Shu",
-  "searchMail": "Search mail",
   "searchMailLabel": "Search mail",
   "sync": "Sync",
   "syncMail": "Sync mail",
@@ -189,12 +188,6 @@
   "junk": "Junk",
   "trash": "Trash",
   "labels": "Labels",
-  "work": "Work",
-  "personal": "Personal",
-  "receipts": "Receipts",
-  "travel": "Travel",
-  "filter": "Filter",
-  "filterMessages": "Filter messages",
   "more": "More",
   "moreActions": "More actions",
   "searchFolder": "Search {folder}",
@@ -219,16 +212,6 @@
   "replyAll": "Reply All",
   "forward": "Forward",
   "toMe": "to me",
-  "unreadCount": "{count, plural, =0 {No unread messages} one {# unread message} other {# unread messages}}",
-  "@unreadCount": {
-    "description": "The unread badge of a folder.",
-    "placeholders": {
-      "count": {
-        "type": "int",
-        "example": "3"
-      }
-    }
-  },
   "messageCount": "{count, plural, =0 {No messages} one {# message} other {# messages}}",
   "@messageCount": {
     "description": "The number of messages in a folder.",
@@ -252,8 +235,6 @@
   "host": "Server",
   "port": "Port",
   "security": "Security",
-  "tlsImplicit": "TLS",
-  "tlsStartTLS": "STARTTLS",
   "provider": "Provider",
   "providerCustom": "Custom",
   "testAndSave": "Test and save",
@@ -392,18 +373,13 @@
   "sentCopyWarning": "Sent, but the copy could not be saved.",
   "composeTitle": "New message",
   "replyTitle": "Reply",
-  "replyAllTitle": "Reply all",
   "forwardTitle": "Forward",
   "pendingSends": "Unsent messages",
   "deliveryUnknown": "{count, plural, one {# message has an unknown delivery state} other {# messages have an unknown delivery state}}",
   "deliveryUnknownDetail": "Shu did not resend automatically, to avoid sending twice.",
   "retrySend": "Retry",
   "dismiss": "Dismiss",
-  "star": "Star",
-  "unstar": "Unstar",
-  "searchMessages": "Search messages",
   "read": "Read",
-  "unread": "Unread",
   "@saveFailed": {
     "placeholders": {
       "error": {
@@ -2580,7 +2556,6 @@
     }
   },
   "rules": "Rules",
-  "rulesTip": "Rules that sort new mail",
   "mailRules": "Mail rules",
   "rulesTab": "Rules",
   "activityTab": "Activity",
@@ -3688,7 +3663,6 @@
     }
   },
   "moveToFolder": "Move to folder",
-  "moveToFolderEllipsis": "Move to folder…",
   "movedToFolder": "Moved to {name}",
   "@movedToFolder": {
     "description": "The note after messages were moved to a folder. On the undo banner.",
@@ -3786,7 +3760,6 @@
     }
   },
   "saveAllAttachments": "Save all",
-  "attachmentPreviewTitle": "Preview",
   "previewUnavailable": "There is no preview for this kind of file.",
   "openInDefaultApp": "Open in the default app",
   "previewFailed": "Could not read the attachment: {error}",
@@ -3927,24 +3900,8 @@
   "shortcutSettings": "Settings",
   "shortcutShortcuts": "Keyboard shortcuts",
   "shortcutClose": "Close a dialog or cancel",
-  "inviteTitle": "Meeting invitation",
   "inviteCanceled": "This meeting was canceled",
   "inviteUpdated": "This is an update to the invitation",
-  "inviteAllDay": "All day",
-  "inviteWhen": "{start} – {end}",
-  "@inviteWhen": {
-    "description": "The time range of a meeting.",
-    "placeholders": {
-      "start": {
-        "type": "String",
-        "example": "Thu, Mar 5, 10:00"
-      },
-      "end": {
-        "type": "String",
-        "example": "11:00"
-      }
-    }
-  },
   "inviteOrganizer": "Organizer: {name}",
   "@inviteOrganizer": {
     "description": "The organizer of a meeting.",
@@ -4085,7 +4042,6 @@
   "aiProviderModelDefault": "The chosen model always stays visible.",
   "aiProviderNoModels": "This provider reports no models yet. Type one below.",
   "aiProviderModelHint": "Type a model, or choose one this provider reports.",
-  "aiProviderOff": "Off",
   "aiProviderOffHint": "Its models leave the pickers. Its setup and key are kept.",
   "aiProviderEnabled": "Available in Shu",
   "aiProviderEffort": "Reasoning effort",
@@ -4152,7 +4108,6 @@
   "aiLocalToolOutdated": "Update required",
   "aiLocalToolUpdate": "Open update page",
   "aiLocalToolNotOfficial": "Shu is not affiliated with the tools’ vendors, and this is not an official integration. Using a subscription through another app may be restricted by the vendor’s terms; check them before relying on it.",
-  "aiProviderNeedsURL": "Server URL needed",
   "aiProviderNoConnection": "No provider selected",
   "aiProviderAdd": "Add API connection",
   "aiProviderEdit": "Edit…",

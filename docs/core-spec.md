@@ -550,8 +550,8 @@ lines). Keep the original HTML for the webview.
 - Add `"i18n": {"dir": "locales", "source": "en"}` to `mygo.json`.
 - Create `locales/en.json` and `locales/zh-Hans.json` (ARB-style ICU
   MessageFormat, with `@@locale` and `@key` metadata) covering every existing UI
-  string and the new strings kept in the UI, using plurals (unreadCount,
-  messageCount).
+  string and the new strings kept in the UI, using plurals (messageCount,
+  selectedCount).
 - Run `go tool mygo generate` to produce `locales/catalog_gen.go`; all views call
   the generated functions (for example `locales.Compose()`) instead of hardcoding.
 - The settings view offers a language choice: Follow system / English / 简体中文,

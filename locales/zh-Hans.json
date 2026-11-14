@@ -1,7 +1,6 @@
 {
   "@@locale": "zh-Hans",
   "appName": "Shu",
-  "searchMail": "搜索邮件",
   "searchMailLabel": "搜索邮件",
   "sync": "同步",
   "syncMail": "同步邮件",
@@ -65,12 +64,6 @@
   "junk": "垃圾邮件",
   "trash": "废纸篓",
   "labels": "标签",
-  "work": "工作",
-  "personal": "个人",
-  "receipts": "收据",
-  "travel": "旅行",
-  "filter": "筛选",
-  "filterMessages": "筛选邮件",
   "more": "更多",
   "moreActions": "更多操作",
   "searchFolder": "搜索{folder}",
@@ -86,7 +79,6 @@
   "replyAll": "全部回复",
   "forward": "转发",
   "toMe": "发给我",
-  "unreadCount": "{count, plural, other {# 封未读邮件}}",
   "messageCount": "{count, plural, =0 {没有邮件} other {# 封邮件}}",
   "accountsTitle": "账户",
   "accountsIntro": "添加你的邮箱账户以开始收发邮件。",
@@ -101,8 +93,6 @@
   "host": "服务器",
   "port": "端口",
   "security": "安全连接",
-  "tlsImplicit": "TLS",
-  "tlsStartTLS": "STARTTLS",
   "provider": "服务商",
   "providerCustom": "自定义",
   "testAndSave": "测试并保存",
@@ -174,18 +164,13 @@
   "sentCopyWarning": "已发送，但未能保存副本。",
   "composeTitle": "新邮件",
   "replyTitle": "回复",
-  "replyAllTitle": "全部回复",
   "forwardTitle": "转发",
   "pendingSends": "未发送的邮件",
   "deliveryUnknown": "{count, plural, other {# 封邮件的发送状态未知}}",
   "deliveryUnknownDetail": "为避免重复发送，Shu 没有自动重发。",
   "retrySend": "重试",
   "dismiss": "忽略",
-  "star": "加星标",
-  "unstar": "取消星标",
-  "searchMessages": "搜索邮件",
   "read": "已读",
-  "unread": "未读",
   "folders": "文件夹",
   "archiveMessage": "归档邮件",
   "deleteMessage": "删除邮件",
@@ -704,7 +689,6 @@
   "anyLabel": "任意标签",
   "filterLabelValue": "标签：{value}",
   "rules": "规则",
-  "rulesTip": "整理新邮件的规则",
   "mailRules": "邮件规则",
   "rulesTab": "规则",
   "activityTab": "活动记录",
@@ -1075,7 +1059,6 @@
     }
   },
   "moveToFolder": "移动到文件夹",
-  "moveToFolderEllipsis": "移动到文件夹…",
   "movedToFolder": "已移动到{name}",
   "@movedToFolder": {
     "description": "The note after messages were moved to a folder. On the undo banner.",
@@ -1173,7 +1156,6 @@
     }
   },
   "saveAllAttachments": "全部保存",
-  "attachmentPreviewTitle": "预览",
   "previewUnavailable": "此类文件没有预览。",
   "openInDefaultApp": "用默认应用打开",
   "previewFailed": "无法读取附件：{error}",
@@ -1314,24 +1296,8 @@
   "shortcutSettings": "设置",
   "shortcutShortcuts": "键盘快捷键",
   "shortcutClose": "关闭对话框或取消",
-  "inviteTitle": "会议邀请",
   "inviteCanceled": "此会议已取消",
   "inviteUpdated": "这是邀请的更新版本",
-  "inviteAllDay": "全天",
-  "inviteWhen": "{start} – {end}",
-  "@inviteWhen": {
-    "description": "The time range of a meeting.",
-    "placeholders": {
-      "start": {
-        "type": "String",
-        "example": "Thu, Mar 5, 10:00"
-      },
-      "end": {
-        "type": "String",
-        "example": "11:00"
-      }
-    }
-  },
   "inviteOrganizer": "组织者：{name}",
   "@inviteOrganizer": {
     "description": "The organizer of a meeting.",
@@ -1472,7 +1438,6 @@
   "aiProviderModelDefault": "已选定的模型始终可见。",
   "aiProviderNoModels": "此服务商尚未报告模型，可在下方手动输入。",
   "aiProviderModelHint": "输入模型，或选择此服务商报告的模型。",
-  "aiProviderOff": "已关闭",
   "aiProviderOffHint": "它的模型会从选择列表里消失，配置和密钥保留。",
   "aiProviderEnabled": "在 Shu 中可用",
   "aiProviderEffort": "推理强度",
@@ -1494,7 +1459,6 @@
   "aiLocalToolOutdated": "需要更新",
   "aiLocalToolUpdate": "打开更新页面",
   "aiLocalToolNotOfficial": "Shu 与这些工具的厂商没有关联，这也不是官方集成。通过其他应用使用订阅可能受厂商条款限制，依赖前请先确认。",
-  "aiProviderNeedsURL": "需要服务器地址",
   "aiProviderNoConnection": "未选择服务商",
   "aiProviderAdd": "添加 API 连接",
   "aiProviderEdit": "编辑…",

@@ -1362,6 +1362,9 @@ func (s *memStore) SetOutboxState(ctx context.Context, id, state, lastError stri
 	}
 	p.State = state
 	p.LastError = lastError
+	if state == StateSent || state == StateCancelled {
+		p.Raw = nil
+	}
 	s.outbox[id] = p
 	return nil
 }
@@ -1377,6 +1380,9 @@ func (s *memStore) ClaimOutbox(ctx context.Context, id, from, to string) (bool, 
 		return false, nil
 	}
 	p.State = to
+	if to == StateSent || to == StateCancelled {
+		p.Raw = nil
+	}
 	s.outbox[id] = p
 	return true, nil
 }

@@ -273,7 +273,8 @@ const (
 // PendingSend is an outbox entry. Raw is the message as it was built,
 // except for a message with attachments: that one is built again from its
 // envelope and the attached files when it is sent, so that their bytes
-// stay out of the database.
+// stay out of the database. An entry that reached a state no send
+// follows, sent or cancelled, keeps none.
 type PendingSend struct {
 	ID        string    `json:"id"`
 	AccountID string    `json:"accountID"`

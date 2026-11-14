@@ -222,8 +222,8 @@ func TestSendRecordsOutboxAndSentCopy(t *testing.T) {
 	if pending.State != StateSent {
 		t.Errorf("outbox state = %q", pending.State)
 	}
-	if string(pending.Raw) == "" {
-		t.Error("outbox kept no raw message")
+	if len(pending.Raw) != 0 {
+		t.Errorf("outbox kept %d bytes of a delivered message", len(pending.Raw))
 	}
 	if got, _ := secrets.Get(PasswordKey(a.ID)); string(got) != "secret" {
 		t.Errorf("password = %q", got)

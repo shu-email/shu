@@ -60,9 +60,13 @@ Windows and Linux. It is written in Go with
   outbox entry names it. `Service.SyncDraftEdits`, the sync views ask for
   on a pause in the typing, leaves a draft with large attachments for
   `SyncDrafts`.
-- The outbox keeps a message without attachments as its bytes. For one
-  with attachments it keeps the envelope and the references to the
-  stored files, and builds the message again for each try.
+- The outbox keeps a message without attachments as its bytes while it
+  waits to go. For one with attachments it keeps the envelope and the
+  references to the stored files, and builds the message again for each
+  try. An entry that reaches a state no send follows, sent or cancelled,
+  drops the bytes it kept for delivery (`Store.SetOutboxState`,
+  `Store.ClaimOutbox`), and the row stays for what it says of the
+  message; a failed or waiting entry keeps them, as it may still go.
 - A message sent with a delay waits it out in the outbox, `scheduled`
   with the time it is due, so that it outlives the app: `Service.Schedule`
   writes it, `SendScheduled` sends it when it is due, `Unsend` takes it

@@ -9736,18 +9736,150 @@ func (msgs Messages) SecurityLinkTitle() string {
 	return Catalog.Format(msgs.locale, "securityLinkTitle", nil)
 }
 
-// SecurityLinkMessage says "The link goes to:\n\n{url}"
+// SecurityLinkMessage says "The link goes to:\n\n{domain}\n\n{url}"
 // in the language the app shows.
 //
-// Shows the real destination of a link before it opens.
-func SecurityLinkMessage(url string) string { return In(i18n.Locale()).SecurityLinkMessage(url) }
+// Shows the real destination of a link before it opens: the registrable
+// domain first, then the address as written.
+func SecurityLinkMessage(domain string, url string) string {
+	return In(i18n.Locale()).SecurityLinkMessage(domain, url)
+}
 
-// SecurityLinkMessage says "The link goes to:\n\n{url}"
+// SecurityLinkMessage says "The link goes to:\n\n{domain}\n\n{url}"
 // in the language of msgs.
 //
-// Shows the real destination of a link before it opens.
-func (msgs Messages) SecurityLinkMessage(url string) string {
-	return Catalog.Format(msgs.locale, "securityLinkMessage", map[string]any{"url": url})
+// Shows the real destination of a link before it opens: the registrable
+// domain first, then the address as written.
+func (msgs Messages) SecurityLinkMessage(domain string, url string) string {
+	return Catalog.Format(msgs.locale, "securityLinkMessage", map[string]any{"domain": domain, "url": url})
+}
+
+// SecurityLinkWarnings says "Signs worth checking:"
+// in the language the app shows.
+func SecurityLinkWarnings() string { return In(i18n.Locale()).SecurityLinkWarnings() }
+
+// SecurityLinkWarnings says "Signs worth checking:"
+// in the language of msgs.
+func (msgs Messages) SecurityLinkWarnings() string {
+	return Catalog.Format(msgs.locale, "securityLinkWarnings", nil)
+}
+
+// SecurityLinkWarnScheme says "The link is not a web address but {scheme}."
+// in the language the app shows.
+//
+// A link that would not open a web page.
+func SecurityLinkWarnScheme(scheme string) string {
+	return In(i18n.Locale()).SecurityLinkWarnScheme(scheme)
+}
+
+// SecurityLinkWarnScheme says "The link is not a web address but {scheme}."
+// in the language of msgs.
+//
+// A link that would not open a web page.
+func (msgs Messages) SecurityLinkWarnScheme(scheme string) string {
+	return Catalog.Format(msgs.locale, "securityLinkWarnScheme", map[string]any{"scheme": scheme})
+}
+
+// SecurityLinkWarnUserinfo says "“{name}” before @ is not the site. The site is {host}."
+// in the language the app shows.
+//
+// A name before @ in the address, which is not the host the link goes to.
+func SecurityLinkWarnUserinfo(name string, host string) string {
+	return In(i18n.Locale()).SecurityLinkWarnUserinfo(name, host)
+}
+
+// SecurityLinkWarnUserinfo says "“{name}” before @ is not the site. The site is {host}."
+// in the language of msgs.
+//
+// A name before @ in the address, which is not the host the link goes to.
+func (msgs Messages) SecurityLinkWarnUserinfo(name string, host string) string {
+	return Catalog.Format(msgs.locale, "securityLinkWarnUserinfo", map[string]any{"name": name, "host": host})
+}
+
+// SecurityLinkWarnIP says "The site is an IP address, not a name."
+// in the language the app shows.
+func SecurityLinkWarnIP() string { return In(i18n.Locale()).SecurityLinkWarnIP() }
+
+// SecurityLinkWarnIP says "The site is an IP address, not a name."
+// in the language of msgs.
+func (msgs Messages) SecurityLinkWarnIP() string {
+	return Catalog.Format(msgs.locale, "securityLinkWarnIP", nil)
+}
+
+// SecurityLinkWarnLookalike says "The address starts with “{name}”, which looks like another site. The site is {domain}."
+// in the language the app shows.
+//
+// A site name buried in the subdomain labels before the real registrable
+// domain.
+func SecurityLinkWarnLookalike(name string, domain string) string {
+	return In(i18n.Locale()).SecurityLinkWarnLookalike(name, domain)
+}
+
+// SecurityLinkWarnLookalike says "The address starts with “{name}”, which looks like another site. The site is {domain}."
+// in the language of msgs.
+//
+// A site name buried in the subdomain labels before the real registrable
+// domain.
+func (msgs Messages) SecurityLinkWarnLookalike(name string, domain string) string {
+	return Catalog.Format(msgs.locale, "securityLinkWarnLookalike", map[string]any{"name": name, "domain": domain})
+}
+
+// SecurityLinkWarnPort says "The site uses port {port}, not the usual one."
+// in the language the app shows.
+//
+// A link on a port other than 80 or 443.
+func SecurityLinkWarnPort(port string) string { return In(i18n.Locale()).SecurityLinkWarnPort(port) }
+
+// SecurityLinkWarnPort says "The site uses port {port}, not the usual one."
+// in the language of msgs.
+//
+// A link on a port other than 80 or 443.
+func (msgs Messages) SecurityLinkWarnPort(port string) string {
+	return Catalog.Format(msgs.locale, "securityLinkWarnPort", map[string]any{"port": port})
+}
+
+// SecurityLinkWarnTrailingDot says "The site name ends with a dot, which can hide where it ends."
+// in the language the app shows.
+func SecurityLinkWarnTrailingDot() string { return In(i18n.Locale()).SecurityLinkWarnTrailingDot() }
+
+// SecurityLinkWarnTrailingDot says "The site name ends with a dot, which can hide where it ends."
+// in the language of msgs.
+func (msgs Messages) SecurityLinkWarnTrailingDot() string {
+	return Catalog.Format(msgs.locale, "securityLinkWarnTrailingDot", nil)
+}
+
+// SecurityLinkWarnSubdomains says "{count} parts of the name come before {domain}, which can hide the real site."
+// in the language the app shows.
+//
+// A host name with many labels before its registrable domain.
+func SecurityLinkWarnSubdomains(count int, domain string) string {
+	return In(i18n.Locale()).SecurityLinkWarnSubdomains(count, domain)
+}
+
+// SecurityLinkWarnSubdomains says "{count} parts of the name come before {domain}, which can hide the real site."
+// in the language of msgs.
+//
+// A host name with many labels before its registrable domain.
+func (msgs Messages) SecurityLinkWarnSubdomains(count int, domain string) string {
+	return Catalog.Format(msgs.locale, "securityLinkWarnSubdomains", map[string]any{"count": count, "domain": domain})
+}
+
+// SecurityLinkWarnLetters says "The name “{name}” is written with letters that can imitate another site."
+// in the language the app shows.
+//
+// A host name written with letters other than the plain Latin ones, as
+// lookalike letters are.
+func SecurityLinkWarnLetters(name string) string {
+	return In(i18n.Locale()).SecurityLinkWarnLetters(name)
+}
+
+// SecurityLinkWarnLetters says "The name “{name}” is written with letters that can imitate another site."
+// in the language of msgs.
+//
+// A host name written with letters other than the plain Latin ones, as
+// lookalike letters are.
+func (msgs Messages) SecurityLinkWarnLetters(name string) string {
+	return Catalog.Format(msgs.locale, "securityLinkWarnLetters", map[string]any{"name": name})
 }
 
 // SecurityLinkOpen says "Open link"

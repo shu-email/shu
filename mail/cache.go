@@ -18,6 +18,16 @@ import (
 // them.
 const CacheVersion = 1
 
+// PrepareCache brings the parsed cache to this build's CacheVersion and
+// sweeps the files no row names. The app runs it as it starts, before it
+// reads any mail.
+func (s *Service) PrepareCache(ctx context.Context) error {
+	if _, err := s.store.PrepareCache(ctx, CacheVersion); err != nil {
+		return err
+	}
+	return s.SweepCache(ctx)
+}
+
 const (
 	// attachmentCacheDir is the directory of the received attachments'
 	// bytes, one file per content hash.
@@ -35,16 +45,6 @@ const (
 	// checks that its context is still alive.
 	sweepStep = 512
 )
-
-// PrepareCache brings the parsed cache to this build's CacheVersion and
-// sweeps the files no row names. The app runs it as it starts, before it
-// reads any mail.
-func (s *Service) PrepareCache(ctx context.Context) error {
-	if _, err := s.store.PrepareCache(ctx, CacheVersion); err != nil {
-		return err
-	}
-	return s.SweepCache(ctx)
-}
 
 // SweepCache removes what the cache no longer names: attachment files and
 // half-copied downloads, and the temporary files an earlier run left for

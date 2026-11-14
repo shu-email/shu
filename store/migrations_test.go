@@ -95,6 +95,10 @@ func seedAtVersion(v int) []string {
 		columns += `, security`
 		values += `, '` + encodeJSON(mail.ParseSecurity(baselineHeaders)) + `'`
 	}
+	// An outbox entry sent by an older build, which kept the raw message
+	// it delivered with until v25 dropped it.
+	stmts = append(stmts, `INSERT INTO outbox (id, account_id, raw, envelope_json, state, attempts, created_at)
+		VALUES ('o1', 'a1', 'Subject: old', '{"to":[{"email":"bob@example.org"}]}', 'sent', 1, 1700000000)`)
 	return append(stmts, fmt.Sprintf(`INSERT INTO messages (%s) VALUES (%s)`, columns, values))
 }
 
@@ -195,6 +199,17 @@ func checkUpgradedData(t *testing.T, s *Store, v int) {
 		t.Errorf("v%d: the headers kept said nothing of the message after the migration", v)
 	} else if msg.Security.Trust.Verdict != mail.AuthPassed || msg.Security.ListUnsubscribe == "" {
 		t.Errorf("v%d: security = %+v, want a pass and its list", v, msg.Security)
+	}
+	// An entry that had been sent kept no raw message once v25 ran.
+	rows, err = s.query(ctx, `SELECT raw, state FROM outbox WHERE id = 'o1'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows.Values) != 1 {
+		t.Fatalf("v%d: %d outbox entries after the migration, want 1", v, len(rows.Values))
+	}
+	if raw, state := text(rows.Values[0][0]), text(rows.Values[0][1]); raw != "" || state != "sent" {
+		t.Errorf("v%d: sent entry = %q bytes in state %q, want no bytes and its state", v, raw, state)
 	}
 	// The address book was made from the mail already cached, once.
 	if v < 11 {

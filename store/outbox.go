@@ -32,7 +32,8 @@ func (s *Store) EnqueueOutbox(ctx context.Context, p mail.PendingSend) error {
 const outboxColumns = `id, account_id, raw, envelope_json, state, attempts,
 	COALESCE(last_error, ''), created_at, sent_at, due_at, draft_id`
 
-// Outbox reads one entry with its raw message.
+// Outbox reads one entry. Its raw message is gone once the entry reached
+// a state no send follows, sent or cancelled.
 func (s *Store) Outbox(ctx context.Context, id string) (mail.PendingSend, error) {
 	rows, err := s.query(ctx, `SELECT `+outboxColumns+` FROM outbox WHERE id = ?`, id)
 	if err != nil {
@@ -108,21 +109,42 @@ func (s *Store) ScheduledSends(ctx context.Context) ([]mail.PendingSend, error) 
 }
 
 // SetOutboxState records a state transition. Recording a message as sent
-// counts its recipients in the address book, in the same transaction.
+// counts its recipients in the address book, in the same transaction. An
+// entry that reaches a state no send follows, sent or cancelled, drops the
+// raw message it kept for delivery: the Sent copy is made from the bytes
+// the send already holds, and the row stays for what it says of the
+// message. A failed or waiting entry keeps its bytes, as it may still go.
 func (s *Store) SetOutboxState(ctx context.Context, id, state, lastError string) error {
+	drop := ""
+	if terminalOutbox(state) {
+		drop = `, raw = ''`
+	}
 	if state != mail.StateSent {
-		_, err := s.exec(ctx, `UPDATE outbox SET state = ?, last_error = ? WHERE id = ?`, state, lastError, id)
+		_, err := s.exec(ctx, `UPDATE outbox SET state = ?, last_error = ?`+drop+` WHERE id = ?`, state, lastError, id)
 		return err
 	}
-	sent := stmt(`UPDATE outbox SET state = ?, last_error = NULL, sent_at = unixepoch(), attempts = attempts + 1 WHERE id = ?`, state, id)
+	sent := stmt(`UPDATE outbox SET state = ?, last_error = NULL, sent_at = unixepoch(),
+		attempts = attempts + 1`+drop+` WHERE id = ?`, state, id)
 	return s.writeCounting(ctx, []stmtType{sent}, func() ([]stmtType, error) { return s.countSent(ctx, id) })
+}
+
+// terminalOutbox reports whether no send follows a state, so that the
+// entry never sends again and the bytes it kept for delivery are dead.
+func terminalOutbox(state string) bool {
+	return state == mail.StateSent || state == mail.StateCancelled
 }
 
 // ClaimOutbox moves an entry from one state to another if it is in the
 // first, and reports whether it was. It is one statement, so of callers
-// that claim an entry from the same state one alone gets true.
+// that claim an entry from the same state one alone gets true. A claim
+// into a state no send follows drops the entry's bytes, as SetOutboxState
+// does.
 func (s *Store) ClaimOutbox(ctx context.Context, id, from, to string) (bool, error) {
-	res, err := s.exec(ctx, `UPDATE outbox SET state = ? WHERE id = ? AND state = ?`, to, id, from)
+	drop := ""
+	if terminalOutbox(to) {
+		drop = `, raw = ''`
+	}
+	res, err := s.exec(ctx, `UPDATE outbox SET state = ?`+drop+` WHERE id = ? AND state = ?`, to, id, from)
 	if err != nil {
 		return false, err
 	}

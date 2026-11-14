@@ -557,6 +557,12 @@ var migrations = [][]string{
 	// conversation once, not twice, when one of its aggregates' columns
 	// changes (see thread_aggregates.go).
 	threadAggregateUpdateMigration(),
+	// v25: an outbox entry that reached a state no send follows, sent or
+	// cancelled, no longer keeps the raw message it held for delivery; the
+	// rows an older build wrote drop it too.
+	{
+		`UPDATE outbox SET raw = '' WHERE raw <> '' AND state IN ('sent', 'cancelled')`,
+	},
 }
 
 // backfills compute, from the rows of the version before, statements a

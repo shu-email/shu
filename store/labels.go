@@ -395,8 +395,15 @@ func keywordRows(msgs []mail.Message, flags []mail.FlagUpdate) []keywordRow {
 // those of its keywords, a keyword no label of the account has becoming
 // one. A keyword whose label was deleted at or after since, when the
 // fetch began, was read before the deletion took it off the server: it
-// is left out. The caller holds threadMu.
-func (s *Store) keywordLabels(ctx context.Context, accountID string, folderID int64, rows []keywordRow, since time.Time) ([]stmtType, error) {
+// is left out. Only a label a message gains or loses is written, so that
+// a sync that read the same keywords again writes nothing.
+//
+// reset says the folder's rows are replaced whole in this batch: no label
+// of theirs is left to compare with, so every label the messages carry is
+// written. The caller must say it rather than the write discover it,
+// because the statements are made before the transaction that applies
+// them runs. The caller holds threadMu.
+func (s *Store) keywordLabels(ctx context.Context, accountID string, folderID int64, rows []keywordRow, since time.Time, reset bool) ([]stmtType, error) {
 	if len(rows) == 0 {
 		return nil, nil
 	}
@@ -404,32 +411,108 @@ func (s *Store) keywordLabels(ctx context.Context, accountID string, folderID in
 	if err != nil {
 		return nil, err
 	}
+	// wanted is what the server said of each message by keyword in lower
+	// case, a keyword being its label's whatever case it is in, with the
+	// keyword as the server wrote it. A message read twice in a batch
+	// keeps both readings.
+	var uids []mail.UID
+	wanted := make(map[mail.UID]map[string]string, len(rows))
 	var stmts []stmtType
-	uids := make([]mail.UID, 0, len(rows))
-	var pairs [][]any
 	for _, r := range rows {
-		uids = append(uids, r.uid)
+		if _, ok := wanted[r.uid]; !ok {
+			uids = append(uids, r.uid)
+			wanted[r.uid] = map[string]string{}
+		}
 		for _, keyword := range r.keywords {
 			if !mail.IsLabelKeyword(keyword) || s.goneSince(accountID, keyword, since) {
 				continue
 			}
-			if !set.hasKeyword(strings.ToLower(keyword)) {
+			lower := strings.ToLower(keyword)
+			if !set.hasKeyword(lower) {
 				stmts = append(stmts, set.fromKeyword(accountID, keyword))
 			}
-			pairs = append(pairs, []any{int64(r.uid), keyword})
+			wanted[r.uid][lower] = keyword
 		}
 	}
-	stmts = append(stmts, stmt(`DELETE FROM message_labels WHERE message_id IN (
-		SELECT id FROM messages WHERE folder_id = ? AND server_uid IN (SELECT value FROM json_each(?)))`,
-		folderID, jsonText(uids)))
-	if len(pairs) > 0 {
-		stmts = append(stmts, stmt(`INSERT OR IGNORE INTO message_labels (message_id, label_id)
-			SELECT m.id, l.id FROM json_each(?) j
-				JOIN messages m ON m.folder_id = ? AND m.server_uid = j.value ->> 0
-				JOIN labels l ON l.account_id = ? AND l.keyword = j.value ->> 1 COLLATE NOCASE`,
-			jsonText(pairs), folderID, accountID))
+	var have map[mail.UID]map[string]string
+	if !reset {
+		var err error
+		if have, err = s.keywordState(ctx, folderID, uids, set); err != nil {
+			return nil, err
+		}
+	}
+	var drops, adds [][]any
+	for _, uid := range uids {
+		for lower, keyword := range have[uid] {
+			if _, ok := wanted[uid][lower]; !ok {
+				drops = append(drops, []any{int64(uid), keyword})
+			}
+		}
+		for lower, keyword := range wanted[uid] {
+			if _, ok := have[uid][lower]; !ok {
+				adds = append(adds, []any{int64(uid), keyword})
+			}
+		}
+	}
+	if len(drops) > 0 {
+		stmts = append(stmts, stmt(labelDrops, jsonText(drops), folderID, accountID))
+	}
+	if len(adds) > 0 {
+		stmts = append(stmts, stmt(labelAdds, jsonText(adds), folderID, accountID))
 	}
 	return stmts, nil
+}
+
+// labelPairs names the message of the folder and the label of the account
+// each (uid, keyword) pair of a JSON list stands for, as a query of that
+// list, the folder and the account. The joins go from the list itself, one
+// index lookup for the message and one for the label, so a change of a few
+// labels costs that and not the folder's mail.
+const labelPairs = ` FROM json_each(?) j
+		CROSS JOIN messages m
+		CROSS JOIN labels l
+		WHERE m.folder_id = ? AND m.server_uid = j.value ->> 0
+			AND l.account_id = ? AND l.keyword = j.value ->> 1 COLLATE NOCASE`
+
+// labelDrops takes the labels in labelPairs' list off their messages, and
+// labelAdds puts them on.
+const (
+	labelDrops = `DELETE FROM message_labels WHERE (message_id, label_id) IN (
+		SELECT m.id, l.id` + labelPairs + `)`
+	labelAdds = `INSERT OR IGNORE INTO message_labels (message_id, label_id)
+		SELECT m.id, l.id` + labelPairs
+)
+
+// keywordState reads the keywords the cache has of each message of a
+// folder as the server keeps them, by keyword in lower case with the
+// keyword the label has. The account's labels, which the caller has just
+// read, name the keywords.
+func (s *Store) keywordState(ctx context.Context, folderID int64, uids []mail.UID, labels *labelSet) (map[mail.UID]map[string]string, error) {
+	out := make(map[mail.UID]map[string]string, len(uids))
+	if len(uids) == 0 {
+		return out, nil
+	}
+	rows, err := s.query(ctx, `SELECT m.server_uid, ml.label_id FROM messages m
+		JOIN message_labels ml ON ml.message_id = m.id
+		WHERE m.folder_id = ? AND m.server_uid IN (SELECT value FROM json_each(?))`,
+		folderID, jsonText(uids))
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows.Values {
+		label, ok := labels.byID[mail.LabelID(number(r[1]))]
+		if !ok {
+			continue
+		}
+		uid := mail.UID(number(r[0]))
+		set := out[uid]
+		if set == nil {
+			set = map[string]string{}
+			out[uid] = set
+		}
+		set[strings.ToLower(label.Keyword)] = label.Keyword
+	}
+	return out, nil
 }
 
 // withLabels gives each message of list, whose rows are ids, the labels

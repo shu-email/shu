@@ -270,8 +270,9 @@ func (s *Store) SaveMessage(ctx context.Context, accountID, folder string, m mai
 		}
 		// A row written before keeps its labels, as it keeps a flag set:
 		// a label just put on it may not have reached the server this
-		// fetch read.
-		labels, err := s.keywordLabels(ctx, accountID, folderID, keywordRows([]mail.Message{m}, nil), time.Time{})
+		// fetch read. A row this fetch makes has none yet, so there is
+		// nothing to compare with.
+		labels, err := s.keywordLabels(ctx, accountID, folderID, keywordRows([]mail.Message{m}, nil), time.Time{}, id == 0)
 		if err != nil {
 			return err
 		}
@@ -385,7 +386,7 @@ func (s *Store) ApplySync(ctx context.Context, accountID string, b mail.SyncBatc
 			AND (seen <> ? OR flagged <> ?)`,
 			boolInt(seen), boolInt(flagged), folderID, jsonText(uids), boolInt(seen), boolInt(flagged)))
 	}
-	labels, err := s.keywordLabels(ctx, accountID, folderID, keywordRows(b.Messages, b.Flags), b.Folder.SyncedAt)
+	labels, err := s.keywordLabels(ctx, accountID, folderID, keywordRows(b.Messages, b.Flags), b.Folder.SyncedAt, b.Reset)
 	if err != nil {
 		return err
 	}
@@ -475,7 +476,7 @@ func (s *Store) ApplyOlder(ctx context.Context, accountID string, b mail.OlderBa
 	for i, m := range b.Messages {
 		stmts = append(stmts, upsertHeader(folderID, m, plan.find(threads[i])))
 	}
-	labels, err := s.keywordLabels(ctx, accountID, folderID, keywordRows(b.Messages, nil), time.Time{})
+	labels, err := s.keywordLabels(ctx, accountID, folderID, keywordRows(b.Messages, nil), time.Time{}, false)
 	if err != nil {
 		return err
 	}

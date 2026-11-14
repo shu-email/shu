@@ -280,6 +280,156 @@ func TestSyncMakesLabelsOfKeywords(t *testing.T) {
 	checkThreadRows(t, s)
 }
 
+// A sync writes a message's labels only as they changed: one that read
+// the same keywords again writes none, and one that read another writes
+// that one alone. A refresh reads the keywords of the whole window every
+// time, so writing them all again would rewrite every message's labels
+// on every sync.
+func TestSyncWritesOnlyChangedLabels(t *testing.T) {
+	ctx := context.Background()
+	s := openTest(t)
+	addAccount(t, s, "a1")
+	addFolders(t, s, "a1", "INBOX")
+	if _, err := s.CreateLabel(ctx, mail.Label{Account: "a1", Name: "Work", Keyword: "Work"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateLabel(ctx, mail.Label{Account: "a1", Name: "Clients", Keyword: "Clients"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ApplySync(ctx, "a1", mail.SyncBatch{
+		Folder: mail.Folder{Name: "INBOX", UIDValidity: 1, LastUID: 1},
+		Messages: []mail.Message{
+			labelled(1, "one@x", "One", 1, "Work"),
+			labelled(2, "two@x", "Two", 2, "Clients"),
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`CREATE TABLE label_writes (ins INTEGER, del INTEGER)`,
+		`INSERT INTO label_writes VALUES (0, 0)`,
+		`CREATE TRIGGER test_label_ins AFTER INSERT ON message_labels
+			BEGIN UPDATE label_writes SET ins = ins + 1; END`,
+		`CREATE TRIGGER test_label_del AFTER DELETE ON message_labels
+			BEGIN UPDATE label_writes SET del = del + 1; END`,
+	} {
+		if _, err := s.exec(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writes := func() (ins, del int64) {
+		t.Helper()
+		rows, err := s.query(ctx, `SELECT ins, del FROM label_writes`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return number(rows.Values[0][0]), number(rows.Values[0][1])
+	}
+	refresh := func(keywords []string) {
+		t.Helper()
+		if _, err := s.exec(ctx, `UPDATE label_writes SET ins = 0, del = 0`); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.ApplySync(ctx, "a1", mail.SyncBatch{
+			Folder: mail.Folder{Name: "INBOX", UIDValidity: 1, LastUID: 1},
+			Flags:  []mail.FlagUpdate{{UID: 1, Keywords: keywords}},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	refresh([]string{"work"})
+	if ins, del := writes(); ins != 0 || del != 0 {
+		t.Errorf("the same keywords written again: %d inserts, %d deletes", ins, del)
+	}
+	refresh([]string{"Work", "CLIENTS"})
+	if ins, del := writes(); ins != 1 || del != 0 {
+		t.Errorf("a label gained wrote %d inserts, %d deletes", ins, del)
+	}
+	if got := labelsOn(t, s, "a1", "INBOX", 1); !slices.Equal(got, []string{"Work", "Clients"}) {
+		t.Errorf("One has %v", got)
+	}
+	refresh([]string{"Clients"})
+	if ins, del := writes(); ins != 0 || del != 1 {
+		t.Errorf("a label lost wrote %d inserts, %d deletes", ins, del)
+	}
+	if got := labelsOn(t, s, "a1", "INBOX", 1); !slices.Equal(got, []string{"Clients"}) {
+		t.Errorf("One has %v", got)
+	}
+	// A message read with no keyword loses those it had.
+	refresh([]string{})
+	if ins, del := writes(); ins != 0 || del != 1 {
+		t.Errorf("no keywords wrote %d inserts, %d deletes", ins, del)
+	}
+	if got := labelsOn(t, s, "a1", "INBOX", 1); len(got) != 0 {
+		t.Errorf("One has %v", got)
+	}
+	// A reset replaces the folder's rows, and with them their labels: the
+	// message carries its keyword again only because its new row is
+	// labelled, not because the cache says it had it.
+	refresh([]string{"Work"})
+	if err := s.ApplySync(ctx, "a1", mail.SyncBatch{Reset: true,
+		Folder:   mail.Folder{Name: "INBOX", UIDValidity: 2, LastUID: 2},
+		Messages: []mail.Message{labelled(1, "one@x", "One", 1, "Work"), labelled(2, "two@x", "Two", 2, "Clients")},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := labelsOn(t, s, "a1", "INBOX", 1); !slices.Equal(got, []string{"Work"}) {
+		t.Errorf("after a reset, One has %v", got)
+	}
+	// One refresh that takes a label off each of two messages and puts
+	// another on it writes those four changes, and takes no label off a
+	// message that keeps it.
+	if _, err := s.exec(ctx, `UPDATE label_writes SET ins = 0, del = 0`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ApplySync(ctx, "a1", mail.SyncBatch{
+		Folder: mail.Folder{Name: "INBOX", UIDValidity: 2, LastUID: 2},
+		Flags: []mail.FlagUpdate{
+			{UID: 1, Keywords: []string{"Clients"}},
+			{UID: 2, Keywords: []string{"Work"}},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if ins, del := writes(); ins != 2 || del != 2 {
+		t.Errorf("a swap wrote %d inserts, %d deletes; want 2 and 2", ins, del)
+	}
+	for uid, want := range map[mail.UID]string{1: "Clients", 2: "Work"} {
+		if got := labelsOn(t, s, "a1", "INBOX", uid); !slices.Equal(got, []string{want}) {
+			t.Errorf("message %d has %v, want %s", uid, got, want)
+		}
+	}
+}
+
+// A refresh that changes labels reads the pairs it writes from its own
+// list, one index lookup each, not by pairing the folder's mail with the
+// account's labels.
+func TestLabelChangesReadTheirPairsByIndex(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	for name, query := range map[string]string{"drops": labelDrops, "adds": labelAdds} {
+		rows, err := s.query(ctx, `EXPLAIN QUERY PLAN `+query, "[[1,\"Work\"]]", 1, "a1")
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		var steps []string
+		for _, r := range rows.Values {
+			steps = append(steps, text(r[len(r)-1]))
+		}
+		plan := strings.Join(steps, "\n")
+		at := strings.Index(plan, "SCAN j VIRTUAL TABLE")
+		message, label := strings.Index(plan, "SEARCH m USING"), strings.Index(plan, "SEARCH l USING")
+		if at < 0 || message < at || label < at {
+			t.Errorf("%s does not read its pairs from the list it is given, then look them up:\n%s", name, plan)
+		}
+		for _, scan := range []string{"SCAN m", "SCAN l", "SCAN message_labels"} {
+			if strings.Contains(plan, scan) {
+				t.Errorf("%s reads %s whole:\n%s", name, scan, plan)
+			}
+		}
+	}
+}
+
 // A sync that began before a label was deleted does not make it again of
 // the keyword it read; one that began after does.
 func TestSyncAfterADeletedLabel(t *testing.T) {

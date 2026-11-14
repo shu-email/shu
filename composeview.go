@@ -328,13 +328,19 @@ func (cs *composeState) writeAt() int {
 }
 
 // identityLabel is an identity as the From picker names it: its name and
-// address, written for people rather than for a header. An account has
-// an address once, so the labels tell its identities apart.
+// address, written for people rather than for a header. A name holding a
+// comma, an angle bracket or a quote would read as more than one
+// address, so it is quoted by hand: a header's encoder would turn a name
+// that is not all ASCII into an encoded word nobody reads.
 func identityLabel(id mail.Identity) string {
-	if strings.TrimSpace(id.Name) == "" {
+	name := strings.TrimSpace(id.Name)
+	if name == "" {
 		return id.Email
 	}
-	return id.Name + " <" + id.Email + ">"
+	if strings.ContainsAny(name, `,<>"`) {
+		name = `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(name) + `"`
+	}
+	return name + " <" + id.Email + ">"
 }
 
 // fromRow chooses the identity the message goes from: the account's own
@@ -412,11 +418,7 @@ func (cs *composeState) draftNote(t *ui.Theme) (string, *ui.SVG, ui.Color) {
 
 // attachmentBytes is the size of the files attached, together.
 func (cs *composeState) attachmentBytes() int64 {
-	var total int64
-	for _, att := range cs.attachments {
-		total += att.Size
-	}
-	return total
+	return mail.Draft{Attachments: cs.attachments}.AttachmentBytes()
 }
 
 // conflictNotice says that another mail client changed the draft, and

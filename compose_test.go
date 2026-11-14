@@ -690,3 +690,26 @@ func TestAIDraftGoesWhereTheReplyIsWritten(t *testing.T) {
 		t.Errorf("drafted into an edited quote = %q", cs.body)
 	}
 }
+
+// A From label quotes a name holding what a list of addresses is written
+// with, so that an alias named "Doe, Jane" does not read as two
+// addresses, and leaves a name such as "Ann Lee (Lab)" readable.
+func TestFromLabelQuotesAwkwardNames(t *testing.T) {
+	if got, want := identityLabel(mail.Identity{Name: "Doe, Jane", Email: "jane@example.com"}),
+		`"Doe, Jane" <jane@example.com>`; got != want {
+		t.Errorf("identityLabel = %q, want %q", got, want)
+	}
+	if got, want := identityLabel(mail.Identity{Name: "Ann Lee (Lab)", Email: "ann@lab.example.org"}),
+		"Ann Lee (Lab) <ann@lab.example.org>"; got != want {
+		t.Errorf("identityLabel = %q, want %q", got, want)
+	}
+	// A quoted name is quoted, not encoded: a name that is not all ASCII
+	// is still read by people.
+	if got, want := identityLabel(mail.Identity{Name: "张,伟", Email: "zhang@example.com"}),
+		`"张,伟" <zhang@example.com>`; got != want {
+		t.Errorf("identityLabel = %q, want %q", got, want)
+	}
+	if got, want := identityLabel(mail.Identity{Name: "  ", Email: "x@example.com"}), "x@example.com"; got != want {
+		t.Errorf("identityLabel = %q, want %q", got, want)
+	}
+}

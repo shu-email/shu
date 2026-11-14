@@ -1,0 +1,8 @@
+<!-- Event handlers on any element, the body and the root included, are
+     removed: no attribute beginning with "on" survives. -->
+<html><body onload="steal()" onpageshow="steal()">
+<!-- drop: steal() -->
+<!-- keep: Handled -->
+<p onclick="steal()" onmouseover="steal()">Handled</p>
+<img src="data:image/png;base64,AAAA" onerror="steal()" alt="ok">
+</body></html>

@@ -508,6 +508,11 @@ real clock.
   `ui.NewTester` has its own clock; advance it with `tt.Advance`.
 - For rendering changes, check the light and dark appearances, not just
   the default one.
+- The HTML sanitizer's regression corpus is `testdata/html/`
+  (`TestHTMLCorpus`). Every `*.html` fixture is rendered both blocked and
+  allowed; its `<!-- keep: … -->` and `<!-- drop: … -->` comment lines say
+  what must survive and must not, and the test also holds every document
+  to the policy. A new dangerous case is a new fixture.
 - Mail tests run against fake IMAP/SMTP servers only (`internal/fakemail`)
   — never a real account, not even a test mailbox on a real provider.
   The dev build's seeded account (`seed_e2e.go`) runs on the same

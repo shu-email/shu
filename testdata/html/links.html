@@ -1,0 +1,16 @@
+<!-- A link may leave the reading pane only when it names the web, and
+     then the window asks the user first. Every other scheme is no link. -->
+<html><body>
+<!-- keep: href="https://example.com/about" -->
+<!-- drop: javascript: -->
+<!-- drop: vbscript: -->
+<!-- drop: data:text/html -->
+<!-- drop: file: -->
+<!-- drop: about:blank -->
+<p>Read <a href="https://example.com/about">the report</a>.</p>
+<p><a href="javascript:alert(1)">JavaScript</a></p>
+<p><a href="vbscript:msgbox(1)">VBScript</a></p>
+<p><a href="data:text/html,<script>alert(1)</script>">Data</a></p>
+<p><a href="file:///etc/passwd">File</a></p>
+<p><a href="about:blank">About</a></p>
+</body></html>

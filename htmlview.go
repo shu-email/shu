@@ -168,6 +168,11 @@ func sanitizeNode(n *html.Node, allowRemote bool) {
 			atom.Template, atom.Meta:
 			removeNode(n)
 			return
+		case atom.Svg, atom.Math:
+			// Foreign content carries script and links of its own, which
+			// the policy does not describe: none of it is a message.
+			removeNode(n)
+			return
 		}
 	}
 	for child := n.FirstChild; child != nil; {
@@ -180,7 +185,9 @@ func sanitizeNode(n *html.Node, allowRemote bool) {
 	}
 }
 
-// safeAttributes drops event handlers, form actions and unsafe links.
+// safeAttributes drops event handlers, form actions and unsafe links, and
+// keeps a picture's address only when the message carries it or the user
+// allowed remote ones.
 func safeAttributes(tag string, attrs []html.Attribute, allowRemote bool) []html.Attribute {
 	out := attrs[:0]
 	for _, attr := range attrs {
@@ -188,19 +195,23 @@ func safeAttributes(tag string, attrs []html.Attribute, allowRemote bool) []html
 		if strings.HasPrefix(key, "on") {
 			continue
 		}
+		// Foreign content spells an href with the xlink prefix.
+		key = strings.TrimPrefix(key, "xlink:")
 		switch key {
-		case "srcdoc", "action", "formaction", "ping", "nonce":
+		case "srcdoc", "action", "formaction", "ping", "nonce",
+			"srcset", "imagesrcset":
+			// A candidate list names many addresses: the window cannot
+			// check them one at a time, and needs none of them.
 			continue
-		case "href", "src":
-			if key == "href" && isWebURL(attr.Val) {
+		case "href":
+			if isWebURL(attr.Val) {
 				out = append(out, attr)
-				continue
 			}
-			if key == "src" {
-				v := strings.ToLower(strings.TrimSpace(attr.Val))
-				if strings.HasPrefix(v, "data:") || (allowRemote && isWebURL(v)) {
-					out = append(out, attr)
-				}
+			continue
+		case "src", "poster", "background":
+			v := strings.ToLower(strings.TrimSpace(attr.Val))
+			if strings.HasPrefix(v, "data:") || (allowRemote && isWebURL(v)) {
+				out = append(out, attr)
 			}
 			continue
 		}

@@ -1,0 +1,12 @@
+<!-- Meta refresh would leave the message for a server, and a charset
+     meta is the window's to set: every meta of the message goes. -->
+<html><head>
+<meta http-equiv="refresh" content="0;url=https://evil.example/">
+<meta charset="iso-8859-1">
+</head><body>
+<!-- drop: content="0;url= -->
+<!-- drop: evil.example -->
+<!-- drop: iso-8859-1 -->
+<!-- keep: Refresh -->
+<p>Refresh</p>
+</body></html>

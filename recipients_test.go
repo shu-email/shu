@@ -81,24 +81,27 @@ func combo(t *testing.T, tt *ui.Tester, field string) ui.AccessInfo {
 	return info
 }
 
-// Two letters of a known name offer its contact first, chosen, with the
-// others they begin a word of: those Ann writes to, best first, above one
-// who wrote to her once, however lately. Enter writes the contact's
-// address in place of the letters, with a comma after it, the draft keeps
-// it and the message goes to it. The field is a combo box whose list
-// completes what is typed, and assistive technology follows the contact
-// the arrows are on.
-func TestTwoLettersOfANameOfferItFirst(t *testing.T) {
+// A letter of a known name offers its contact first, chosen, with the
+// others it begins a word of: those Ann writes to, best first, above one
+// who wrote to her once, however lately. Enter makes a chip of the chosen
+// contact, the draft keeps it and the message goes to it. The field is a
+// combo box whose list completes what is typed, and assistive technology
+// follows the contact the arrows are on.
+func TestOneLetterOfANameOffersItFirst(t *testing.T) {
 	a, fs, cs, tt := contactsApp(t)
 	if info := combo(t, tt, locales.To()); info.Expanded || info.AutoComplete != ui.AutoCompleteList {
 		t.Fatalf("the To field before typing = %+v", info)
 	}
 	typeIn(t, tt, locales.To(), "m")
-	if names, _ := offers(tt); len(names) != 0 || len(fs.suggested) != 0 {
-		t.Fatalf("one letter offered %q, asked %q", names, fs.suggested)
+	names, on := offers(tt)
+	if want := []string{mayaOffer, martaOffer, markOffer}; !slices.Equal(names, want) || on != mayaOffer {
+		t.Fatalf("“m” offers %q, the arrows on %q; want %q", names, on, want)
+	}
+	if !slices.Equal(fs.suggested, []string{"m"}) {
+		t.Fatalf("one letter asked the address book for %q", fs.suggested)
 	}
 	tt.Type("a")
-	names, on := offers(tt)
+	names, on = offers(tt)
 	if want := []string{mayaOffer, martaOffer, markOffer}; !slices.Equal(names, want) || on != mayaOffer {
 		t.Fatalf("“ma” offers %q, the arrows on %q; want %q", names, on, want)
 	}
@@ -183,28 +186,40 @@ func TestOfferKeysAndClicks(t *testing.T) {
 	}
 }
 
-// Taking a contact replaces only the entry under the caret, the entries
-// before and after it kept, and leaves the caret after its comma; text
-// written in a script of several bytes a character before it counts by
-// characters. A name in Chinese is looked up from its first character.
-func TestTakingAnOfferReplacesTheEntryUnderTheCaret(t *testing.T) {
+// A comma ends the entry typed and makes a chip of it, a contact taken
+// joins the chips before the empty input, and a chip goes with its button
+// or with Backspace in an empty input. A name in Chinese is looked up
+// from its first character.
+func TestCommasMakeChipsAndTakingOneAddsAnother(t *testing.T) {
 	_, _, cs, tt := contactsApp(t)
-	typeIn(t, tt, locales.To(), "Bob <bob@example.com>, , lena@example.org")
-	tt.Key(ui.Ctrl, ui.KeyHome)
-	for range len("Bob <bob@example.com>, ") {
-		tt.Key(0, ui.KeyRight)
+	typeIn(t, tt, locales.To(), "Bob <bob@example.com>, lena@example.org, ")
+	if want := "Bob <bob@example.com>, lena@example.org, "; cs.to != want {
+		t.Fatalf("To = %q, want %q", cs.to, want)
+	}
+	if !tt.HasText("Bob") || !tt.HasText("lena@example.org") {
+		t.Fatalf("the entries are no chips: %q", tt.Texts())
 	}
 	tt.Type("ma")
 	if names, on := offers(tt); on != mayaOffer || len(names) != 3 {
-		t.Fatalf("“ma” amid other entries offers %q, the arrows on %q", names, on)
+		t.Fatalf("“ma” offers %q, the arrows on %q", names, on)
 	}
 	tt.Key(0, ui.KeyEnter)
-	if want := "Bob <bob@example.com>, Maya Chen <maya@example.com>, lena@example.org"; cs.to != want {
+	if want := "Bob <bob@example.com>, lena@example.org, Maya Chen <maya@example.com>, "; cs.to != want {
 		t.Fatalf("To = %q, want %q", cs.to, want)
 	}
 	tt.Type("x")
-	if want := "Bob <bob@example.com>, Maya Chen <maya@example.com>, xlena@example.org"; cs.to != want {
-		t.Errorf("the caret is not after the comma: %q", cs.to)
+	if want := "Bob <bob@example.com>, lena@example.org, Maya Chen <maya@example.com>, x"; cs.to != want {
+		t.Errorf("the caret is not after the chips: %q", cs.to)
+	}
+	// Backspace takes the entry out first, then the last chip.
+	tt.Key(0, ui.KeyBackspace)
+	tt.Key(0, ui.KeyBackspace)
+	if want := "Bob <bob@example.com>, lena@example.org, "; cs.to != want {
+		t.Errorf("Backspace left %q, want %q", cs.to, want)
+	}
+	click(t, tt, locales.RemoveRecipient("lena@example.org"))
+	if want := "Bob <bob@example.com>, "; cs.to != want {
+		t.Errorf("the chip's button left %q, want %q", cs.to, want)
 	}
 
 	// After a name in Chinese.
@@ -213,13 +228,64 @@ func TestTakingAnOfferReplacesTheEntryUnderTheCaret(t *testing.T) {
 		t.Fatalf("“王” offers %q", names)
 	}
 	tt.Key(0, ui.KeyEnter)
-	tt.Type("Ma")
+	tt.Type("Mar")
 	if names, _ := offers(tt); !slices.Equal(names, []string{martaOffer, markOffer}) {
-		t.Fatalf("with Maya in To, “Ma” offers %q", names)
+		t.Fatalf("with Maya in To, “Mar” offers %q", names)
 	}
 	tt.Key(0, ui.KeyEnter)
 	if want := "王小明 <wang@example.cn>, Marta Díaz <marta@example.org>, "; cs.cc != want {
 		t.Errorf("Cc = %q, want %q", cs.cc, want)
+	}
+}
+
+// The + button beside a field opens the address book below it, best
+// first, with a search that narrows it. A click adds a contact as a chip
+// and the list stays open without it; on the keyboard, the arrows move
+// and Enter adds the one they are on. Escape clears the search, and then
+// closes the list, not the window.
+func TestAddButtonOffersTheAddressBook(t *testing.T) {
+	_, _, cs, tt := contactsApp(t)
+	click(t, tt, locales.AddRecipientTo(locales.To()))
+	tt.Frame()
+	names, _ := offers(tt)
+	if len(names) == 0 || names[0] != mayaOffer {
+		t.Fatalf("the list offers %q: %q", names, tt.Texts())
+	}
+	if info, ok := tt.AccessByRole(ui.RoleOption, mayaOffer); !ok || !info.Selected {
+		t.Errorf("the first contact is not the one chosen: %+v, found %v", info, ok)
+	}
+	if !tt.Focused(locales.SearchContacts()) {
+		t.Error("the search does not take the keyboard")
+	}
+	typeIn(t, tt, locales.SearchContacts(), "le")
+	lena := "Lena Lee lena.lee@example.com"
+	if names, _ := offers(tt); !slices.Contains(names, lena) {
+		t.Fatalf("“le” offers %q", names)
+	}
+	click(t, tt, "Lena Lee")
+	if cs.to != "Lena Lee <lena.lee@example.com>, " || !cs.rcpt.picker.open {
+		t.Fatalf("the click wrote %q, the list open %v", cs.to, cs.rcpt.picker.open)
+	}
+	if names, _ := offers(tt); slices.Contains(names, lena) {
+		t.Errorf("the list offers Lena again: %q", names)
+	}
+	tt.Key(0, ui.KeyEscape)
+	tt.Key(0, ui.KeyEscape)
+	if cs.rcpt.picker.open || cs.closed {
+		t.Errorf("Escape left the list open %v, the window closed %v", cs.rcpt.picker.open, cs.closed)
+	}
+
+	// On another field, the arrows choose and Enter adds.
+	click(t, tt, locales.AddRecipientTo(locales.Cc()))
+	tt.Frame()
+	typeIn(t, tt, locales.SearchContacts(), "ma")
+	if names, _ := offers(tt); len(names) == 0 {
+		t.Fatalf("“ma” offers nothing: %q", tt.Texts())
+	}
+	tt.Key(0, ui.KeyDown)
+	tt.Key(0, ui.KeyEnter)
+	if cs.cc != "Marta Díaz <marta@example.org>, " || cs.to != "Lena Lee <lena.lee@example.com>, " {
+		t.Errorf("Cc = %q, To = %q", cs.cc, cs.to)
 	}
 }
 
@@ -332,7 +398,7 @@ func TestFreeFormAddressesAsBefore(t *testing.T) {
 		t.Fatalf("an address of nobody offers %q", names)
 	}
 	tt.Key(0, ui.KeyTab)
-	if !tt.Focused(locales.Cc()) || cs.to != "zed@nowhere.example" {
+	if !tt.Focused(locales.Cc()) || cs.to != "zed@nowhere.example, " {
 		t.Fatalf("Tab: Cc focused %v, To %q", tt.Focused(locales.Cc()), cs.to)
 	}
 	tt.Type("maya@example.co")
@@ -341,7 +407,7 @@ func TestFreeFormAddressesAsBefore(t *testing.T) {
 	}
 	tt.Key(0, ui.KeyEnter)
 	tt.Key(0, ui.KeyTab)
-	if cs.cc != "maya@example.co" || tt.Focused(locales.Cc()) {
+	if cs.cc != "maya@example.co, " || tt.Focused(locales.Cc()) {
 		t.Fatalf("Enter and Tab: Cc %q, still focused %v", cs.cc, tt.Focused(locales.Cc()))
 	}
 	typeIn(t, tt, locales.Subject(), "Hello")
@@ -421,19 +487,18 @@ func TestSendStopsOnRecipientsThatAreNoAddresses(t *testing.T) {
 		t.Fatalf("sent with “bob@” and “zed”: %+v", fs.sent)
 	}
 
-	// Typing checks the field again.
-	click(t, tt, locales.To())
-	tt.Key(ui.Ctrl, ui.KeyHome)
-	for range len("bob@, ") {
-		tt.Key(0, ui.KeyDelete)
-	}
+	// Removing a chip and typing a new entry checks the field again.
+	click(t, tt, locales.RemoveRecipient("bob@"))
 	if tt.HasText(locales.RecipientNotAddress("bob@")) || !tt.HasText(locales.RecipientUnknown("zed")) {
-		t.Fatalf("after deleting “bob@”: %q", tt.Texts())
+		t.Fatalf("after removing “bob@”: %q", tt.Texts())
 	}
-	for range len(lena + ", zed") {
-		tt.Key(0, ui.KeyRight)
+	click(t, tt, locales.RemoveRecipient("zed"))
+	if tt.HasText(locales.RecipientUnknown("zed")) {
+		t.Fatalf("after removing “zed”: %q", tt.Texts())
 	}
-	tt.Type("@example.org")
+	click(t, tt, locales.To())
+	tt.Key(ui.Ctrl, ui.KeyEnd)
+	tt.Type(", zed@example.org")
 	if cs.hasProblems() || combo(t, tt, locales.To()).Invalid || tt.HasText(locales.RecipientsNotSent()) {
 		t.Fatalf("all fixed, the window says %q", tt.Texts())
 	}
@@ -441,7 +506,7 @@ func TestSendStopsOnRecipientsThatAreNoAddresses(t *testing.T) {
 	if len(fs.sent) != 1 {
 		t.Fatalf("not sent once fixed: %q", tt.Texts())
 	}
-	want := []mail.Address{{Name: "Lena Lee", Email: "lena.lee@example.com"}, {Email: "zed@example.org"}, {Name: "Maya Chen", Email: "maya@example.com"}}
+	want := []mail.Address{{Name: "Lena Lee", Email: "lena.lee@example.com"}, {Name: "Maya Chen", Email: "maya@example.com"}, {Email: "zed@example.org"}}
 	if got := fs.sent[0]; !slices.Equal(got.To, want) || got.Cc[0].Email != "raj@example.com" || got.Bcc[0].Email != "wang@example.cn" {
 		t.Errorf("sent %+v", got)
 	}
@@ -468,6 +533,7 @@ func TestRecipientStringsInChinese(t *testing.T) {
 		"recipientNotAddress": zh.RecipientNotAddress("bob@"), "recipientUnknown": zh.RecipientUnknown("Zed"),
 		"recipientAmbiguous": zh.RecipientAmbiguous("Lee"), "recipientMatch": zh.RecipientMatch("Maya", "Maya Chen"),
 		"useContact": zh.UseContact("Maya Chen <maya@example.com>"), "useContactFor": zh.UseContactFor("Maya", "m"),
+		"removeRecipient":       zh.RemoveRecipient("Maya"),
 		"recipientsCheckFailed": zh.RecipientsCheckFailed("x"),
 	} {
 		if !strings.ContainsFunc(text, func(r rune) bool { return r >= 0x4e00 && r <= 0x9fff }) {

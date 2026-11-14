@@ -124,10 +124,13 @@ func TestDraftRestoredFromDiskAfterRestart(t *testing.T) {
 	}
 	rt := ui.NewTester(got.view, 720, 620)
 	values := fieldValues(rt)
-	for _, want := range []string{to, cc, subject, body} {
+	for _, want := range []string{"carol@exa", cc, subject, body} {
 		if !slices.Contains(values, want) {
 			t.Errorf("restored window does not show %q: %q", want, values)
 		}
+	}
+	if !rt.HasText("Bob") {
+		t.Errorf("restored window does not show the chip of Bob: %q", rt.Texts())
 	}
 	// An edit after the restart is saved to the same draft.
 	typeIn(t, rt, locales.Body(), ", continued")

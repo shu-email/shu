@@ -6528,6 +6528,20 @@ func (msgs Messages) UseContactFor(address string, entry string) string {
 	return Catalog.Format(msgs.locale, "useContactFor", map[string]any{"address": address, "entry": entry})
 }
 
+// RemoveRecipient says "Remove {name}"
+// in the language the app shows.
+//
+// The button that takes a recipient out of a field of the compose window.
+func RemoveRecipient(name string) string { return In(i18n.Locale()).RemoveRecipient(name) }
+
+// RemoveRecipient says "Remove {name}"
+// in the language of msgs.
+//
+// The button that takes a recipient out of a field of the compose window.
+func (msgs Messages) RemoveRecipient(name string) string {
+	return Catalog.Format(msgs.locale, "removeRecipient", map[string]any{"name": name})
+}
+
 // RecipientsCheckFailed says "Couldn't check the recipients: {error}"
 // in the language the app shows.
 func RecipientsCheckFailed(error string) string {
@@ -6698,6 +6712,44 @@ func ContactsEmpty() string { return In(i18n.Locale()).ContactsEmpty() }
 // in the language of msgs.
 func (msgs Messages) ContactsEmpty() string {
 	return Catalog.Format(msgs.locale, "contactsEmpty", nil)
+}
+
+// AddRecipientTo says "Add {field} recipient"
+// in the language the app shows.
+//
+// What assistive technology calls the + button of one recipient field.
+func AddRecipientTo(field string) string { return In(i18n.Locale()).AddRecipientTo(field) }
+
+// AddRecipientTo says "Add {field} recipient"
+// in the language of msgs.
+//
+// What assistive technology calls the + button of one recipient field.
+func (msgs Messages) AddRecipientTo(field string) string {
+	return Catalog.Format(msgs.locale, "addRecipientTo", map[string]any{"field": field})
+}
+
+// ChooseRecipients says "Choose recipients"
+// in the language the app shows.
+//
+// What assistive technology calls the list of contacts the + button opens.
+func ChooseRecipients() string { return In(i18n.Locale()).ChooseRecipients() }
+
+// ChooseRecipients says "Choose recipients"
+// in the language of msgs.
+//
+// What assistive technology calls the list of contacts the + button opens.
+func (msgs Messages) ChooseRecipients() string {
+	return Catalog.Format(msgs.locale, "chooseRecipients", nil)
+}
+
+// NoContactsToAdd says "No contacts to add."
+// in the language the app shows.
+func NoContactsToAdd() string { return In(i18n.Locale()).NoContactsToAdd() }
+
+// NoContactsToAdd says "No contacts to add."
+// in the language of msgs.
+func (msgs Messages) NoContactsToAdd() string {
+	return Catalog.Format(msgs.locale, "noContactsToAdd", nil)
 }
 
 // ContactsNoMatch says "No contacts match “{search}”."

@@ -2214,6 +2214,16 @@
       }
     }
   },
+  "removeRecipient": "Remove {name}",
+  "@removeRecipient": {
+    "description": "The button that takes a recipient out of a field of the compose window.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Maya Chen"
+      }
+    }
+  },
   "recipientsCheckFailed": "Couldn't check the recipients: {error}",
   "@recipientsCheckFailed": {
     "placeholders": {
@@ -2279,6 +2289,21 @@
     }
   },
   "contactsEmpty": "No contacts yet. The people you write to, and those who write to you, show up here.",
+  "addRecipientTo": "Add {field} recipient",
+  "@addRecipientTo": {
+    "description": "What assistive technology calls the + button of one recipient field.",
+    "placeholders": {
+      "field": {
+        "type": "String",
+        "example": "To"
+      }
+    }
+  },
+  "chooseRecipients": "Choose recipients",
+  "@chooseRecipients": {
+    "description": "What assistive technology calls the list of contacts the + button opens."
+  },
+  "noContactsToAdd": "No contacts to add.",
   "contactsNoMatch": "No contacts match “{search}”.",
   "@contactsNoMatch": {
     "placeholders": {

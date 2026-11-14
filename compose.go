@@ -27,6 +27,11 @@ import (
 // on the server each time, so it waits for a pause.
 const draftSyncDelay = 3 * time.Second
 
+// fromRowMinHeight is the height below which a single sender address
+// folds away to leave the files their room; a choice of addresses keeps
+// its row at any height.
+const fromRowMinHeight = 480
+
 // composeState is one compose window.
 type composeState struct {
 	app *app
@@ -313,8 +318,13 @@ func (cs *composeState) view(c *ui.Context) {
 	ids := cs.app.identitiesOf(cs.accountID)
 	drafting := cs.source != nil && cs.app.ai != nil
 	root.Children(func() {
-		// The account's own address alone needs no choice.
-		if len(ids) > 1 {
+		// The sender is one of the account's addresses, the account's own
+		// first; it stays on show with one, so the window says whom the
+		// message goes from. In a small window, a single address folds
+		// away as the files take the room: it gives no choice to make.
+		h := c.Root().Bounds().H
+		roomy := h < 1 || h >= fromRowMinHeight
+		if len(ids) > 1 || len(ids) > 0 && (len(cs.attachments) == 0 || roomy) {
 			cs.fromRow(c, t, ids)
 		}
 		var fields [recipientFieldCount]ui.Element

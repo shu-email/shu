@@ -16,14 +16,13 @@ import (
 )
 
 // The recipient fields offer the contacts of the address book as the user
-// types: for the entry under the caret, once it holds two characters, or
-// one of a script that writes a name without spaces, a list below the
-// field of the contacts it may be, best first, which the arrows move
-// through and Enter, Tab or a click takes, writing the contact's address
-// in place of the entry. Each field is a combo box to assistive
-// technology, as MyGo's own are, pointing at the offer the arrows are on.
-// A send that finds entries that are no address stops, and the window
-// says what each is, offering the contacts a name may mean.
+// types: for the entry under the caret, as soon as it holds a letter, a
+// list below the field of the contacts it may be, best first, which the
+// arrows move through and Enter, Tab or a click takes, writing the
+// contact's address in place of the entry. Each field is a combo box to
+// assistive technology, as MyGo's own are, pointing at the offer the
+// arrows are on. A send that finds entries that are no address stops, and
+// the window says what each is, offering the contacts a name may mean.
 
 // recipientField is one of the compose window's fields of recipients.
 type recipientField int
@@ -57,6 +56,32 @@ type recipientState struct {
 	// window's own, which offers nothing.
 	checks [recipientFieldCount]*fieldCheck
 	quiet  [recipientFieldCount]bool
+	// tokens are each field's finished entries, shown as chips, and
+	// entries the text being typed after them. joined is the field's text
+	// they made as the window last wrote it; a field holding another text
+	// was set from outside, and is read again (syncField). shown is the
+	// text the field's input last showed, which a pending edit replaces.
+	tokens  [recipientFieldCount][]string
+	entries [recipientFieldCount]string
+	joined  [recipientFieldCount]string
+	shown   [recipientFieldCount]string
+	// picker is the list of contacts the + button opens, for the field it
+	// was opened in, and pseq drops an answer for a query typed over.
+	picker contactPicker
+	pseq   atomic.Uint64
+}
+
+// contactPicker is the list of contacts a + button opens: the field they
+// go into, the search typed, the contacts the address book answered, and
+// the one the arrows are on.
+type contactPicker struct {
+	field    recipientField
+	open     bool
+	query    string
+	contacts []mail.Contact
+	loading  bool
+	err      string
+	hi       int
 }
 
 // offer is the contacts offered for an entry of a field: for the field's
@@ -131,14 +156,16 @@ func firstChoice(list []mail.Contact, e mail.RecipientEntry, last *offer) (int, 
 	return 0, false
 }
 
-// recipientEdit replaces the bytes from to to of a field's text with s,
-// while the field still holds text. quiet edits offer nothing.
+// recipientEdit replaces the bytes from to to of a field's input with s,
+// while the input still shows text, and sets the field's chips to tokens
+// when they are not nil. quiet edits offer nothing.
 type recipientEdit struct {
 	field    recipientField
 	text     string
 	from, to int
 	s        string
 	quiet    bool
+	tokens   []string
 }
 
 // fieldCheck is what CheckRecipients said of a field's text.
@@ -181,46 +208,88 @@ func fieldLabel(f recipientField) string {
 }
 
 // recipientRow is a field of recipients: a row of the compose window's
-// fields whose input is a combo box, which offers contacts for the entry
-// being typed in a list below it. trailing adds controls after it.
+// fields whose entries show as chips, before an input for the one being
+// typed, which offers contacts for it in a list below the field. A
+// comma, Enter or Tab ends the entry and makes a chip of it, Enter takes
+// the contact the list is on, and Backspace in an empty input takes the
+// last chip out. trailing adds controls after the field.
 func (cs *composeState) recipientRow(c *ui.Context, f recipientField, label, placeholder string, trailing func()) ui.Element {
 	t := c.Theme()
-	value := cs.fieldText(f)
-	var in ui.Element
+	cs.syncField(f)
+	var in, box, add ui.Element
 	ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
 		// The caption names the input, so a click on it focuses the field.
 		caption := ui.Text(c, label).FontSize(12).TextColor(t.TextMuted).Width(52)
-		in = ui.TextInput(c, value).Grow(1).LabelledBy(caption).Placeholder(placeholder).
-			FocusBind(&cs.focused, focusOf(f)).Role(ui.RoleComboBox).AutoComplete(ui.AutoCompleteList).
-			OnChange(func() { cs.recipientChanged(f) }).
-			OnTextKey(func(k ui.TextKey) bool { return cs.offerKey(f, k) })
-		_, caret := in.TextAnchorCaret()
-		if e := cs.rcpt.edit; e != nil && e.field == f {
-			cs.rcpt.edit = nil
-			if *value == e.text {
-				cs.rcpt.quiet[f] = e.quiet
-				in.ReplaceText(runeAt(e.text, e.from), runeAt(e.text, e.to), e.s)
-				_, caret = in.TextAnchorCaret()
+		box = ui.Row(c.Key("recipients")).Grow(1).Wrap().AlignItems(ui.Center).Gap(6).
+			Padding(3, 6).Radius(t.Radius).Background(t.Surface).Border(1, t.Border).Cursor(ui.CursorText)
+		box.Children(func() {
+			for i, token := range cs.rcpt.tokens[f] {
+				cs.recipientChip(c, t, f, i, token)
 			}
+			// The input keeps its identity, whatever chips come before it.
+			ui.Row(c.Key("input")).Grow(1).MinWidth(t.Space(12)).Children(func() {
+				ph := placeholder
+				if len(cs.rcpt.tokens[f]) > 0 {
+					ph = ""
+				}
+				text := &cs.rcpt.entries[f]
+				in = ui.TextInput(c, text).Grow(1).Padding(2, 0).Border(0, ui.Transparent).Background(ui.Transparent).
+					LabelledBy(caption).Placeholder(ph).
+					FocusBind(&cs.focused, focusOf(f)).Role(ui.RoleComboBox).AutoComplete(ui.AutoCompleteList).
+					OnChange(func() { cs.recipientChanged(f) }).
+					OnTextKey(func(k ui.TextKey) bool { return cs.recipientKey(f, k) })
+				if e := cs.rcpt.edit; e != nil && e.field == f && cs.rcpt.shown[f] == e.text {
+					cs.rcpt.edit = nil
+					cs.rcpt.quiet[f] = e.quiet
+					in.ReplaceText(runeAt(e.text, e.from), runeAt(e.text, e.to), e.s)
+					if e.tokens != nil {
+						cs.rcpt.tokens[f] = e.tokens
+					}
+					cs.setJoined(f)
+					cs.changed()
+					if cs.rcpt.checks[f] != nil {
+						cs.checkRecipients(false, f)
+					}
+				}
+				_, caret := in.TextAnchorCaret()
+				cs.rcpt.carets[f] = caret
+				cs.rcpt.shown[f] = cs.rcpt.entries[f]
+				problems := len(cs.problemsOf(f)) > 0
+				if problems {
+					in.Invalid(true)
+				}
+				entry := cs.rcpt.entries[f]
+				o := cs.rcpt.offer
+				if o != nil && o.field == f && o.text != entry {
+					o = o.narrowed(entry, byteAt(entry, caret))
+					cs.rcpt.offer = o
+				}
+				open := o != nil && o.field == f && o.text == entry && in.Focused() && o.covers(byteAt(entry, caret))
+				in.Expanded(open)
+				if open {
+					// Escape closes the list rather than the window.
+					in.OnShortcut(0, ui.KeyEscape, cs.dismissOffer)
+					if active := cs.offerList(c, t, box, o); o.hi >= 0 {
+						in.ActiveDescendant(active)
+					}
+				}
+				if problems {
+					box.Border(1, t.Danger)
+				} else if in.Focused() {
+					box.Border(1, t.Accent)
+				} else if box.Hovered() {
+					box.Border(1, t.Border.Mix(t.Text, 0.25))
+				}
+			})
+			add = ui.Button(c.Key("add"), "").Label(locales.AddRecipientTo(label)).Tooltip(locales.AddRecipientTo(label)).
+				Padding(2, 3).Radius(t.Radius - 2).Background(ui.Transparent).Shrink(0).TabStop(false).
+				OnClick(func() { cs.toggleContactPicker(f) }).
+				Children(func() { ui.Icon(c, plusIcon).FontSize(13).TextColor(t.TextMuted) })
+		})
+		if box.Clicked() {
+			in.Focus()
 		}
-		cs.rcpt.carets[f] = caret
-		if len(cs.problemsOf(f)) > 0 {
-			in.Invalid(true)
-		}
-		o := cs.rcpt.offer
-		if o != nil && o.field == f && o.text != *value {
-			o = o.narrowed(*value, byteAt(*value, caret))
-			cs.rcpt.offer = o
-		}
-		open := o != nil && o.field == f && o.text == *value && in.Focused() && o.covers(byteAt(*value, caret))
-		in.Expanded(open)
-		if open {
-			// Escape closes the list rather than the window.
-			in.OnShortcut(0, ui.KeyEscape, cs.dismissOffer)
-			if active := cs.offerList(c, t, in, o); o.hi >= 0 {
-				in.ActiveDescendant(active)
-			}
-		}
+		cs.contactPicker(c, t, f, add)
 		if trailing != nil {
 			trailing()
 		}
@@ -228,13 +297,295 @@ func (cs *composeState) recipientRow(c *ui.Context, f recipientField, label, pla
 	return in
 }
 
+// recipientChip shows one finished entry of a field, by its name or its
+// address, with a button that takes it out.
+func (cs *composeState) recipientChip(c *ui.Context, t *ui.Theme, f recipientField, i int, token string) {
+	label := recipientChipLabel(token)
+	chip := ui.Row(c.Key("chip/"+strconv.Itoa(i))).AlignItems(ui.Center).Gap(2).
+		Padding(2, 2).PaddingStart(8).Radius(t.Radius).Background(t.SurfacePressed).Shrink(0)
+	chip.Label(token)
+	chip.Children(func() {
+		ui.Text(c, label).FontSize(12).SingleLine()
+		ui.Button(c.Key("remove"), "").Label(locales.RemoveRecipient(label)).Tooltip(locales.RemoveRecipient(label)).
+			KeepFocus().TabStop(false).Padding(1, 3).Radius(t.Radius - 2).Background(ui.Transparent).
+			OnClick(func() { cs.removeRecipient(f, i) }).
+			Children(func() { ui.Icon(c, closeIcon).FontSize(10).TextColor(t.TextMuted) })
+	})
+}
+
+// recipientChipLabel is what a chip shows: the name of the entry's one
+// address when it has one, and the entry itself otherwise.
+func recipientChipLabel(token string) string {
+	if list, err := mail.ParseAddressList([]string{token}); err == nil && len(list) == 1 {
+		if list[0].Name != "" {
+			return list[0].Name
+		}
+		return list[0].Email
+	}
+	return token
+}
+
+// removeRecipient takes a chip out of a field, the draft saved without it.
+func (cs *composeState) removeRecipient(f recipientField, i int) {
+	if i < 0 || i >= len(cs.rcpt.tokens[f]) {
+		return
+	}
+	cs.rcpt.tokens[f] = slices.Delete(cs.rcpt.tokens[f], i, i+1)
+	cs.setJoined(f)
+	cs.changed()
+	if cs.rcpt.checks[f] != nil {
+		cs.checkRecipients(false, f)
+	}
+	cs.redraw()
+}
+
+// contactPickerLimit is how many contacts the + button's list holds; the
+// search narrows them.
+const contactPickerLimit = 50
+
+// toggleContactPicker opens the + button's list of contacts for a field,
+// or closes it.
+func (cs *composeState) toggleContactPicker(f recipientField) {
+	p := &cs.rcpt.picker
+	if p.open && p.field == f {
+		p.open = false
+		return
+	}
+	p.field, p.open, p.err, p.hi = f, true, "", 0
+	p.query, p.contacts = "", nil
+	cs.loadContacts()
+	cs.redraw()
+}
+
+// contactPicker shows the + button's list of contacts below the field it
+// adds to, which a search narrows. A click adds a contact, as Enter adds
+// the one the arrows are on; the list stays open to add more.
+func (cs *composeState) contactPicker(c *ui.Context, t *ui.Theme, f recipientField, anchor ui.Element) {
+	p := &cs.rcpt.picker
+	if p.field != f {
+		return
+	}
+	ui.PopoverBase(c, anchor, &p.open, func(panel ui.Element) {
+		panel.Width(320).Margin(6, 0, 0, 0).Padding(8).Gap(8).Radius(10).
+			Background(t.Background).Border(1, t.Border).Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.18)).
+			Label(locales.ChooseRecipients())
+		var search ui.Element
+		ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
+			ui.Icon(c, searchIcon).FontSize(14).TextColor(t.TextMuted).Shrink(0)
+			search = ui.TextInput(c, &p.query).Grow(1).Label(locales.SearchContacts()).Placeholder(locales.SearchContacts()).
+				AutoFocus().OnChange(func() {
+				p.hi = 0
+				cs.loadContacts()
+			})
+		})
+		search.OnTextKey(func(k ui.TextKey) bool {
+			if k.Mods != 0 {
+				return false
+			}
+			switch k.Key {
+			case ui.KeyDown:
+				if len(p.contacts) == 0 {
+					return false
+				}
+				p.hi = min(p.hi+1, len(p.contacts)-1)
+			case ui.KeyUp:
+				if len(p.contacts) == 0 {
+					return false
+				}
+				p.hi = max(p.hi-1, 0)
+			case ui.KeyEnter:
+				if p.hi < 0 || p.hi >= len(p.contacts) {
+					return false
+				}
+				cs.addRecipientContact(p.contacts[p.hi])
+			default:
+				return false
+			}
+			cs.redraw()
+			return true
+		})
+		switch {
+		case p.err != "":
+			ui.Text(c, p.err).FontSize(12).TextColor(t.Warning).MaxLines(4).Role(ui.RoleStatus)
+		case p.loading && len(p.contacts) == 0:
+			ui.Text(c, locales.Loading()).FontSize(12).TextColor(t.TextMuted).Padding(4, 8)
+		case len(p.contacts) == 0:
+			text := locales.NoContactsToAdd()
+			if strings.TrimSpace(p.query) != "" {
+				text = locales.ContactsNoMatch(strings.TrimSpace(p.query))
+			}
+			ui.Text(c, text).FontSize(12).TextColor(t.TextMuted).MaxLines(3).Padding(4, 8)
+		default:
+			words := mail.ContactWords(p.query)
+			ui.Scroll(c).MaxHeight(t.Space(72)).Children(func() {
+				ui.Column(c).Gap(1).Label(locales.ChooseRecipients()).Children(func() {
+					for i, ct := range p.contacts {
+						cs.contactPickerRow(c, t, p, i, ct, words)
+					}
+				})
+			})
+		}
+	})
+}
+
+// contactPickerRow is one contact of the + button's list: its name and
+// address, the parts the search begins in bold, and the one the arrows
+// are on in the accent color.
+func (cs *composeState) contactPickerRow(c *ui.Context, t *ui.Theme, p *contactPicker, i int, ct mail.Contact, words []string) {
+	chosen := i == p.hi
+	row := ui.Row(c.Key("picker/"+mail.ContactKey(ct.Email))).Gap(10).Padding(6, 8).Radius(t.Radius).
+		AlignItems(ui.Center).Role(ui.RoleOption).Checked(chosen).PositionInSet(i+1, len(p.contacts)).
+		OnClick(func() { cs.addRecipientContact(ct) })
+	name, address, star := t.Text, t.TextMuted, t.Warning
+	switch {
+	case chosen:
+		row.Background(t.Accent)
+		name, address, star = t.AccentText, t.AccentText.Alpha(0.85), t.AccentText
+	case row.Hovered():
+		row.Background(t.SurfaceHover)
+	}
+	row.Children(func() {
+		if ct.Name != "" {
+			ui.RichText(c, matchSpans(ct.Name, words, false, name, 400)...).FontSize(13).SingleLine().Shrink(0).MaxWidth(180)
+		}
+		ui.RichText(c, matchSpans(ct.Email, words, true, address, 400)...).FontSize(12).SingleLine().Grow(1).MinWidth(0)
+		if ct.Favorite {
+			ui.Icon(c, starFilledIcon).FontSize(11).TextColor(star)
+		}
+	})
+}
+
+// loadContacts asks the address book, in a job, for the contacts the +
+// button's list shows: those the search finds, the addresses the fields
+// hold already left out. An answer a later query overtook is dropped.
+func (cs *composeState) loadContacts() {
+	p := &cs.rcpt.picker
+	if !p.open {
+		return
+	}
+	field, text := p.field, p.query
+	seq := cs.rcpt.pseq.Add(1)
+	exclude := cs.recipientAddresses()
+	p.loading, p.err = true, ""
+	a := cs.app
+	a.run(func() {
+		ctx, cancel := a.ctx()
+		var (
+			list []mail.Contact
+			err  error
+		)
+		if strings.TrimSpace(text) == "" {
+			var page mail.ContactPage
+			page, err = a.svc.Contacts(ctx, "", 0, contactPickerLimit+len(exclude))
+			list = page.Contacts
+		} else {
+			list, err = a.svc.Suggest(ctx, text, exclude, contactPickerLimit)
+		}
+		cancel()
+		excluded := make(map[string]bool, len(exclude))
+		for _, email := range exclude {
+			excluded[mail.ContactKey(email)] = true
+		}
+		kept := list[:0]
+		for _, ct := range list {
+			if !excluded[mail.ContactKey(ct.Email)] {
+				kept = append(kept, ct)
+			}
+		}
+		list = kept[:min(len(kept), contactPickerLimit)]
+		a.post(func() {
+			p := &cs.rcpt.picker
+			if cs.closed || cs.rcpt.pseq.Load() != seq || !p.open || p.field != field || p.query != text {
+				return
+			}
+			p.loading = false
+			p.err, p.contacts = "", nil
+			if err != nil {
+				p.err = locales.ContactsReadFailed(err.Error())
+			} else {
+				p.contacts = list
+			}
+			p.hi = min(max(p.hi, 0), len(p.contacts)-1)
+			cs.redraw()
+		})
+	})
+}
+
+// addRecipientContact adds a contact of the + button's list to the field
+// it was opened for, as a chip, and asks the list again without it.
+func (cs *composeState) addRecipientContact(ct mail.Contact) {
+	p := &cs.rcpt.picker
+	if !p.open {
+		return
+	}
+	f := p.field
+	cs.rcpt.tokens[f] = append(cs.rcpt.tokens[f], ct.Address().String())
+	cs.setJoined(f)
+	cs.changed()
+	if cs.rcpt.checks[f] != nil {
+		cs.checkRecipients(false, f)
+	}
+	p.hi = 0
+	cs.loadContacts()
+	cs.redraw()
+}
+
+// syncField reads a field's text into its chips and its input when the
+// window was given another text, as a draft opened or a message replied
+// to, keeping the field's text as it is.
+func (cs *composeState) syncField(f recipientField) {
+	text := *cs.fieldText(f)
+	if text == cs.rcpt.joined[f] {
+		return
+	}
+	cs.rcpt.tokens[f], cs.rcpt.entries[f] = splitRecipients(text)
+	cs.rcpt.joined[f] = text
+	cs.rcpt.shown[f] = cs.rcpt.entries[f]
+}
+
+// splitRecipients reads a field's text as chips and the entry being
+// typed: every entry but one ended by a comma is a chip, and the last,
+// while no comma follows it, is the entry in the input.
+func splitRecipients(text string) (tokens []string, entry string) {
+	entries := mail.RecipientEntries(text)
+	if len(entries) == 0 {
+		return nil, ""
+	}
+	last := entries[len(entries)-1]
+	for _, e := range entries[:len(entries)-1] {
+		tokens = append(tokens, e.Text)
+	}
+	if last.End < len(text) {
+		return append(tokens, last.Text), ""
+	}
+	return tokens, last.Text
+}
+
+// joinRecipients is a field's text as its chips and its input make it.
+func joinRecipients(tokens []string, entry string) string {
+	var b strings.Builder
+	for _, token := range tokens {
+		b.WriteString(strings.TrimSpace(token))
+		b.WriteString(", ")
+	}
+	b.WriteString(strings.TrimLeftFunc(entry, unicode.IsSpace))
+	return b.String()
+}
+
+// setJoined writes a field's text from its chips and its input.
+func (cs *composeState) setJoined(f recipientField) {
+	text := joinRecipients(cs.rcpt.tokens[f], cs.rcpt.entries[f])
+	cs.rcpt.joined[f] = text
+	*cs.fieldText(f) = text
+}
+
 // offerList shows the contacts offered below a field: each one's name and
 // address, the parts the words typed begin in bold, and the one the arrows
 // are on in the accent color, which it returns.
-func (cs *composeState) offerList(c *ui.Context, t *ui.Theme, in ui.Element, o *offer) ui.Element {
+func (cs *composeState) offerList(c *ui.Context, t *ui.Theme, anchor ui.Element, o *offer) ui.Element {
 	var active ui.Element
 	ui.Overlay(c, func() {
-		panel := ui.Column(c).AttachTo(in, ui.AnchorBottomStart, ui.AnchorTopStart).MinWidth(in.Bounds().W).
+		panel := ui.Column(c).AttachTo(anchor, ui.AnchorBottomStart, ui.AnchorTopStart).MinWidth(anchor.Bounds().W).
 			Margin(4, 0, 0, 0).Padding(4).Gap(1).Radius(t.Radius+2).Background(t.Background).Border(1, t.Border).
 			Shadow(0, 6, 20, 0, ui.RGBA(0, 0, 0, 0.18)).
 			Role(ui.RoleListBox).Label(locales.ContactSuggestions()).KeepFocus()
@@ -352,59 +703,90 @@ func foldPrefix(s, word string) int {
 	return n
 }
 
-// offerKey takes the keys of the list of offers while it shows: the
-// arrows move among the contacts, and Enter and Tab take the one they are
-// on. The field keeps the other keys, and these while none is chosen, so
-// that an address typed whole goes on as it would without the list.
-func (cs *composeState) offerKey(f recipientField, k ui.TextKey) bool {
+// recipientKey takes the keys of a field's input: the arrows move among
+// the contacts offered while the list shows, and Enter and Tab take the
+// one they are on. A comma, Enter or Tab ends the entry typed and makes a
+// chip of it, and Backspace in an empty input takes the last chip out.
+// The input keeps the other keys.
+func (cs *composeState) recipientKey(f recipientField, k ui.TextKey) bool {
 	o := cs.rcpt.offer
-	if o == nil || o.field != f || k.Mods != 0 || k.Text() != o.text || !o.covers(byteAt(o.text, cs.rcpt.carets[f])) {
+	if o != nil && o.field == f && k.Mods == 0 && k.Text() == o.text && o.covers(byteAt(o.text, cs.rcpt.carets[f])) {
+		switch k.Key {
+		case ui.KeyDown:
+			o.hi, o.chose = min(o.hi+1, len(o.contacts)-1), true
+			cs.redraw()
+			return true
+		case ui.KeyUp:
+			o.hi, o.chose = max(o.hi-1, 0), true
+			cs.redraw()
+			return true
+		case ui.KeyEnter, ui.KeyTab:
+			if o.hi >= 0 {
+				cs.take(f, o.contacts[o.hi])
+				return true
+			}
+		}
+	}
+	if k.Mods != 0 {
 		return false
 	}
-	switch k.Key {
-	case ui.KeyDown:
-		o.hi, o.chose = min(o.hi+1, len(o.contacts)-1), true
-	case ui.KeyUp:
-		o.hi, o.chose = max(o.hi-1, 0), true
-	case ui.KeyEnter, ui.KeyTab:
-		if o.hi < 0 {
-			return false
+	switch {
+	case k.Key == ui.KeyEnter || k.Text() == ",":
+		return cs.commitEntry(f, k)
+	case k.Key == ui.KeyBackspace && strings.TrimSpace(cs.rcpt.entries[f]) == "" && len(cs.rcpt.tokens[f]) > 0:
+		cs.rcpt.tokens[f] = cs.rcpt.tokens[f][:len(cs.rcpt.tokens[f])-1]
+		k.SetText("")
+		cs.setJoined(f)
+		cs.changed()
+		if cs.rcpt.checks[f] != nil {
+			cs.checkRecipients(false, f)
 		}
-		cs.take(f, o.contacts[o.hi])
-	default:
+		cs.redraw()
+		return true
+	case k.Key == ui.KeyTab && strings.TrimSpace(k.Text()) != "":
+		// The entry becomes a chip, and the keyboard moves on as Tab does.
+		cs.commitEntry(f, k)
 		return false
+	}
+	return false
+}
+
+// commitEntry makes chips of the entries typed in a field, and leaves an
+// empty input after them.
+func (cs *composeState) commitEntry(f recipientField, k ui.TextKey) bool {
+	text := strings.TrimSpace(k.Text())
+	if text == "" {
+		return false
+	}
+	tokens := cs.rcpt.tokens[f]
+	for _, e := range mail.RecipientEntries(text) {
+		tokens = append(tokens, e.Text)
+	}
+	k.SetText("")
+	cs.rcpt.tokens[f] = tokens
+	cs.rcpt.entries[f] = ""
+	cs.rcpt.shown[f] = ""
+	cs.setJoined(f)
+	cs.dismissOffer()
+	cs.changed()
+	if cs.rcpt.checks[f] != nil {
+		cs.checkRecipients(false, f)
 	}
 	cs.redraw()
 	return true
 }
 
-// take writes a contact offered in place of the entry it was offered for,
-// followed by the comma that ends it, and leaves the caret after both.
+// take makes a chip of a contact offered in place of the entry typed.
 func (cs *composeState) take(f recipientField, ct mail.Contact) {
 	o := cs.rcpt.offer
 	if o == nil || o.field != f {
 		return
 	}
-	from, to := takenSpan(o.text, o.entry)
-	cs.rcpt.edit = &recipientEdit{field: f, text: o.text, from: from, to: to, s: ct.Address().String() + ", "}
+	old := cs.rcpt.entries[f]
+	tokens := append(append([]string(nil), cs.rcpt.tokens[f]...), ct.Address().String())
+	cs.rcpt.edit = &recipientEdit{field: f, text: old, from: 0, to: len(old), s: "", quiet: true, tokens: tokens}
 	cs.dismissOffer()
 	cs.redraw()
-}
-
-// takenSpan is the part of a field's text a contact taken replaces: the
-// entry, without the spaces before it, and the comma and spaces after it,
-// which the comma written after the address stands for.
-func takenSpan(text string, e mail.RecipientEntry) (from, to int) {
-	seg := text[e.Start:e.End]
-	from = e.Start + len(seg) - len(strings.TrimLeftFunc(seg, unicode.IsSpace))
-	to = e.End
-	if to < len(text) && text[to] == ',' {
-		to++
-		for to < len(text) && text[to] == ' ' {
-			to++
-		}
-	}
-	return from, to
 }
 
 // dismissOffer closes the list of offers, and drops the query under way.
@@ -413,10 +795,15 @@ func (cs *composeState) dismissOffer() {
 	cs.rcpt.offer = nil
 }
 
-// recipientChanged follows an edit of a field of recipients: the draft
-// saves it, a field whose problems show is checked again, and the address
-// book is asked what the entry under the caret may be.
+// recipientChanged follows an edit of a field's input: a pasted list is
+// split into chips, the draft saves it, a field whose problems show is
+// checked again, and the address book is asked what the entry under the
+// caret may be.
 func (cs *composeState) recipientChanged(f recipientField) {
+	if cs.splitPasted(f) {
+		return
+	}
+	cs.setJoined(f)
 	cs.changed()
 	if cs.rcpt.checks[f] != nil {
 		cs.checkRecipients(false, f)
@@ -429,11 +816,37 @@ func (cs *composeState) recipientChanged(f recipientField) {
 	cs.lookUp(f)
 }
 
+// splitPasted makes chips of the entries a pasted list ended with a comma,
+// and leaves the entry after the last comma to type on. It reports whether
+// the input held such a list.
+func (cs *composeState) splitPasted(f recipientField) bool {
+	text := cs.rcpt.entries[f]
+	if !strings.Contains(text, ",") {
+		return false
+	}
+	tokens := cs.rcpt.tokens[f]
+	cut := 0
+	for _, e := range mail.RecipientEntries(text) {
+		if e.End >= len(text) {
+			break
+		}
+		tokens = append(tokens, e.Text)
+		cut = e.End + 1
+	}
+	if cut == 0 {
+		return false
+	}
+	rest := strings.TrimLeft(text[cut:], " \t\r\n")
+	cs.rcpt.edit = &recipientEdit{field: f, text: text, from: 0, to: len(text), s: rest, tokens: tokens}
+	cs.redraw()
+	return true
+}
+
 // lookUp asks the address book, in a job, for the contacts the entry
 // under a field's caret may be. A query a later one overtook does not
 // run, and an answer for text that changed since is dropped.
 func (cs *composeState) lookUp(f recipientField) {
-	text := *cs.fieldText(f)
+	text := cs.rcpt.entries[f]
 	seq := cs.rcpt.seq.Add(1)
 	entry, ok := entryAt(text, byteAt(text, cs.rcpt.carets[f]))
 	if !ok || !worthLookingUp(entry.Text) {
@@ -455,7 +868,7 @@ func (cs *composeState) lookUp(f recipientField) {
 		}
 		cs.rcpt.mu.Unlock()
 		a.post(func() {
-			if cs.rcpt.seq.Load() != seq || cs.closed || *cs.fieldText(f) != text {
+			if cs.rcpt.seq.Load() != seq || cs.closed || cs.rcpt.entries[f] != text {
 				return
 			}
 			last := cs.rcpt.offer
@@ -483,23 +896,10 @@ func entryAt(text string, at int) (mail.RecipientEntry, bool) {
 	return mail.RecipientEntry{}, false
 }
 
-// worthLookingUp reports whether an entry says enough to look it up: two
-// characters, or one of a script that writes a name without spaces, as a
-// Chinese family name.
+// worthLookingUp reports whether an entry says enough to look it up: a
+// word of one character is, as a name or an address begins it.
 func worthLookingUp(text string) bool {
-	if len(mail.ContactWords(text)) == 0 {
-		return false
-	}
-	n := 0
-	for _, r := range text {
-		if unspaced(r) {
-			return true
-		}
-		if !unicode.IsSpace(r) {
-			n++
-		}
-	}
-	return n >= 2
+	return len(mail.ContactWords(text)) > 0
 }
 
 // recipientAddresses are the addresses the fields of recipients hold
@@ -701,7 +1101,13 @@ func (cs *composeState) fix(f recipientField, p mail.RecipientProblem, ct mail.C
 	}
 	seg := ch.text[p.Start:p.End]
 	from := p.Start + len(seg) - len(strings.TrimLeftFunc(seg, unicode.IsSpace))
-	cs.rcpt.edit = &recipientEdit{field: f, text: ch.text, from: from, to: from + len(p.Text), s: ct.Address().String(), quiet: true}
+	if from < 0 || from+len(p.Text) > len(ch.text) {
+		return
+	}
+	text := ch.text[:from] + ct.Address().String() + ch.text[from+len(p.Text):]
+	tokens, entry := splitRecipients(text)
+	old := cs.rcpt.entries[f]
+	cs.rcpt.edit = &recipientEdit{field: f, text: old, from: 0, to: len(old), s: entry, quiet: true, tokens: tokens}
 	cs.focused = focusOf(f)
 	cs.redraw()
 }

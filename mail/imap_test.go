@@ -840,3 +840,55 @@ func selfSignedCert() (tls.Certificate, error) {
 	}
 	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}, nil
 }
+
+// A connection's release ends its context hook once, however many places
+// that close the connection meet at it.
+func TestWhenDoneReleaseRunsOnce(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var calls atomic.Int32
+	release := whenDone(ctx, func() { calls.Add(1) })
+	released := make(chan struct{})
+	go func() {
+		release()
+		release()
+		close(released)
+	}()
+	select {
+	case <-released:
+	case <-time.After(5 * time.Second):
+		t.Fatal("a second release waited for a call that will not come")
+	}
+	cancel()
+	if n := calls.Load(); n != 0 {
+		t.Errorf("the hook ran %d times after its release", n)
+	}
+}
+
+// A connection closed at the end of its operation gives up the hook that
+// would close it when its context ends, once, however many paths close it.
+func TestSessionCloseEndsItsHookOnce(t *testing.T) {
+	f := startFakeIMAP(t, allCaps())
+	svc, _, _ := newTestService()
+	svc.SetTLSConfig(insecureTLS())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c, err := svc.dialIMAP(ctx, fakeAccount(t, f.addr), "secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var calls atomic.Int32
+	release := c.release
+	c.release = func() {
+		calls.Add(1)
+		release()
+	}
+	c.close()
+	c.close()
+	if got := calls.Load(); got != 1 {
+		t.Errorf("the hook was given up %d times, want once", got)
+	}
+	// The hook that would have closed it is gone, so the context ending
+	// has nothing left to do.
+	cancel()
+}

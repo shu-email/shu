@@ -196,6 +196,36 @@ func TestFromPickerKeptInDraft(t *testing.T) {
 	}
 }
 
+// A sender row takes room the files need in a short window: with one
+// address and files to show, it folds away, while a choice of addresses
+// keeps it at any height.
+func TestFromRowFoldsAwayForFilesInASmallWindow(t *testing.T) {
+	a, _ := draftsApp(t)
+	cs := a.openCompose(nil)
+	cs.attachments = []mail.Attachment{{Filename: "report.pdf", Size: 3 << 10}}
+	tt := ui.NewTester(cs.view, 520, 420)
+	tt.Frame()
+	if from, ok := tt.AccessByRole(ui.RolePopUpButton, locales.From()); ok {
+		t.Errorf("a single sender with files in a 520x420 window shows %+v", from)
+	}
+	if tt2 := ui.NewTester(cs.view, 720, 620); func() bool {
+		from, ok := tt2.AccessByRole(ui.RolePopUpButton, locales.From())
+		return !ok || from.Value != "Shu Mail <me@example.com>"
+	}() {
+		t.Errorf("a 720x620 window does not show the sender: %q", tt2.Texts())
+	}
+
+	// A choice of addresses keeps its row in the small window.
+	b, _ := composeApp(t)
+	choice := b.openCompose(nil)
+	choice.attachments = []mail.Attachment{{Filename: "report.pdf", Size: 3 << 10}}
+	ct := ui.NewTester(choice.view, 520, 420)
+	ct.Frame()
+	if from, ok := ct.AccessByRole(ui.RolePopUpButton, locales.From()); !ok || from.Value != ownLabel {
+		t.Errorf("a choice of addresses is hidden with files: %+v, found %v", from, ok)
+	}
+}
+
 // theDraftOf is the draft the fake holds under an ID.
 func theDraftOf(t *testing.T, fs *fakeService, id string) mail.Draft {
 	t.Helper()

@@ -891,7 +891,7 @@ read of the list (`labels.go`).
 
 The engine keeps the rules, sorts the mail that arrives with them and logs what they
 did (`AGENTS.md` says how); the window writes them, orders them and shows the log
-through the `mailService` calls above (`rules.go`, `ruleeditor.go`, `rulelog.go`).
+through the `mailService` calls above (`rules.go`, `ruleeditor.go`, `ruleeditorview.go`, `rulelog.go`).
 Nothing in the window can make a rule send, forward or delete mail: the editor offers
 the engine's actions, `mail.ActionKinds`, and no others.
 

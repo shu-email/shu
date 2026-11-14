@@ -645,11 +645,22 @@ func (a *app) saveCLIEnv(list []ai.CLIEnvVar, done func()) {
 	})
 }
 
+// cliProblemText says why a tool's check could not read it.
+func cliProblemText(kind ai.Kind) string {
+	switch kind {
+	case ai.KindCLIBadPath:
+		return locales.AiErrToolBadPath()
+	case ai.KindBadConfig:
+		return locales.AiErrConfig()
+	}
+	return locales.AiErrOther()
+}
+
 // cliStatusText is the one line a tool's check shows.
 func cliStatusText(status ai.CLIStatus, p ai.Provider, t *ui.Theme) (string, *ui.SVG, ui.Color) {
 	if !status.Installed {
-		if status.Err != "" {
-			return status.Err, alertIcon, t.Warning
+		if status.Problem != 0 {
+			return cliProblemText(status.Problem), alertIcon, t.Warning
 		}
 		return locales.AiLocalToolNotInstalled(), alertIcon, t.Warning
 	}

@@ -163,6 +163,34 @@ func TestRunProcessOutputCap(t *testing.T) {
 	}
 }
 
+// A run whose output overruns what Shu reads keeps its own kind through
+// the launch's classification, so the window says the tool answered too
+// much rather than that it failed.
+func TestRunCLIKeepsTheOutputKind(t *testing.T) {
+	script, _, _ := fakeCLI(t, "exec yes\n")
+	svc := NewService(nil, nil)
+	_, err := svc.runCLI(context.Background(), cliConfig(script), "sonnet", request{system: "s", user: "u"})
+	var aiErr *Error
+	if !errors.As(err, &aiErr) || aiErr.Kind != KindCLIOutput {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+// A set path that does not run is said as that, not as a tool missing.
+func TestCheckNamesABadPath(t *testing.T) {
+	svc, _, _, _ := newTestService(t)
+	cfg := DefaultConfig()
+	cfg.Enabled = true
+	cfg.UseProvider(ProviderClaudeCLI)
+	cfg.SetCLIPath(ProviderClaudeCLI, filepath.Join(t.TempDir(), "claude"))
+	if err := svc.SaveConfig(context.Background(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Check(context.Background(), FeatureSummary); KindOf(err) != KindCLIBadPath {
+		t.Fatalf("check = %v", err)
+	}
+}
+
 // A summary runs through an installed, signed-in tool with no API key.
 func TestSummaryThroughACLI(t *testing.T) {
 	script, _, _ := fakeCLI(t, `if [ "$1" = "--version" ]; then echo "2.1.323"; exit 0; fi

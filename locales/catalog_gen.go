@@ -2820,6 +2820,66 @@ func (msgs Messages) AiErrKeychain() string {
 	return Catalog.Format(msgs.locale, "aiErrKeychain", nil)
 }
 
+// AiErrToolNotInstalled says "The local tool is not installed, or is not where the settings say."
+// in the language the app shows.
+func AiErrToolNotInstalled() string { return In(i18n.Locale()).AiErrToolNotInstalled() }
+
+// AiErrToolNotInstalled says "The local tool is not installed, or is not where the settings say."
+// in the language of msgs.
+func (msgs Messages) AiErrToolNotInstalled() string {
+	return Catalog.Format(msgs.locale, "aiErrToolNotInstalled", nil)
+}
+
+// AiErrToolBadPath says "The command path does not run."
+// in the language the app shows.
+func AiErrToolBadPath() string { return In(i18n.Locale()).AiErrToolBadPath() }
+
+// AiErrToolBadPath says "The command path does not run."
+// in the language of msgs.
+func (msgs Messages) AiErrToolBadPath() string {
+	return Catalog.Format(msgs.locale, "aiErrToolBadPath", nil)
+}
+
+// AiErrToolSignIn says "The local tool is signed out. Sign in on this device, then try again."
+// in the language the app shows.
+func AiErrToolSignIn() string { return In(i18n.Locale()).AiErrToolSignIn() }
+
+// AiErrToolSignIn says "The local tool is signed out. Sign in on this device, then try again."
+// in the language of msgs.
+func (msgs Messages) AiErrToolSignIn() string {
+	return Catalog.Format(msgs.locale, "aiErrToolSignIn", nil)
+}
+
+// AiErrToolFailed says "The local tool failed to answer."
+// in the language the app shows.
+func AiErrToolFailed() string { return In(i18n.Locale()).AiErrToolFailed() }
+
+// AiErrToolFailed says "The local tool failed to answer."
+// in the language of msgs.
+func (msgs Messages) AiErrToolFailed() string {
+	return Catalog.Format(msgs.locale, "aiErrToolFailed", nil)
+}
+
+// AiErrToolOutput says "The local tool answered with more than Shu reads."
+// in the language the app shows.
+func AiErrToolOutput() string { return In(i18n.Locale()).AiErrToolOutput() }
+
+// AiErrToolOutput says "The local tool answered with more than Shu reads."
+// in the language of msgs.
+func (msgs Messages) AiErrToolOutput() string {
+	return Catalog.Format(msgs.locale, "aiErrToolOutput", nil)
+}
+
+// AiErrToolOutdated says "The local tool is too old for the flags Shu starts it with. Update it, then try again."
+// in the language the app shows.
+func AiErrToolOutdated() string { return In(i18n.Locale()).AiErrToolOutdated() }
+
+// AiErrToolOutdated says "The local tool is too old for the flags Shu starts it with. Update it, then try again."
+// in the language of msgs.
+func (msgs Messages) AiErrToolOutdated() string {
+	return Catalog.Format(msgs.locale, "aiErrToolOutdated", nil)
+}
+
 // AiErrOther says "The request failed."
 // in the language the app shows.
 func AiErrOther() string { return In(i18n.Locale()).AiErrOther() }

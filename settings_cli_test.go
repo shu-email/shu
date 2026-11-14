@@ -82,10 +82,10 @@ func TestAISettingsLocalToolPath(t *testing.T) {
 	tt := ui.NewTester(a.view, 1220, 900)
 	a.openProviders()
 	tt.Frame()
-	if a.aiForm.cliStatus.Err != "the command path does not run" {
+	if a.aiForm.cliStatus.Problem != ai.KindCLIBadPath {
 		t.Errorf("status = %+v", a.aiForm.cliStatus)
 	}
-	if !tt.HasText("the command path does not run") {
+	if !tt.HasText(locales.AiErrToolBadPath()) {
 		t.Errorf("the bad path is not reported: %q", tt.Texts())
 	}
 }

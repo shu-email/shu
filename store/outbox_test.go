@@ -49,9 +49,8 @@ func TestOutboxTransitionsAndCrashRecovery(t *testing.T) {
 	}
 }
 
-// A draft comes back exactly as written: the recipient text as typed,
-// with its linkage, at revision 1 and with nothing on the server.
-
+// The outbox keeps what a message says, not which draft it was: the
+// draft's ID is no part of the stored envelope.
 func TestOutboxEnvelopeLeavesOutTheDraft(t *testing.T) {
 	s := openTest(t)
 	ctx := context.Background()
@@ -82,5 +81,3 @@ func TestOutboxEnvelopeLeavesOutTheDraft(t *testing.T) {
 		t.Errorf("envelope JSON names the draft: %s", raw)
 	}
 }
-
-// A database from before drafts gains the table and keeps its data.

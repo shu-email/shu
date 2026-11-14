@@ -42,19 +42,6 @@ func scenarioSync(folder string, validity uint32, uids ...mail.UID) mail.SyncBat
 	}
 }
 
-// scenarioCount is how many rows one query counts.
-func scenarioCount(t *testing.T, s *Store, query string, args ...any) int64 {
-	t.Helper()
-	rows, err := s.query(context.Background(), query, args...)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(rows.Values) != 1 || len(rows.Values[0]) != 1 {
-		t.Fatalf("count gave %v", rows.Values)
-	}
-	return number(rows.Values[0][0])
-}
-
 // scenarioInvariants proves what every write must leave: no reference to
 // a row that is not there, the search index in step, and the
 // conversations' totals equal to their messages. It writes nothing.
@@ -67,6 +54,13 @@ func scenarioInvariants(t *testing.T, s *Store) {
 	if len(findings) != 0 {
 		t.Fatalf("the cache is out of step: %+v", findings)
 	}
+}
+
+// visibleAndTombstones counts what a list shows and what a move hides.
+func visibleAndTombstones(t *testing.T, s *Store) (visible, tombstones int64) {
+	t.Helper()
+	return countRows(t, s, `SELECT COUNT(*) FROM messages WHERE deleted = 0`),
+		countRows(t, s, `SELECT COUNT(*) FROM messages WHERE deleted = 1`)
 }
 
 func scenarioStore(t *testing.T) *Store {
@@ -118,6 +112,11 @@ func TestMessageWriteScenarioMatrix(t *testing.T) {
 				if err := s.MarkDeleted(ctx, "a1", "INBOX", 1, true); err != nil {
 					t.Fatal(err)
 				}
+				// Between the two steps the mail is a tombstone, hidden
+				// from the list, which is what an undone move puts back.
+				if visible, tombstones := visibleAndTombstones(t, s); visible != 0 || tombstones != 1 {
+					t.Fatalf("while the move waits: %d visible, %d tombstones", visible, tombstones)
+				}
 				if err := s.MarkDeleted(ctx, "a1", "INBOX", 1, false); err != nil {
 					t.Fatal(err)
 				}
@@ -132,6 +131,9 @@ func TestMessageWriteScenarioMatrix(t *testing.T) {
 				}
 				if err := s.MarkDeleted(ctx, "a1", "INBOX", 1, true); err != nil {
 					t.Fatal(err)
+				}
+				if visible, tombstones := visibleAndTombstones(t, s); visible != 0 || tombstones != 1 {
+					t.Fatalf("after the delete flag: %d visible, %d tombstones", visible, tombstones)
 				}
 				if err := s.DeleteMessage(ctx, "a1", "INBOX", 1); err != nil {
 					t.Fatal(err)
@@ -159,10 +161,10 @@ func TestMessageWriteScenarioMatrix(t *testing.T) {
 			s := scenarioStore(t)
 			c.write(t, s)
 			scenarioInvariants(t, s)
-			if got := scenarioCount(t, s, `SELECT COUNT(*) FROM messages WHERE deleted = 0`); got != c.visible {
+			if got := countRows(t, s, `SELECT COUNT(*) FROM messages WHERE deleted = 0`); got != c.visible {
 				t.Errorf("visible messages = %d, want %d", got, c.visible)
 			}
-			if got := scenarioCount(t, s, `SELECT COUNT(*) FROM messages WHERE deleted = 1`); got != c.tombstones {
+			if got := countRows(t, s, `SELECT COUNT(*) FROM messages WHERE deleted = 1`); got != c.tombstones {
 				t.Errorf("tombstones = %d, want %d", got, c.tombstones)
 			}
 		})
@@ -178,10 +180,10 @@ func TestWriteToAMissingFolderChangesNothing(t *testing.T) {
 	if !errors.Is(err, mail.ErrNotFound) {
 		t.Fatalf("sync of a missing folder = %v", err)
 	}
-	if got := scenarioCount(t, s, `SELECT COUNT(*) FROM messages`); got != 0 {
+	if got := countRows(t, s, `SELECT COUNT(*) FROM messages`); got != 0 {
 		t.Errorf("messages left by a failed sync = %d", got)
 	}
-	if got := scenarioCount(t, s, `SELECT COUNT(*) FROM threads`); got != 0 {
+	if got := countRows(t, s, `SELECT COUNT(*) FROM threads`); got != 0 {
 		t.Errorf("conversations left by a failed sync = %d", got)
 	}
 	if _, ok, _ := s.Folder(ctx, "a1", "Missing"); ok {
@@ -209,7 +211,9 @@ func TestWriteScenariosSurviveRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	ops := queueOps()
-	ops[0].Validity = 7
+	// The queued move is the tombstoned message's own: it waits for the
+	// server to make it after the restart.
+	ops[0].UID, ops[0].Validity = 1, 7
 	if _, err := s.EnqueueOperations(ctx, ops[:1]); err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +234,7 @@ func TestWriteScenariosSurviveRestart(t *testing.T) {
 	if len(msgs) != 1 || msgs[0].UID != 2 {
 		t.Errorf("after the restart the list = %+v", msgs)
 	}
-	if got := scenarioCount(t, s, `SELECT COUNT(*) FROM messages WHERE deleted = 1`); got != 1 {
+	if got := countRows(t, s, `SELECT COUNT(*) FROM messages WHERE deleted = 1`); got != 1 {
 		t.Errorf("tombstones after the restart = %d", got)
 	}
 	queued, err := s.Operations(ctx, "a1")
@@ -250,8 +254,8 @@ func TestOutboxClaimHasOneWinner(t *testing.T) {
 	addAccount(t, s, "a1")
 	p := mail.PendingSend{
 		ID: "o1", AccountID: "a1", Raw: []byte("Subject: hi\r\n\r\nbody"),
-		Envelope:  mail.Outgoing{To: []mail.Address{{Email: "a@example.com"}}},
-		CreatedAt: scenarioNow,
+		Envelope: mail.Outgoing{To: []mail.Address{{Email: "a@example.com"}}},
+		State:    mail.StateScheduled, DueAt: scenarioNow, CreatedAt: scenarioNow,
 	}
 	if err := s.EnqueueOutbox(ctx, p); err != nil {
 		t.Fatal(err)
@@ -271,7 +275,7 @@ func TestOutboxClaimHasOneWinner(t *testing.T) {
 		wg.Add(1)
 		go func(to string) {
 			defer wg.Done()
-			won, err := s.ClaimOutbox(ctx, "o1", mail.StatePending, to)
+			won, err := s.ClaimOutbox(ctx, "o1", mail.StateScheduled, to)
 			if err != nil {
 				errs <- err
 				return

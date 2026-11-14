@@ -399,6 +399,9 @@ func TestMigrationsFromEmpty(t *testing.T) {
 		"discoveries",
 		"rules", "rules_account", "rule_log", "rule_log_rule", "rule_log_account", "rule_log_message",
 		"expected_arrivals", "expected_arrivals_key",
+		"thread_folders", "thread_folders_folder",
+		"pending_operations", "pending_operations_account",
+		"unsubscribes", "blocked_senders",
 	} {
 		if !have[name] {
 			t.Errorf("missing schema object %q", name)
@@ -412,10 +415,17 @@ func TestMigrationsFromEmpty(t *testing.T) {
 			t.Errorf("%s has no %s column", column[0], column[1])
 		}
 	}
-	// Reopening runs no migration and keeps the data.
-	addAccount(t, s, "a1")
-	path := t.TempDir() + "/shu.db"
 	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// Reopening the file runs no migration and keeps the data.
+	path := t.TempDir() + "/shu.db"
+	db, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	addAccount(t, db, "a1")
+	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i < 2; i++ {
@@ -424,40 +434,19 @@ func TestMigrationsFromEmpty(t *testing.T) {
 			t.Fatalf("reopen %d: %v", i, err)
 		}
 		accounts, err := db.Accounts(ctx)
-		if err != nil || len(accounts) != 0 {
+		if err != nil || len(accounts) != 1 || accounts[0].ID != "a1" {
 			t.Fatalf("reopen %d accounts = %v, %v", i, accounts, err)
 		}
 		db.Close()
 	}
 }
 
+// A database from before drafts gains the table and keeps its data.
 func TestMigrationAddsDraftsToAnOlderDatabase(t *testing.T) {
 	sqlitetest.Require(t)
 	ctx := context.Background()
 	path := t.TempDir() + "/shu.db"
-	// Build a v2 database by hand, as the previous release left it.
-	db, err := sqlite.Open(ctx, path, sqlite.OpenOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for v := 0; v < 2; v++ {
-		for _, q := range migrations[v] {
-			if _, err := db.Execute(ctx, q); err != nil {
-				t.Fatalf("v%d: %v", v+1, err)
-			}
-		}
-	}
-	if _, err := db.Execute(ctx, `INSERT INTO accounts
-		(id, name, email, username, imap_host, imap_port, imap_tls, smtp_host, smtp_port, smtp_tls)
-		VALUES ('a1', 'Ann', 'ann@example.com', 'ann', 'imap.example.com', 993, 'tls', 'smtp.example.com', 465, 'tls')`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Execute(ctx, "PRAGMA user_version=2"); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatal(err)
-	}
+	createAtVersion(t, ctx, path, 2)
 
 	s, err := Open(ctx, path)
 	if err != nil {

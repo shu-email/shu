@@ -9,6 +9,8 @@ import (
 	"shu/mail"
 )
 
+// A draft comes back exactly as written: the recipient text as typed,
+// with its linkage, at revision 1 and with nothing on the server.
 func TestDraftRoundTrip(t *testing.T) {
 	s := openTest(t)
 	ctx := context.Background()
@@ -75,7 +77,6 @@ func TestDraftRoundTrip(t *testing.T) {
 
 // A save raises the revision and leaves the sync state alone; recording
 // a sync leaves the content and the revision alone.
-
 func TestDraftRevisionAndSyncState(t *testing.T) {
 	s := openTest(t)
 	ctx := context.Background()
@@ -138,7 +139,6 @@ func TestDraftRevisionAndSyncState(t *testing.T) {
 
 // A draft discarded keeps its row, marked, until its server copy is
 // removed; then the row goes.
-
 func TestDraftPendingDeleteAndList(t *testing.T) {
 	s := openTest(t)
 	ctx := context.Background()
@@ -210,7 +210,6 @@ func TestDraftPendingDeleteAndList(t *testing.T) {
 }
 
 // Deleting an account removes its drafts and no one else's.
-
 func TestDraftsCascadeOnAccountDelete(t *testing.T) {
 	s := openTest(t)
 	ctx := context.Background()
@@ -237,6 +236,3 @@ func TestDraftsCascadeOnAccountDelete(t *testing.T) {
 		t.Errorf("drafts after the account delete = %v", rows.Values)
 	}
 }
-
-// The outbox keeps what a message says, not which draft it was: the
-// draft's ID is no part of the stored envelope.

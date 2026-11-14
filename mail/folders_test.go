@@ -215,6 +215,19 @@ func TestFolderListAsksOnlyForWhatTheServerAdvertised(t *testing.T) {
 			if inbox.Total != 1 {
 				t.Errorf("inbox = %+v, want one message", inbox)
 			}
+			f.mu.Lock()
+			lists := slices.Clone(f.lists)
+			f.mu.Unlock()
+			if len(lists) == 0 {
+				t.Fatal("no LIST was asked")
+			}
+			list := lists[0]
+			if want := c.caps.Has(imap.CapListStatus); list.status != want {
+				t.Errorf("STATUS return = %v, want %v", list.status, want)
+			}
+			if want := c.caps.Has(imap.CapSpecialUse); list.specialUse != want {
+				t.Errorf("SPECIAL-USE return = %v, want %v", list.specialUse, want)
+			}
 		})
 	}
 }

@@ -315,9 +315,18 @@ func TestFetchOlderSyncsAResetFolder(t *testing.T) {
 	}
 	f.create(t, "INBOX")
 	fill(t, f, "INBOX", 201, 203)
+	rec := &syncRecorder{}
+	svc.OnSync(rec.report)
 	got, err := svc.FetchOlder(ctx, a.ID, "INBOX", 30)
 	if err != nil || got != (OlderResult{Fetched: 3, Reset: true}) {
 		t.Fatalf("FetchOlder of a reset folder = %+v, %v", got, err)
+	}
+	// A fetch that resets a folder has no progress to show: the count it
+	// wrote is said by the step that ends it.
+	checkPhases(t, rec.all(), a.ID, "INBOX", SyncKindOlder,
+		[]SyncPhase{SyncPhaseConnecting, SyncPhaseReading, SyncPhaseWriting, SyncPhaseFinished})
+	if last := rec.all()[len(rec.all())-1]; last.Done != 3 || last.Total != 3 {
+		t.Errorf("the reset's end says %d of %d, want 3 of 3", last.Done, last.Total)
 	}
 	after, _, _ := store.Folder(ctx, a.ID, "INBOX")
 	if after.UIDValidity == before.UIDValidity || after.LastUID != 3 || !after.Complete {

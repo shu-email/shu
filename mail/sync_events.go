@@ -104,6 +104,69 @@ func (s *Service) reportSync(ev SyncEvent) {
 	}
 }
 
+// syncTracker reports one sync to the window as it runs: the step it is
+// in, how many of how many it has done when the server said, and how it
+// ended. Every sync of the service reports the same way (see
+// sync_events.go), so the window draws and words them alike.
+type syncTracker struct {
+	svc     *Service
+	account string
+	folder  string
+	kind    SyncKind
+	phase   SyncPhase
+	done    int
+	total   int
+}
+
+// trackSync begins a sync's report, saying the step it begins in.
+func (s *Service) trackSync(accountID, folder string, kind SyncKind) *syncTracker {
+	t := &syncTracker{svc: s, account: accountID, folder: folder, kind: kind, phase: SyncPhaseConnecting}
+	t.report()
+	return t
+}
+
+// report tells the window where the sync is now.
+func (t *syncTracker) report() {
+	t.svc.reportSync(SyncEvent{AccountID: t.account, Folder: t.folder, Kind: t.kind,
+		Phase: t.phase, Done: t.done, Total: t.total})
+}
+
+// step moves the sync to another step, reporting the one it moved to, and
+// gives up nothing for a step it is in already.
+func (t *syncTracker) step(p SyncPhase) {
+	if t.phase == p {
+		return
+	}
+	t.phase = p
+	t.report()
+}
+
+// move names the folder the sync came to read, as a watcher's check does
+// when a full check opens the inbox on a connection that had none. The
+// step that follows reports the new name.
+func (t *syncTracker) move(folder string) {
+	t.folder = folder
+}
+
+// progress says how many of how many the sync has done, as the server
+// said.
+func (t *syncTracker) progress(done, total int) {
+	t.done, t.total = done, total
+	t.report()
+}
+
+// count says how many of how many without reporting: a fetch that resets
+// a folder has no progress to show, but the step that ends it says the
+// count.
+func (t *syncTracker) count(done, total int) {
+	t.done, t.total = done, total
+}
+
+// end reports the sync over, with the reason it ended.
+func (t *syncTracker) end(ctx context.Context, err error) {
+	t.svc.reportSync(syncEnd(ctx, t.account, t.folder, t.kind, t.phase, t.done, t.total, err))
+}
+
 // syncEnd is the event that ends a sync: finished when it worked,
 // cancelled when the app stopped it, else failed at the step it reached.
 func syncEnd(ctx context.Context, accountID, folder string, kind SyncKind, phase SyncPhase, done, total int, err error) SyncEvent {

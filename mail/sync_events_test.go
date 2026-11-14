@@ -26,6 +26,27 @@ func (r *syncRecorder) all() []SyncEvent {
 	return append([]SyncEvent(nil), r.events...)
 }
 
+// checkPhases reads the events of one sync: each names the account, the
+// folder and the kind, and together they report the steps in order.
+func checkPhases(t *testing.T, events []SyncEvent, account, folder string, kind SyncKind, want []SyncPhase) {
+	t.Helper()
+	var phases []SyncPhase
+	for _, ev := range events {
+		if ev.AccountID != account || ev.Folder != folder || ev.Kind != kind {
+			t.Errorf("event = %+v, want %v of %q for %q", ev, kind, folder, account)
+		}
+		phases = append(phases, ev.Phase)
+	}
+	if len(phases) != len(want) {
+		t.Fatalf("phases = %v, want %v", phases, want)
+	}
+	for i := range want {
+		if phases[i] != want[i] {
+			t.Fatalf("phases = %v, want %v", phases, want)
+		}
+	}
+}
+
 func (r *syncRecorder) reset() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -47,23 +68,8 @@ func TestSyncFolderReportsItsSteps(t *testing.T) {
 	if err := svc.SyncFolder(ctx, a.ID, "INBOX", 50); err != nil {
 		t.Fatal(err)
 	}
-	events := rec.all()
-	var phases []SyncPhase
-	for _, ev := range events {
-		if ev.AccountID != a.ID || ev.Folder != "INBOX" || ev.Kind != SyncKindFirst {
-			t.Errorf("event = %+v, want the account's first sync of INBOX", ev)
-		}
-		phases = append(phases, ev.Phase)
-	}
-	want := []SyncPhase{SyncPhaseConnecting, SyncPhaseReading, SyncPhaseWriting, SyncPhaseFinished}
-	if len(phases) != len(want) {
-		t.Fatalf("phases = %v, want %v", phases, want)
-	}
-	for i := range want {
-		if phases[i] != want[i] {
-			t.Fatalf("phases = %v, want %v", phases, want)
-		}
-	}
+	checkPhases(t, rec.all(), a.ID, "INBOX", SyncKindFirst,
+		[]SyncPhase{SyncPhaseConnecting, SyncPhaseReading, SyncPhaseWriting, SyncPhaseFinished})
 
 	rec.reset()
 	if err := svc.SyncFolder(ctx, a.ID, "INBOX", 50); err != nil {
@@ -174,5 +180,56 @@ func TestSyncEndTellsCancellationFromFailure(t *testing.T) {
 	refused := syncEnd(ctx, "a1", "INBOX", SyncKindFolder, SyncPhaseReading, 0, 0, errors.New("the server said no"))
 	if refused.Cancelled || refused.Failure != SyncFailOther {
 		t.Errorf("a refusal during a cancellation = %+v, want a failure", refused)
+	}
+}
+
+// The sync of an account's drafts says the account and no folder, as the
+// drafts are the account's, from connecting to finished. It writes where
+// a folder's sync would read and write, as it uploads what it has.
+func TestSyncDraftsReportsItsSteps(t *testing.T) {
+	svc, _, _, a := draftService(t, allCaps(), "INBOX", "Drafts")
+	rec := &syncRecorder{}
+	svc.OnSync(rec.report)
+	if _, err := svc.SyncDrafts(context.Background(), a.ID); err != nil {
+		t.Fatal(err)
+	}
+	checkPhases(t, rec.all(), a.ID, "", SyncKindDrafts,
+		[]SyncPhase{SyncPhaseConnecting, SyncPhaseWriting, SyncPhaseFinished})
+}
+
+// A watcher's check reports itself as its own kind, and names the inbox a
+// full check opens on a connection that had none when it began.
+func TestWatchCheckReportsItsFolder(t *testing.T) {
+	f := startFakeIMAP(t, allCaps())
+	f.create(t, "INBOX")
+	f.append(t, "INBOX", readFixture(t, "plain.eml"))
+	r := newWatchRig(t, f, "secret", false)
+	rec := &syncRecorder{}
+	r.svc.OnSync(rec.report)
+	r.watch()
+	r.checked()
+	events := rec.all()
+	if len(events) < 2 {
+		t.Fatalf("the check reported %d events: %+v", len(events), events)
+	}
+	last := events[len(events)-1]
+	if last.AccountID != r.account.ID || last.Kind != SyncKindWatch || last.Folder != "INBOX" ||
+		last.Phase != SyncPhaseFinished || last.Cancelled || last.Failure != SyncFailNone {
+		t.Errorf("the check ended with %+v, want a finished check of INBOX", last)
+	}
+	read := false
+	for _, ev := range events[:len(events)-1] {
+		if ev.Kind != SyncKindWatch || ev.AccountID != r.account.ID {
+			t.Errorf("event = %+v, want the account's check", ev)
+		}
+		if ev.Phase == SyncPhaseReading {
+			if ev.Folder != "INBOX" {
+				t.Errorf("the reading step names %q, want INBOX", ev.Folder)
+			}
+			read = true
+		}
+	}
+	if !read {
+		t.Errorf("the check reported no reading step: %+v", events)
 	}
 }

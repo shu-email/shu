@@ -238,6 +238,57 @@ func TestCommasMakeChipsAndTakingOneAddsAnother(t *testing.T) {
 	}
 }
 
+// The + button beside a field opens the address book below it, best
+// first, with a search that narrows it. A click adds a contact as a chip
+// and the list stays open without it; on the keyboard, the arrows move
+// and Enter adds the one they are on. Escape clears the search, and then
+// closes the list, not the window.
+func TestAddButtonOffersTheAddressBook(t *testing.T) {
+	_, _, cs, tt := contactsApp(t)
+	click(t, tt, locales.AddRecipientTo(locales.To()))
+	tt.Frame()
+	names, _ := offers(tt)
+	if len(names) == 0 || names[0] != mayaOffer {
+		t.Fatalf("the list offers %q: %q", names, tt.Texts())
+	}
+	if info, ok := tt.AccessByRole(ui.RoleOption, mayaOffer); !ok || !info.Selected {
+		t.Errorf("the first contact is not the one chosen: %+v, found %v", info, ok)
+	}
+	if !tt.Focused(locales.SearchContacts()) {
+		t.Error("the search does not take the keyboard")
+	}
+	typeIn(t, tt, locales.SearchContacts(), "le")
+	lena := "Lena Lee lena.lee@example.com"
+	if names, _ := offers(tt); !slices.Contains(names, lena) {
+		t.Fatalf("“le” offers %q", names)
+	}
+	click(t, tt, "Lena Lee")
+	if cs.to != "Lena Lee <lena.lee@example.com>, " || !cs.rcpt.picker.open {
+		t.Fatalf("the click wrote %q, the list open %v", cs.to, cs.rcpt.picker.open)
+	}
+	if names, _ := offers(tt); slices.Contains(names, lena) {
+		t.Errorf("the list offers Lena again: %q", names)
+	}
+	tt.Key(0, ui.KeyEscape)
+	tt.Key(0, ui.KeyEscape)
+	if cs.rcpt.picker.open || cs.closed {
+		t.Errorf("Escape left the list open %v, the window closed %v", cs.rcpt.picker.open, cs.closed)
+	}
+
+	// On another field, the arrows choose and Enter adds.
+	click(t, tt, locales.AddRecipientTo(locales.Cc()))
+	tt.Frame()
+	typeIn(t, tt, locales.SearchContacts(), "ma")
+	if names, _ := offers(tt); len(names) == 0 {
+		t.Fatalf("“ma” offers nothing: %q", tt.Texts())
+	}
+	tt.Key(0, ui.KeyDown)
+	tt.Key(0, ui.KeyEnter)
+	if cs.cc != "Marta Díaz <marta@example.org>, " || cs.to != "Lena Lee <lena.lee@example.com>, " {
+		t.Errorf("Cc = %q, To = %q", cs.cc, cs.to)
+	}
+}
+
 // The addresses the fields hold already, in any case and in any of To,
 // Cc and Bcc, are not offered again, and no contact is offered twice;
 // the user's own addresses are never offered.

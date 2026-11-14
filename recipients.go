@@ -65,6 +65,23 @@ type recipientState struct {
 	entries [recipientFieldCount]string
 	joined  [recipientFieldCount]string
 	shown   [recipientFieldCount]string
+	// picker is the list of contacts the + button opens, for the field it
+	// was opened in, and pseq drops an answer for a query typed over.
+	picker contactPicker
+	pseq   atomic.Uint64
+}
+
+// contactPicker is the list of contacts a + button opens: the field they
+// go into, the search typed, the contacts the address book answered, and
+// the one the arrows are on.
+type contactPicker struct {
+	field    recipientField
+	open     bool
+	query    string
+	contacts []mail.Contact
+	loading  bool
+	err      string
+	hi       int
 }
 
 // offer is the contacts offered for an entry of a field: for the field's
@@ -199,7 +216,7 @@ func fieldLabel(f recipientField) string {
 func (cs *composeState) recipientRow(c *ui.Context, f recipientField, label, placeholder string, trailing func()) ui.Element {
 	t := c.Theme()
 	cs.syncField(f)
-	var in, box ui.Element
+	var in, box, add ui.Element
 	ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
 		// The caption names the input, so a click on it focuses the field.
 		caption := ui.Text(c, label).FontSize(12).TextColor(t.TextMuted).Width(52)
@@ -264,10 +281,15 @@ func (cs *composeState) recipientRow(c *ui.Context, f recipientField, label, pla
 					box.Border(1, t.Border.Mix(t.Text, 0.25))
 				}
 			})
+			add = ui.Button(c.Key("add"), "").Label(locales.AddRecipientTo(label)).Tooltip(locales.AddRecipientTo(label)).
+				Padding(2, 3).Radius(t.Radius - 2).Background(ui.Transparent).Shrink(0).TabStop(false).
+				OnClick(func() { cs.toggleContactPicker(f) }).
+				Children(func() { ui.Icon(c, plusIcon).FontSize(13).TextColor(t.TextMuted) })
 		})
 		if box.Clicked() {
 			in.Focus()
 		}
+		cs.contactPicker(c, t, f, add)
 		if trailing != nil {
 			trailing()
 		}
@@ -285,7 +307,7 @@ func (cs *composeState) recipientChip(c *ui.Context, t *ui.Theme, f recipientFie
 	chip.Children(func() {
 		ui.Text(c, label).FontSize(12).SingleLine()
 		ui.Button(c.Key("remove"), "").Label(locales.RemoveRecipient(label)).Tooltip(locales.RemoveRecipient(label)).
-			KeepFocus().Padding(1, 3).Radius(t.Radius - 2).Background(ui.Transparent).
+			KeepFocus().TabStop(false).Padding(1, 3).Radius(t.Radius - 2).Background(ui.Transparent).
 			OnClick(func() { cs.removeRecipient(f, i) }).
 			Children(func() { ui.Icon(c, closeIcon).FontSize(10).TextColor(t.TextMuted) })
 	})
@@ -314,6 +336,197 @@ func (cs *composeState) removeRecipient(f recipientField, i int) {
 	if cs.rcpt.checks[f] != nil {
 		cs.checkRecipients(false, f)
 	}
+	cs.redraw()
+}
+
+// contactPickerLimit is how many contacts the + button's list holds; the
+// search narrows them.
+const contactPickerLimit = 50
+
+// toggleContactPicker opens the + button's list of contacts for a field,
+// or closes it.
+func (cs *composeState) toggleContactPicker(f recipientField) {
+	p := &cs.rcpt.picker
+	if p.open && p.field == f {
+		p.open = false
+		return
+	}
+	p.field, p.open, p.err, p.hi = f, true, "", 0
+	p.query, p.contacts = "", nil
+	cs.loadContacts()
+	cs.redraw()
+}
+
+// contactPicker shows the + button's list of contacts below the field it
+// adds to, which a search narrows. A click adds a contact, as Enter adds
+// the one the arrows are on; the list stays open to add more.
+func (cs *composeState) contactPicker(c *ui.Context, t *ui.Theme, f recipientField, anchor ui.Element) {
+	p := &cs.rcpt.picker
+	if p.field != f {
+		return
+	}
+	ui.PopoverBase(c, anchor, &p.open, func(panel ui.Element) {
+		panel.Width(320).Margin(6, 0, 0, 0).Padding(8).Gap(8).Radius(10).
+			Background(t.Background).Border(1, t.Border).Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.18)).
+			Label(locales.ChooseRecipients())
+		var search ui.Element
+		ui.Row(c).AlignItems(ui.Center).Gap(6).Children(func() {
+			ui.Icon(c, searchIcon).FontSize(14).TextColor(t.TextMuted).Shrink(0)
+			search = ui.TextInput(c, &p.query).Grow(1).Label(locales.SearchContacts()).Placeholder(locales.SearchContacts()).
+				AutoFocus().OnChange(func() {
+				p.hi = 0
+				cs.loadContacts()
+			})
+		})
+		search.OnTextKey(func(k ui.TextKey) bool {
+			if k.Mods != 0 {
+				return false
+			}
+			switch k.Key {
+			case ui.KeyDown:
+				if len(p.contacts) == 0 {
+					return false
+				}
+				p.hi = min(p.hi+1, len(p.contacts)-1)
+			case ui.KeyUp:
+				if len(p.contacts) == 0 {
+					return false
+				}
+				p.hi = max(p.hi-1, 0)
+			case ui.KeyEnter:
+				if p.hi < 0 || p.hi >= len(p.contacts) {
+					return false
+				}
+				cs.addRecipientContact(p.contacts[p.hi])
+			default:
+				return false
+			}
+			cs.redraw()
+			return true
+		})
+		switch {
+		case p.err != "":
+			ui.Text(c, p.err).FontSize(12).TextColor(t.Warning).MaxLines(4).Role(ui.RoleStatus)
+		case p.loading && len(p.contacts) == 0:
+			ui.Text(c, locales.Loading()).FontSize(12).TextColor(t.TextMuted).Padding(4, 8)
+		case len(p.contacts) == 0:
+			text := locales.NoContactsToAdd()
+			if strings.TrimSpace(p.query) != "" {
+				text = locales.ContactsNoMatch(strings.TrimSpace(p.query))
+			}
+			ui.Text(c, text).FontSize(12).TextColor(t.TextMuted).MaxLines(3).Padding(4, 8)
+		default:
+			words := mail.ContactWords(p.query)
+			ui.Scroll(c).MaxHeight(t.Space(72)).Children(func() {
+				ui.Column(c).Gap(1).Label(locales.ChooseRecipients()).Children(func() {
+					for i, ct := range p.contacts {
+						cs.contactPickerRow(c, t, p, i, ct, words)
+					}
+				})
+			})
+		}
+	})
+}
+
+// contactPickerRow is one contact of the + button's list: its name and
+// address, the parts the search begins in bold, and the one the arrows
+// are on in the accent color.
+func (cs *composeState) contactPickerRow(c *ui.Context, t *ui.Theme, p *contactPicker, i int, ct mail.Contact, words []string) {
+	chosen := i == p.hi
+	row := ui.Row(c.Key("picker/"+mail.ContactKey(ct.Email))).Gap(10).Padding(6, 8).Radius(t.Radius).
+		AlignItems(ui.Center).Role(ui.RoleOption).Checked(chosen).PositionInSet(i+1, len(p.contacts)).
+		OnClick(func() { cs.addRecipientContact(ct) })
+	name, address, star := t.Text, t.TextMuted, t.Warning
+	switch {
+	case chosen:
+		row.Background(t.Accent)
+		name, address, star = t.AccentText, t.AccentText.Alpha(0.85), t.AccentText
+	case row.Hovered():
+		row.Background(t.SurfaceHover)
+	}
+	row.Children(func() {
+		if ct.Name != "" {
+			ui.RichText(c, matchSpans(ct.Name, words, false, name, 400)...).FontSize(13).SingleLine().Shrink(0).MaxWidth(180)
+		}
+		ui.RichText(c, matchSpans(ct.Email, words, true, address, 400)...).FontSize(12).SingleLine().Grow(1).MinWidth(0)
+		if ct.Favorite {
+			ui.Icon(c, starFilledIcon).FontSize(11).TextColor(star)
+		}
+	})
+}
+
+// loadContacts asks the address book, in a job, for the contacts the +
+// button's list shows: those the search finds, the addresses the fields
+// hold already left out. An answer a later query overtook is dropped.
+func (cs *composeState) loadContacts() {
+	p := &cs.rcpt.picker
+	if !p.open {
+		return
+	}
+	field, text := p.field, p.query
+	seq := cs.rcpt.pseq.Add(1)
+	exclude := cs.recipientAddresses()
+	p.loading, p.err = true, ""
+	a := cs.app
+	a.run(func() {
+		ctx, cancel := a.ctx()
+		var (
+			list []mail.Contact
+			err  error
+		)
+		if strings.TrimSpace(text) == "" {
+			var page mail.ContactPage
+			page, err = a.svc.Contacts(ctx, "", 0, contactPickerLimit+len(exclude))
+			list = page.Contacts
+		} else {
+			list, err = a.svc.Suggest(ctx, text, exclude, contactPickerLimit)
+		}
+		cancel()
+		excluded := make(map[string]bool, len(exclude))
+		for _, email := range exclude {
+			excluded[mail.ContactKey(email)] = true
+		}
+		kept := list[:0]
+		for _, ct := range list {
+			if !excluded[mail.ContactKey(ct.Email)] {
+				kept = append(kept, ct)
+			}
+		}
+		list = kept[:min(len(kept), contactPickerLimit)]
+		a.post(func() {
+			p := &cs.rcpt.picker
+			if cs.closed || cs.rcpt.pseq.Load() != seq || !p.open || p.field != field || p.query != text {
+				return
+			}
+			p.loading = false
+			p.err, p.contacts = "", nil
+			if err != nil {
+				p.err = locales.ContactsReadFailed(err.Error())
+			} else {
+				p.contacts = list
+			}
+			p.hi = min(max(p.hi, 0), len(p.contacts)-1)
+			cs.redraw()
+		})
+	})
+}
+
+// addRecipientContact adds a contact of the + button's list to the field
+// it was opened for, as a chip, and asks the list again without it.
+func (cs *composeState) addRecipientContact(ct mail.Contact) {
+	p := &cs.rcpt.picker
+	if !p.open {
+		return
+	}
+	f := p.field
+	cs.rcpt.tokens[f] = append(cs.rcpt.tokens[f], ct.Address().String())
+	cs.setJoined(f)
+	cs.changed()
+	if cs.rcpt.checks[f] != nil {
+		cs.checkRecipients(false, f)
+	}
+	p.hi = 0
+	cs.loadContacts()
 	cs.redraw()
 }
 

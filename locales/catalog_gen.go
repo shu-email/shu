@@ -6868,6 +6868,44 @@ func (msgs Messages) ContactsEmpty() string {
 	return Catalog.Format(msgs.locale, "contactsEmpty", nil)
 }
 
+// AddRecipientTo says "Add {field} recipient"
+// in the language the app shows.
+//
+// What assistive technology calls the + button of one recipient field.
+func AddRecipientTo(field string) string { return In(i18n.Locale()).AddRecipientTo(field) }
+
+// AddRecipientTo says "Add {field} recipient"
+// in the language of msgs.
+//
+// What assistive technology calls the + button of one recipient field.
+func (msgs Messages) AddRecipientTo(field string) string {
+	return Catalog.Format(msgs.locale, "addRecipientTo", map[string]any{"field": field})
+}
+
+// ChooseRecipients says "Choose recipients"
+// in the language the app shows.
+//
+// What assistive technology calls the list of contacts the + button opens.
+func ChooseRecipients() string { return In(i18n.Locale()).ChooseRecipients() }
+
+// ChooseRecipients says "Choose recipients"
+// in the language of msgs.
+//
+// What assistive technology calls the list of contacts the + button opens.
+func (msgs Messages) ChooseRecipients() string {
+	return Catalog.Format(msgs.locale, "chooseRecipients", nil)
+}
+
+// NoContactsToAdd says "No contacts to add."
+// in the language the app shows.
+func NoContactsToAdd() string { return In(i18n.Locale()).NoContactsToAdd() }
+
+// NoContactsToAdd says "No contacts to add."
+// in the language of msgs.
+func (msgs Messages) NoContactsToAdd() string {
+	return Catalog.Format(msgs.locale, "noContactsToAdd", nil)
+}
+
 // ContactsNoMatch says "No contacts match “{search}”."
 // in the language the app shows.
 func ContactsNoMatch(search string) string { return In(i18n.Locale()).ContactsNoMatch(search) }

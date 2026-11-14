@@ -267,6 +267,23 @@ func (s *memStore) ReclaimOperations(ctx context.Context, accountID string, befo
 	return nil
 }
 
+// ReleaseOperations puts back actions a call wrote but makes none of.
+func (s *memStore) ReleaseOperations(ctx context.Context, ids []int64, now time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, id := range ids {
+		for i, op := range s.pending {
+			if op.ID != id || op.State != OperationClaimed {
+				continue
+			}
+			s.pending[i].State = OperationPending
+			s.pending[i].ClaimedAt = time.Time{}
+			s.pending[i].NextTry = now
+		}
+	}
+	return nil
+}
+
 // CancelOperations drops actions before the server makes them, and
 // returns those it dropped.
 func (s *memStore) CancelOperations(ctx context.Context, ids []int64) ([]int64, error) {

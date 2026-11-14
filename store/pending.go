@@ -168,6 +168,21 @@ func (s *Store) RetryOperation(ctx context.Context, id int64, nextTry time.Time,
 	return err
 }
 
+// ReleaseOperations puts actions the caller held back for itself after
+// all in the queue, due now: it wrote them, but makes none of them.
+func (s *Store) ReleaseOperations(ctx context.Context, ids []int64, now time.Time) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	idArgs, marks := idList(ids)
+	args := append([]any{string(mail.OperationPending), now.Unix()}, idArgs...)
+	args = append(args, string(mail.OperationClaimed))
+	_, err := s.exec(ctx, `UPDATE pending_operations
+		SET state = ?, claimed_at = 0, next_try = ?
+		WHERE id IN (`+marks+`) AND state = ?`, args...)
+	return err
+}
+
 // FailOperation keeps an action the server refused, with its reason.
 func (s *Store) FailOperation(ctx context.Context, id int64, reason string) error {
 	_, err := s.exec(ctx, `UPDATE pending_operations

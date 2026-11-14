@@ -45,14 +45,29 @@ func (s *Service) writeSync(ctx context.Context, accountID string, batch SyncBat
 // writeArrivals writes a batch and sorts what arrived with it in one step,
 // under arrivalMu, which the watcher takes the mail to announce under
 // (takeNew): no message is announced before the rules said whether to,
-// and none is sorted twice. It reports whether it logged actions to
-// apply.
+// and none is sorted twice. A block only queues the moves it plans; the
+// account's worker makes them, which needs no arrival lock, so a server
+// out of reach delays neither this check nor what it announces. It
+// reports whether it logged actions to apply.
 func (s *Service) writeArrivals(ctx context.Context, accountID string, batch SyncBatch, sorts bool) (bool, error) {
 	s.arrivalMu.Lock()
 	defer s.arrivalMu.Unlock()
-	before, known, err := s.store.Folder(ctx, accountID, batch.Folder.Name)
+	apply, queued, err := s.writeArrivalsLocked(ctx, accountID, batch, sorts)
 	if err != nil {
 		return false, err
+	}
+	if queued {
+		s.wakeQueue(accountID)
+	}
+	return apply, nil
+}
+
+// writeArrivalsLocked is writeArrivals under arrivalMu. It reports whether
+// a block queued moves for the account's worker.
+func (s *Service) writeArrivalsLocked(ctx context.Context, accountID string, batch SyncBatch, sorts bool) (bool, bool, error) {
+	before, known, err := s.store.Folder(ctx, accountID, batch.Folder.Name)
+	if err != nil {
+		return false, false, err
 	}
 	// Only a sync writes SyncedAt: a folder without it was never synced,
 	// and one synced empty has all it gets next arrive.
@@ -63,14 +78,14 @@ func (s *Service) writeArrivals(ctx context.Context, accountID string, batch Syn
 		batch.Folder.LastUID = before.LastUID
 	}
 	if err := s.store.ApplySync(ctx, accountID, batch); err != nil {
-		return false, err
+		return false, false, err
 	}
 	if !same {
 		delete(s.movedIn, accountID+"\x00"+batch.Folder.Name)
 		delete(s.heldBack, accountID+"\x00"+batch.Folder.Name)
 	}
 	if !sorts || !same {
-		return false, nil
+		return false, false, nil
 	}
 	var arrived []UID
 	for _, m := range batch.Messages {
@@ -79,35 +94,39 @@ func (s *Service) writeArrivals(ctx context.Context, accountID string, batch Syn
 		}
 	}
 	if len(arrived) == 0 {
-		return false, nil
+		return false, false, nil
 	}
-	return s.sortArrivals(ctx, accountID, before, arrived), nil
+	apply, queued := s.sortArrivals(ctx, accountID, before, arrived)
+	return apply, queued, nil
 }
 
 // sortArrivals runs the rules over the messages that arrived in a folder
 // and logs each match, its actions to be applied in the background. It
-// reads the cache alone. It reports whether it logged actions to apply.
-// The caller holds arrivalMu.
-func (s *Service) sortArrivals(ctx context.Context, accountID string, folder Folder, uids []UID) bool {
+// reads the cache alone. It reports whether it logged actions to apply,
+// and whether a block queued moves for the account's worker. The caller
+// holds arrivalMu.
+func (s *Service) sortArrivals(ctx context.Context, accountID string, folder Folder, uids []UID) (bool, bool) {
 	msgs, err := s.store.MessageHeaders(ctx, accountID, folder.Name, uids)
 	if err != nil || len(msgs) == 0 {
-		return false
+		return false, false
 	}
 	msgs = s.skipMovedIn(ctx, accountID, folder, msgs)
 	// A block files its sender's mail before the rules see it: the rules
 	// sort the mail that stays. It holds back only what arrives in the
 	// inbox; mail in another folder is what the user or another mail client
-	// put there, and moving it again would undo their choice.
+	// put there, and moving it again would undo their choice. The moves
+	// themselves are made by the account's worker.
+	var queued bool
 	if folder.IsInbox() {
-		msgs = s.fileBlocked(ctx, accountID, folder, msgs)
+		msgs, queued = s.planBlocked(ctx, accountID, folder, msgs)
 	}
 	rules, err := s.sortingRules(ctx)
 	if err != nil {
-		return false
+		return false, queued
 	}
 	rules = slices.DeleteFunc(rules, func(r Rule) bool { return !r.watches(accountID, folder) })
 	if len(rules) == 0 || len(msgs) == 0 {
-		return false
+		return false, queued
 	}
 	slices.SortFunc(msgs, func(a, b Message) int { return cmp.Compare(a.UID, b.UID) })
 	var entries []RuleActivity
@@ -118,10 +137,10 @@ func (s *Service) sortArrivals(ctx context.Context, accountID string, folder Fol
 		}
 	}
 	if len(entries) == 0 {
-		return false
+		return false, queued
 	}
 	saved, err := s.store.AddRuleActivity(ctx, entries)
-	return err == nil && slices.ContainsFunc(saved, func(e RuleActivity) bool { return e.State == ActivityPending })
+	return err == nil && slices.ContainsFunc(saved, func(e RuleActivity) bool { return e.State == ActivityPending }), queued
 }
 
 // skipMovedIn leaves out of the messages that arrived in a folder those

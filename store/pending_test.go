@@ -218,6 +218,42 @@ func TestQueueReclaimTakesBackWhatARunLeft(t *testing.T) {
 	}
 }
 
+// An action a call wrote and then does not make goes back to the queue
+// at once, and with no attempt on it: nothing failed.
+func TestQueueReleaseGivesBackACallsClaim(t *testing.T) {
+	ctx := context.Background()
+	s := openTest(t)
+	addAccount(t, s, "a1")
+	ids, err := s.EnqueueOperations(ctx, queueOps())
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	if _, ok, _ := s.ClaimOperation(ctx, "a1", now); !ok {
+		t.Fatal("nothing claimed")
+	}
+	if err := s.ReleaseOperations(ctx, []int64{ids[0]}, now); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Operations(ctx, "a1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[0].State != mail.OperationPending || !got[0].ClaimedAt.IsZero() || got[0].Attempts != 0 {
+		t.Errorf("released = %+v", got[0])
+	}
+	// The ones the call never held are as they were.
+	for _, op := range got[1:] {
+		if op.State != mail.OperationPending || !op.ClaimedAt.IsZero() {
+			t.Errorf("release touched another action: %+v", op)
+		}
+	}
+	op, ok, err := s.ClaimOperation(ctx, "a1", now)
+	if err != nil || !ok || op.ID != ids[0] {
+		t.Errorf("after release = %+v, %v, %v", op, ok, err)
+	}
+}
+
 func TestQueueCancelDropsWhatIsNotMade(t *testing.T) {
 	ctx := context.Background()
 	s := openTest(t)

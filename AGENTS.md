@@ -140,7 +140,9 @@ Windows and Linux. It is written in Go with
   `Service.MoveMessages` (and so `Move`) write it to
   `pending_operations` (migration v21, `mail/queue.go`,
   `store/pending.go`) before the server is touched, show it in the cache
-  and return. The account's one queue worker, which runs beside its
+  and return; a block's filing queues its move the same way, and hands it
+  to the worker with `Store.ReleaseOperations` once no other work is
+  needed. The account's one queue worker, which runs beside its
   watcher, makes the actions oldest first, taking each with one state
   change (`Store.ClaimOperation`) so that no action is made twice, and
   it groups those one command makes (`Store.ClaimOperationsByKey`). A
@@ -366,11 +368,15 @@ Windows and Linux. It is written in Go with
   window alone opens. Nothing unsubscribes by itself, and the choice is
   kept per sender and account (`unsubscribes`, migration v23).
   A block names an address or a whole domain, per account, and the folder
-  its new mail goes to. `fileBlocked` runs in `sortArrivals` before the
-  rules, takes the sender's mail out of the batch and files it with
-  `MoveMessages`, so the move waits in the queue when the server is out
-  of reach, and the watcher announces none of it (`heldBack`). No cached
-  mail moves, and no server hears of the block. The banner's undo drops
+  its new mail goes to. `planBlocked` runs in `sortArrivals` before the
+  rules and, under the arrival lock, writes the moves to the queue and
+  hides the messages; the account's worker makes them, so a server out of
+  reach delays neither that check nor its announcement, and the worker
+  retries what it could not make. A refusal stays in the queue as failed
+  for the window, and its message comes back to the list but stays
+  unannounced: the watcher announces none of the mail a block holds back
+  (`heldBack`). No cached mail moves, and no server hears of
+  the block. The banner's undo drops
   the block and puts back the one it replaced, and the settings' Privacy
   tab lists the blocks to unblock (`Service.BlockedSenders`,
   `UnblockSender`, `blocked_senders`).

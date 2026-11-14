@@ -122,56 +122,77 @@ func (s *Service) BlockedSenders(ctx context.Context, accountID string) ([]Block
 	return s.store.BlockedSenders(ctx, accountID)
 }
 
-// fileBlocked files the mail of blocked senders away as it arrives and
-// returns the messages left for the rules: none of a blocked sender. The
-// move is written to the queue before the server is touched, so it is made
-// offline as well; the watcher announces none of the mail that was filed
-// or is waiting (see heldBack). A move that failed leaves the message
-// where it arrived, to be sorted and announced as any other, rather than
-// held back in silence.
-func (s *Service) fileBlocked(ctx context.Context, accountID string, folder Folder, msgs []Message) []Message {
+// planBlocked takes the mail of blocked senders out of msgs, queues a move
+// of each to the block's folder and hides it in the cache, all without
+// touching the server: the account's worker makes the moves, woke by
+// writeArrivals. It notes the messages for the watcher to announce none of
+// them (see heldBack) and reports whether it queued any. Mail a refused
+// move brings back is not sorted by the rules: they ran on the batch as it
+// arrived. The caller holds arrivalMu.
+func (s *Service) planBlocked(ctx context.Context, accountID string, folder Folder, msgs []Message) ([]Message, bool) {
 	if len(msgs) == 0 {
-		return msgs
+		return msgs, false
 	}
 	blocks, err := s.store.BlockedSenders(ctx, accountID)
 	if err != nil || len(blocks) == 0 {
-		return msgs
+		return msgs, false
 	}
-	byDest := map[string][]MessageRef{}
+	held := map[UID]bool{}
+	var ops []PendingOperation
 	for _, m := range msgs {
 		b, ok := Blocked(blocks, m.From)
-		if !ok || b.Folder == folder.Name {
+		if !ok || b.Folder == folder.Name || held[m.UID] {
 			continue
 		}
-		byDest[b.Folder] = append(byDest[b.Folder], MessageRef{Folder: folder.Name, UID: m.UID})
+		held[m.UID] = true
+		ops = append(ops, PendingOperation{
+			Kind: OpMove, Folder: folder.Name, UID: m.UID, Dest: b.Folder, Validity: folder.UIDValidity,
+		})
 	}
-	if len(byDest) == 0 {
-		return msgs
+	if len(ops) == 0 {
+		return msgs, false
 	}
-	// The move outlives the context of the check that found this mail: the
-	// mail is filed even as a sync that began it ends.
-	base := context.WithoutCancel(ctx)
-	filed := map[UID]bool{}
-	for dest, refs := range byDest {
-		ctx, cancel := context.WithTimeout(base, ruleApplyTimeout)
-		_, err := s.MoveMessages(ctx, accountID, refs, dest)
-		cancel()
-		if err != nil {
-			continue
-		}
-		for _, ref := range refs {
-			filed[ref.UID] = true
-		}
+	// The writes outlive the check that found the mail: the batch is in the
+	// cache already, and a check that ends must not leave it unfiled for a
+	// later sync that will not count it as arrived again.
+	bg := context.WithoutCancel(ctx)
+	// The moves are this call's until their rows are hidden, so that the
+	// account's worker cannot make one and put the row back meanwhile.
+	ids, err := s.enqueueOperations(bg, accountID, ops)
+	if err != nil {
+		// A cache that cannot take the moves cannot hide the mail either:
+		// it stays an ordinary arrival, in the list and announced, rather
+		// than leave a row that no action would ever bring back.
+		return msgs, false
 	}
-	if len(filed) == 0 {
-		return msgs
+	groups := []uidGroup{{folder: folder.Name}}
+	for _, op := range ops {
+		groups[0].uids = append(groups[0].uids, op.UID)
+	}
+	// Only a watched account has a worker to make the moves: without one,
+	// the mail stays in the list as an ordinary arrival, and the queue
+	// keeps the moves for a worker to make when the account is watched.
+	if !s.queueRunning(accountID) {
+		_ = s.store.ReleaseOperations(bg, ids, s.now())
+		return msgs, false
+	}
+	if err := s.hideQueued(bg, accountID, groups, ids); err != nil {
+		return msgs, false
+	}
+	// The worker makes them once wakeQueue sets it on them.
+	if err := s.store.ReleaseOperations(bg, ids, s.now()); err != nil {
+		// The moves are not its to make: the mail comes back to the list,
+		// as an arrival no block filed.
+		s.showQueued(bg, accountID, groups)
+		s.dropOperations(bg, ids)
+		return msgs, false
 	}
 	note := accountID + "\x00" + folder.Name
 	if s.heldBack[note] == nil {
 		s.heldBack[note] = map[UID]bool{}
 	}
-	for uid := range filed {
+	for uid := range held {
 		s.heldBack[note][uid] = true
 	}
-	return slices.DeleteFunc(msgs, func(m Message) bool { return filed[m.UID] })
+	return slices.DeleteFunc(msgs, func(m Message) bool { return held[m.UID] }), true
 }

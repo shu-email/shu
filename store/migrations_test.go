@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/plugins/sqlite"
 
@@ -357,4 +358,120 @@ func TestFailedMigrationRollsBack(t *testing.T) {
 		t.Errorf("user_version = %d, want %d", got, SchemaVersion)
 	}
 	checkUpgradedData(t, s, 12)
+}
+
+func TestMigrationsFromEmpty(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	rows, err := s.query(ctx, "PRAGMA user_version")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := number(rows.Values[0][0]); got != int64(SchemaVersion) {
+		t.Fatalf("user_version = %d, want %d", got, SchemaVersion)
+	}
+	rows, err = s.query(ctx, `SELECT name FROM sqlite_master WHERE type IN ('table', 'index', 'trigger')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	have := map[string]bool{}
+	for _, r := range rows.Values {
+		have[text(r[0])] = true
+	}
+	for _, name := range []string{
+		"accounts", "kv", "folders", "messages", "attachments", "outbox",
+		"messages_fts", "messages_list", "messages_message_id", "folders_account",
+		"messages_ai", "messages_ad", "messages_au", "outbox_account",
+		"ai_cache", "ai_cache_account",
+		"drafts", "drafts_account",
+		"draft_attachments",
+		"watermarks",
+		"threads", "threads_account", "thread_refs", "thread_refs_thread", "messages_thread",
+		"messages_thread_insert", "messages_thread_update",
+		"messages_date", "messages_flagged",
+		"identities", "identities_email",
+		"contacts", "contacts_rank", "contact_terms", "contact_terms_key", "contact_messages",
+		"labels", "labels_name", "labels_keyword", "message_labels", "message_labels_label",
+		"local_labels", "local_labels_key", "messages_key",
+		"reminders", "reminders_account", "reminders_due",
+		"follow_up_dismissals", "follow_up_dismissals_thread",
+		"smart_mailboxes", "smart_mailboxes_account",
+		"discoveries",
+		"rules", "rules_account", "rule_log", "rule_log_rule", "rule_log_account", "rule_log_message",
+		"expected_arrivals", "expected_arrivals_key",
+	} {
+		if !have[name] {
+			t.Errorf("missing schema object %q", name)
+		}
+	}
+	for _, column := range [][2]string{
+		{"accounts", "oauth"}, {"drafts", "identity"}, {"outbox", "due_at"}, {"outbox", "draft_id"},
+		{"messages", "msg_key"}, {"folders", "permanent_flags"},
+	} {
+		if !hasColumn(t, s, column[0], column[1]) {
+			t.Errorf("%s has no %s column", column[0], column[1])
+		}
+	}
+	// Reopening runs no migration and keeps the data.
+	addAccount(t, s, "a1")
+	path := t.TempDir() + "/shu.db"
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		db, err := Open(ctx, path)
+		if err != nil {
+			t.Fatalf("reopen %d: %v", i, err)
+		}
+		accounts, err := db.Accounts(ctx)
+		if err != nil || len(accounts) != 0 {
+			t.Fatalf("reopen %d accounts = %v, %v", i, accounts, err)
+		}
+		db.Close()
+	}
+}
+
+func TestMigrationAddsDraftsToAnOlderDatabase(t *testing.T) {
+	sqlitetest.Require(t)
+	ctx := context.Background()
+	path := t.TempDir() + "/shu.db"
+	// Build a v2 database by hand, as the previous release left it.
+	db, err := sqlite.Open(ctx, path, sqlite.OpenOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for v := 0; v < 2; v++ {
+		for _, q := range migrations[v] {
+			if _, err := db.Execute(ctx, q); err != nil {
+				t.Fatalf("v%d: %v", v+1, err)
+			}
+		}
+	}
+	if _, err := db.Execute(ctx, `INSERT INTO accounts
+		(id, name, email, username, imap_host, imap_port, imap_tls, smtp_host, smtp_port, smtp_tls)
+		VALUES ('a1', 'Ann', 'ann@example.com', 'ann', 'imap.example.com', 993, 'tls', 'smtp.example.com', 465, 'tls')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Execute(ctx, "PRAGMA user_version=2"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	rows, err := s.query(ctx, "PRAGMA user_version")
+	if err != nil || number(rows.Values[0][0]) != int64(SchemaVersion) {
+		t.Fatalf("user_version = %v, %v", rows.Values, err)
+	}
+	if accounts, err := s.Accounts(ctx); err != nil || len(accounts) != 1 {
+		t.Fatalf("accounts after the migration = %v, %v", accounts, err)
+	}
+	if _, err := s.SaveDraft(ctx, mail.Draft{ID: "d1", AccountID: "a1", Subject: "x", UpdatedAt: time.Unix(1_700_000_000, 0)}); err != nil {
+		t.Fatalf("draft in a migrated database: %v", err)
+	}
 }

@@ -37,11 +37,14 @@ func (s *Store) PrepareCache(ctx context.Context, version int) (bool, error) {
 	return true, s.transaction(ctx, cleared)
 }
 
+// attachmentFileRefsSQL is the sweep's read, which v26's index drives.
+const attachmentFileRefsSQL = `SELECT cache_path FROM attachments
+	WHERE cache_path IS NOT NULL AND cache_path <> ''`
+
 // AttachmentFileRefs lists the files the cached attachments' bytes are in,
 // which a sweep of the cache directory keeps.
 func (s *Store) AttachmentFileRefs(ctx context.Context) ([]string, error) {
-	rows, err := s.query(ctx, `SELECT cache_path FROM attachments
-		WHERE cache_path IS NOT NULL AND cache_path <> ''`)
+	rows, err := s.query(ctx, attachmentFileRefsSQL)
 	if err != nil {
 		return nil, err
 	}

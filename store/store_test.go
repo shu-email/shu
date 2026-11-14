@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -464,5 +465,50 @@ func TestFlagUpdateBooleansAreAllWritten(t *testing.T) {
 	}
 	if want := []string{"Seen", "Flagged"}; !slices.Equal(bools, want) {
 		t.Errorf("mail.FlagUpdate holds %v; ApplySync groups and writes %v", bools, want)
+	}
+}
+
+// The cache directory's sweep and the one of the sends an earlier run left
+// find their rows by the index added in v26, in the order they read them:
+// neither reads the table whole nor sorts what it found.
+func TestCacheSweepsFindTheirRowsByIndex(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	for _, q := range []struct {
+		name, table, query, index string
+		args                      []any
+	}{
+		{"the attachment files", "attachments", attachmentFileRefsSQL, "attachments_cache_path", nil},
+		{"the sends left", "outbox", scheduledSendsSQL, "outbox_state_due", []any{mail.StateScheduled}},
+	} {
+		rows, err := s.query(ctx, `EXPLAIN QUERY PLAN `+q.query, q.args...)
+		if err != nil {
+			t.Fatalf("%s: %v", q.name, err)
+		}
+		var steps []string
+		for _, r := range rows.Values {
+			steps = append(steps, text(r[len(r)-1]))
+		}
+		plan := strings.Join(steps, "\n")
+		if !strings.Contains(plan, "INDEX "+q.index) {
+			t.Errorf("%s does not read %s:\n%s", q.name, q.index, plan)
+		}
+		if strings.Contains(plan, "TEMP B-TREE") || strings.Contains(plan, "SCAN "+q.table) ||
+			strings.HasSuffix(plan, "SCAN "+q.table) {
+			t.Errorf("%s reads or sorts its table whole:\n%s", q.name, plan)
+		}
+	}
+	// The folders a label's lists read come in the order the account's
+	// index gives them: the one they were sorted by is gone (v26).
+	rows, err := s.query(ctx, `EXPLAIN QUERY PLAN `+labelFoldersSQL, "a1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var steps []string
+	for _, r := range rows.Values {
+		steps = append(steps, text(r[len(r)-1]))
+	}
+	if plan := strings.Join(steps, "\n"); strings.Contains(plan, "TEMP B-TREE") {
+		t.Errorf("the folders a label reads are sorted:\n%s", plan)
 	}
 }

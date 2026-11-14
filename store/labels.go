@@ -125,10 +125,15 @@ func (s *Store) labelUnread(ctx context.Context, accountID string) (map[mail.Lab
 	return out, nil
 }
 
+// labelFoldersSQL reads an account's folders. They are only tested for
+// membership, so they come in whatever order the account's index finds
+// them, with no sort of their own (v26).
+const labelFoldersSQL = `SELECT id, COALESCE(special_use, '') FROM folders WHERE account_id = ?`
+
 // labelFolders are the rows of an account's folders that a label's list
 // reads (mail.Folder.InLabelScope).
 func (s *Store) labelFolders(ctx context.Context, accountID string) ([]int64, error) {
-	rows, err := s.query(ctx, `SELECT id, COALESCE(special_use, '') FROM folders WHERE account_id = ? ORDER BY id`, accountID)
+	rows, err := s.query(ctx, labelFoldersSQL, accountID)
 	if err != nil {
 		return nil, err
 	}

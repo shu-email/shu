@@ -156,8 +156,12 @@ func (s *Service) skipMovedIn(ctx context.Context, accountID string, folder Fold
 		return msgs
 	}
 	note := accountID + "\x00" + folder.Name
+	byKey := make(map[string]bool, len(moved))
+	for _, key := range moved {
+		byKey[key] = true
+	}
 	return slices.DeleteFunc(msgs, func(m Message) bool {
-		if !slices.Contains(moved, LabelKey(m.Summary)) {
+		if !byKey[LabelKey(m.Summary)] {
 			return false
 		}
 		if folder.IsInbox() {
@@ -240,9 +244,13 @@ func (s *Service) expectArrivals(ctx context.Context, c *imapSession, accountID 
 	if err != nil {
 		return forget
 	}
+	asked := make(map[UID]bool, len(uids))
+	for _, uid := range uids {
+		asked[uid] = true
+	}
 	var keys []string
 	for _, buf := range fetched {
-		if buf.Envelope != nil && slices.Contains(uids, UID(buf.UID)) {
+		if buf.Envelope != nil && asked[UID(buf.UID)] {
 			keys = append(keys, LabelKey(summaryFromFetch(buf, false).Summary))
 		}
 	}

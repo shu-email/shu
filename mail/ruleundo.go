@@ -192,14 +192,13 @@ func (u *undoRun) moveBack() {
 				continue
 			}
 			moving = append(moving, i)
-			if !slices.Contains(uids, uid) {
-				uids = append(uids, uid)
-			}
+			uids = append(uids, uid)
 		}
+		slices.Sort(uids)
+		uids = slices.Compact(uids)
 		if len(uids) == 0 {
 			continue
 		}
-		slices.Sort(uids)
 		moved, err := u.s.moveOnServer(u.ctx, a, password, r.from, uids, r.to)
 		if err != nil {
 			for _, i := range moving {

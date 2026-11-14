@@ -863,6 +863,7 @@ func (s *Service) MoveBackMessages(ctx context.Context, accountID string, moved 
 	type route struct{ from, to string }
 	var order []route
 	byRoute := map[route][]UID{}
+	seen := map[route]map[UID]bool{}
 	for _, m := range moved {
 		if m.Pending != 0 {
 			continue
@@ -874,10 +875,13 @@ func (s *Service) MoveBackMessages(ctx context.Context, accountID string, moved 
 		r := route{m.Folder, m.From}
 		if _, ok := byRoute[r]; !ok {
 			order = append(order, r)
+			seen[r] = map[UID]bool{}
 		}
-		if !slices.Contains(byRoute[r], m.DestUID) {
-			byRoute[r] = append(byRoute[r], m.DestUID)
+		if seen[r][m.DestUID] {
+			continue
 		}
+		seen[r][m.DestUID] = true
+		byRoute[r] = append(byRoute[r], m.DestUID)
 	}
 	if len(order) > 0 {
 		a, password, err := s.account(ctx, accountID)
@@ -912,6 +916,7 @@ type uidGroup struct {
 func byFolder(msgs []MessageRef, skip string) []uidGroup {
 	var out []uidGroup
 	index := map[string]int{}
+	seen := map[string]map[UID]bool{}
 	for _, m := range msgs {
 		if m.Folder == skip {
 			continue
@@ -920,11 +925,14 @@ func byFolder(msgs []MessageRef, skip string) []uidGroup {
 		if !ok {
 			i = len(out)
 			index[m.Folder] = i
+			seen[m.Folder] = map[UID]bool{}
 			out = append(out, uidGroup{folder: m.Folder})
 		}
-		if !slices.Contains(out[i].uids, m.UID) {
-			out[i].uids = append(out[i].uids, m.UID)
+		if seen[m.Folder][m.UID] {
+			continue
 		}
+		seen[m.Folder][m.UID] = true
+		out[i].uids = append(out[i].uids, m.UID)
 	}
 	return out
 }

@@ -874,8 +874,7 @@ func (a *app) setLabelNote(text string) {
 
 // labelNoteBanner shows the note about labels.
 func (a *app) labelNoteBanner(c *ui.Context, t *ui.Theme) {
-	ui.Row(c.Key("banner/label-note")).Shrink(0).Gap(8).AlignItems(ui.Center).Padding(8, 14).
-		Background(t.Accent.Alpha(0.08)).Transition(bannerMotion).Children(func() {
+	bannerRow(c, "banner/label-note", t.Accent.Alpha(0.08)).Children(func() {
 		ui.Icon(c, cloudOffIcon).FontSize(14).TextColor(t.Accent)
 		// A status, so that a screen reader says it once as it appears.
 		ui.Text(c, a.labels.note).FontSize(12).TextColor(t.Text).Grow(1).MinWidth(0).MaxLines(4).Role(ui.RoleStatus)

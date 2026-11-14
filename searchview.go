@@ -457,16 +457,16 @@ func (a *app) searchBar(c *ui.Context, t *ui.Theme) {
 			a.scopeSeg = i
 		}
 	}
-	ui.Column(c.Key("search-bar")).Shrink(0).Padding(8, 14).Gap(8).BorderWidth(0, 0, 1, 0).BorderColor(t.Border).
-		Transition(bannerMotion).Children(func() {
-		ui.Segmented(c, &a.scopeSeg, labels...).FillEqually().Label(locales.SearchScope()).
-			OnChange(func() {
-				if a.scopeSeg >= 0 && a.scopeSeg < len(choices) {
-					a.chooseScope(choices[a.scopeSeg])
-				}
-			})
-		a.filterChips(c, t)
-	})
+	bannerColumn(c, "search-bar", ui.Transparent).Gap(8).BorderWidth(0, 0, 1, 0).BorderColor(t.Border).
+		Children(func() {
+			ui.Segmented(c, &a.scopeSeg, labels...).FillEqually().Label(locales.SearchScope()).
+				OnChange(func() {
+					if a.scopeSeg >= 0 && a.scopeSeg < len(choices) {
+						a.chooseScope(choices[a.scopeSeg])
+					}
+				})
+			a.filterChips(c, t)
+		})
 }
 
 // filterChips shows the search's filters, each with a button that takes

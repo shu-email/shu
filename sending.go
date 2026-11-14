@@ -160,9 +160,8 @@ func (a *app) waitingNotice(c *ui.Context, t *ui.Theme) {
 	for _, w := range a.waiting {
 		left := w.due.Sub(c.Now())
 		counting := left > 0 && !w.tooLate
-		ui.Row(c.Key("waiting/"+w.id)).Shrink(0).Gap(8).AlignItems(ui.Center).Padding(8, 14).
-			Background(t.Accent.Alpha(0.08)).BorderWidth(0, 0, 1, 0).BorderColor(t.Border).
-			Transition(bannerMotion).Children(func() {
+		bannerRow(c, "waiting/"+w.id, t.Accent.Alpha(0.08)).
+			BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
 			ui.Icon(c, sentIcon).FontSize(14).TextColor(t.Accent)
 			ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
 				text := locales.Sending()
@@ -196,8 +195,7 @@ func (a *app) sendNoteBanner(c *ui.Context, t *ui.Theme) {
 	if a.sendNoteWarn {
 		icon, color = alertIcon, t.Warning
 	}
-	ui.Row(c.Key("banner/send-note")).Shrink(0).Gap(8).AlignItems(ui.Center).Padding(8, 14).
-		Background(color.Alpha(0.10)).Transition(bannerMotion).Children(func() {
+	bannerRow(c, "banner/send-note", color.Alpha(0.10)).Children(func() {
 		ui.Icon(c, icon).FontSize(14).TextColor(color)
 		// A status, so that a screen reader says it once as it appears.
 		ui.Text(c, a.sendNote).FontSize(12).TextColor(t.Text).Grow(1).MinWidth(0).MaxLines(4).Role(ui.RoleStatus)

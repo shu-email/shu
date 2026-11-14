@@ -398,8 +398,7 @@ func (a *app) signInBanners(c *ui.Context, t *ui.Theme) {
 		if !a.needSignIn[acc.ID] {
 			continue
 		}
-		ui.Column(c.Key("sign-in/"+acc.ID)).Shrink(0).Gap(6).Padding(10, 14).
-			Background(t.Warning.Alpha(0.10)).Transition(bannerMotion).Children(func() {
+		bannerColumn(c, "sign-in/"+acc.ID, t.Warning.Alpha(0.10)).Padding(10, 14).Children(func() {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Icon(c, alertIcon).FontSize(14).TextColor(t.Warning)
 				ui.Text(c, locales.SignInNeeded(acc.Label())).FontSize(12).Bold().Grow(1).MinWidth(0).MaxLines(2)

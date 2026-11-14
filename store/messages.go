@@ -345,7 +345,7 @@ func (s *Store) ApplySync(ctx context.Context, accountID string, b mail.SyncBatc
 		threads[j] = plan.assign(keys[j], cached[h.UID].thread)
 	}
 
-	stmts := make([]stmtType, 0, len(b.Messages)+len(again)+len(b.Flags)+8)
+	stmts := make([]stmtType, 0, len(b.Messages)+len(again)+4+8)
 	if b.Reset {
 		stmts = append(stmts, stmt(`DELETE FROM messages WHERE folder_id = ?`, folderID))
 	}
@@ -360,10 +360,30 @@ func (s *Store) ApplySync(ctx context.Context, accountID string, b mail.SyncBatc
 			WHERE folder_id = ? AND server_uid = ?`,
 			encodeJSON(h.References), h.ThreadIndex, plan.find(threads[len(b.Messages)+i]), folderID, int64(h.UID)))
 	}
+	// The flags of a refreshed window go in one statement a pair of values,
+	// and only to the rows the server changed: a sync that changes none
+	// writes none, and the trigger that keeps the conversations' totals
+	// does not run for a row whose flags are those it had.
+	var flags [4][]mail.UID
 	for _, f := range b.Flags {
+		i := 0
+		if f.Seen {
+			i |= 1
+		}
+		if f.Flagged {
+			i |= 2
+		}
+		flags[i] = append(flags[i], f.UID)
+	}
+	for i, uids := range flags {
+		if len(uids) == 0 {
+			continue
+		}
+		seen, flagged := i&1 != 0, i&2 != 0
 		stmts = append(stmts, stmt(`UPDATE messages SET seen = ?, flagged = ?
-			WHERE folder_id = ? AND server_uid = ?`,
-			boolInt(f.Seen), boolInt(f.Flagged), folderID, int64(f.UID)))
+			WHERE folder_id = ? AND server_uid IN (SELECT value FROM json_each(?))
+			AND (seen <> ? OR flagged <> ?)`,
+			boolInt(seen), boolInt(flagged), folderID, jsonText(uids), boolInt(seen), boolInt(flagged)))
 	}
 	labels, err := s.keywordLabels(ctx, accountID, folderID, keywordRows(b.Messages, b.Flags), b.Folder.SyncedAt)
 	if err != nil {

@@ -69,6 +69,19 @@ func clearThreadFolderSQL(thread, folder string) string {
 }
 
 func insertThreadFolderSQL(thread, folder string) string {
+	return insertThreadFolderWhere(thread, folder, "")
+}
+
+// insertThreadFolderWhere is insertThreadFolderSQL with a condition the
+// counted messages must also meet, in the WHERE: what the query does not
+// select, it does not aggregate, even to drop it after.
+func insertThreadFolderWhere(thread, folder, cond string) string {
+	where := `m.thread_id = ` + thread + ` AND m.folder_id = ` + folder + `
+			AND m.deleted = 0`
+	if cond != "" {
+		where += `
+			AND ` + cond
+	}
 	return `INSERT INTO thread_folders
 			(thread_id, folder_id, last_message_at,
 			 message_count, unread_count, starred_count, attachment_count)
@@ -76,9 +89,36 @@ func insertThreadFolderSQL(thread, folder string) string {
 			COUNT(*), COALESCE(SUM(m.seen = 0), 0),
 			COALESCE(SUM(m.flagged), 0), COALESCE(SUM(m.has_attachments), 0)
 		FROM messages m INDEXED BY messages_thread
-		WHERE m.thread_id = ` + thread + ` AND m.folder_id = ` + folder + `
-			AND m.deleted = 0
+		WHERE ` + where + `
 		HAVING COUNT(*) > 0`
+}
+
+// movedGuard holds for an update that takes a message to another
+// conversation or folder: only then do the totals of the one it left
+// need writing again. A move in the cache goes as a tombstone and a
+// delete, so a conversation changes and a folder does not; the folder
+// half is for a writer that changes one in place.
+const movedGuard = `(old.thread_id IS NOT new.thread_id OR old.folder_id IS NOT new.folder_id)`
+
+// threadAggregateUpdateMigration recreates the trigger of an update of a
+// message, which used to write the conversation the message left even
+// when it was the same one. A flag changes one conversation's totals, so
+// the write of the one it stayed in was the same write over again, and
+// the trigger now leaves it out.
+func threadAggregateUpdateMigration() []string {
+	left := aggregateThreadSQL("old.thread_id") + " AND " + movedGuard + ";\n" +
+		clearThreadFolderSQL("old.thread_id", "old.folder_id") + " AND " + movedGuard + ";\n" +
+		insertThreadFolderWhere("old.thread_id", "old.folder_id", movedGuard) + ";"
+	return []string{
+		`DROP TRIGGER messages_agg_au`,
+		`CREATE TRIGGER messages_agg_au
+		AFTER UPDATE OF thread_id, folder_id, date, seen, flagged, has_attachments, deleted ON messages
+		BEGIN ` + left + "\n" +
+			aggregateThreadSQL("new.thread_id") + ";\n" +
+			clearThreadFolderSQL("new.thread_id", "new.folder_id") + ";\n" +
+			insertThreadFolderSQL("new.thread_id", "new.folder_id") + ";\n" +
+			`END`,
+	}
 }
 
 // threadAggregateMigration adds the columns, the table and the triggers

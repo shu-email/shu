@@ -553,6 +553,10 @@ var migrations = [][]string{
 			at INTEGER NOT NULL,
 			PRIMARY KEY (account_id, value, domain))`,
 	},
+	// v24: a message that stays in its conversation recomputes that
+	// conversation once, not twice, when one of its aggregates' columns
+	// changes (see thread_aggregates.go).
+	threadAggregateUpdateMigration(),
 }
 
 // backfills compute, from the rows of the version before, statements a

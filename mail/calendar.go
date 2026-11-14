@@ -35,6 +35,10 @@ type CalendarInvite struct {
 	Organizer Address
 	Attendees []CalendarAttendee
 	Canceled  bool
+	// Floating says the times carry no zone: RFC 5545's floating time,
+	// which is the reader's own wall clock wherever they are. All-day
+	// events are not floating: theirs is a date, not a time.
+	Floating bool
 	// StartRaw and EndRaw are the original property values, so a reply
 	// names the same instant and zone.
 	StartRaw string
@@ -100,6 +104,7 @@ func ParseCalendar(raw string) (*CalendarInvite, error) {
 			if inEvent {
 				event.StartRaw = line
 				event.Start, event.AllDay = calendarTime(value, params)
+				event.Floating = calendarFloating(value, params)
 			}
 		case "DTEND":
 			if inEvent {
@@ -229,6 +234,16 @@ func calendarTime(value string, params map[string]string) (time.Time, bool) {
 	}
 	t, _ := time.ParseInLocation(layout, value, loc)
 	return t, false
+}
+
+// calendarFloating reports a date-time with neither a zone nor a "Z":
+// RFC 5545's floating time.
+func calendarFloating(value string, params map[string]string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" || strings.EqualFold(params["VALUE"], "DATE") || len(value) == 8 || strings.HasSuffix(value, "Z") {
+		return false
+	}
+	return strings.TrimSpace(params["TZID"]) == ""
 }
 
 // CalendarReply builds the iMIP reply an organizer can read: a

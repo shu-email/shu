@@ -962,7 +962,12 @@ the engine's actions, `mail.ActionKinds`, and no others.
   `CalendarRaw` so the pane can say so instead of showing nothing. The
   invitation is stored with the message (`messages.calendar`) so the card shows
   from the cache after a restart.
-- The reading pane shows a card with the summary, the time in the user's zone,
+- A date-time with neither `Z` nor `TZID` is RFC 5545's floating time, the
+  reader's own clock wherever they are; `CalendarInvite.Floating` keeps that,
+  and the card names no zone for it. An all-day event is a date, which no zone
+  moves.
+- The reading pane shows a card with the summary, the time in the user's zone
+  and written as the user's locale writes it (`i18n.FormatDateRange`),
   location, organizer, attendee count, an update or cancellation marker, and the
   user's PARTSTAT when known. Accept / Maybe / Decline send an iMIP reply
   (`CalendarReply`) through the normal `Send` path with a

@@ -59,6 +59,30 @@ func TestParseCalendarAllDayAndCancel(t *testing.T) {
 	}
 }
 
+// A date-time with neither a zone nor a "Z" is floating: the reader's
+// own wall clock, wherever they are.
+func TestParseCalendarFloatingTime(t *testing.T) {
+	base := "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nSUMMARY:S\r\n"
+	for _, tc := range []struct {
+		line string
+		want bool
+	}{
+		{"DTSTART:20260305T100000\r\n", true},
+		{"DTSTART:20260305T100000Z\r\n", false},
+		{"DTSTART;TZID=Europe/Berlin:20260305T100000\r\n", false},
+		{"DTSTART;VALUE=DATE:20260305\r\n", false},
+		{"DTSTART:20260305\r\n", false},
+	} {
+		inv, err := ParseCalendar(base + tc.line + "END:VEVENT\r\nEND:VCALENDAR\r\n")
+		if err != nil {
+			t.Fatalf("%q: %v", tc.line, err)
+		}
+		if inv.Floating != tc.want {
+			t.Errorf("%q: floating = %v, want %v", tc.line, inv.Floating, tc.want)
+		}
+	}
+}
+
 func TestCalendarReply(t *testing.T) {
 	inv, err := ParseCalendar(testInvite)
 	if err != nil {

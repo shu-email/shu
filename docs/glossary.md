@@ -142,7 +142,7 @@ A message's cache row while a move is unconfirmed: `deleted = 1` hides
 it from lists and counts without losing it, so an undo or a refused move
 can bring it back. Once the server confirms, the source row goes.
 `Store.MarkDeleted` ([store/messages.go](../store/messages.go)), used by
-[move paths in mail/service.go](../mail/service.go).
+[move paths in mail/changes.go](../mail/changes.go).
 *Not:* "deleted message" (the user's Trash is a folder; a tombstone is
 this device's bookkeeping) or "soft delete" in user-facing text.
 

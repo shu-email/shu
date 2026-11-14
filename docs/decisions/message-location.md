@@ -25,7 +25,7 @@ Shu's cache keeps **one row per message copy in a folder**:
 source row (`deleted = 1`), the server's copy is made, and the source row
 is deleted once the server confirms; the destination row is written by
 the next sync of that folder, so a move reads as the message leaving the
-folder until that sync brings it there (`mail/service.go`,
+folder until that sync brings it there (`mail/changes.go`,
 `mail/queue.go`, `store/messages.go`). Geary (`MessageTable` +
 `MessageLocationTable`), meli (`folder_and_envelope`) and Penguin Mail
 (`message_mailboxes`) instead keep one row per message identity and a
@@ -248,7 +248,7 @@ the honest rollback is a restored copy:
   joins, pages, searches, aggregates threads, contacts, labels, rules,
   watermarks and the queue is re-read.
 - Six engine files in `mail/` (`block.go`, `queue.go`, `reminders.go`,
-  `service.go`, `store.go`, `undo.go`) and nine test files use
+  `changes.go`, `store.go`, `undo.go`) and nine test files use
   `MoveMessages`, `MoveBackMessages`, `MarkDeleted`, `SetFlags` or the
   queue. Their public shape (`MessageRef`, `MoveResult`) survives, but a
   result's meaning (a moved copy) becomes a location.

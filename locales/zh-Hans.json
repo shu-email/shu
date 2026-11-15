@@ -238,7 +238,7 @@
   "aiDrafts": "起草回复",
   "aiDraftsDetail": "在写信窗口中生成可编辑的回复。发送与摘要相同的节选，以及你填写的提示。",
   "aiTranslate": "翻译",
-  "aiTranslateDetail": "把当前打开的邮件翻译成你的语言。发送整封正文，最多 {limit} 个字符，不含引用的历史回复、签名和链接地址。",
+  "aiTranslateDetail": "把当前打开的邮件翻译成你的语言。发送正文文字，最多 {limit} 个字符：HTML 邮件发送各段可见文字，绝不发送链接地址、图片或附件，链接、表格和加粗都会保留原位。",
   "aiTranslateTo": "翻译为",
   "aiTranslateFollowApp": "与界面语言一致",
   "aiFeatureModel": "此功能使用的模型（可选）",

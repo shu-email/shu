@@ -55,6 +55,9 @@ type aiService interface {
 	Triage(ctx context.Context, items []ai.TriageItem, language string) (ai.TriageResult, error)
 	TranslatePayload(ctx context.Context, m ai.Message, target string) (ai.Payload, error)
 	Translate(ctx context.Context, m ai.Message, target string) (ai.Translation, error)
+	// TranslateHTML translates a message's HTML without losing its markup.
+	TranslateHTMLPayload(ctx context.Context, m ai.HTMLMessage, target string) (ai.Payload, error)
+	TranslateHTML(ctx context.Context, m ai.HTMLMessage, target string) (ai.HTMLTranslation, error)
 	DraftPayload(ctx context.Context, m ai.Message, guidance string) (ai.Payload, error)
 	Draft(ctx context.Context, m ai.Message, guidance string) (ai.Result, error)
 }

@@ -388,6 +388,10 @@ func recipients(list []mail.Address) string {
 func (a *app) body(c *ui.Context, t *ui.Theme, m *mail.Summary, msg *mail.Message) {
 	key := summaryKey(*m)
 	switch {
+	case a.translationShows(key) && a.translatedHTML(key) != "" && a.webview != nil:
+		ui.Column(c).Radius(10).Border(1, t.Border).Background(t.Background).Children(func() {
+			ui.WebView(c, a.webview).Height(480)
+		})
 	case a.translationShows(key):
 		ui.Column(c).Padding(18, 20).Radius(10).Border(1, t.Border).
 			Background(t.Background).Children(func() {

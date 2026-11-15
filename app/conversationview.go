@@ -547,6 +547,10 @@ func (a *app) threadBody(c *ui.Context, t *ui.Theme, cv *convView, n, total int,
 	key := summaryKey(m)
 	b, loaded := a.bodies[key]
 	switch {
+	case a.translationShows(key) && a.translatedHTML(key) != "" && a.translationHTMLKey == key && a.webview != nil:
+		ui.Column(c).Radius(8).Border(1, t.Border).Background(t.Background).Children(func() {
+			ui.WebView(c, a.webview).Height(480)
+		})
 	case a.translationShows(key):
 		a.bodyText(c, t, a.translatedText(key))
 	case cv.bodyErr[key] != "":
@@ -592,6 +596,7 @@ func (a *app) toggleThreadHTML(key string) {
 		return
 	}
 	cv.html = key
+	a.translationHTMLKey = ""
 	if tr := a.translations[key]; tr != nil {
 		tr.original = true
 	}

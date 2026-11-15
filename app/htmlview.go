@@ -43,25 +43,39 @@ func (a *app) ensureWebView() {
 	a.webview = v
 }
 
-// syncHTMLView loads the chosen message's HTML once, and only when it
-// changes.
+// syncHTMLView loads the HTML the reading pane is to show once, and only
+// when it changes: a translation, which takes the pane while it shows, or
+// else the message itself.
 func (a *app) syncHTMLView() {
 	if a.threaded() {
 		a.syncThreadHTML()
 		return
 	}
-	if !a.htmlOn || a.webview == nil {
+	if a.webview == nil {
 		return
 	}
 	m, msg := a.current()
-	if m == nil || msg == nil || msg.BodyHTML == "" {
+	if m == nil || msg == nil {
 		return
 	}
-	key := summaryKey(*m) + "/html"
-	if a.htmlKey == key {
+	key := summaryKey(*m)
+	if translated := a.translatedHTML(key); translated != "" {
+		k := key + "/tr"
+		if a.htmlKey == k {
+			return
+		}
+		a.htmlKey = k
+		a.webview.Page().LoadHTML(renderHTML(translated, a.imageAllowed(*m)), "about:blank")
 		return
 	}
-	a.htmlKey = key
+	if !a.htmlOn || msg.BodyHTML == "" {
+		return
+	}
+	k := key + "/html"
+	if a.htmlKey == k {
+		return
+	}
+	a.htmlKey = k
 	a.webview.Page().LoadHTML(renderHTML(msg.BodyHTML, a.imageAllowed(*m)), "about:blank")
 }
 
@@ -69,7 +83,25 @@ func (a *app) syncHTMLView() {
 // show that is to show as HTML, once.
 func (a *app) syncThreadHTML() {
 	cv := a.conv
-	if cv == nil || cv.html == "" || a.webview == nil {
+	if cv == nil || a.webview == nil {
+		return
+	}
+	// A translation of one message holds the web view until another
+	// message claims it, or the original is asked for.
+	if key := a.translationHTMLKey; key != "" {
+		if translated := a.translatedHTML(key); translated != "" && cv.open[key] {
+			if m, ok := cv.message(key); ok {
+				k := key + "/tr"
+				if a.htmlKey == k {
+					return
+				}
+				a.htmlKey = k
+				a.webview.Page().LoadHTML(renderHTML(translated, a.imageAllowed(m)), "about:blank")
+				return
+			}
+		}
+	}
+	if cv.html == "" {
 		return
 	}
 	b, ok := a.bodies[cv.html]

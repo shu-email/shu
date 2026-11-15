@@ -128,10 +128,15 @@ func (a *app) setSenderImages(m mail.Summary, on bool) {
 // refreshImages shows the message's HTML with its pictures, in the
 // message view or in the conversation's web view.
 func (a *app) refreshImages(m mail.Summary) {
+	// The pictures are in the message, so the message is what shows.
+	if tr := a.translations[summaryKey(m)]; tr != nil {
+		tr.original = true
+	}
 	if a.threaded() {
 		if cv := a.conv; cv != nil {
 			cv.html = summaryKey(m)
 		}
+		a.translationHTMLKey = ""
 	} else {
 		a.htmlOn = true
 	}

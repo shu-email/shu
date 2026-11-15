@@ -65,8 +65,13 @@ func (s aiSecrets) Delete(key string) error {
 // tests run the real AI service against it, so a count of zero here means
 // nothing left the app.
 type aiProvider struct {
-	texts  []string
-	status int
+	texts []string
+	// systems is the instruction of each request, in order, so a test can
+	// answer one kind of request differently from another.
+	systems []string
+	// respond, when set, answers instead of the text below.
+	respond func(*http.Request) (*http.Response, error)
+	status  int
 	// during runs while a request is in flight, as a click on Cancel
 	// would.
 	during func()
@@ -78,6 +83,10 @@ const (
 	testDraft         = "Thursday at 10 works for me."
 	testTranslation   = "Source: German\n\nDie Besprechung ist am Donnerstag."
 	testTranslated    = "Die Besprechung ist am Donnerstag."
+	// An HTML translation answers with the blocks it was given, each
+	// keeping the markers that place it.
+	testHTMLTranslation = `{"source":"German","segments":[{"n":1,"text":"{0}Bericht über {1}Design-Review"}]}`
+	testHTMLTranslated  = "Bericht über Design-Review"
 )
 
 func (p *aiProvider) RoundTrip(r *http.Request) (*http.Response, error) {
@@ -98,11 +107,15 @@ func (p *aiProvider) RoundTrip(r *http.Request) (*http.Response, error) {
 		}
 	}
 	p.texts = append(p.texts, user)
+	p.systems = append(p.systems, system)
 	if p.during != nil {
 		p.during()
 		if err := r.Context().Err(); err != nil {
 			return nil, err
 		}
+	}
+	if p.respond != nil {
+		return p.respond(r)
 	}
 	if p.status != 0 {
 		return aiReply(p.status, `{"error":{"message":"`+user+`"}}`), nil
@@ -129,6 +142,8 @@ func (p *aiProvider) RoundTrip(r *http.Request) (*http.Response, error) {
 		answer = testSummary
 	case strings.Contains(system, "summarize an email conversation"):
 		answer = testThreadSummary
+	case strings.Contains(system, "the blocks of one email's HTML"):
+		answer = testHTMLTranslation
 	case strings.Contains(system, "You translate one email"):
 		answer = testTranslation
 	}
@@ -561,7 +576,7 @@ func TestAIControlsAtMinimumSize(t *testing.T) {
 		// the pane holds both.
 		click(t, tt, locales.TranslateMessage())
 		click(t, tt, locales.AiReviewSend("gpt-4o-mini"))
-		if !tt.HasText(testTranslated) || !tt.HasText(locales.ShowOriginal()) || len(provider.texts) != 3 {
+		if !tt.HasText(testHTMLTranslated) || !tt.HasText(locales.ShowOriginal()) || len(provider.texts) != 3 {
 			t.Errorf("dark=%v: no translation at the minimum size: %q", dark, tt.Texts())
 		}
 	}
@@ -700,18 +715,21 @@ func TestTranslationReviewThenCache(t *testing.T) {
 		t.Fatal("the request went out before the user approved it")
 	}
 	// The instruction names the language the app shows in English, and
-	// the text sent is the excerpt of the message.
+	// the text sent is the blocks of the message, not its markup.
 	if !strings.Contains(a.review.payload.Instruction, "English") {
 		t.Errorf("instruction = %q", a.review.payload.Instruction)
 	}
-	if !strings.Contains(a.review.payload.Text, "From: Maya Chen") {
+	if !strings.Contains(a.review.payload.Text, "From: Maya Chen") || !strings.Contains(a.review.payload.Text, `"n":1`) {
 		t.Errorf("text = %q", a.review.payload.Text)
+	}
+	if strings.Contains(a.review.payload.Text, "<script") || strings.Contains(a.review.payload.Text, "<b>") {
+		t.Errorf("markup was sent: %q", a.review.payload.Text)
 	}
 	click(t, tt, locales.AiReviewSend("gpt-4o-mini"))
 	if len(provider.texts) != 1 {
 		t.Fatalf("requests = %d", len(provider.texts))
 	}
-	if !tt.HasText(testTranslated) {
+	if !tt.HasText(testHTMLTranslated) {
 		t.Fatalf("the translation is not shown: %q", tt.Texts())
 	}
 	if tt.HasText(body) {
@@ -723,17 +741,17 @@ func TestTranslationReviewThenCache(t *testing.T) {
 
 	// The original comes back, and the translation again.
 	click(t, tt, locales.ShowOriginal())
-	if !tt.HasText(body) || tt.HasText(testTranslated) {
+	if !tt.HasText(body) || tt.HasText(testHTMLTranslated) {
 		t.Errorf("showing the original: %q", tt.Texts())
 	}
 	click(t, tt, locales.ShowTranslation())
-	if !tt.HasText(testTranslated) || tt.HasText(body) {
+	if !tt.HasText(testHTMLTranslated) || tt.HasText(body) {
 		t.Errorf("showing the translation again: %q", tt.Texts())
 	}
 
 	// The translation can be copied, and what was sent inspected.
 	click(t, tt, locales.AiCopy())
-	if got := tt.Clipboard(); got != testTranslated {
+	if got := tt.Clipboard(); got != testHTMLTranslated {
 		t.Errorf("clipboard = %q", got)
 	}
 	click(t, tt, locales.AiWhatWasSent())
@@ -744,7 +762,7 @@ func TestTranslationReviewThenCache(t *testing.T) {
 
 	// Dismissing puts the message back, and asking again sends nothing.
 	click(t, tt, locales.AiDismissTranslation())
-	if !tt.HasText(body) || tt.HasText(testTranslated) {
+	if !tt.HasText(body) || tt.HasText(testHTMLTranslated) {
 		t.Errorf("after dismissing: %q", tt.Texts())
 	}
 	click(t, tt, locales.TranslateMessage())
@@ -754,7 +772,7 @@ func TestTranslationReviewThenCache(t *testing.T) {
 	if len(provider.texts) != 1 {
 		t.Fatalf("a cached translation made a request: %d", len(provider.texts))
 	}
-	if !tt.HasText(testTranslated) || !tt.HasText(locales.AiCachedNote()) {
+	if !tt.HasText(testHTMLTranslated) || !tt.HasText(locales.AiCachedNote()) {
 		t.Errorf("cached translation missing: %q", tt.Texts())
 	}
 	// Translating changes nothing in the mailbox.
@@ -781,7 +799,7 @@ func TestTranslationFailureAndRetry(t *testing.T) {
 	}
 	provider.status = 0
 	click(t, tt, locales.Retry())
-	if !tt.HasText(testTranslated) {
+	if !tt.HasText(testHTMLTranslated) {
 		t.Errorf("retry did not translate: %q", tt.Texts())
 	}
 }
@@ -794,7 +812,7 @@ func TestTranslationAndHTML(t *testing.T) {
 	tt := ui.NewTester(a.view, 1220, 800)
 	click(t, tt, "Design review — Thursday at 10")
 	click(t, tt, locales.TranslateMessage())
-	if !tt.HasText(testTranslated) {
+	if !tt.HasText(testHTMLTranslated) {
 		t.Fatalf("translation missing: %q", tt.Texts())
 	}
 	if a.htmlOn {
@@ -821,7 +839,7 @@ func TestTranslateAMessageOfAConversation(t *testing.T) {
 	if len(provider.texts) != 1 {
 		t.Fatalf("requests = %d", len(provider.texts))
 	}
-	if !tt.HasText(testTranslated) || !tt.HasText(locales.TranslatedFrom("German")) {
+	if !tt.HasText(testHTMLTranslated) || !tt.HasText(locales.TranslatedFrom("German")) {
 		t.Fatalf("the translation is not shown: %q", tt.Texts())
 	}
 	if tt.HasText("Body of Design review — Thursday at 10") {
@@ -868,5 +886,118 @@ func TestTranslationSettings(t *testing.T) {
 	}
 	if a.aiForm.features[3] {
 		t.Error("the form kept the capability on")
+	}
+}
+
+// The translation of HTML mail goes back into the markup: a link keeps its
+// address and its word for word place.
+func TestTranslationKeepsHTMLMarkup(t *testing.T) {
+	a, _, _, _ := aiMessageApp(t, true)
+	reviewed(t, a, ai.FeatureTranslate)
+	tt := ui.NewTester(a.view, 1220, 800)
+	click(t, tt, "Design review — Thursday at 10")
+	key := summaryKey(a.all[0])
+	body := a.bodies[key]
+	body.Message.BodyHTML = `<p>Body of <a href="https://example.com/agenda">Design review</a></p>`
+	a.bodies[key] = body
+	tt.Frame()
+	click(t, tt, locales.TranslateMessage())
+	tr := a.translations[key]
+	if tr == nil || tr.html == "" {
+		t.Fatalf("no translated HTML: %+v", tr)
+	}
+	for _, want := range []string{`href="https://example.com/agenda"`, ">Design-Review</a>", "Bericht über"} {
+		if !strings.Contains(tr.html, want) {
+			t.Errorf("translated HTML lacks %q: %s", want, tr.html)
+		}
+	}
+	if strings.Contains(tr.html, ">Design review</a>") {
+		t.Errorf("the link still holds the original words: %s", tr.html)
+	}
+	// The text without markup is what a conversation shows while another
+	// message holds the web view, and what Copy copies.
+	if tr.text != testHTMLTranslated {
+		t.Errorf("text = %q", tr.text)
+	}
+}
+
+// A model that will not keep the shape of an HTML request still
+// translates: the window asks again for the plain text, and says so when
+// asked what was sent.
+func TestTranslationFallsBackToPlainText(t *testing.T) {
+	a, _, provider, _ := aiMessageApp(t, true)
+	reviewed(t, a, ai.FeatureTranslate)
+	provider.respond = func(*http.Request) (*http.Response, error) {
+		answer := testTranslation
+		if n := len(provider.systems); n > 0 && strings.Contains(provider.systems[n-1], "the blocks of one email's HTML") {
+			// Not the object the instruction asked for.
+			answer = "Here is the translation."
+		}
+		b, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": answer}}}})
+		return aiReply(http.StatusOK, string(b)), nil
+	}
+	tt := ui.NewTester(a.view, 1220, 800)
+	click(t, tt, "Design review — Thursday at 10")
+	click(t, tt, locales.TranslateMessage())
+	if len(provider.texts) != 2 {
+		t.Fatalf("requests = %d, want the block request and the plain one", len(provider.texts))
+	}
+	tr := a.translations[summaryKey(a.all[0])]
+	if tr == nil || tr.html != "" || tr.text != testTranslated {
+		t.Fatalf("translation = %+v", tr)
+	}
+	if !tt.HasText(testTranslated) {
+		t.Errorf("the plain translation is not shown: %q", tt.Texts())
+	}
+	click(t, tt, locales.AiWhatWasSent())
+	if !tt.HasText(locales.AiReviewTitle()) || !strings.Contains(a.review.payload.Text, "From: Maya Chen") {
+		t.Errorf("what was sent is not the plain request: %q", tt.Texts())
+	}
+	if strings.Contains(a.review.payload.Text, `"n":1`) {
+		t.Error("the failed block request is shown as what was sent")
+	}
+}
+
+// A message without HTML is translated as text, with no change in how it
+// is shown.
+func TestTranslationOfPlainMail(t *testing.T) {
+	a, _, provider, _ := aiMessageApp(t, true)
+	reviewed(t, a, ai.FeatureTranslate)
+	tt := ui.NewTester(a.view, 1220, 800)
+	click(t, tt, "Design review — Thursday at 10")
+	key := summaryKey(a.all[0])
+	body := a.bodies[key]
+	body.Message.BodyHTML = ""
+	a.bodies[key] = body
+	tt.Frame()
+	click(t, tt, locales.TranslateMessage())
+	if len(provider.texts) != 1 {
+		t.Fatalf("requests = %d", len(provider.texts))
+	}
+	tr := a.translations[key]
+	if tr == nil || tr.html != "" || tr.text != testTranslated {
+		t.Fatalf("translation = %+v", tr)
+	}
+}
+
+// A conversation has one web view: a translated message claims it, and
+// asking for the original gives it back.
+func TestTranslationClaimsTheWebView(t *testing.T) {
+	a, _, _, _ := aiApp(t, true)
+	reviewed(t, a, ai.FeatureTranslate)
+	tt := ui.NewTester(a.view, 1220, 800)
+	click(t, tt, "Design review — Thursday at 10")
+	click(t, tt, locales.TranslateNewest())
+	key := summaryKey(a.conv.msgs[0])
+	if a.translationHTMLKey != key {
+		t.Fatalf("the translation did not claim the web view: %q", a.translationHTMLKey)
+	}
+	click(t, tt, locales.ShowOriginal())
+	if a.translationHTMLKey != "" || !a.translations[key].original {
+		t.Errorf("the original did not take the web view back: %q", a.translationHTMLKey)
+	}
+	click(t, tt, locales.ShowTranslation())
+	if a.translationHTMLKey != key {
+		t.Errorf("the translation did not claim the web view again: %q", a.translationHTMLKey)
 	}
 }

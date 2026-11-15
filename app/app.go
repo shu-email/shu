@@ -130,10 +130,13 @@ type app struct {
 	counts map[string]countSeen
 	rows   rowMotion
 
-	htmlOn   bool
-	webview  *mygo.WebView
-	htmlKey  string
-	services ui.Services
+	htmlOn  bool
+	webview *mygo.WebView
+	htmlKey string
+	// translationHTMLKey names the message of a conversation whose
+	// translated HTML holds the window's one web view.
+	translationHTMLKey string
+	services           ui.Services
 
 	// AI state: the settings form, the summaries and the translations of
 	// this account's messages by key, the triage of the list on screen,
@@ -621,6 +624,8 @@ func (a *app) clearAI() {
 		}
 	}
 	a.translations = map[string]*translation{}
+	a.translationHTMLKey = ""
+	a.htmlKey = ""
 	a.clearTriage()
 }
 

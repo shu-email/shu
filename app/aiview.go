@@ -208,6 +208,12 @@ type translation struct {
 	key    string
 	target string
 	source string
+	// html is the message's HTML with its text translated, "" when the
+	// message has none or the translation is of its plain text.
+	html string
+	// htmlWasOn reports that the message was shown as HTML before it was
+	// translated, which is what the original comes back as.
+	htmlWasOn bool
 	// original reports that the message itself, not the translation, is
 	// what the reading pane draws. The translation stays at hand.
 	original bool
@@ -230,6 +236,15 @@ func (a *app) translatedText(key string) string {
 	return a.translations[key].text
 }
 
+// translatedHTML is a message's translated HTML, "" while none shows or
+// the translation is of its plain text.
+func (a *app) translatedHTML(key string) string {
+	if !a.translationShows(key) {
+		return ""
+	}
+	return a.translations[key].html
+}
+
 // translationLanguage is the name a target language is shown by.
 func translationLanguage(tag string) string { return ai.LanguageLabel(tag) }
 
@@ -250,8 +265,10 @@ func (a *app) translate() {
 }
 
 // translateMessage asks for one message in the language the settings
-// choose. Like every capability, its first use shows exactly what would
-// be sent and waits for the user's approval.
+// choose. Its HTML, when it has one, is translated block by block so that
+// the links, tables and emphasis it carries stay where they are. Like
+// every capability, its first use shows exactly what would be sent and
+// waits for the user's approval.
 func (a *app) translateMessage(m mail.Summary, msg *mail.Message) {
 	if a.ai == nil || m.DraftID != "" {
 		return
@@ -261,6 +278,7 @@ func (a *app) translateMessage(m mail.Summary, msg *mail.Message) {
 		return
 	}
 	in := a.aiMessage(m, msg.BodyText)
+	html := a.aiHTMLMessage(m, msg.BodyHTML)
 	g := a.gen
 	// The target language is a setting, which the window reads before it
 	// builds a request, so the review names the language it will use.
@@ -275,15 +293,33 @@ func (a *app) translateMessage(m mail.Summary, msg *mail.Message) {
 			if a.stale(g) {
 				return
 			}
-			a.beginTranslation(g, key, in, target)
+			a.beginTranslation(g, key, in, html, target)
 		})
 	})
 }
 
+// aiHTMLMessage is the HTML of a message the AI layer may read, or an
+// empty one when the message has none.
+func (a *app) aiHTMLMessage(m mail.Summary, body string) ai.HTMLMessage {
+	if strings.TrimSpace(body) == "" {
+		return ai.HTMLMessage{}
+	}
+	return ai.HTMLMessage{
+		Scope: m.Account, Subject: m.Subject,
+		FromName: m.From.Name, FromEmail: m.From.Email, Date: m.Date,
+		HTML: body,
+	}
+}
+
 // beginTranslation runs a translation of one message into one language.
-func (a *app) beginTranslation(g uint64, key string, in ai.Message, target string) {
-	retry := func() { a.beginTranslation(a.gen, key, in, target) }
-	payload := func(ctx context.Context) (ai.Payload, error) { return a.ai.TranslatePayload(ctx, in, target) }
+func (a *app) beginTranslation(g uint64, key string, in ai.Message, html ai.HTMLMessage, target string) {
+	retry := func() { a.beginTranslation(a.gen, key, in, html, target) }
+	payload := func(ctx context.Context) (ai.Payload, error) {
+		if html.HTML != "" {
+			return a.ai.TranslateHTMLPayload(ctx, html, target)
+		}
+		return a.ai.TranslatePayload(ctx, in, target)
+	}
 	a.aiBegin(ai.FeatureTranslate,
 		func(r *aiReview) { a.review = r },
 		func(err error) {
@@ -299,10 +335,11 @@ func (a *app) beginTranslation(g uint64, key string, in ai.Message, target strin
 			ctx, cancel := context.WithCancel(context.Background())
 			job := &translation{aiJob: aiJob{busy: true, cancel: cancel, model: model}, key: key, target: target}
 			job.sent = payload
+			job.htmlWasOn = a.htmlShown(key)
 			a.translations[key] = job
 			a.run(func() {
 				defer cancel()
-				result, err := a.ai.Translate(ctx, in, target)
+				result, translated, err := a.translateResult(ctx, in, html, target)
 				a.post(func() {
 					if a.translations[key] != job {
 						return
@@ -315,35 +352,147 @@ func (a *app) beginTranslation(g uint64, key string, in ai.Message, target strin
 					default:
 						job.busy = false
 						job.text, job.model, job.cached = result.Text, result.Model, result.Cached
-						job.source = result.Source
-						// The translation takes the place of the HTML view,
-						// which shows the message as it was sent, one at a
-						// time.
-						if a.threaded() {
-							if cv := a.conv; cv != nil && cv.html == key {
-								cv.html = ""
+						job.source, job.html = result.Source, translated
+						if translated == "" && html.HTML != "" {
+							// The HTML request fell back to plain text, so
+							// that is what was sent.
+							job.sent = func(ctx context.Context) (ai.Payload, error) {
+								return a.ai.TranslatePayload(ctx, in, target)
 							}
-						} else {
-							a.htmlOn = false
-							a.htmlKey = ""
 						}
-						a.syncHTMLView()
+						a.showTranslation(key)
 					}
 				})
 			})
 		})
 }
 
+// translateResult asks for the translation of a message, as HTML when it
+// has it. A model that answers the HTML request with something that cannot
+// be read still translates: the second request sends the plain text.
+func (a *app) translateResult(ctx context.Context, in ai.Message, html ai.HTMLMessage, target string) (ai.Translation, string, error) {
+	if html.HTML != "" {
+		result, err := a.ai.TranslateHTML(ctx, html, target)
+		if err == nil {
+			return result.Translation, result.HTML, nil
+		}
+		if ai.KindOf(err) != ai.KindBadResponse {
+			return ai.Translation{}, "", err
+		}
+	}
+	result, err := a.ai.Translate(ctx, in, target)
+	return result, "", err
+}
+
+// htmlShown reports whether a message is shown as HTML now, which is what
+// the original comes back as after a translation.
+func (a *app) htmlShown(key string) bool {
+	if a.threaded() {
+		cv := a.conv
+		return cv != nil && cv.html == key
+	}
+	return a.htmlOn
+}
+
+// showTranslation puts a finished translation on screen, taking the web
+// view when it has HTML to show.
+func (a *app) showTranslation(key string) {
+	job := a.translations[key]
+	if job == nil {
+		return
+	}
+	if job.html != "" {
+		a.claimTranslationHTML(key)
+	} else {
+		if cv := a.conv; cv != nil && cv.html == key {
+			cv.html = ""
+		}
+		if !a.threaded() {
+			a.htmlOn = false
+		}
+	}
+	a.htmlKey = ""
+	a.syncHTMLView()
+}
+
+// claimTranslationHTML shows a message's translated HTML in the window's
+// one web view. In conversation view only one message holds it, so the
+// newest claim takes it from the one before, whose translation shows as
+// text until it is claimed again.
+func (a *app) claimTranslationHTML(key string) {
+	if a.threaded() {
+		if cv := a.conv; cv != nil && cv.html == key {
+			cv.html = ""
+		}
+		a.translationHTMLKey = key
+	} else {
+		a.htmlOn = false
+	}
+	a.htmlKey = ""
+}
+
+// releaseTranslationHTML gives the web view back to what held it before a
+// translation did.
+func (a *app) releaseTranslationHTML(key string) {
+	if a.translationHTMLKey == key {
+		a.translationHTMLKey = ""
+	}
+	a.htmlKey = ""
+}
+
+// toggleTranslation switches the reading pane between a message and its
+// translation, and puts the original back as HTML when that is how it was
+// read.
+func (a *app) toggleTranslation(key string) {
+	tr := a.translations[key]
+	if tr == nil {
+		return
+	}
+	tr.original = !tr.original
+	switch {
+	case tr.original:
+		a.releaseTranslationHTML(key)
+		if tr.htmlWasOn {
+			if a.threaded() {
+				if cv := a.conv; cv != nil {
+					cv.html = key
+				}
+			} else {
+				a.htmlOn = true
+			}
+		}
+	case tr.html != "":
+		a.claimTranslationHTML(key)
+	}
+	a.htmlKey = ""
+	a.syncHTMLView()
+}
+
+// dismissTranslation drops a translation, cancelling it while it runs, and
+// gives the reading pane back to the message.
+func (a *app) dismissTranslation(job *translation) {
+	if job.cancel != nil {
+		job.cancel()
+	}
+	delete(a.translations, job.key)
+	a.releaseTranslationHTML(job.key)
+	if job.htmlWasOn {
+		if a.threaded() {
+			if cv := a.conv; cv != nil {
+				cv.html = job.key
+			}
+		} else {
+			a.htmlOn = true
+		}
+	}
+	a.syncHTMLView()
+}
+
 // translationStrip draws what a translation is, above the text it
 // replaced: its progress, its failure, or the language it came from with
 // the controls around it.
 func (a *app) translationStrip(c *ui.Context, t *ui.Theme, job *translation) {
-	dismiss := func() {
-		if job.cancel != nil {
-			job.cancel()
-		}
-		delete(a.translations, job.key)
-	}
+	dismiss := func() { a.dismissTranslation(job) }
 	switch {
 	case job.busy:
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Padding(8, 10).Radius(8).Background(t.Accent.Alpha(0.06)).Children(func() {
@@ -371,7 +520,7 @@ func (a *app) translationStrip(c *ui.Context, t *ui.Theme, job *translation) {
 			if job.original {
 				label = locales.ShowTranslation()
 			}
-			ui.ButtonBase(c).Label(label).OnClick(func() { job.original = !job.original }).Children(func() {
+			ui.ButtonBase(c).Label(label).OnClick(func() { a.toggleTranslation(job.key) }).Children(func() {
 				ui.Text(c, label).FontSize(11).TextColor(t.Accent)
 			})
 			copyLabel := locales.AiCopy()

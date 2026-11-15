@@ -2520,11 +2520,11 @@ func (msgs Messages) AiTranslate() string {
 	return Catalog.Format(msgs.locale, "aiTranslate", nil)
 }
 
-// AiTranslateDetail says "Translate the open message into your language. Sends the whole message text, up to {limit} characters, without quoted…"
+// AiTranslateDetail says "Translate the open message into your language. Sends its text, up to {limit} characters: for HTML mail the visible te…"
 // in the language the app shows.
 func AiTranslateDetail(limit int) string { return In(i18n.Locale()).AiTranslateDetail(limit) }
 
-// AiTranslateDetail says "Translate the open message into your language. Sends the whole message text, up to {limit} characters, without quoted…"
+// AiTranslateDetail says "Translate the open message into your language. Sends its text, up to {limit} characters: for HTML mail the visible te…"
 // in the language of msgs.
 func (msgs Messages) AiTranslateDetail(limit int) string {
 	return Catalog.Format(msgs.locale, "aiTranslateDetail", map[string]any{"limit": limit})

@@ -67,7 +67,7 @@ servers, or open-source clients designed a decade ago. Shu is a fresh take:
   Thread-Index, never by subject. Read a conversation across folders, or switch to single messages.
 - **Labels, rules and filing** — server-side labels where the folder keeps them, labels on this
   device where it does not. Rules file, label, star or silence arriving mail. Blocked senders and
-  one-click unsubscribe are kept locally until you choose them.
+  leaving a mailing list are kept local, and happen only after you confirm.
 - **Reminders and follow-ups** — set a conversation aside until a time and it leaves the inbox;
   follow up on conversations you sent that nobody answered.
 - **Writing without losing work** — drafts are saved to the cache on every change and uploaded when

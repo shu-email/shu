@@ -76,6 +76,8 @@ const (
 	testSummary       = "- The review moved to Thursday at 10."
 	testThreadSummary = "- The lakeside venue is booked for Thursday."
 	testDraft         = "Thursday at 10 works for me."
+	testTranslation   = "Source: German\n\nDie Besprechung ist am Donnerstag."
+	testTranslated    = "Die Besprechung ist am Donnerstag."
 )
 
 func (p *aiProvider) RoundTrip(r *http.Request) (*http.Response, error) {
@@ -127,6 +129,8 @@ func (p *aiProvider) RoundTrip(r *http.Request) (*http.Response, error) {
 		answer = testSummary
 	case strings.Contains(system, "summarize an email conversation"):
 		answer = testThreadSummary
+	case strings.Contains(system, "You translate one email"):
+		answer = testTranslation
 	}
 	b, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": answer}}}})
 	return aiReply(http.StatusOK, string(b)), nil
@@ -553,6 +557,13 @@ func TestAIControlsAtMinimumSize(t *testing.T) {
 		if !tt.HasText(locales.AiSuggestions()) || len(provider.texts) != 2 {
 			t.Errorf("dark=%v: no triage at the minimum size: %q", dark, tt.Texts())
 		}
+		// A translation replaces the body under the summary's card, and
+		// the pane holds both.
+		click(t, tt, locales.TranslateMessage())
+		click(t, tt, locales.AiReviewSend("gpt-4o-mini"))
+		if !tt.HasText(testTranslated) || !tt.HasText(locales.ShowOriginal()) || len(provider.texts) != 3 {
+			t.Errorf("dark=%v: no translation at the minimum size: %q", dark, tt.Texts())
+		}
 	}
 }
 
@@ -563,6 +574,9 @@ func TestAIStringsInChinese(t *testing.T) {
 		"aiOff":         zh.AiOff(),
 		"aiReviewTitle": zh.AiReviewTitle(),
 		"summarize":     zh.Summarize(),
+		"translate":     zh.TranslateMessage(),
+		"aiTranslate":   zh.AiTranslate(),
+		"showOriginal":  zh.ShowOriginal(),
 		"aiErrTimeout":  zh.AiErrTimeout(),
 	} {
 		if text == "" || text == name || !strings.ContainsFunc(text, func(r rune) bool { return r >= 0x4e00 && r <= 0x9fff }) {
@@ -655,5 +669,204 @@ func TestASignInFailureOffersARetry(t *testing.T) {
 	}
 	if j := aiFailed(&ai.Error{Kind: ai.KindCLINotInstalled}); !j.setup || j.canRetry {
 		t.Errorf("not installed = %+v, want a setup step alone", j)
+	}
+}
+
+// reviewed approves a capability, as a first use does, so a test about
+// something else needs no review.
+func reviewed(t *testing.T, a *app, f ai.Feature) {
+	t.Helper()
+	if err := a.ai.MarkReviewed(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The first translation shows what will be sent and waits; its text then
+// takes the place of the message, the original stays a click away, and a
+// second translation comes from the cache.
+func TestTranslationReviewThenCache(t *testing.T) {
+	a, fs, provider, _ := aiMessageApp(t, true)
+	tt := ui.NewTester(a.view, 1220, 800)
+	click(t, tt, "Design review — Thursday at 10")
+	const body = "Body of Design review — Thursday at 10"
+	if !tt.HasText(body) {
+		t.Fatalf("body missing: %q", tt.Texts())
+	}
+	click(t, tt, locales.TranslateMessage())
+	if !tt.HasText(locales.AiReviewTitle()) {
+		t.Fatalf("no review before the first translation: %q", tt.Texts())
+	}
+	if len(provider.texts) != 0 {
+		t.Fatal("the request went out before the user approved it")
+	}
+	// The instruction names the language the app shows in English, and
+	// the text sent is the excerpt of the message.
+	if !strings.Contains(a.review.payload.Instruction, "English") {
+		t.Errorf("instruction = %q", a.review.payload.Instruction)
+	}
+	if !strings.Contains(a.review.payload.Text, "From: Maya Chen") {
+		t.Errorf("text = %q", a.review.payload.Text)
+	}
+	click(t, tt, locales.AiReviewSend("gpt-4o-mini"))
+	if len(provider.texts) != 1 {
+		t.Fatalf("requests = %d", len(provider.texts))
+	}
+	if !tt.HasText(testTranslated) {
+		t.Fatalf("the translation is not shown: %q", tt.Texts())
+	}
+	if tt.HasText(body) {
+		t.Error("the original is still drawn under the translation")
+	}
+	if !tt.HasText(locales.TranslatedFrom("German")) || !tt.HasText("gpt-4o-mini") {
+		t.Errorf("the translation does not say what it is: %q", tt.Texts())
+	}
+
+	// The original comes back, and the translation again.
+	click(t, tt, locales.ShowOriginal())
+	if !tt.HasText(body) || tt.HasText(testTranslated) {
+		t.Errorf("showing the original: %q", tt.Texts())
+	}
+	click(t, tt, locales.ShowTranslation())
+	if !tt.HasText(testTranslated) || tt.HasText(body) {
+		t.Errorf("showing the translation again: %q", tt.Texts())
+	}
+
+	// The translation can be copied, and what was sent inspected.
+	click(t, tt, locales.AiCopy())
+	if got := tt.Clipboard(); got != testTranslated {
+		t.Errorf("clipboard = %q", got)
+	}
+	click(t, tt, locales.AiWhatWasSent())
+	if !tt.HasText(locales.AiReviewTitle()) || tt.HasText(locales.AiReviewSend("gpt-4o-mini")) {
+		t.Errorf("inspection view: %q", tt.Texts())
+	}
+	click(t, tt, locales.Close())
+
+	// Dismissing puts the message back, and asking again sends nothing.
+	click(t, tt, locales.AiDismissTranslation())
+	if !tt.HasText(body) || tt.HasText(testTranslated) {
+		t.Errorf("after dismissing: %q", tt.Texts())
+	}
+	click(t, tt, locales.TranslateMessage())
+	if a.review != nil {
+		t.Error("the review came back for an approved capability")
+	}
+	if len(provider.texts) != 1 {
+		t.Fatalf("a cached translation made a request: %d", len(provider.texts))
+	}
+	if !tt.HasText(testTranslated) || !tt.HasText(locales.AiCachedNote()) {
+		t.Errorf("cached translation missing: %q", tt.Texts())
+	}
+	// Translating changes nothing in the mailbox.
+	if len(fs.moved) != 0 || len(fs.sent) != 0 || len(fs.flagCalls) != 0 {
+		t.Errorf("mailbox changed: moved %v sent %v flags %v", fs.moved, fs.sent, fs.flagCalls)
+	}
+}
+
+// A failure is explained without the mail, and retried.
+func TestTranslationFailureAndRetry(t *testing.T) {
+	a, _, provider, _ := aiMessageApp(t, true)
+	reviewed(t, a, ai.FeatureTranslate)
+	provider.status = http.StatusTooManyRequests
+	tt := ui.NewTester(a.view, 1220, 800)
+	click(t, tt, "Design review — Thursday at 10")
+	click(t, tt, locales.TranslateMessage())
+	if !tt.HasText(locales.AiErrRateLimit()) {
+		t.Fatalf("rate limit not explained: %q", tt.Texts())
+	}
+	for _, text := range tt.Texts() {
+		if strings.Contains(text, testAIKey) || strings.Contains(text, "From: Maya Chen") {
+			t.Errorf("the failure shows mail or the key: %q", text)
+		}
+	}
+	provider.status = 0
+	click(t, tt, locales.Retry())
+	if !tt.HasText(testTranslated) {
+		t.Errorf("retry did not translate: %q", tt.Texts())
+	}
+}
+
+// HTML mail shows the translation as plain text; the HTML view is the
+// message as it was sent, so choosing it takes the pane back.
+func TestTranslationAndHTML(t *testing.T) {
+	a, _, _, _ := aiMessageApp(t, true)
+	reviewed(t, a, ai.FeatureTranslate)
+	tt := ui.NewTester(a.view, 1220, 800)
+	click(t, tt, "Design review — Thursday at 10")
+	click(t, tt, locales.TranslateMessage())
+	if !tt.HasText(testTranslated) {
+		t.Fatalf("translation missing: %q", tt.Texts())
+	}
+	if a.htmlOn {
+		t.Error("the HTML view stayed on under a plain-text translation")
+	}
+	click(t, tt, locales.ShowHTML())
+	if !tt.HasText("Body of Design review — Thursday at 10") {
+		t.Errorf("the HTML view did not show the message: %q", tt.Texts())
+	}
+	if a.translations[summaryKey(a.all[0])] != nil && !a.translations[summaryKey(a.all[0])].original {
+		t.Error("the translation is still what the pane draws")
+	}
+}
+
+// A message of a conversation is translated on its own, from its own
+// actions.
+func TestTranslateAMessageOfAConversation(t *testing.T) {
+	a, _, provider, _ := aiApp(t, true)
+	reviewed(t, a, ai.FeatureTranslate)
+	tt := ui.NewTester(a.view, 1220, 800)
+	click(t, tt, "Design review — Thursday at 10")
+	click(t, tt, locales.ForMessage(locales.MoreActions(), 1, 1))
+	click(t, tt, locales.TranslateThisMessage())
+	if len(provider.texts) != 1 {
+		t.Fatalf("requests = %d", len(provider.texts))
+	}
+	if !tt.HasText(testTranslated) || !tt.HasText(locales.TranslatedFrom("German")) {
+		t.Fatalf("the translation is not shown: %q", tt.Texts())
+	}
+	if tt.HasText("Body of Design review — Thursday at 10") {
+		t.Error("the original is still drawn under the translation")
+	}
+	// The conversation's own summary is untouched: no request was made
+	// for one.
+	if a.summaries[threadKey(a.conv.account, a.conv.thread)] != nil {
+		t.Error("translating a message wrote a summary")
+	}
+}
+
+// The translation switch and the language it writes are saved with the
+// rest of the AI settings.
+func TestTranslationSettings(t *testing.T) {
+	a, _, _, _ := aiApp(t, false)
+	a.openSettings(settingsTabAI)
+	tt := ui.NewTester(a.view, 1220, 900)
+	click(t, tt, locales.AiEnable())
+	if !tt.HasText(locales.AiTranslate()) || !tt.HasText(locales.AiTranslateTo()) {
+		t.Fatalf("translation settings missing: %q", tt.Texts())
+	}
+	// The language choice starts as the app's own.
+	if !tt.HasText(locales.AiTranslateFollowApp()) {
+		t.Errorf("the default target is not the app's language: %q", tt.Texts())
+	}
+	click(t, tt, locales.AiTranslateFollowApp())
+	click(t, tt, "简体中文")
+	cfg, err := a.ai.Config(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.TranslateTo != "zh-Hans" {
+		t.Errorf("saved target = %q", cfg.TranslateTo)
+	}
+	if cfg.TranslateTarget("en") != "zh-Hans" {
+		t.Errorf("target = %q", cfg.TranslateTarget("en"))
+	}
+	// Switching the capability off takes the language choice away too.
+	click(t, tt, locales.AiTranslate())
+	cfg, _ = a.ai.Config(context.Background())
+	if cfg.FeatureOn(ai.FeatureTranslate) {
+		t.Error("the translation switch did not save")
+	}
+	if a.aiForm.features[3] {
+		t.Error("the form kept the capability on")
 	}
 }

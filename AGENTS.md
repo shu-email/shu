@@ -406,8 +406,8 @@ Windows and Linux. It is written in Go with
   words. It makes no request, keeps no score and blocks nothing.
 - `ai/` is the AI layer: provider settings, the excerpt that decides what
   part of a message may leave the device, the features (summary of a
-  message or a conversation, triage, draft reply) and `Service.send`, the
-  single egress point every model
+  message or a conversation, triage, draft reply, translation of a
+  message) and `Service.send`, the single egress point every model
   request passes through. It imports neither the UI nor `mail/`; views
   reach it through the `aiService` value. Its settings and the summary
   cache live in `store/`; its keys live only in `mygo.Secrets`. Local

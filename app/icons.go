@@ -53,6 +53,7 @@ var (
 	mailIcon           = mustIcon("mail")
 	mailOpenIcon       = mustIcon("mail-open")
 	sparklesIcon       = mustIcon("sparkles")
+	languagesIcon      = mustIcon("languages")
 	copyIcon           = mustIcon("copy")
 	offlineIcon        = mustIcon("wifi-off")
 	conversationsIcon  = mustIcon("messages-square")

@@ -135,16 +135,17 @@ type app struct {
 	htmlKey  string
 	services ui.Services
 
-	// AI state: the settings form, the summaries of this account's
-	// messages by key, the triage of the list on screen, and the payload
-	// being inspected.
-	settingsTab int
-	aiForm      aiSettings
-	aiSaveMu    sync.Mutex
-	aiSaveSeq   atomic.Uint64
-	summaries   map[string]*aiJob
-	triage      *triageState
-	review      *aiReview
+	// AI state: the settings form, the summaries and the translations of
+	// this account's messages by key, the triage of the list on screen,
+	// and the payload being inspected.
+	settingsTab  int
+	aiForm       aiSettings
+	aiSaveMu     sync.Mutex
+	aiSaveSeq    atomic.Uint64
+	summaries    map[string]*aiJob
+	translations map[string]*translation
+	triage       *triageState
+	review       *aiReview
 
 	// Receiving mail in the background. watches is whether the accounts
 	// are watched at all; watched is each watched account as it was when
@@ -327,6 +328,7 @@ func newApp(svc mailService) *app {
 		bodies:        map[string]mail.FetchResult{},
 		older:         map[string]*olderMail{},
 		summaries:     map[string]*aiJob{},
+		translations:  map[string]*translation{},
 		counts:        map[string]countSeen{},
 		draftSyncs:    map[string]*draftSync{},
 		watches:       true,
@@ -613,6 +615,12 @@ func (a *app) clearAI() {
 		}
 	}
 	a.summaries = map[string]*aiJob{}
+	for _, job := range a.translations {
+		if job.cancel != nil {
+			job.cancel()
+		}
+	}
+	a.translations = map[string]*translation{}
 	a.clearTriage()
 }
 

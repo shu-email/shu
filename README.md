@@ -54,7 +54,7 @@ servers, or open-source clients designed a decade ago. Shu is a fresh take:
   webview, no JavaScript bridge, no telemetry, and no Shu account to create.
 - **Direct by design** — Shu speaks IMAP/SMTP to your provider. There are no Shu servers, and your
   mail never passes through us.
-- **AI on your terms** — summaries, triage and reply drafts are part of the client, not a bolted-on
+- **AI on your terms** — summaries, translation, triage and reply drafts are part of the client, not a bolted-on
   sidebar. Bring your own API key, or use an installed Claude Code, Codex or pi. AI is off until you
   turn it on.
 - **Local-first** — the SQLite cache, search index, conversations, contacts, labels, rules and

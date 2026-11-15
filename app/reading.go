@@ -88,6 +88,9 @@ func (a *app) messagePane(c *ui.Context, t *ui.Theme) {
 			if job := a.summaries[summaryKey(*m)]; job != nil {
 				a.summaryCard(c, t, summaryKey(*m), job)
 			}
+			if tr := a.translations[summaryKey(*m)]; tr != nil {
+				a.translationStrip(c, t, tr)
+			}
 			ui.Divider(c)
 			a.body(c, t, m, msg)
 		})
@@ -185,10 +188,15 @@ func (a *app) readingToolbar(c *ui.Context, t *ui.Theme) {
 			})
 		}
 		if a.ai != nil {
-			// A summary is of the one message open, once its body is here.
+			// A summary and a translation are of the one message open,
+			// once its body is here.
 			_, msg := a.current()
+			can := msg != nil && len(targets) == 1 && has
 			a.barCapsule(c, func() ui.Element {
-				return a.toolButton(c, sparklesIcon, locales.Summarize(), msg != nil && len(targets) == 1 && has, a.summarize)
+				return a.toolButton(c, sparklesIcon, locales.Summarize(), can, a.summarize)
+			})
+			a.barCapsule(c, func() ui.Element {
+				return a.toolButton(c, languagesIcon, locales.TranslateMessage(), can, a.translate)
 			})
 		}
 	})
@@ -278,6 +286,13 @@ func (a *app) toggleHTML() {
 	a.htmlOn = !a.htmlOn
 	a.htmlKey = ""
 	if a.htmlOn {
+		// The translation is plain text; the HTML view is the message as
+		// it was sent, so it takes the pane back.
+		if m, _ := a.current(); m != nil {
+			if tr := a.translations[summaryKey(*m)]; tr != nil {
+				tr.original = true
+			}
+		}
 		a.ensureWebView()
 		a.syncHTMLView()
 	}
@@ -373,6 +388,11 @@ func recipients(list []mail.Address) string {
 func (a *app) body(c *ui.Context, t *ui.Theme, m *mail.Summary, msg *mail.Message) {
 	key := summaryKey(*m)
 	switch {
+	case a.translationShows(key):
+		ui.Column(c).Padding(18, 20).Radius(10).Border(1, t.Border).
+			Background(t.Background).Children(func() {
+			a.bodyText(c, t, a.translatedText(key))
+		})
 	case a.bodyLocked:
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			ui.Spinner(c).Size(14, 14)

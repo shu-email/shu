@@ -587,9 +587,54 @@
   },
   "aiDrafts": "Draft replies",
   "aiDraftsDetail": "Write an editable reply in the compose window. Sends the same excerpt as a summary, plus your guidance.",
+  "aiTranslate": "Translation",
+  "aiTranslateDetail": "Translate the open message into your language. Sends the whole message text, up to {limit} characters, without quoted replies, signatures or link addresses.",
+  "@aiTranslateDetail": {
+    "placeholders": {
+      "limit": {
+        "type": "int",
+        "example": "6000"
+      }
+    }
+  },
+  "aiTranslateTo": "Translate into",
+  "aiTranslateFollowApp": "The language the app shows",
   "aiFeatureModel": "Model for this capability (optional)",
   "aiNeverSent": "Never sent: quoted replies, signatures, link addresses, attachments and other recipients. You review the exact text the first time you use each capability.",
   "summarize": "Summarize with AI",
+  "translateMessage": "Translate with AI",
+  "translateThisMessage": "Translate this message",
+  "translateNewest": "Translate the newest message with AI",
+  "translating": "Translating with {model}…",
+  "@translating": {
+    "placeholders": {
+      "model": {
+        "type": "String",
+        "example": "gpt-4o-mini"
+      }
+    }
+  },
+  "translatedFrom": "Translated from {source}",
+  "@translatedFrom": {
+    "placeholders": {
+      "source": {
+        "type": "String",
+        "example": "French"
+      }
+    }
+  },
+  "translatedInto": "Translated into {language}",
+  "@translatedInto": {
+    "placeholders": {
+      "language": {
+        "type": "String",
+        "example": "简体中文"
+      }
+    }
+  },
+  "showOriginal": "Show original",
+  "showTranslation": "Show translation",
+  "aiDismissTranslation": "Dismiss translation",
   "aiSummary": "Summary",
   "aiSummarizing": "Summarizing with {model}…",
   "@aiSummarizing": {
@@ -670,6 +715,19 @@
   "aiReviewInstruction": "Shu's instruction to the model",
   "aiReviewText": "From your mail",
   "aiReviewSize": "{chars} characters, body limited to {limit}",
+  "aiReviewTranslateSize": "{chars} of up to {limit} characters of this message.",
+  "@aiReviewTranslateSize": {
+    "placeholders": {
+      "chars": {
+        "type": "int",
+        "example": "1200"
+      },
+      "limit": {
+        "type": "int",
+        "example": "6000"
+      }
+    }
+  },
   "@aiReviewSize": {
     "placeholders": {
       "chars": {

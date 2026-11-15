@@ -2510,6 +2510,46 @@ func (msgs Messages) AiDraftsDetail() string {
 	return Catalog.Format(msgs.locale, "aiDraftsDetail", nil)
 }
 
+// AiTranslate says "Translation"
+// in the language the app shows.
+func AiTranslate() string { return In(i18n.Locale()).AiTranslate() }
+
+// AiTranslate says "Translation"
+// in the language of msgs.
+func (msgs Messages) AiTranslate() string {
+	return Catalog.Format(msgs.locale, "aiTranslate", nil)
+}
+
+// AiTranslateDetail says "Translate the open message into your language. Sends the whole message text, up to {limit} characters, without quoted…"
+// in the language the app shows.
+func AiTranslateDetail(limit int) string { return In(i18n.Locale()).AiTranslateDetail(limit) }
+
+// AiTranslateDetail says "Translate the open message into your language. Sends the whole message text, up to {limit} characters, without quoted…"
+// in the language of msgs.
+func (msgs Messages) AiTranslateDetail(limit int) string {
+	return Catalog.Format(msgs.locale, "aiTranslateDetail", map[string]any{"limit": limit})
+}
+
+// AiTranslateTo says "Translate into"
+// in the language the app shows.
+func AiTranslateTo() string { return In(i18n.Locale()).AiTranslateTo() }
+
+// AiTranslateTo says "Translate into"
+// in the language of msgs.
+func (msgs Messages) AiTranslateTo() string {
+	return Catalog.Format(msgs.locale, "aiTranslateTo", nil)
+}
+
+// AiTranslateFollowApp says "The language the app shows"
+// in the language the app shows.
+func AiTranslateFollowApp() string { return In(i18n.Locale()).AiTranslateFollowApp() }
+
+// AiTranslateFollowApp says "The language the app shows"
+// in the language of msgs.
+func (msgs Messages) AiTranslateFollowApp() string {
+	return Catalog.Format(msgs.locale, "aiTranslateFollowApp", nil)
+}
+
 // AiFeatureModel says "Model for this capability (optional)"
 // in the language the app shows.
 func AiFeatureModel() string { return In(i18n.Locale()).AiFeatureModel() }
@@ -2538,6 +2578,96 @@ func Summarize() string { return In(i18n.Locale()).Summarize() }
 // in the language of msgs.
 func (msgs Messages) Summarize() string {
 	return Catalog.Format(msgs.locale, "summarize", nil)
+}
+
+// TranslateMessage says "Translate with AI"
+// in the language the app shows.
+func TranslateMessage() string { return In(i18n.Locale()).TranslateMessage() }
+
+// TranslateMessage says "Translate with AI"
+// in the language of msgs.
+func (msgs Messages) TranslateMessage() string {
+	return Catalog.Format(msgs.locale, "translateMessage", nil)
+}
+
+// TranslateThisMessage says "Translate this message"
+// in the language the app shows.
+func TranslateThisMessage() string { return In(i18n.Locale()).TranslateThisMessage() }
+
+// TranslateThisMessage says "Translate this message"
+// in the language of msgs.
+func (msgs Messages) TranslateThisMessage() string {
+	return Catalog.Format(msgs.locale, "translateThisMessage", nil)
+}
+
+// TranslateNewest says "Translate the newest message with AI"
+// in the language the app shows.
+func TranslateNewest() string { return In(i18n.Locale()).TranslateNewest() }
+
+// TranslateNewest says "Translate the newest message with AI"
+// in the language of msgs.
+func (msgs Messages) TranslateNewest() string {
+	return Catalog.Format(msgs.locale, "translateNewest", nil)
+}
+
+// Translating says "Translating with {model}…"
+// in the language the app shows.
+func Translating(model string) string { return In(i18n.Locale()).Translating(model) }
+
+// Translating says "Translating with {model}…"
+// in the language of msgs.
+func (msgs Messages) Translating(model string) string {
+	return Catalog.Format(msgs.locale, "translating", map[string]any{"model": model})
+}
+
+// TranslatedFrom says "Translated from {source}"
+// in the language the app shows.
+func TranslatedFrom(source string) string { return In(i18n.Locale()).TranslatedFrom(source) }
+
+// TranslatedFrom says "Translated from {source}"
+// in the language of msgs.
+func (msgs Messages) TranslatedFrom(source string) string {
+	return Catalog.Format(msgs.locale, "translatedFrom", map[string]any{"source": source})
+}
+
+// TranslatedInto says "Translated into {language}"
+// in the language the app shows.
+func TranslatedInto(language string) string { return In(i18n.Locale()).TranslatedInto(language) }
+
+// TranslatedInto says "Translated into {language}"
+// in the language of msgs.
+func (msgs Messages) TranslatedInto(language string) string {
+	return Catalog.Format(msgs.locale, "translatedInto", map[string]any{"language": language})
+}
+
+// ShowOriginal says "Show original"
+// in the language the app shows.
+func ShowOriginal() string { return In(i18n.Locale()).ShowOriginal() }
+
+// ShowOriginal says "Show original"
+// in the language of msgs.
+func (msgs Messages) ShowOriginal() string {
+	return Catalog.Format(msgs.locale, "showOriginal", nil)
+}
+
+// ShowTranslation says "Show translation"
+// in the language the app shows.
+func ShowTranslation() string { return In(i18n.Locale()).ShowTranslation() }
+
+// ShowTranslation says "Show translation"
+// in the language of msgs.
+func (msgs Messages) ShowTranslation() string {
+	return Catalog.Format(msgs.locale, "showTranslation", nil)
+}
+
+// AiDismissTranslation says "Dismiss translation"
+// in the language the app shows.
+func AiDismissTranslation() string { return In(i18n.Locale()).AiDismissTranslation() }
+
+// AiDismissTranslation says "Dismiss translation"
+// in the language of msgs.
+func (msgs Messages) AiDismissTranslation() string {
+	return Catalog.Format(msgs.locale, "aiDismissTranslation", nil)
 }
 
 // AiSummary says "Summary"
@@ -2940,6 +3070,18 @@ func AiReviewSize(chars int, limit int) string { return In(i18n.Locale()).AiRevi
 // in the language of msgs.
 func (msgs Messages) AiReviewSize(chars int, limit int) string {
 	return Catalog.Format(msgs.locale, "aiReviewSize", map[string]any{"chars": chars, "limit": limit})
+}
+
+// AiReviewTranslateSize says "{chars} of up to {limit} characters of this message."
+// in the language the app shows.
+func AiReviewTranslateSize(chars int, limit int) string {
+	return In(i18n.Locale()).AiReviewTranslateSize(chars, limit)
+}
+
+// AiReviewTranslateSize says "{chars} of up to {limit} characters of this message."
+// in the language of msgs.
+func (msgs Messages) AiReviewTranslateSize(chars int, limit int) string {
+	return Catalog.Format(msgs.locale, "aiReviewTranslateSize", map[string]any{"chars": chars, "limit": limit})
 }
 
 // AiReviewTriageSize says "{count} messages, {chars} characters"

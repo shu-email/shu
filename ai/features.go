@@ -134,12 +134,13 @@ func (s *Service) Summarize(ctx context.Context, m Message) (Result, error) {
 	if req.user == "" {
 		return Result{}, &Error{Kind: KindEmpty}
 	}
-	return s.summarize(ctx, cfg, req, m.Scope)
+	return s.cachedAnswer(ctx, cfg, req, m.Scope)
 }
 
-// summarize sends a summary request, or answers it from the cache when the
-// same request was answered before.
-func (s *Service) summarize(ctx context.Context, cfg Config, req request, scope string) (Result, error) {
+// cachedAnswer sends a request, or answers it from the cache when the same
+// request was answered before. The key holds the whole request, so a
+// different message, prompt, model or server never reuses another's answer.
+func (s *Service) cachedAnswer(ctx context.Context, cfg Config, req request, scope string) (Result, error) {
 	key := cacheKey(cfg, req)
 	if entry, ok, err := s.store.AICached(ctx, key); err == nil && ok {
 		return Result{Text: entry.Text, Provider: entry.Provider, Model: entry.Model, Cached: true}, nil
@@ -148,10 +149,10 @@ func (s *Service) summarize(ctx context.Context, cfg Config, req request, scope 
 	if err != nil {
 		return Result{}, err
 	}
-	result := Result{Text: text, Provider: cfg.Provider, Model: cfg.ModelFor(FeatureSummary)}
+	result := Result{Text: text, Provider: cfg.Provider, Model: cfg.ModelFor(req.feature)}
 	// A failed cache write costs a repeated request later, nothing more.
 	_ = s.store.SaveAICache(ctx, CacheEntry{
-		Key: key, Scope: scope, Feature: FeatureSummary,
+		Key: key, Scope: scope, Feature: req.feature,
 		Provider: result.Provider, Model: result.Model, Text: text, CreatedAt: s.now().UTC(),
 	})
 	return result, nil
@@ -275,7 +276,7 @@ func (s *Service) SummarizeConversation(ctx context.Context, c Conversation) (Re
 	if req.user == "" {
 		return Result{}, &Error{Kind: KindEmpty}
 	}
-	return s.summarize(ctx, cfg, req, c.Scope)
+	return s.cachedAnswer(ctx, cfg, req, c.Scope)
 }
 
 // DraftPayload shows what Draft would send, without sending it.

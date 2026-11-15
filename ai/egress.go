@@ -68,7 +68,22 @@ type request struct {
 	feature Feature
 	system  string
 	user    string
+	// maxTokens is the most the answer may take, where the API asks for
+	// a budget; zero is the default these features need.
+	maxTokens int
 }
+
+// tokens is the answer budget to ask for.
+func (r request) tokens() int {
+	if r.maxTokens > 0 {
+		return r.maxTokens
+	}
+	return defaultTokens
+}
+
+// defaultTokens is the answer budget of a request that names none: far
+// more than a summary, triage or draft needs.
+const defaultTokens = 1024
 
 // Payload is a request as the user can inspect it before it is sent: the
 // exact text, where it goes and what was left out.
@@ -263,7 +278,7 @@ func (s *Service) post(ctx context.Context, cfg Config, model, key string, req r
 		}
 		body = map[string]any{
 			"model":      model,
-			"max_tokens": 1024,
+			"max_tokens": req.tokens(),
 			"system":     req.system,
 			"messages":   []map[string]string{{"role": "user", "content": req.user}},
 		}

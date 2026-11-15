@@ -17,6 +17,10 @@ const (
 	ConversationLimit = 8000
 	// PreviewLimit is the most preview text sent per triaged message.
 	PreviewLimit = 160
+	// TranslateLimit is the most text one translation sends, in
+	// characters: a translation needs the whole message, where a summary
+	// needs its gist.
+	TranslateLimit = 6000
 	// TriageLimit is the most messages one triage request lists.
 	TriageLimit = 50
 	// GuidanceLimit is the most of the user's own guidance a draft sends.

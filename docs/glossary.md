@@ -55,9 +55,9 @@ The window says "conversation"; the schema's column is `thread_id`.
 
 A message the user is writing; the cache's copy is the truth, and the
 one in the account's Drafts folder is what other mail clients see.
-`mail.Draft`, `Service.SaveDraft` and `Service.SyncDrafts`
-([mail/draft.go](../mail/draft.go)), `drafts` and `draft_attachments`
-([store/drafts.go](../store/drafts.go)).
+`mail.Draft` and `Service.SaveDraft` ([mail/draft.go](../mail/draft.go)),
+`Service.SyncDrafts` ([mail/draftsync.go](../mail/draftsync.go)), `drafts`
+and `draft_attachments` ([store/drafts.go](../store/drafts.go)).
 *Not:* "outbox" (a message the user sent, waiting to leave) or
 "template".
 

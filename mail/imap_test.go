@@ -10,9 +10,11 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"fmt"
+	"maps"
 	"math/big"
 	"net"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -75,6 +77,10 @@ type fakeIMAP struct {
 	// lists records each LIST's return options, as the client asked for
 	// them: a server must be asked only for what it advertised.
 	lists []fakeList
+	// listAttrs, when set, is what LIST advertises for each mailbox, by
+	// name, as Gmail advertises \All and \Important; nil lets the
+	// in-memory server answer as it does.
+	listAttrs map[string][]imap.MailboxAttr
 }
 
 // fakeList is one LIST as a client asked it.
@@ -139,7 +145,8 @@ func (s *fakeSession) Status(mailbox string, options *imap.StatusOptions) (*imap
 }
 
 // List records the return options a LIST asked for, then answers as the
-// in-memory server does.
+// in-memory server does, or with the attributes a test gave each
+// mailbox, as Gmail lists its system folders.
 func (s *fakeSession) List(w *imapserver.ListWriter, ref string, patterns []string, options *imap.ListOptions) error {
 	s.f.mu.Lock()
 	s.f.lists = append(s.f.lists, fakeList{
@@ -147,8 +154,35 @@ func (s *fakeSession) List(w *imapserver.ListWriter, ref string, patterns []stri
 		specialUse: options != nil && options.ReturnSpecialUse,
 		subscribed: options != nil && options.SelectSubscribed,
 	})
+	attrs := maps.Clone(s.f.listAttrs)
 	s.f.mu.Unlock()
-	return s.SessionIMAP4rev2.List(w, ref, patterns, options)
+	if attrs == nil {
+		return s.SessionIMAP4rev2.List(w, ref, patterns, options)
+	}
+	for _, name := range slices.Sorted(maps.Keys(attrs)) {
+		matched := false
+		for _, pattern := range patterns {
+			if imapserver.MatchList(name, '/', ref, pattern) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			continue
+		}
+		data := imap.ListData{Mailbox: name, Delim: '/', Attrs: attrs[name]}
+		if options != nil && options.ReturnStatus != nil {
+			status, err := s.SessionIMAP4rev2.Status(name, options.ReturnStatus)
+			if err != nil {
+				return err
+			}
+			data.Status = status
+		}
+		if err := w.WriteList(&data); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Idle reports the selected mailbox's changes while the client idles. The
@@ -310,6 +344,13 @@ func (f *fakeIMAP) hostPort(t *testing.T) (string, int) {
 		t.Fatal(err)
 	}
 	return host, mustPort(t, port)
+}
+
+// setListAttrs has LIST advertise these attributes per mailbox.
+func (f *fakeIMAP) setListAttrs(attrs map[string][]imap.MailboxAttr) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.listAttrs = attrs
 }
 
 func (f *fakeIMAP) create(t *testing.T, names ...string) {

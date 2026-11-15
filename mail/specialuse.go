@@ -4,7 +4,12 @@ import "strings"
 
 // specialUse maps an IMAP mailbox attribute to the app's special-use
 // name, or "".
+//
+// Gmail advertises its All Mail with \All, not with \Archive: a server
+// that names both makes the folder it calls the archive win, whatever
+// order the attributes come in.
 func specialUse(attrs []string) string {
+	all := false
 	for _, a := range attrs {
 		switch strings.ToLower(a) {
 		case `\inbox`:
@@ -19,9 +24,16 @@ func specialUse(attrs []string) string {
 			return SpecialJunk
 		case `\archive`:
 			return SpecialArchive
+		case `\all`:
+			all = true
 		case `\flagged`:
 			return SpecialFlagged
+		case `\important`:
+			return SpecialImportant
 		}
+	}
+	if all {
+		return SpecialArchive
 	}
 	return ""
 }

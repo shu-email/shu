@@ -109,8 +109,16 @@ func (a *app) threadToolbar(c *ui.Context, t *ui.Theme) {
 			a.glassGroup(c, locales.RemindMe(), remind)
 		}
 		if a.ai != nil {
+			var newestBody *mail.Message
+			if newest != nil {
+				newestBody = a.bodyOf(summaryKey(*newest))
+			}
+			can := n == 1 && newest != nil
 			a.barCapsule(c, func() ui.Element {
-				return a.toolButton(c, sparklesIcon, locales.SummarizeConversation(), n == 1 && newest != nil, a.summarize)
+				return a.toolButton(c, sparklesIcon, locales.SummarizeConversation(), can, a.summarize)
+			})
+			a.barCapsule(c, func() ui.Element {
+				return a.toolButton(c, languagesIcon, locales.TranslateNewest(), can && newestBody != nil, a.translate)
 			})
 		}
 	})
@@ -334,6 +342,9 @@ func (a *app) threadMessage(c *ui.Context, t *ui.Theme, cv *convView, i int, m m
 			if loaded && len(body.Message.Attachments) > 0 {
 				a.attachments(c, t, m, body.Message.Attachments)
 			}
+			if tr := a.translations[key]; tr != nil {
+				a.translationStrip(c, t, tr)
+			}
 			a.threadBody(c, t, cv, n, total, m)
 		})
 	})
@@ -492,6 +503,12 @@ func (a *app) messageMenu(menu *ui.Menu, key string) {
 	})
 	menu.Submenu(locales.Labels(), func(menu *ui.Menu) { a.labelMenuItems(menu, oneMessage(m)) })
 	a.ruleMenuItem(menu, oneMessage(m))
+	if body, loaded := a.bodies[key]; loaded && m.DraftID == "" && a.ai != nil {
+		menu.Separator()
+		if menu.Item(locales.TranslateThisMessage()).Chosen() {
+			a.translateMessage(m, &body.Message)
+		}
+	}
 	var offer mail.UnsubscribeOffer
 	if body, ok := a.bodies[summaryKey(m)]; ok {
 		offer = offerOf(&body.Message)
@@ -530,6 +547,12 @@ func (a *app) threadBody(c *ui.Context, t *ui.Theme, cv *convView, n, total int,
 	key := summaryKey(m)
 	b, loaded := a.bodies[key]
 	switch {
+	case a.translationShows(key) && a.translatedHTML(key) != "" && a.translationHTMLKey == key && a.webview != nil:
+		ui.Column(c).Radius(8).Border(1, t.Border).Background(t.Background).Children(func() {
+			ui.WebView(c, a.webview).Height(480)
+		})
+	case a.translationShows(key):
+		a.bodyText(c, t, a.translatedText(key))
 	case cv.bodyErr[key] != "":
 		ui.Column(c).Gap(8).Children(func() {
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -573,6 +596,10 @@ func (a *app) toggleThreadHTML(key string) {
 		return
 	}
 	cv.html = key
+	a.translationHTMLKey = ""
+	if tr := a.translations[key]; tr != nil {
+		tr.original = true
+	}
 	a.ensureWebView()
 	a.syncHTMLView()
 }

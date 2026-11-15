@@ -494,7 +494,7 @@ func (a *app) loadBodies(g uint64, cv *convView, load, unread []mail.Summary) {
 					result.Message.Seen = true
 				}
 				a.bodies[key] = result
-				if a.conv == cv && cv.html == key {
+				if a.conv == cv {
 					a.syncHTMLView()
 				}
 			})

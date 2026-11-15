@@ -30,7 +30,7 @@ behavior change and run without a display.
 - Never add a real account to the dev build. Check with the seeded
   account (below); if a check needs anything else, stop and ask the user.
 - Do not press Send, Delete, Move to Junk, Empty Trash or any AI button
-  (summary, triage, draft reply) unless the user asked for that step, or
+  (summary, translation, triage, draft reply) unless the user asked for that step, or
   the account is the seeded one, where only the AI buttons stay off
   limits. AI
   buttons send mail text to the user's model provider.

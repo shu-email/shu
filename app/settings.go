@@ -26,9 +26,10 @@ type aiSettings struct {
 	cfg      ai.Config
 	provider string
 	// features and models mirror the per-capability maps of cfg, as
-	// controls bind to fields rather than to map entries.
-	features [3]bool
-	models   [3]string
+	// controls bind to fields rather than to map entries. They are as
+	// long as ai.Features.
+	features []bool
+	models   []string
 
 	key       string
 	keyStored bool
@@ -131,6 +132,8 @@ func (f *aiSettings) setConfig(cfg ai.Config) {
 	if p, ok := ai.ProviderByID(cfg.Provider); ok {
 		f.provider = aiProviderName(p)
 	}
+	f.features = make([]bool, len(ai.Features))
+	f.models = make([]string, len(ai.Features))
 	for i, feature := range ai.Features {
 		f.features[i] = cfg.FeatureOn(feature)
 		f.models[i] = cfg.Models[feature]
@@ -141,6 +144,10 @@ func (f *aiSettings) setConfig(cfg ai.Config) {
 
 // config reads the form back into settings to save.
 func (f *aiSettings) config() ai.Config {
+	if len(f.features) != len(ai.Features) {
+		f.features = make([]bool, len(ai.Features))
+		f.models = make([]string, len(ai.Features))
+	}
 	for i, feature := range ai.Features {
 		f.cfg.SetFeature(feature, f.features[i])
 		f.cfg.SetModelFor(feature, f.models[i])
@@ -231,7 +238,7 @@ func (a *app) chooseAIProvider() {
 		if p.EditableURL {
 			f.cfg.BaseURL = p.BaseURL
 		}
-		f.models = [3]string{}
+		f.models = make([]string, len(ai.Features))
 		f.key, f.note, f.err = "", "", ""
 		f.keyStored = false
 		f.cfg.Active = ""
@@ -455,13 +462,21 @@ func (a *app) aiSettingsView(c *ui.Context, t *ui.Theme) {
 	a.section(c, locales.Provider(), func() { a.providersSummary(c, t) })
 
 	a.section(c, locales.AiCapabilities(), func() {
-		details := [3][2]string{
-			{locales.AiSummaries(), locales.AiSummariesDetail(ai.BodyLimit, ai.ConversationLimit)},
-			{locales.AiTriage(), locales.AiTriageDetail(ai.TriageLimit)},
-			{locales.AiDrafts(), locales.AiDraftsDetail()},
+		described := func(feature ai.Feature) (string, string) {
+			switch feature {
+			case ai.FeatureSummary:
+				return locales.AiSummaries(), locales.AiSummariesDetail(ai.BodyLimit, ai.ConversationLimit)
+			case ai.FeatureTriage:
+				return locales.AiTriage(), locales.AiTriageDetail(ai.TriageLimit)
+			case ai.FeatureDraft:
+				return locales.AiDrafts(), locales.AiDraftsDetail()
+			case ai.FeatureTranslate:
+				return locales.AiTranslate(), locales.AiTranslateDetail(ai.TranslateLimit)
+			}
+			return string(feature), ""
 		}
-		for i := range ai.Features {
-			title, detail := details[i][0], details[i][1]
+		for i, feature := range ai.Features {
+			title, detail := described(feature)
 			ui.Column(c.Key(string(ai.Features[i]))).Gap(6).Children(func() {
 				ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
 					var caption ui.Element
@@ -477,7 +492,43 @@ func (a *app) aiSettingsView(c *ui.Context, t *ui.Theme) {
 				}
 			})
 		}
+		a.aiTranslateTarget(c, t)
 		ui.Text(c, locales.AiNeverSent()).FontSize(11).TextColor(t.TextMuted)
+	})
+}
+
+// aiTranslateTarget picks the language translations are written in,
+// under the capability's switch. The first choice is the language the app
+// shows, so a user who reads one language has nothing to choose.
+func (a *app) aiTranslateTarget(c *ui.Context, t *ui.Theme) {
+	f := &a.aiForm
+	on := false
+	for i, feature := range ai.Features {
+		if feature == ai.FeatureTranslate && i < len(f.features) {
+			on = f.features[i]
+		}
+	}
+	if !on {
+		return
+	}
+	labels := []string{locales.AiTranslateFollowApp()}
+	choice := labels[0]
+	for _, l := range ai.TranslateLanguages {
+		labels = append(labels, l.Label)
+		if l.Tag == f.cfg.TranslateTo {
+			choice = l.Label
+		}
+	}
+	caption := ui.Text(c, locales.AiTranslateTo()).FontSize(11).Bold().TextColor(t.TextMuted)
+	ui.Select(c, &choice, labels).LabelledBy(caption).Width(320).OnChange(func() {
+		tag := ""
+		for _, l := range ai.TranslateLanguages {
+			if l.Label == choice {
+				tag = l.Tag
+			}
+		}
+		f.cfg.TranslateTo = tag
+		a.saveAI()
 	})
 }
 

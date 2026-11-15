@@ -87,13 +87,14 @@ type Feature string
 
 // The capabilities of the first AI release.
 const (
-	FeatureSummary Feature = "summary"
-	FeatureTriage  Feature = "triage"
-	FeatureDraft   Feature = "draft"
+	FeatureSummary   Feature = "summary"
+	FeatureTriage    Feature = "triage"
+	FeatureDraft     Feature = "draft"
+	FeatureTranslate Feature = "translate"
 )
 
 // Features lists the capabilities in the order the settings show them.
-var Features = []Feature{FeatureSummary, FeatureTriage, FeatureDraft}
+var Features = []Feature{FeatureSummary, FeatureTriage, FeatureDraft, FeatureTranslate}
 
 // Config is the user's AI settings. It holds no secret: keys are in the
 // keychain, under KeyName.
@@ -114,6 +115,10 @@ type Config struct {
 	Off map[Feature]bool `json:"off,omitempty"`
 	// Models are optional per-capability models; empty uses Model.
 	Models map[Feature]string `json:"models,omitempty"`
+	// TranslateTo is the language tag translations are written in, such
+	// as "zh-Hans"; empty is the language the app shows, which the
+	// caller names.
+	TranslateTo string `json:"translateTo,omitempty"`
 	// Reviewed records the capabilities whose payload the user has
 	// inspected and approved once.
 	Reviewed map[Feature]bool `json:"reviewed,omitempty"`
@@ -411,6 +416,15 @@ func (c *Config) SetFeature(f Feature, on bool) {
 		c.Off = map[Feature]bool{}
 	}
 	c.Off[f] = true
+}
+
+// TranslateTarget is the language tag translations are written in: the
+// one the user chose, else the app's own, which the caller names.
+func (c Config) TranslateTarget(app string) string {
+	if tag := strings.TrimSpace(c.TranslateTo); tag != "" {
+		return tag
+	}
+	return strings.TrimSpace(app)
 }
 
 // ModelFor is the model a capability uses.

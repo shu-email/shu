@@ -2,6 +2,7 @@ package mail
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/rand"
 	"crypto/tls"
@@ -11,6 +12,7 @@ import (
 	"net"
 	"net/mail"
 	"net/textproto"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -126,7 +128,7 @@ func (s *Service) Send(ctx context.Context, accountID string, out Outgoing) (Sen
 	// cancelled since does not undo that.
 	sentDraft := s.retireDraft(context.WithoutCancel(ctx), accountID, out.DraftID)
 	superseded := s.supersede(context.WithoutCancel(ctx), accountID, out.MessageID, pending.ID)
-	s.afterDelivery(ctx, a, password, raw, out.Bcc, sentDraft || superseded || len(out.Attachments) > 0, &result)
+	s.afterDelivery(ctx, a, password, raw, out.Bcc, out.MessageID, sentDraft || superseded || len(out.Attachments) > 0, &result)
 	if sentDraft {
 		s.flushDraftDeletions(ctx, accountID)
 	}
@@ -351,27 +353,35 @@ func refused(ctx context.Context, err error) error {
 // afterDelivery saves the sent copy in the server's Sent folder and, where
 // the message carried files or was a draft, removes the files nothing
 // names any more.
-func (s *Service) afterDelivery(ctx context.Context, a Account, password string, raw []byte, bcc []Address, sweep bool, result *SendResult) {
-	if err := s.appendSent(ctx, a, password, raw, bcc); err != nil {
+func (s *Service) afterDelivery(ctx context.Context, a Account, password string, raw []byte, bcc []Address, messageID string, sweep bool, result *SendResult) {
+	uid, err := s.saveSentCopy(ctx, a, password, raw, bcc, messageID)
+	if err != nil {
 		result.Warning = err
 	} else {
-		result.Copied = true
+		result.Copied, result.SentUID = true, uid
 	}
 	if sweep {
 		_ = s.SweepDraftFiles(context.WithoutCancel(ctx))
 	}
 }
 
-// appendSent saves the sent copy in the server's Sent folder.
-func (s *Service) appendSent(ctx context.Context, a Account, password string, raw []byte, bcc []Address) error {
+// saveSentCopy saves the sent copy in the server's Sent folder, and
+// returns the UID it has there. A server that saved its own copy of what
+// SMTP delivered — Gmail does, and names it in its help — is not given a
+// second one: the message is looked for by its Message-ID first.
+//
+// The copy Gmail saves is the one it received, which has no Bcc header,
+// as no message on the wire does. The outbox row, which stays, is where
+// the user's own record of the blind copies remains.
+func (s *Service) saveSentCopy(ctx context.Context, a Account, password string, raw []byte, bcc []Address, messageID string) (UID, error) {
 	c, err := s.dialIMAP(ctx, a, password)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer c.close()
 	folders, err := s.listFolders(c)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	sent := ""
 	for _, f := range folders {
@@ -381,12 +391,47 @@ func (s *Service) appendSent(ctx context.Context, a Account, password string, ra
 		}
 	}
 	if sent == "" {
-		return errors.New("the server has no Sent folder")
+		return 0, errors.New("the server has no Sent folder")
 	}
-	if err := appendSentCopy(c, sent, sentCopy(raw, bcc), s.now()); err != nil {
-		return fmt.Errorf("append to %s: %w", sent, err)
+	// A lookup that fails is no reason to leave the message without a
+	// copy: appending one is worse only than not having one at all.
+	if uid, err := sentCopyUID(c, sent, messageID); err == nil && uid != 0 {
+		return uid, nil
 	}
-	return nil
+	data, err := appendSentCopy(c, sent, sentCopy(raw, bcc), s.now())
+	if err != nil {
+		return 0, fmt.Errorf("append to %s: %w", sent, err)
+	}
+	if data == nil {
+		return 0, nil
+	}
+	return UID(data.UID), nil
+}
+
+// sentCopyUID returns the UID of the copy of a message in a folder, or 0
+// when the folder has none. The copy is found by its Message-ID, which
+// servers save without the angle brackets the header carries; a search
+// for the ID alone matches either.
+func sentCopyUID(c *imapSession, folder, messageID string) (UID, error) {
+	if messageID == "" {
+		return 0, nil
+	}
+	if _, err := c.client.Select(folder, &imap.SelectOptions{ReadOnly: true}).Wait(); err != nil {
+		return 0, fmt.Errorf("imap: examine %s: %w", folder, err)
+	}
+	data, err := c.client.UIDSearch(&imap.SearchCriteria{
+		Header: []imap.SearchCriteriaHeaderField{{Key: "Message-ID", Value: messageID}},
+	}, &imap.SearchOptions{ReturnAll: true}).Wait()
+	if err != nil {
+		return 0, err
+	}
+	uids := data.AllUIDs()
+	if len(uids) == 0 {
+		return 0, nil
+	}
+	// A user may have copies already; the newest is the one just saved.
+	slices.SortFunc(uids, func(a, b imap.UID) int { return cmp.Compare(a, b) })
+	return UID(uids[len(uids)-1]), nil
 }
 
 // sentCopy is a message as the Sent folder keeps it: the bytes sent and,
@@ -408,8 +453,8 @@ func sentCopy(raw []byte, bcc []Address) [][]byte {
 }
 
 // appendSentCopy saves a message, which comes in parts, in a folder,
-// read.
-func appendSentCopy(c *imapSession, folder string, parts [][]byte, now time.Time) error {
+// read, and returns what the server said of it.
+func appendSentCopy(c *imapSession, folder string, parts [][]byte, now time.Time) (*imap.AppendData, error) {
 	var size int64
 	for _, part := range parts {
 		size += int64(len(part))
@@ -418,14 +463,13 @@ func appendSentCopy(c *imapSession, folder string, parts [][]byte, now time.Time
 	for _, part := range parts {
 		if _, err := cmd.Write(part); err != nil {
 			cmd.Close()
-			return err
+			return nil, err
 		}
 	}
 	if err := cmd.Close(); err != nil {
-		return err
+		return nil, err
 	}
-	_, err := cmd.Wait()
-	return err
+	return cmd.Wait()
 }
 
 // headerAddresses writes addresses for a header go-mail does not write,
@@ -681,7 +725,7 @@ func (s *Service) RetryPending(ctx context.Context, id string) (SendResult, erro
 	if len(sent) == 0 {
 		sent = raw
 	}
-	s.afterDelivery(ctx, a, password, sent, pending.Envelope.Bcc, sentDraft || len(pending.Envelope.Attachments) > 0, &result)
+	s.afterDelivery(ctx, a, password, sent, pending.Envelope.Bcc, pending.Envelope.MessageID, sentDraft || len(pending.Envelope.Attachments) > 0, &result)
 	if sentDraft {
 		s.flushDraftDeletions(ctx, pending.AccountID)
 	}

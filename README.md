@@ -33,6 +33,13 @@
   same thing for a thousand years: a message carried to someone who matters.</em>
 </p>
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/screenshot-dark.png">
+    <img src="docs/images/screenshot-light.png" alt="Shu's mail window with a conversation open">
+  </picture>
+</p>
+
 Shu is a desktop mail client written in Go with [MyGo](https://mygo.run). It talks IMAP and SMTP
 straight to your mail provider, draws its own interface with no webview or Electron, and keeps mail
 on your machine. AI features run on a key or a local tool you choose, and every message a model may

@@ -1,0 +1,208 @@
+name: Release
+run-name: "Shu ${{ inputs.tag || github.ref_name }}"
+
+# A tag starts the release. The dispatch builds one tag again, into the
+# release it already has: a platform that failed is rebuilt, never the
+# branch its tag happens to point at.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "An existing release tag to rebuild, e.g. v0.1.0"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+# Two runs of one tag race on the files of its draft; and a run cancelled
+# halfway has published some platforms and not others.
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  draft:
+    name: Draft release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # the draft release
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          fetch-depth: 0
+      # mygo build names the installers, the disk images and, later, the
+      # update manifests from mygo.json, so a tag that named another
+      # version would publish this build as that one's.
+      - name: The tag names the version the app says it is
+        id: meta
+        run: |
+          version=$(jq -r .version mygo.json)
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::tag $TAG is not v$version, the version of mygo.json"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          # A prerelease tag carries its channel in the version itself
+          # (v0.2.0-beta.1): the release is marked so, and an app that checks
+          # updates skips it unless the user asked for prereleases.
+          case "$version" in
+            *-*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+      # CI proves a commit, and main holds only commits whose CI passed, so
+      # a tag built from anywhere else is a build nothing checked.
+      - name: The tag is on main
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor HEAD FETCH_HEAD; then
+            echo "::error::$TAG is not on main: no CI run ever saw this commit"
+            exit 1
+          fi
+      # The draft comes before the builds: each `gh release upload` needs a
+      # release to reach, and a rerun keeps this one rather than making a
+      # second.
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "$TAG already has a release; the builds upload into it."
+            exit 0
+          fi
+          notes="$RUNNER_TEMP/notes.md"
+          # The update window shows this version's section of CHANGELOG.md,
+          # so the release page says the same words rather than its own. A
+          # heading that only starts with the version (0.1.0-beta.1 beside
+          # 0.1.0) is another section, hence the close.
+          if [ -f CHANGELOG.md ]; then
+            awk -v v="$VERSION" '
+              BEGIN { gsub(/\./, "\\.", v) }
+              $0 ~ "^## \\[?" v "\\]?([[:space:]]|$)" { on = 1; next }
+              on && /^## / { exit }
+              on { print }
+            ' CHANGELOG.md > "$notes"
+          fi
+          if [ -s "$notes" ]; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --draft --verify-tag --title "Shu $VERSION" --notes-file "$notes"
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --draft --verify-tag --title "Shu $VERSION" \
+              --notes "Shu $VERSION is a pre-alpha build, published from $GITHUB_SHA."
+          fi
+
+  build:
+    name: Build (${{ matrix.name }})
+    needs: draft
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    permissions:
+      contents: write # the files of the draft
+      id-token: write # the build's provenance
+      attestations: write
+    strategy:
+      fail-fast: false # the other platforms finish, and a rerun builds the one that failed
+      matrix:
+        include:
+          # One universal app: Apple silicon and Intel install the same dmg.
+          - { name: macOS, os: macos-latest, platform: "darwin/universal" }
+          # MyGo needs no cgo, so an Ubuntu runner builds Windows and Linux
+          # alike; only signing, notarizing and disk images need macOS.
+          - { name: Windows, os: ubuntu-latest, platform: "windows/amd64,windows/arm64" }
+          - { name: Linux, os: ubuntu-latest, platform: "linux/amd64,linux/arm64" }
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ env.TAG }}
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      # mygo build makes the Windows installers with NSIS, and downloads it
+      # itself on Windows runners only; a Linux runner installs it.
+      - name: Install NSIS, for the Windows installers
+        if: matrix.name == 'Windows'
+        run: sudo apt-get update && sudo apt-get install -y nsis
+      # Signing in with a provider is offered only where its client is
+      # linked in (mail.Service.OAuthConfigured), so a release without one
+      # silently drops that sign-in for every user. Fail before building.
+      - name: The OAuth clients are set
+        env:
+          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          MICROSOFT_CLIENT_ID: ${{ vars.MICROSOFT_CLIENT_ID }}
+        run: |
+          # One line each: the macOS runner's /bin/bash is 3.2, which has no
+          # ${!name} to read a variable by its name.
+          missing=0
+          fail() { echo "::error::$1 is not set for this repository"; missing=1; }
+          [ -n "$GOOGLE_CLIENT_ID" ] || fail GOOGLE_CLIENT_ID
+          [ -n "$GOOGLE_CLIENT_SECRET" ] || fail GOOGLE_CLIENT_SECRET
+          [ -n "$MICROSOFT_CLIENT_ID" ] || fail MICROSOFT_CLIENT_ID
+          exit "$missing"
+      # The IDs are package variables of shu/mail, set by the linker, empty
+      # in the repository; see docs/oauth.md.
+      - name: Build
+        env:
+          MYGO_LDFLAGS: >-
+            -X shu/mail.GoogleClientID=${{ vars.GOOGLE_CLIENT_ID }}
+            -X shu/mail.GoogleClientSecret=${{ secrets.GOOGLE_CLIENT_SECRET }}
+            -X shu/mail.MicrosoftClientID=${{ vars.MICROSOFT_CLIENT_ID }}
+        run: go tool mygo build -platform "${{ matrix.platform }}"
+      - name: Upload to the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          files=$(ls build/*/*.dmg build/*/*-setup-*.exe \
+                     build/*/*.tar.gz build/*/*.deb build/*/*.rpm 2>/dev/null || true)
+          if [ -z "$files" ]; then
+            echo "::error::the build wrote no installer for ${{ matrix.platform }}"
+            exit 1
+          fi
+          # --clobber: a rerun replaces its own files instead of failing on
+          # them, and the other platforms' stay.
+          gh release upload "$TAG" $files --clobber --repo "$GITHUB_REPOSITORY"
+      # What each download is, checked with
+      # `gh attestation verify FILE --repo shu-email/shu`. Not for the
+      # dispatch, whose build is main's commit and not the tag's.
+      - if: github.event_name == 'push'
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            build/*/*.dmg
+            build/*/*-setup-*.exe
+            build/*/*.tar.gz
+            build/*/*.deb
+            build/*/*.rpm
+
+  publish:
+    name: Publish
+    needs: [draft, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # the release, out of draft
+    steps:
+      - name: Make the release public
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ needs.draft.outputs.prerelease }}
+        run: |
+          flags=()
+          if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --draft=false "${flags[@]}"

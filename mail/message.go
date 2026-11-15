@@ -169,6 +169,9 @@ const (
 	SpecialJunk    = `\Junk`
 	SpecialArchive = `\Archive`
 	SpecialFlagged = `\Flagged`
+	// SpecialImportant is Gmail's Important: a label the server keeps,
+	// which the user can neither rename nor delete.
+	SpecialImportant = `\Important`
 )
 
 // Outgoing is a message to send. Its Bcc recipients get it and are named

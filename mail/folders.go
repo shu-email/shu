@@ -31,7 +31,7 @@ var (
 // renamed or deleted.
 func (f Folder) IsSystem() bool {
 	switch f.SpecialUse {
-	case SpecialInbox, SpecialSent, SpecialDrafts, SpecialTrash, SpecialJunk, SpecialArchive, SpecialFlagged:
+	case SpecialInbox, SpecialSent, SpecialDrafts, SpecialTrash, SpecialJunk, SpecialArchive, SpecialFlagged, SpecialImportant:
 		return true
 	}
 	return false

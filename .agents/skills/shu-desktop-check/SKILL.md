@@ -70,8 +70,8 @@ app, which keep their mail in memory, and adds the account
 adds it again, so every run starts from the same mailbox
 (`internal/fakemail/seed.go`): a conversation across the inbox and Sent,
 one across the inbox and Archive, a newsletter with remote images, a mail
-with two attachments, one in Chinese, a long one, a draft, junk, trash and
-more inbox mail than the first sync keeps. Drafts and changes made in it
+with two attachments, a long one, a draft, junk, trash and more inbox mail
+than the first sync keeps. Drafts and changes made in it
 are gone at the next launch. Its watcher and syncs reach only these
 servers: the engine then trusts their certificate and no other, so other
 accounts of the dev build fail to connect for the run.

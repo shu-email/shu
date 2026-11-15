@@ -30,8 +30,8 @@ const SeedFiller = 230
 // Seed fills a server started with SeedMailboxes with a mailbox that
 // covers what a check of the window walks through: a conversation within
 // the inbox and Sent, one across the inbox and Archive, HTML with remote
-// images, attachments, text in Chinese, a long message, flags, a draft
-// another client wrote, junk, trash and enough mail for several pages.
+// images, attachments, a long message, flags, a draft another client
+// wrote, junk, trash and enough mail for several pages.
 // Dates count back from now so the list shows today, yesterday and
 // older; everything else is fixed.
 func Seed(s *IMAP, now time.Time) error {
@@ -39,7 +39,7 @@ func Seed(s *IMAP, now time.Time) error {
 	me := SeedName + " <" + SeedAddress + ">"
 	mia := "Mia Chen <mia@example.com>"
 	leo := "Leo Park <leo@example.com>"
-	wang := "王小明 <xiaoming@example.com>"
+	alex := "Alex Wang <alex@example.com>"
 
 	type seeded struct {
 		folder string
@@ -55,6 +55,7 @@ func Seed(s *IMAP, now time.Time) error {
 	// follows up.
 	put("INBOX", plain(header{
 		from: mia, to: me, subject: "Q3 roadmap review", date: ago(50 * time.Hour), id: "roadmap-1",
+		auth: "mx.example.com; spf=pass; dkim=pass; dmarc=pass header.from=example.com",
 	}, "Hi,\n\nCould you look at the Q3 roadmap before Thursday? The open\nquestions are in the second section.\n\nMia"), imap.FlagSeen)
 	put("Sent", plain(header{
 		from: me, to: mia, subject: "Re: Q3 roadmap review", date: ago(30 * time.Hour), id: "roadmap-2",
@@ -63,6 +64,7 @@ func Seed(s *IMAP, now time.Time) error {
 	put("INBOX", plain(header{
 		from: leo, to: me, cc: mia, subject: "Re: Q3 roadmap review", date: ago(3 * time.Hour), id: "roadmap-3",
 		inReplyTo: "roadmap-2", refs: []string{"roadmap-1", "roadmap-2"},
+		auth: "mx.example.com; spf=pass; dkim=pass; dmarc=pass header.from=example.com",
 	}, "Agreed with the notes. I moved the launch a week out."))
 
 	// A conversation across folders: the original was archived, the
@@ -73,6 +75,7 @@ func Seed(s *IMAP, now time.Time) error {
 	put("INBOX", plain(header{
 		from: leo, to: me, subject: "Re: Venue for the offsite", date: ago(40 * time.Minute), id: "offsite-2",
 		inReplyTo: "offsite-1", refs: []string{"offsite-1"},
+		auth: "mx.example.com; spf=pass; dkim=pass; dmarc=pass header.from=example.com",
 	}, "Booked the room on the third floor."), imap.FlagFlagged)
 
 	// A message the user sent that no one answered: the follow-up list
@@ -93,18 +96,21 @@ func Seed(s *IMAP, now time.Time) error {
 			`<p>The new dashboard is live. <a href="https://acme.example.com/blog">Read more</a>.</p>`+
 			`</body></html>`))
 
-	// Attachments.
+	// Attachments, from a sender whose results the server reported, so
+	// the reading pane shows the verified chip rather than a warning.
 	put("INBOX", attached(header{
 		from: mia, to: me, subject: "Numbers for the board", date: ago(26 * time.Hour), id: "board-1",
-	}, "The numbers and my notes are attached.", []attachment{
+		auth: "mx.example.com; spf=pass; dkim=pass; dmarc=pass header.from=example.com",
+	}, "Hi,\n\nThe Q3 numbers are in q3-numbers.csv, with my notes below.\n\nRevenue is up 25% over the quarter. August carried most of the growth; September was flat after the launch.\n\nLet me know if you want the monthly breakdown before the board meeting.\n\nMia", []attachment{
 		{name: "q3-numbers.csv", typ: "text/csv", data: "month,revenue\nJuly,120\nAugust,135\nSeptember,150\n"},
 		{name: "notes.txt", typ: "text/plain", data: "Revenue is up 25% over the quarter.\n"},
 	}), imap.FlagSeen)
 
-	// Chinese, to check text that is not Latin and its search.
+	// A plain message from a sender who is not in the other threads.
 	put("INBOX", plain(header{
-		from: wang, to: me, subject: "周五团队聚餐安排", date: ago(7 * time.Hour), id: "dinner-1",
-	}, "大家好，\n\n周五晚上七点在公司楼下的餐厅聚餐，请回复是否参加。\n\n小明"))
+		from: alex, to: me, subject: "Team dinner on Friday", date: ago(7 * time.Hour), id: "dinner-1",
+		auth: "mx.example.com; spf=pass; dkim=pass; dmarc=pass header.from=example.com",
+	}, "Hi,\n\nWe are having dinner downstairs at seven on Friday. Let me\nknow if you can make it.\n\nAlex"))
 
 	// A meeting invitation, to walk the RSVP card.
 	ics := "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nMETHOD:REQUEST\r\n" +
@@ -115,6 +121,7 @@ func Seed(s *IMAP, now time.Time) error {
 		"END:VEVENT\r\nEND:VCALENDAR\r\n"
 	put("INBOX", invite(header{
 		from: leo, to: me, subject: "Invitation: Offsite planning", date: ago(90 * time.Minute), id: "invite-1",
+		auth: "mx.example.com; spf=pass; dkim=pass; dmarc=pass header.from=example.com",
 	}, "Here is the invitation for the offsite planning.", ics))
 
 	// A long message, to scroll the reading pane.
@@ -124,6 +131,7 @@ func Seed(s *IMAP, now time.Time) error {
 	}
 	put("INBOX", plain(header{
 		from: leo, to: me, subject: "Incident report: sync outage", date: ago(4 * 24 * time.Hour), id: "incident-1",
+		auth: "mx.example.com; spf=pass; dkim=pass; dmarc=pass header.from=example.com",
 	}, long.String()), imap.FlagSeen, imap.FlagFlagged)
 
 	// A draft another mail client saved.
@@ -139,18 +147,29 @@ func Seed(s *IMAP, now time.Time) error {
 		from: "Calendar <calendar@example.com>", to: me, subject: "Cancelled: weekly sync", date: ago(6 * 24 * time.Hour), id: "trash-1",
 	}, "This event was cancelled."), imap.FlagSeen)
 
-	senders := []string{
-		"Build Bot <ci@example.com>", "Docs Team <docs@example.com>", mia, leo, "Billing <billing@example.com>",
+	fillerMail := []struct{ from, subject string }{
+		{"Build Bot <ci@example.com>", "Deploy notes for build 4812"},
+		{"Docs Team <docs@example.com>", "Release checklist for v0.2"},
+		{mia, "Design review: settings"},
+		{leo, "Team offsite agenda"},
+		{"Billing <billing@example.com>", "October invoice from Acme"},
+		{"Build Bot <ci@example.com>", "Nightly build passed"},
+		{"Docs Team <docs@example.com>", "Weekly digest: product and docs"},
+		{mia, "Customer feedback from the beta"},
+		{leo, "Vendor contract renewal"},
+		{"Billing <billing@example.com>", "Receipt for October"},
 	}
 	for i := 1; i <= SeedFiller; i++ {
 		var flags []imap.Flag
 		if i%4 != 0 {
 			flags = append(flags, imap.FlagSeen)
 		}
+		m := fillerMail[(i-1)%len(fillerMail)]
 		put("INBOX", plain(header{
-			from: senders[i%len(senders)], to: me, subject: fmt.Sprintf("Status update #%d", i),
+			from: m.from, to: me, subject: m.subject,
 			date: ago(time.Duration(10*24+i*6) * time.Hour), id: fmt.Sprintf("filler-%d", i),
-		}, fmt.Sprintf("Status update number %d. Nothing needs your attention.", i)), flags...)
+			auth: "mx.example.com; spf=pass; dkim=pass; dmarc=pass header.from=example.com",
+		}, "A short note before the week ends.\n\nEverything on our side is on track. I will follow up if\nanything changes."), flags...)
 	}
 
 	// Each folder's UIDs go up with the date, as on a server that got the

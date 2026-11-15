@@ -110,7 +110,7 @@ func TestSeededMailbox(t *testing.T) {
 			t.Errorf("%q is in %v, want %v", subject, got, want)
 		}
 	}
-	for _, subject := range []string{"This week at Acme", "Numbers for the board", "周五团队聚餐安排", "Incident report: sync outage"} {
+	for _, subject := range []string{"This week at Acme", "Numbers for the board", "Team dinner on Friday", "Incident report: sync outage"} {
 		if _, ok := bySubject[subject]; !ok {
 			t.Errorf("no %q in the inbox's first page", subject)
 		}

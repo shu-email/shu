@@ -35,20 +35,34 @@ const barInset = (barHeight - 2*barButton) / 2
 
 const barPad = 8
 
-// compactReading is the reading pane's width below which the search field
-// leaves the actions their room and shows only while in use.
+// compactReading is the reading pane's width below which its action
+// groups fold into menus, to keep the bar from overflowing.
 const compactReading float32 = 600
+
+// searchReading is the reading pane's width below which a search field
+// cannot sit beside every action group at full width. Until it fits, the
+// field is the magnifier that opens it; a squeezed field clips its own
+// icon before the actions give way.
+const searchReading float32 = 800
 
 // readingCompact reports whether the reading pane is too narrow to show
 // every group of actions beside the search.
 func (a *app) readingCompact() bool {
-	return a.readingWidth > 0 && a.readingWidth < compactReading
+	// Before the first layout the pane has no width yet: fold rather than
+	// lay the bar out wider than the window it will be in.
+	return a.readingWidth < compactReading
+}
+
+// readingSearchFits reports whether a full search field and its filter
+// fit beside every action group.
+func (a *app) readingSearchFits() bool {
+	return a.readingWidth >= searchReading
 }
 
 // readingSearchShown reports whether the bar shows the search field
 // itself, rather than the magnifier that opens it.
 func (a *app) readingSearchShown() bool {
-	return !a.readingCompact() || a.searchOpen || strings.TrimSpace(a.query) != ""
+	return a.searchOpen || strings.TrimSpace(a.query) != "" || a.readingSearchFits()
 }
 
 // barPalette is the glass of a capsule: its tint, its hairline and its
@@ -145,24 +159,29 @@ func (a *app) readingBar(c *ui.Context, label string, fn func()) {
 			// The actions keep their room, but for a search in use in a
 			// narrow pane: then their groups give way, into their menus.
 			actions := ui.Row(c).Gap(6).AlignItems(ui.Center).Shrink(0)
-			if compact && field {
+			if field && !a.readingSearchFits() {
 				actions.Shrink(1).MinWidth(0)
 			}
 			actions.Children(fn)
 			ui.Spacer(c)
-			// Closed, the field is only its magnifier, which opens it:
-			// the same field, so that a click on it gives it the keys at
-			// once.
+			// Closed, the search is its magnifier: a button that opens the
+			// field and gives it the keys.
+			if !field {
+				a.glassGroup(c, "", func() {
+					a.toolButton(c, searchIcon, locales.SearchMailLabel(), true, a.openSearch)
+				})
+				return
+			}
 			// A narrow bar keeps the field short enough for the replies
 			// beside it and the filter at its end.
 			width, placeholder := float32(240), a.searchPlaceholder()
-			if compact {
+			if compact || !a.readingSearchFits() {
 				width = 200
 			}
-			if !field {
-				width, placeholder = 30, ""
-			}
-			capsule(c, ui.Row(c.Key("search")).MinHeight(barHeight).Shrink(1).MinWidth(0).
+			// The capsule takes its own width beside the spacer, and the
+			// filter the width of its button: a capsule that lays out
+			// narrower pushes the field off the window, where it clips.
+			capsule(c, ui.Row(c.Key("search")).Width(width+40).MinHeight(barHeight).Shrink(0).
 				AlignItems(ui.Center).Gap(2).Padding(0, 3)).Children(func() {
 				ui.SearchField(c, &a.query).Width(width).Shrink(1).MinWidth(min(width, 90)).
 					Background(ui.Transparent).Border(0, ui.Transparent).
@@ -182,11 +201,9 @@ func (a *app) readingBar(c *ui.Context, label string, fn func()) {
 						a.list.Handle.Focus(c)
 					})
 				}
-				if field {
-					// In a toolbar of its own, the filter button is flat
-					// on the glass, as the actions are.
-					ui.Toolbar(c, func() { a.filterButton(c, t) }).Padding(0).Shrink(0)
-				}
+				// In a toolbar of its own, the filter button is flat on
+				// the glass, as the actions are.
+				ui.Toolbar(c, func() { a.filterButton(c, t) }).Padding(0).Shrink(0)
 			})
 		})
 	})

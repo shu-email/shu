@@ -414,10 +414,15 @@ func TestMinimumSizeAndDark(t *testing.T) {
 	a, _ := sampleApp(t)
 	for _, dark := range []bool{false, true} {
 		tt := ui.NewTesterWith(a.view, 1000, 640, ui.TesterOptions{Dark: dark})
-		for _, text := range []string{"Inbox", "Search mail", "Compose"} {
+		for _, text := range []string{"Inbox", "Compose"} {
 			if !tt.HasText(text) {
 				t.Errorf("dark=%v missing %q", dark, text)
 			}
+		}
+		// The search is a button at this width, so its label is not a
+		// text of the window, but it still has one.
+		if r, ok := tt.Find(locales.SearchMailLabel()); !ok || r.W == 0 {
+			t.Errorf("dark=%v missing the search: %v", dark, r)
 		}
 	}
 }

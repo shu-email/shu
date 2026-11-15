@@ -298,3 +298,43 @@ func TestCompactFoldsGroups(t *testing.T) {
 		}
 	}
 }
+
+// A pane just past the fold point is still too narrow for a full search
+// field beside every action group. The bar shows the magnifier instead of
+// squeezing the field until its icon clips, and only gives the field room
+// when the user opens it.
+func TestNarrowBarShowsTheSearchMagnifier(t *testing.T) {
+	a, _ := sampleMessageApp(t)
+	tt := ui.NewTester(a.view, 1220, 800)
+	tt.Frame()
+	if a.readingCompact() {
+		t.Fatal("1220x800 folded the action groups")
+	}
+	if a.readingSearchFits() {
+		t.Fatal("1220x800 claims a full search field fits")
+	}
+	if a.readingSearchShown() {
+		t.Error("the closed search field is shown in a pane it does not fit")
+	}
+	if r, ok := tt.Find(locales.SearchFilters()); ok && r.W > 0 {
+		t.Error("the filter shows beside a search that is only its magnifier")
+	}
+	if r, ok := tt.Find(locales.SearchMailLabel()); !ok || r.X+r.W > 1220 {
+		t.Errorf("the magnifier is at %v, outside the 1220px window", r)
+	}
+	for _, s := range []string{locales.ArchiveMessage(), locales.StarMessage(), locales.ChangeLabels()} {
+		if r, ok := tt.Find(s); !ok || r.W == 0 {
+			t.Errorf("%q not shown beside the magnifier", s)
+		}
+	}
+
+	tt.Key(ui.Cmd, ui.KeyK)
+	tt.Frame()
+	tt.Advance(300 * time.Millisecond)
+	if !a.searchOpen || !a.readingSearchShown() {
+		t.Fatalf("Cmd+K: open=%v shown=%v", a.searchOpen, a.readingSearchShown())
+	}
+	if r, ok := tt.Find(locales.SearchMailLabel()); !ok || r.W < 90 {
+		t.Errorf("the opened field takes %v, want room for its icon and text", r)
+	}
+}

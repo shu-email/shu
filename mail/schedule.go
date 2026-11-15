@@ -230,7 +230,7 @@ func (s *Service) sendDue(ctx context.Context, p PendingSend) (SendResult, error
 	result := SendResult{Outbox: p}
 	sentDraft := s.retireScheduledDraft(record, p)
 	superseded := s.supersede(record, p.AccountID, p.Envelope.MessageID, p.ID)
-	s.afterDelivery(ctx, a, password, raw, p.Envelope.Bcc, sentDraft || superseded || len(p.Envelope.Attachments) > 0, &result)
+	s.afterDelivery(ctx, a, password, raw, p.Envelope.Bcc, p.Envelope.MessageID, sentDraft || superseded || len(p.Envelope.Attachments) > 0, &result)
 	if sentDraft {
 		s.flushDraftDeletions(ctx, p.AccountID)
 	}

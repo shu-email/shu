@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-sasl"
 	smtp "github.com/emersion/go-smtp"
 )
@@ -38,6 +40,9 @@ type fakeSMTP struct {
 	// refuseMail is the server's answer to MAIL FROM, as a provider that
 	// will not take mail from the sender gives it.
 	refuseMail error
+	// saveSent, when set, saves each message the server takes in a folder
+	// of its own, as Gmail saves its own copy of what SMTP delivers.
+	saveSent func(raw []byte) error
 }
 
 type smtpBackend struct{ f *fakeSMTP }
@@ -106,8 +111,12 @@ func (s *smtpSession) Data(r io.Reader) error {
 		return refuse
 	}
 	s.f.mu.Lock()
+	save := s.f.saveSent
 	s.f.messages = append(s.f.messages, string(b))
 	s.f.mu.Unlock()
+	if save != nil {
+		return save(b)
+	}
 	return nil
 }
 
@@ -154,6 +163,17 @@ func (l testSMTPLogger) Printf(format string, args ...any) {
 	l.t.Logf("smtpserver: "+format, args...)
 }
 func (l testSMTPLogger) Println(args ...any) { l.t.Log(args...) }
+
+// savesSent has the server keep its own copy of what it takes in a
+// folder, as Gmail does.
+func (f *fakeSMTP) savesSent(server *fakeIMAP, mailbox string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.saveSent = func(raw []byte) error {
+		_, err := server.user.Append(mailbox, appendLiteral{bytes.NewReader(raw)}, &imap.AppendOptions{})
+		return err
+	}
+}
 
 func (f *fakeSMTP) received() []string {
 	f.mu.Lock()

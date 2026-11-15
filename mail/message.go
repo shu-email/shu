@@ -219,7 +219,11 @@ type MoveResult struct {
 // SendResult says whether the Sent copy was saved. Copied is false when
 // the provider has no Sent folder, which the UI reports.
 type SendResult struct {
-	Copied  bool
+	// Copied says that the message has a copy in the server's Sent folder,
+	// whether this app saved it or the server did.
+	Copied bool
+	// SentUID is that copy's UID, or 0 when the server does not say.
+	SentUID UID
 	Outbox  PendingSend
 	Warning error
 }

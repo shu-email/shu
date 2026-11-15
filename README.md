@@ -1,5 +1,5 @@
 <h1 align="center">
-  <a href="https://github.com/shu-email/shu"><img src="resources/icon.png" alt="Shu app icon" width="128" height="128"></a><br>
+  <a href="https://github.com/shu-email/shu"><img src="docs/images/icon.png" alt="Shu app icon" width="128" height="128"></a><br>
   Shu
 </h1>
 

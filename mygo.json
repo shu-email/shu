@@ -1,6 +1,6 @@
 {
   "name": "shu",
-  "identifier": "com.example.shu",
+  "identifier": "com.shumail.shu",
   "main": "./cmd/shu",
   "version": "0.1.0",
   "out": "build",

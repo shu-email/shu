@@ -78,6 +78,10 @@ type PromptSession struct {
 	imapserver.SessionIMAP4rev2
 	// noKeywords is IMAPOptions.KeepsNoKeywords.
 	noKeywords bool
+	// gmail is IMAPOptions.Gmail's behaviour, nil for a plain server, and
+	// once counts the connection out as it ends.
+	gmail *gmailState
+	once  *sync.Once
 }
 
 // Select selects a mailbox as the in-memory server does, which keeps any
@@ -131,7 +135,11 @@ type IMAPOptions struct {
 	// SELECT's PERMANENTFLAGS name the system's flags alone, and a STORE
 	// that would add a keyword is answered NO.
 	KeepsNoKeywords bool
-	Logger          Logger
+	// Gmail, when set, serves Gmail's shape: system folders under a
+	// noselect [Gmail] parent with Gmail's attributes, a connection cap,
+	// and its Sent folder named as Gmail names it (see GmailProfile).
+	Gmail  *GmailProfile
+	Logger Logger
 }
 
 // IMAP is a running IMAP server.
@@ -141,6 +149,8 @@ type IMAP struct {
 	User   *imapmemserver.User
 	server *imapserver.Server
 	ln     net.Listener
+	// gmail is the profile served, nil for a plain server.
+	gmail *gmailState
 }
 
 // StartIMAP starts an IMAP server on a free port of 127.0.0.1.
@@ -148,7 +158,13 @@ func StartIMAP(o IMAPOptions) (*IMAP, error) {
 	mem := imapmemserver.New()
 	user := imapmemserver.NewUser(o.Username, o.Password)
 	mem.AddUser(user)
-	for _, name := range o.Mailboxes {
+	var gmail *gmailState
+	mailboxes := o.Mailboxes
+	if o.Gmail != nil {
+		gmail = newGmailState(*o.Gmail, o.Mailboxes)
+		mailboxes = gmail.names()
+	}
+	for _, name := range mailboxes {
 		if err := user.Create(name, nil); err != nil {
 			return nil, err
 		}
@@ -159,7 +175,11 @@ func StartIMAP(o IMAPOptions) (*IMAP, error) {
 	}
 	server := imapserver.New(&imapserver.Options{
 		NewSession: func(*imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
-			session := PromptSession{SessionIMAP4rev2: mem.NewSession().(imapserver.SessionIMAP4rev2), noKeywords: o.KeepsNoKeywords}
+			session := PromptSession{SessionIMAP4rev2: mem.NewSession().(imapserver.SessionIMAP4rev2), noKeywords: o.KeepsNoKeywords, gmail: gmail}
+			if gmail != nil {
+				session.once = new(sync.Once)
+				gmail.opened()
+			}
 			if o.Session != nil {
 				return o.Session(session), &imapserver.GreetingData{}, nil
 			}
@@ -173,7 +193,7 @@ func StartIMAP(o IMAPOptions) (*IMAP, error) {
 		Logger:    o.Logger,
 	})
 	go func() { _ = server.Serve(ln) }()
-	return &IMAP{Addr: ln.Addr().String(), User: user, server: server, ln: ln}, nil
+	return &IMAP{Addr: ln.Addr().String(), User: user, server: server, ln: ln, gmail: gmail}, nil
 }
 
 // Append adds a message to a mailbox.
@@ -203,7 +223,10 @@ type SMTPOptions struct {
 	// OnMessage, if set, is given each message the server takes, as it
 	// takes it.
 	OnMessage func(raw []byte)
-	Logger    Logger
+	// SaveSent, when set, has the server save every message it takes in
+	// that server's Sent folder, as Gmail does for what SMTP delivers.
+	SaveSent *IMAP
+	Logger   Logger
 }
 
 // SMTP is a running SMTP server that keeps the messages it takes and
@@ -332,6 +355,15 @@ func (s *smtpSession) Data(r io.Reader) error {
 		s.server.mu.Unlock()
 		return err
 	}
+	s.server.mu.Unlock()
+	// Gmail saves its own copy before it answers the message, so a failure
+	// to save is a failure to deliver.
+	if save := s.server.opts.SaveSent; save != nil {
+		if err := save.saveSent(b); err != nil {
+			return err
+		}
+	}
+	s.server.mu.Lock()
 	s.server.got = append(s.server.got, string(b))
 	s.server.envelopes = append(s.server.envelopes, Envelope{From: s.from, To: s.to})
 	s.server.mu.Unlock()

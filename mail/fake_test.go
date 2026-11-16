@@ -102,6 +102,10 @@ type memStore struct {
 	pendingNext int64
 	blocks      map[string][]BlockedSender
 	unsubs      map[string]UnsubscribeRecord
+	// icons is the icon kept for each sender's domain, and iconFiles the
+	// hashes SenderIconRefs reports.
+	icons     map[string]StoredIcon
+	iconFiles []string
 }
 
 // memMark is a folder's watermark.
@@ -133,6 +137,7 @@ func newMemStore() *memStore {
 		discoveries: map[string]Discovery{},
 		blocks:      map[string][]BlockedSender{},
 		unsubs:      map[string]UnsubscribeRecord{},
+		icons:       map[string]StoredIcon{},
 	}
 }
 
@@ -150,6 +155,32 @@ func (s *memStore) SaveDiscovery(ctx context.Context, d Discovery) error {
 	defer s.mu.Unlock()
 	s.discoveries[d.Domain] = d
 	return nil
+}
+
+// SenderIcon reads the icon kept for a domain.
+func (s *memStore) SenderIcon(ctx context.Context, domain string) (StoredIcon, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	icon, ok := s.icons[domain]
+	return icon, ok, nil
+}
+
+// SaveSenderIcon keeps what a domain's lookup found.
+func (s *memStore) SaveSenderIcon(ctx context.Context, icon StoredIcon) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.icons[icon.Domain] = icon
+	if icon.Found && icon.ContentHash != "" {
+		s.iconFiles = append(s.iconFiles, icon.ContentHash)
+	}
+	return nil
+}
+
+// SenderIconRefs lists the icon files the rows name.
+func (s *memStore) SenderIconRefs(ctx context.Context) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.iconFiles...), nil
 }
 
 // EnqueueOperations writes queued actions, each with its ID.

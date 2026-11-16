@@ -302,7 +302,7 @@ func (a *app) toggleHTML() {
 // details disclosure for the raw fields.
 func (a *app) senderHeader(c *ui.Context, t *ui.Theme, m mail.Summary) {
 	ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
-		ui.Avatar(c, displayName(m.From), nil)
+		ui.Avatar(c, displayName(m.From), a.senderAvatar(m.From))
 		ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
 			ui.Text(c, displayName(m.From)).FontSize(14).Bold().SingleLine()
 			ui.Text(c, m.From.Email).FontSize(12).TextColor(t.TextMuted).SingleLine()

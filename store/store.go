@@ -579,6 +579,18 @@ var migrations = [][]string{
 		`CREATE INDEX attachments_cache_path ON attachments (cache_path)`,
 		`CREATE INDEX outbox_state_due ON outbox (state, due_at, created_at)`,
 	},
+	// v27: the icon this device keeps for a sender's domain (see
+	// mail/avatars.go). The bytes are a file in the cache directory, named
+	// by the hash; the row is the lookup that found them, kept so that a
+	// domain is asked for once, and what a failed lookup found, so that a
+	// second look waits.
+	{
+		`CREATE TABLE sender_icons (
+			domain TEXT PRIMARY KEY,
+			content_hash TEXT NOT NULL DEFAULT '',
+			found INTEGER NOT NULL DEFAULT 0,
+			checked_at INTEGER NOT NULL)`,
+	},
 }
 
 // backfills compute, from the rows of the version before, statements a

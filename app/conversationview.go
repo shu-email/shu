@@ -363,7 +363,7 @@ func (a *app) threadHeader(c *ui.Context, t *ui.Theme, cv *convView, n, total in
 	}
 	header.Children(func() {
 		ui.Row(c).Grow(1).Gap(10).AlignItems(ui.Center).MinWidth(0).Children(func() {
-			ui.Avatar(c, name, nil)
+			ui.Avatar(c, name, a.senderAvatar(m.From))
 			ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
 				ui.Row(c).Gap(6).AlignItems(ui.Center).MinWidth(0).Children(func() {
 					if !m.Seen {

@@ -695,6 +695,11 @@ func (a *app) saveMailSettings() {
 		}
 	}
 	a.mailSet = set
+	// No icon shows once the user turned them off, and the window keeps
+	// none: turning them on again asks the domains it draws.
+	if !set.SenderIcons {
+		a.forgetIcons()
+	}
 	// The saves take turns, and one that a later save has overtaken does
 	// not write, so the last choice made is the one stored.
 	seq := a.mailSaveSeq.Add(1)
@@ -741,6 +746,9 @@ func (a *app) mailSettingsView(c *ui.Context, t *ui.Theme) {
 			}
 		})
 		ui.Text(c, locales.SyncWindowDetail()).FontSize(12).TextColor(t.TextMuted)
+	})
+	a.section(c, locales.SenderIcons(), func() {
+		a.switchRow(c, t, locales.ShowSenderIcons(), locales.ShowSenderIconsDetail(), &a.mailSet.SenderIcons, false)
 	})
 	a.section(c, locales.Notifications(), func() {
 		ui.Column(c).Gap(12).Padding(2, 0, 0, 0).Children(func() {

@@ -75,6 +75,9 @@ type mailService interface {
 	// the network stay blocked until the user allows them.
 	RemoteImages(ctx context.Context) (map[string]bool, error)
 	SetRemoteImages(ctx context.Context, from mail.Address, on bool) error
+	// A sender's icon, for the reading pane's avatar: the PNG this device
+	// kept for the address's domain, or nil when there is none.
+	SenderIcon(ctx context.Context, from mail.Address) ([]byte, error)
 
 	SetFlag(ctx context.Context, accountID, folder string, uid mail.UID, flag mail.Flag, on bool) error
 	SetFlags(ctx context.Context, accountID string, msgs []mail.MessageRef, flag mail.Flag, on bool) error

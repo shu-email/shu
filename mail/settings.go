@@ -44,6 +44,11 @@ type Settings struct {
 	// SyncWindow is one of SyncWindows: how many of a folder's newest
 	// messages its first sync caches, the window's and the watcher's.
 	SyncWindow int
+	// SenderIcons shows the icon of a sender's own domain as its picture
+	// (see avatars.go), in place of the initials of its name. Looking one
+	// up asks that domain, and a public icon service for one it has not,
+	// so the domain leaves this device and the address does not.
+	SenderIcons bool
 }
 
 // DefaultSettings are the settings of a new install: mail is checked
@@ -52,7 +57,7 @@ type Settings struct {
 func DefaultSettings() Settings {
 	return Settings{
 		CheckMinutes: DefaultCheckMinutes, Notify: true, Muted: map[string]bool{}, Conversations: true,
-		SyncWindow: DefaultSyncWindow,
+		SyncWindow: DefaultSyncWindow, SenderIcons: true,
 	}
 }
 
@@ -63,6 +68,7 @@ const (
 	settingNotify        = "notify.enabled"
 	settingNotifyDetails = "notify.details"
 	settingConversations = "view.conversations"
+	settingSenderIcons   = "view.sender_icons"
 )
 
 // MutedKey is the key of the setting that turns one account's
@@ -132,6 +138,9 @@ func (s *Service) Settings(ctx context.Context) (Settings, error) {
 	if err := flag(settingConversations, &out.Conversations); err != nil {
 		return out, err
 	}
+	if err := flag(settingSenderIcons, &out.SenderIcons); err != nil {
+		return out, err
+	}
 	accounts, err := s.store.Accounts(ctx)
 	if err != nil {
 		return out, err
@@ -172,6 +181,9 @@ func (s *Service) SaveSettings(ctx context.Context, set Settings) error {
 		return err
 	}
 	if err := s.store.SetSetting(ctx, settingConversations, bit(set.Conversations)); err != nil {
+		return err
+	}
+	if err := s.store.SetSetting(ctx, settingSenderIcons, bit(set.SenderIcons)); err != nil {
 		return err
 	}
 	// Only the accounts there are get a row: one for an account that was

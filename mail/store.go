@@ -267,6 +267,13 @@ type Store interface {
 	Discovery(ctx context.Context, domain string) (Discovery, bool, error)
 	SaveDiscovery(ctx context.Context, d Discovery) error
 
+	// The icon kept for a sender's domain (see Service.SenderIcon), and the
+	// files they are in, for the sweep that keeps them and removes the
+	// rest. A domain the lookup found no icon for has a row without a hash.
+	SenderIcon(ctx context.Context, domain string) (StoredIcon, bool, error)
+	SaveSenderIcon(ctx context.Context, icon StoredIcon) error
+	SenderIconRefs(ctx context.Context) ([]string, error)
+
 	// The queue of actions the server has not made yet (see
 	// Service.MoveMessages and queue.go). EnqueueOperations writes them,
 	// each with the ID the store gave it; ClaimOperation takes the oldest

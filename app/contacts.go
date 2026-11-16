@@ -477,7 +477,7 @@ func (a *app) contactRow(c *ui.Context, t *ui.Theme, ct mail.Contact) {
 	who := contactName(ct)
 	ui.Row(c).Gap(10).AlignItems(ui.Center).Padding(8, 8, 8, 12).BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
 		// The name says it already.
-		ui.Avatar(c, who, nil).AccessHidden(true)
+		ui.Avatar(c, who, a.senderAvatar(mail.Address{Email: ct.Email})).AccessHidden(true)
 		if b.renaming == mail.ContactKey(ct.Email) {
 			a.renameFields(c, t, ct)
 			return

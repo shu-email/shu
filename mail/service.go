@@ -130,6 +130,14 @@ type Service struct {
 	lookupSRV              func(ctx context.Context, service, proto, name string) (string, []*net.SRV, error)
 	discoverTimeout        time.Duration
 	discoverRequestTimeout time.Duration
+
+	// A sender's icon (avatars.go): the client its domain is read with,
+	// and the lock that has one lookup at a time. Tests replace the
+	// client with fixtures and no real network.
+	logoClient         func(context.Context) (*http.Client, error)
+	logoMu             sync.Mutex
+	logoTimeout        time.Duration
+	logoRequestTimeout time.Duration
 }
 
 // NewService wires the cache, the keychain and the attachment cache
@@ -161,6 +169,9 @@ func NewService(store Store, secrets SecretStore, cacheDir string) *Service {
 	s.lookupSRV = net.DefaultResolver.LookupSRV
 	s.discoverTimeout = discoverTimeout
 	s.discoverRequestTimeout = discoverRequestTimeout
+	s.logoClient = s.HTTPClient
+	s.logoTimeout = logoTimeout
+	s.logoRequestTimeout = logoRequestTimeout
 	return s
 }
 

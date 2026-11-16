@@ -57,12 +57,49 @@ func (s *Service) SweepCache(ctx context.Context) error {
 	}
 	attachments, attachmentErr := s.sweepAttachmentFiles(ctx)
 	previews, previewErr := s.sweepPreviewFiles(ctx)
+	icons, iconErr := s.sweepIconFiles(ctx)
 	// The counts are all the log says: never a message, a file's name or
 	// a path.
-	if attachments+previews > 0 {
-		log.Printf("shu: cache sweep removed %d attachment files and %d temporary files", attachments, previews)
+	if attachments+previews+icons > 0 {
+		log.Printf("shu: cache sweep removed %d attachment files, %d temporary files and %d sender icons",
+			attachments, previews, icons)
 	}
-	return errors.Join(attachmentErr, previewErr)
+	return errors.Join(attachmentErr, previewErr, iconErr)
+}
+
+// sweepIconFiles removes the sender icon files no row names: the icons of
+// the domains a later lookup found none for, and those of a cache writer
+// that stopped halfway.
+func (s *Service) sweepIconFiles(ctx context.Context) (int, error) {
+	dir := filepath.Join(s.cacheDir, senderIconCacheDir)
+	var named map[string]bool
+	removed := 0
+	err := s.walkCacheFiles(ctx, dir, s.now().Add(-cacheGrace), func(name string) error {
+		if named == nil {
+			paths, err := s.store.SenderIconRefs(ctx)
+			if err != nil {
+				// Without the whole list, any file may be in use.
+				return err
+			}
+			named = make(map[string]bool, len(paths))
+			for _, path := range paths {
+				named[path] = true
+			}
+		}
+		if named[name] {
+			return nil
+		}
+		switch err := os.Remove(filepath.Join(dir, name)); {
+		case err == nil:
+			removed++
+			return nil
+		case errors.Is(err, fs.ErrNotExist):
+			return nil
+		default:
+			return err
+		}
+	})
+	return removed, err
 }
 
 // sweepAttachmentFiles removes the attachment files no attachment row

@@ -4028,6 +4028,36 @@ func (msgs Messages) CheckEveryDetail() string {
 	return Catalog.Format(msgs.locale, "checkEveryDetail", nil)
 }
 
+// SenderIcons says "Sender icons"
+// in the language the app shows.
+func SenderIcons() string { return In(i18n.Locale()).SenderIcons() }
+
+// SenderIcons says "Sender icons"
+// in the language of msgs.
+func (msgs Messages) SenderIcons() string {
+	return Catalog.Format(msgs.locale, "senderIcons", nil)
+}
+
+// ShowSenderIcons says "Show a sender's domain icon"
+// in the language the app shows.
+func ShowSenderIcons() string { return In(i18n.Locale()).ShowSenderIcons() }
+
+// ShowSenderIcons says "Show a sender's domain icon"
+// in the language of msgs.
+func (msgs Messages) ShowSenderIcons() string {
+	return Catalog.Format(msgs.locale, "showSenderIcons", nil)
+}
+
+// ShowSenderIconsDetail says "The mark of the sender's own domain — GitHub's for github.com — in place of the initials of its name. Shu asks th…"
+// in the language the app shows.
+func ShowSenderIconsDetail() string { return In(i18n.Locale()).ShowSenderIconsDetail() }
+
+// ShowSenderIconsDetail says "The mark of the sender's own domain — GitHub's for github.com — in place of the initials of its name. Shu asks th…"
+// in the language of msgs.
+func (msgs Messages) ShowSenderIconsDetail() string {
+	return Catalog.Format(msgs.locale, "showSenderIconsDetail", nil)
+}
+
 // Notifications says "Notifications"
 // in the language the app shows.
 func Notifications() string { return In(i18n.Locale()).Notifications() }

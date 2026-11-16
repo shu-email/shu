@@ -83,6 +83,11 @@ type fakeService struct {
 	// the policy calls fail.
 	remote    map[string]bool
 	remoteErr error
+	// icons is the PNG each domain answers with, iconRequests every
+	// domain asked for, and iconErr fails the lookup.
+	icons        map[string][]byte
+	iconErr      error
+	iconRequests []string
 	// imported, exported and restored record the transfer actions, and
 	// transferErr makes them fail.
 	imported    []string
@@ -2655,6 +2660,18 @@ func (f *fakeService) HTTPClient(ctx context.Context) (*http.Client, error) {
 		return nil, f.networkErr
 	}
 	return http.DefaultClient, nil
+}
+
+func (f *fakeService) SenderIcon(ctx context.Context, from mail.Address) ([]byte, error) {
+	domain, ok := mail.LogoDomain(from)
+	if !ok {
+		return nil, nil
+	}
+	f.iconRequests = append(f.iconRequests, domain)
+	if f.iconErr != nil {
+		return nil, f.iconErr
+	}
+	return f.icons[domain], nil
 }
 
 func (f *fakeService) RemoteImages(ctx context.Context) (map[string]bool, error) {

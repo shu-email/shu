@@ -271,6 +271,12 @@ type app struct {
 	imagesLoaded bool
 	preview      attachmentPreview
 	previewView  *mygo.WebView
+	// Sender icons (avatars.go): icons holds the domains whose picture the
+	// window has, iconPending those it asked for and iconGone those it has
+	// no picture for and asks no more in this run.
+	icons       map[string]*ui.Bitmap
+	iconPending map[string]bool
+	iconGone    map[string]bool
 	// rules is the rules' view, open or not (rules.go); the live checks
 	// of the rule being written take turns under ruleCheckMu, and one a
 	// later check overtook (ruleCheckSeq) does not run.
@@ -357,6 +363,9 @@ func newApp(svc mailService) *app {
 		smarts:        newSmartState(),
 		images:        map[string]bool{},
 		imagesShown:   map[string]bool{},
+		icons:         map[string]*ui.Bitmap{},
+		iconPending:   map[string]bool{},
+		iconGone:      map[string]bool{},
 		securityOpen:  map[string]bool{},
 	}
 }

@@ -1176,6 +1176,9 @@
     }
   },
   "checkEveryDetail": "Mail servers that can push deliver new mail right away. Folders and unread counts, and servers that can't push, are checked this often.",
+  "senderIcons": "Sender icons",
+  "showSenderIcons": "Show a sender's domain icon",
+  "showSenderIconsDetail": "The mark of the sender's own domain — GitHub's for github.com — in place of the initials of its name. Shu asks the domain for it once, and a public icon service when it has none, so only the domain leaves this device, never the address. Gmail, Outlook and other mail services keep their initials.",
   "notifications": "Notifications",
   "notifyNewMail": "Notify me about new mail",
   "notifyNewMailDetail": "Shown as system notifications, which follow Do Not Disturb and Focus.",

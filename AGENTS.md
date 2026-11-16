@@ -306,6 +306,22 @@ Windows and Linux. It is written in Go with
   without them and after a restart; a message whose headers said nothing
   keeps none and stays unverified, never safe. Nothing looks anything up
   on the network, and nothing unsubscribes without the user's action.
+- A sender's icon is its domain's, not the person's (`mail/avatars.go`,
+  `store/sendericons.go`, `app/avatars.go`): a list row, the reading pane,
+  a conversation's message headers, the address book and the account
+  switcher draw it in place of a name's initials. A row is no taller for
+  it: the picture fits inside the lines a row already had, and the unread
+  dot moved beside the name. Only the domain leaves
+  the device, once, and only while `Settings.SenderIcons` is on: the
+  domain's own `apple-touch-icon.png` or `favicon.ico` first, a public
+  icon service for a domain with neither, and never the domains of the
+  mail services themselves, whose icon is the provider's. What a lookup
+  found is a PNG in the cache directory named by its content hash with a
+  `sender_icons` row (migration v27); an ICO is decoded to a PNG when it
+  is kept, a domain that found none is asked again after a month, one no
+  source could be reached for records nothing, and the sweep takes the
+  file no row names. The window decodes an icon once, keeps a bounded
+  number of them, and asks a domain from the frame that first shows it.
 - Labels are the user's categories of messages, an account's each
   (`mail/labels.go`, `store/labels.go`). On the server a label is an IMAP
   keyword: `mail.LabelKeyword` writes a name as one, as it is when it is

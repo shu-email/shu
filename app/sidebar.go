@@ -75,7 +75,7 @@ func (a *app) sidebar(c *ui.Context, t *ui.Theme, vibrant bool) {
 			if name == "" {
 				name = locales.AccountsTitle()
 			}
-			ui.Avatar(c, name, nil)
+			ui.Avatar(c, name, a.senderAvatar(mail.Address{Email: email}))
 			ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
 				ui.Text(c, name).FontSize(12).Bold().SingleLine()
 				ui.Text(c, email).FontSize(11).TextColor(t.TextMuted).SingleLine()

@@ -425,6 +425,7 @@ func TestMigrationsFromEmpty(t *testing.T) {
 		"follow_up_dismissals", "follow_up_dismissals_thread",
 		"smart_mailboxes", "smart_mailboxes_account",
 		"discoveries",
+		"sender_icons",
 		"rules", "rules_account", "rule_log", "rule_log_rule", "rule_log_account", "rule_log_message",
 		"expected_arrivals", "expected_arrivals_key",
 		"thread_folders", "thread_folders_folder",

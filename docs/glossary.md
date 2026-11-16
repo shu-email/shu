@@ -136,6 +136,20 @@ the message through moves. `Label.Local` says which one a label is.
 ([store/labels.go](../store/labels.go)).
 *Not:* "tag", "category", or "folder" (a label does not hold mail).
 
+## sender icon
+
+The picture shown for a sender in place of the initials of its name, in a
+list row and in the pane that reads the mail: the
+mark of the address's domain, such as GitHub's for github.com. Only the
+domain is looked up, once, unless the user turned
+`Settings.SenderIcons` off, and the icon is a cache file named by its
+content hash. The icon services' own domains keep their initials.
+`Service.SenderIcon`, `mail.LogoDomain`
+([mail/avatars.go](../mail/avatars.go)), `sender_icons`
+([store/sendericons.go](../store/sendericons.go)).
+*Not:* "avatar" (the initials are an avatar too, and neither is a photo
+of the person) or "favicon" in user-facing text.
+
 ## tombstone
 
 A message's cache row while a move is unconfirmed: `deleted = 1` hides

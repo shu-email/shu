@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -288,7 +289,7 @@ func TestSenderIconRecordsWhatItFound(t *testing.T) {
 	if got, err := svc.SenderIcon(ctx, Address{Email: "a@nologo.example"}); err != nil || got != nil {
 		t.Fatalf("icon = %d bytes, %v, want none", len(got), err)
 	}
-	if icon, ok, _ := store.SenderIcon(ctx, "nologo.example"); !ok || icon.Found {
+	if icon, ok, _ := store.SenderIcon(ctx, "domain:nologo.example"); !ok || icon.Found {
 		t.Errorf("kept %+v, want a lookup that found none", icon)
 	}
 	asked := len(fake.asked())
@@ -317,7 +318,7 @@ func TestSenderIconRecordsWhatItFound(t *testing.T) {
 	if _, err := svc.SenderIcon(ctx, Address{Email: "a@offline.example"}); err == nil {
 		t.Fatal("an unreachable lookup said it was fine")
 	}
-	if _, ok, _ := store.SenderIcon(ctx, "offline.example"); ok {
+	if _, ok, _ := store.SenderIcon(ctx, "domain:offline.example"); ok {
 		t.Error("an unreachable lookup was kept as one that found nothing")
 	}
 }
@@ -332,7 +333,7 @@ func TestSenderIconAsksAgainForAFileTheSweepTook(t *testing.T) {
 	if _, err := svc.SenderIcon(ctx, Address{Email: "a@github.com"}); err != nil {
 		t.Fatal(err)
 	}
-	icon, _, _ := store.SenderIcon(ctx, "github.com")
+	icon, _, _ := store.SenderIcon(ctx, "domain:github.com")
 	if err := os.Remove(filepath.Join(dir, senderIconCacheDir, icon.ContentHash)); err != nil {
 		t.Fatal(err)
 	}
@@ -365,7 +366,7 @@ func TestSweepCacheRemovesIconsNoRowNames(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	kept, _, _ := store.SenderIcon(ctx, "github.com")
+	kept, _, _ := store.SenderIcon(ctx, "domain:github.com")
 	if err := os.Chtimes(filepath.Join(dirIcons, kept.ContentHash), old, old); err != nil {
 		t.Fatal(err)
 	}
@@ -377,5 +378,111 @@ func TestSweepCacheRemovesIconsNoRowNames(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dirIcons, kept.ContentHash)); err != nil {
 		t.Errorf("kept icon file gone: %v", err)
+	}
+}
+
+// TestIconKeysNameThePersonThenTheHost proves what is looked for: the
+// person an address names at the host its mail comes from, then the mark
+// of that host, else the sender's own domain.
+func TestIconKeysNameThePersonThenTheHost(t *testing.T) {
+	cases := []struct {
+		email string
+		keys  []string
+	}{
+		{"octocat@users.noreply.github.com", []string{"profile:github.com/octocat", "domain:github.com"}},
+		{"583231+octocat@users.noreply.github.com", []string{"profile:github.com/octocat", "domain:github.com"}},
+		// A bare number is an id elsewhere: it names no account to ask for.
+		{"583231@users.noreply.github.com", []string{"domain:github.com"}},
+		{"gitlab-org@users.noreply.gitlab.com", []string{"profile:gitlab.com/gitlab-org", "domain:gitlab.com"}},
+		{"bad/user@users.noreply.github.com", []string{"domain:github.com"}},
+		{"notifications@github.com", []string{"domain:github.com"}},
+		{"someone@gmail.com", nil},
+		{"someone@localhost", nil},
+	}
+	for _, c := range cases {
+		if got := iconKeys(Address{Email: c.email}); strings.Join(got, " ") != strings.Join(c.keys, " ") {
+			t.Errorf("iconKeys(%q) = %v, want %v", c.email, got, c.keys)
+		}
+	}
+}
+
+// TestSenderIconShowsThePersonsPictureFirst proves a person's own picture
+// is what shows where the address names one, and that the host's mark is
+// what shows when the account has none: a bot writes, and no account.
+func TestSenderIconShowsThePersonsPictureFirst(t *testing.T) {
+	svc, store, _, fake := iconEnv(t)
+	ctx := context.Background()
+	photo := pngIcon(t, 96, color.NRGBA{R: 0x33, G: 0x33, B: 0x33, A: 0xff})
+	mark := pngIcon(t, 32, iconOf(t, 32))
+	fake.set("github.com", "/octocat.png", http.StatusOK, photo)
+	fake.set("github.com", "/apple-touch-icon.png", http.StatusOK, mark)
+
+	got, err := svc.SenderIcon(ctx, Address{Email: "octocat@users.noreply.github.com"})
+	if err != nil || !bytes.Equal(got, photo) {
+		t.Fatalf("icon = %d bytes, %v, want the account's picture", len(got), err)
+	}
+	if icon, ok, _ := store.SenderIcon(ctx, "profile:github.com/octocat"); !ok || !icon.Found {
+		t.Errorf("the picture was not kept: %+v, %v", icon, ok)
+	}
+	// The mark was not asked for: the picture answered.
+	for _, u := range fake.asked() {
+		if strings.Contains(u, "apple-touch-icon") || strings.Contains(u, "favicon") {
+			t.Errorf("asked %q though the account had a picture", u)
+		}
+	}
+
+	// An account with no picture falls back to the host's mark.
+	fake.set("github.com", "/bot-bot.png", http.StatusNotFound, nil)
+	got, err = svc.SenderIcon(ctx, Address{Email: "bot-bot@users.noreply.github.com"})
+	if err != nil || !bytes.Equal(got, mark) {
+		t.Fatalf("icon = %d bytes, %v, want the host's mark", len(got), err)
+	}
+}
+
+// TestSenderIconReadsGitLabsOwnPictures proves the API names the picture,
+// and that only GitLab's own uploads are taken: a Gravatar is no picture
+// this device asked for.
+func TestSenderIconReadsGitLabsOwnPictures(t *testing.T) {
+	svc, _, _, fake := iconEnv(t)
+	ctx := context.Background()
+	photo := pngIcon(t, 96, color.NRGBA{R: 0x22, G: 0x44, B: 0x66, A: 0xff})
+	fake.set("gitlab.com", "/api/v4/users", http.StatusOK,
+		[]byte(`[{"username":"gitlab-org","avatar_url":"https://gitlab.com/uploads/-/system/user/avatar/1/avatar.png"}]`))
+	fake.set("gitlab.com", "/uploads/-/system/user/avatar/1/avatar.png", http.StatusOK, photo)
+	got, err := svc.SenderIcon(ctx, Address{Email: "gitlab-org@users.noreply.gitlab.com"})
+	if err != nil || !bytes.Equal(got, photo) {
+		t.Fatalf("icon = %d bytes, %v, want GitLab's own picture", len(got), err)
+	}
+
+	// An account whose picture is a Gravatar keeps the host's mark.
+	mark := pngIcon(t, 32, iconOf(t, 32))
+	fake.set("gitlab.com", "/api/v4/users", http.StatusOK,
+		[]byte(`[{"username":"mateo","avatar_url":"https://secure.gravatar.com/avatar/x"}]`))
+	fake.set("gitlab.com", "/apple-touch-icon.png", http.StatusOK, mark)
+	fake.set("gitlab.com", "/favicon.ico", http.StatusNotFound, nil)
+	got, err = svc.SenderIcon(ctx, Address{Email: "mateo@users.noreply.gitlab.com"})
+	if err != nil || !bytes.Equal(got, mark) {
+		t.Fatalf("icon = %d bytes, %v, want the host's mark", len(got), err)
+	}
+
+}
+
+// TestSenderIconKeepsNoVerdictOfABusySource proves a rate limit is no
+// answer: nothing is recorded for the account, so the next attempt is not
+// a month away.
+func TestSenderIconKeepsNoVerdictOfABusySource(t *testing.T) {
+	svc, store, _, fake := iconEnv(t)
+	ctx := context.Background()
+	fake.set("gitlab.com", "/api/v4/users", http.StatusTooManyRequests, nil)
+	for _, path := range []string{"/apple-touch-icon.png", "/favicon.ico"} {
+		fake.set("gitlab.com", path, http.StatusNotFound, nil)
+	}
+	fake.set("icons.duckduckgo.com", "/ip3/gitlab.com.ico", http.StatusNotFound, nil)
+	fake.set("www.google.com", "/s2/favicons", http.StatusNotFound, nil)
+	if _, err := svc.SenderIcon(ctx, Address{Email: "busy@users.noreply.gitlab.com"}); err == nil {
+		t.Error("a rate limit said the account had no picture")
+	}
+	if _, ok, _ := store.SenderIcon(ctx, "profile:gitlab.com/busy"); ok {
+		t.Error("a rate limit was kept as an account with no picture")
 	}
 }

@@ -6,15 +6,15 @@ import (
 	"shu/mail"
 )
 
-// The icons this device keeps for senders' domains (migration v27). A
-// domain has one row: what the lookup found, or that it found none. The
-// bytes are a file of the cache directory the engine writes, and only the
-// hash is here.
+// The icons this device keeps for senders (migrations v27 and v28). A key
+// has one row: what the lookup found, or that it found none. The bytes are
+// a file of the cache directory the engine writes, and only the hash is
+// here.
 
-// SenderIcon reads the icon kept for a domain, or reports that none was
+// SenderIcon reads the icon kept for a key, or reports that none was
 // looked for.
-func (s *Store) SenderIcon(ctx context.Context, domain string) (mail.StoredIcon, bool, error) {
-	rows, err := s.query(ctx, `SELECT content_hash, found, checked_at FROM sender_icons WHERE domain = ?`, domain)
+func (s *Store) SenderIcon(ctx context.Context, key string) (mail.StoredIcon, bool, error) {
+	rows, err := s.query(ctx, `SELECT content_hash, found, checked_at FROM sender_icons WHERE key = ?`, key)
 	if err != nil {
 		return mail.StoredIcon{}, false, err
 	}
@@ -23,20 +23,20 @@ func (s *Store) SenderIcon(ctx context.Context, domain string) (mail.StoredIcon,
 	}
 	r := rows.Values[0]
 	return mail.StoredIcon{
-		Domain:      domain,
+		Key:         key,
 		ContentHash: text(r[0]),
 		Found:       truth(r[1]),
 		CheckedAt:   unixUTC(r[2]),
 	}, true, nil
 }
 
-// SaveSenderIcon keeps what a domain's lookup found, replacing what it had.
+// SaveSenderIcon keeps what a key's lookup found, replacing what it had.
 func (s *Store) SaveSenderIcon(ctx context.Context, icon mail.StoredIcon) error {
-	_, err := s.exec(ctx, `INSERT INTO sender_icons (domain, content_hash, found, checked_at)
+	_, err := s.exec(ctx, `INSERT INTO sender_icons (key, content_hash, found, checked_at)
 		VALUES (?, ?, ?, ?)
-		ON CONFLICT (domain) DO UPDATE SET
+		ON CONFLICT (key) DO UPDATE SET
 			content_hash = excluded.content_hash, found = excluded.found, checked_at = excluded.checked_at`,
-		icon.Domain, icon.ContentHash, icon.Found, icon.CheckedAt.Unix())
+		icon.Key, icon.ContentHash, icon.Found, icon.CheckedAt.Unix())
 	return err
 }
 

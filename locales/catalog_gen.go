@@ -4048,11 +4048,11 @@ func (msgs Messages) ShowSenderIcons() string {
 	return Catalog.Format(msgs.locale, "showSenderIcons", nil)
 }
 
-// ShowSenderIconsDetail says "The mark of the sender's own domain — GitHub's for github.com — in place of the initials of its name. Shu asks th…"
+// ShowSenderIconsDetail says "Shown in place of the initials of a name: the mark of the sender's own domain, or the picture an account has where th…"
 // in the language the app shows.
 func ShowSenderIconsDetail() string { return In(i18n.Locale()).ShowSenderIconsDetail() }
 
-// ShowSenderIconsDetail says "The mark of the sender's own domain — GitHub's for github.com — in place of the initials of its name. Shu asks th…"
+// ShowSenderIconsDetail says "Shown in place of the initials of a name: the mark of the sender's own domain, or the picture an account has where th…"
 // in the language of msgs.
 func (msgs Messages) ShowSenderIconsDetail() string {
 	return Catalog.Format(msgs.locale, "showSenderIconsDetail", nil)

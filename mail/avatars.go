@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
@@ -13,28 +14,34 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 )
 
-// A sender's icon, the picture the reading pane shows in place of the
-// initials of a name (avatars.go). It is the domain's own favicon, so a
-// sender at vercel.com is shown Vercel's mark and one at github.com
-// GitHub's. Only the domain leaves the device, never the address, and
-// the user can turn the whole thing off (Settings.SenderIcons).
+// A sender's icon, the picture a row and the reading pane show in place
+// of the initials of a name (avatars.go). Two things are looked for, in
+// order: the person's own picture, where the address names one at the
+// host its mail comes from (iconProfiles), and the mark of the sender's
+// domain, so that a sender at vercel.com is shown Vercel's mark and one
+// at github.com GitHub's. Only the domain, and the account name the
+// address itself carries, leave the device — never the address — and the
+// user can turn the whole thing off (Settings.SenderIcons).
 //
-// What a domain's lookup found is kept: the bytes in the cache directory,
-// one file per content hash, and the lookup in the store, so that a domain
-// is asked for once and a domain that has none is asked again only after
+// What a lookup found is kept by key: the bytes in the cache directory,
+// one file per content hash, and the lookup in the store, so that a key is
+// asked for once and one that has nothing is asked again only after
 // logoRetry. A lookup that could not reach any source records nothing, so
 // that going offline does not cost a month of initials.
 
-// StoredIcon is what the cache keeps of a domain's icon: the hash of the
-// bytes in the cache directory, and whether there are any.
+// StoredIcon is what the cache keeps of a key: the hash of the bytes in
+// the cache directory, and whether there are any.
 type StoredIcon struct {
-	Domain      string
+	// Key names what was looked up: "domain:github.com" for a domain's
+	// mark, "profile:github.com/octocat" for a person's picture.
+	Key         string
 	ContentHash string
 	Found       bool
 	CheckedAt   time.Time
@@ -61,16 +68,44 @@ const (
 	senderIconCacheDir = "sender-icons"
 )
 
-// logoSources are the endpoints a domain's icon is looked for at, in the
+// domainSources are the endpoints a domain's mark is looked for at, in the
 // order they are tried. The first two are the domain's own hosts, which
-// already see the mail they send. The last is a public icon service,
-// which learns the domain and nothing else; it costs one request per
+// already see the mail they send. The last two are public icon services,
+// which learn the domain and nothing else; each costs one request per
 // domain that has neither of the first two, once.
-var logoSources = []string{
+var domainSources = []string{
 	"https://%s/apple-touch-icon.png",
 	"https://%s/favicon.ico",
 	"https://icons.duckduckgo.com/ip3/%s.ico",
 	"https://www.google.com/s2/favicons?sz=64&domain=%s",
+}
+
+// iconProfile is a host whose mail an address names a person on: the
+// account is the address's local part, and the picture is that account's.
+// The mark of the host is what shows when the account has none.
+type iconProfile struct {
+	// domain is the address's domain, exactly.
+	domain string
+	// host is the site the account is on, whose mark is the fallback.
+	host string
+}
+
+// iconProfiles are the hosts whose addresses name a person. GitHub's mail
+// comes from users.noreply.github.com and GitLab's from
+// users.noreply.gitlab.com.
+var iconProfiles = []iconProfile{
+	{domain: "users.noreply.github.com", host: "github.com"},
+	{domain: "users.noreply.gitlab.com", host: "gitlab.com"},
+}
+
+// profileFor names the host an address's domain names a person on.
+func profileFor(domain string) (iconProfile, bool) {
+	for _, p := range iconProfiles {
+		if p.domain == domain {
+			return p, true
+		}
+	}
+	return iconProfile{}, false
 }
 
 // publicMailDomains are the domains of the mail services themselves: their
@@ -111,74 +146,150 @@ func LogoDomain(addr Address) (string, bool) {
 	return domain, true
 }
 
-// SenderIcon returns the icon kept for the sender's domain, looking it up
-// when this device has not before, or nil when there is none. It is
-// bounded in time and safe to call from a background job; the window
-// decides when to ask, and asks once per domain.
+// SenderIcon returns the icon kept for the sender, looking it up when this
+// device has not before, or nil when there is none. It is bounded in time
+// and safe to call from a background job; the window decides when to ask,
+// and asks once per address.
 func (s *Service) SenderIcon(ctx context.Context, addr Address) ([]byte, error) {
-	domain, ok := LogoDomain(addr)
-	if !ok || s.cacheDir == "" {
+	keys := iconKeys(addr)
+	if len(keys) == 0 || s.cacheDir == "" {
 		return nil, nil
 	}
 	// One lookup at a time: a list that shows many new senders asks for
 	// several, and the sources are shared.
 	s.logoMu.Lock()
 	defer s.logoMu.Unlock()
+	var lastErr error
+	for _, key := range keys {
+		data, found, err := s.iconForKey(ctx, key)
+		if err != nil {
+			// A source nothing answered for: the next key may still,
+			// and the initials show if none does.
+			lastErr = err
+			continue
+		}
+		if found {
+			return data, nil
+		}
+	}
+	return nil, lastErr
+}
 
-	stored, has, err := s.store.SenderIcon(ctx, domain)
+// iconKeys names what is looked for, in the order the first that answers
+// wins: the person's picture where the address names one, then the mark of
+// the host it is on, else the sender's domain's mark.
+func iconKeys(addr Address) []string {
+	email := strings.TrimSpace(addr.Email)
+	at := strings.LastIndex(email, "@")
+	if at <= 0 || at == len(email)-1 {
+		return nil
+	}
+	local := strings.ToLower(strings.TrimSpace(email[:at]))
+	domain := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(email[at+1:]), "."))
+	if p, ok := profileFor(domain); ok {
+		var keys []string
+		if user, ok := profileUser(local); ok {
+			keys = append(keys, "profile:"+p.host+"/"+user)
+		}
+		return append(keys, "domain:"+p.host)
+	}
+	if d, ok := LogoDomain(addr); ok {
+		return []string{"domain:" + d}
+	}
+	return nil
+}
+
+// profileUser names the account an address's local part is: GitHub writes
+// "<id>+<account>", and GitLab the account alone. A bare number names no
+// account that can be asked for safely, since a number is an id elsewhere.
+func profileUser(local string) (string, bool) {
+	if i := strings.LastIndex(local, "+"); i >= 0 {
+		local = local[i+1:]
+	}
+	if local == "" || len(local) > 39 {
+		return "", false
+	}
+	for _, r := range local {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-', r == '_', r == '.':
+		default:
+			return "", false
+		}
+	}
+	if strings.Trim(local, "0123456789") == "" {
+		return "", false
+	}
+	return local, true
+}
+
+// iconForKey returns the icon kept for a key, looking it up when this
+// device has not before, and reports whether there is one. Only a source
+// that answered with nothing is recorded: one that could not be reached
+// says so instead, so that a network that comes back finds its icon.
+func (s *Service) iconForKey(ctx context.Context, key string) ([]byte, bool, error) {
+	stored, has, err := s.store.SenderIcon(ctx, key)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if has && stored.Found {
 		if data, err := s.readIcon(stored.ContentHash); err == nil {
-			return data, nil
+			return data, true, nil
 		}
 		// The file is gone though the row says it was there: a sweep or
-		// the user removed it, and the domain is asked again.
+		// the user removed it, and the key is asked again.
 	}
 	if has && !stored.Found && s.now().Sub(stored.CheckedAt) < logoRetry {
-		return nil, nil
+		return nil, false, nil
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, s.logoTimeout)
+	lookup, cancel := context.WithTimeout(ctx, s.logoTimeout)
 	defer cancel()
-	data, answered, err := s.fetchIcon(ctx, domain)
+	data, answered, err := s.fetchIcon(lookup, key)
 	if data == nil {
 		if !answered {
-			// Nothing answered: a month of initials is too long for a
-			// network that may come back in a minute.
-			return nil, err
+			return nil, false, err
 		}
-		if saveErr := s.store.SaveSenderIcon(ctx, StoredIcon{Domain: domain, CheckedAt: s.now()}); saveErr != nil {
-			return nil, saveErr
+		if saveErr := s.store.SaveSenderIcon(ctx, StoredIcon{Key: key, CheckedAt: s.now()}); saveErr != nil {
+			return nil, false, saveErr
 		}
-		return nil, nil
+		return nil, false, nil
 	}
 	hash := hashIcon(data)
 	if err := s.writeIcon(hash, data); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if err := s.store.SaveSenderIcon(ctx, StoredIcon{
-		Domain: domain, ContentHash: hash, Found: true, CheckedAt: s.now(),
+		Key: key, ContentHash: hash, Found: true, CheckedAt: s.now(),
 	}); err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return data, nil
+	return data, true, nil
 }
 
-// fetchIcon looks the domain's icon up at the sources in order, and
-// reports whether any of them answered: one that answered with nothing is
-// worth recording, one that could not be reached is not.
-func (s *Service) fetchIcon(ctx context.Context, domain string) ([]byte, bool, error) {
+// fetchIcon looks a key's icon up, and reports whether any source
+// answered: one that answered with nothing is worth recording, one that
+// could not be reached is not.
+func (s *Service) fetchIcon(ctx context.Context, key string) ([]byte, bool, error) {
 	client, err := s.logoHTTPClient(ctx)
 	if err != nil {
 		return nil, false, err
 	}
+	if domain, ok := strings.CutPrefix(key, "domain:"); ok {
+		return s.fetchDomainIcon(ctx, client, domain)
+	}
+	if rest, ok := strings.CutPrefix(key, "profile:"); ok {
+		host, user, _ := strings.Cut(rest, "/")
+		return s.fetchProfileIcon(ctx, client, host, user)
+	}
+	return nil, false, nil
+}
+
+// fetchDomainIcon reads the domain's mark from the sources in order.
+func (s *Service) fetchDomainIcon(ctx context.Context, client *http.Client, domain string) ([]byte, bool, error) {
 	answered := false
 	var last error
-	for _, source := range logoSources {
-		u := fmt.Sprintf(source, domain)
-		data, ok, err := s.logoFetch(ctx, client, u)
+	for _, source := range domainSources {
+		data, ok, err := s.logoFetch(ctx, client, fmt.Sprintf(source, domain))
 		if ok {
 			return data, true, nil
 		}
@@ -198,15 +309,46 @@ func (s *Service) fetchIcon(ctx context.Context, domain string) ([]byte, bool, e
 	return nil, false, last
 }
 
+// fetchProfileIcon reads the account's picture: GitHub serves one at its
+// account's name, and GitLab's API names the one it keeps for the account.
+// GitLab's pictures are its own uploads: one that is a Gravatar is no
+// picture this device asked for.
+func (s *Service) fetchProfileIcon(ctx context.Context, client *http.Client, host, user string) ([]byte, bool, error) {
+	switch host {
+	case "github.com":
+		return s.logoFetch(ctx, client, "https://github.com/"+url.PathEscape(user)+".png?size=96")
+	case "gitlab.com":
+		body, answered, err := s.logoJSON(ctx, client, "https://gitlab.com/api/v4/users?username="+url.QueryEscape(user))
+		if !answered {
+			return nil, false, err
+		}
+		var users []struct {
+			AvatarURL string `json:"avatar_url"`
+		}
+		if err := json.Unmarshal(body, &users); err != nil || len(users) == 0 {
+			return nil, true, nil
+		}
+		u, err := url.Parse(strings.TrimSpace(users[0].AvatarURL))
+		if err != nil || u.Scheme != "https" || u.Host != "gitlab.com" {
+			return nil, true, nil
+		}
+		return s.logoFetch(ctx, client, u.String())
+	}
+	return nil, false, nil
+}
+
 // errIconStatus is a source that answered with a status other than 200,
-// and errIconBody one that answered with no image.
+// errIconBody one that answered with no image, and errIconBusy one that
+// said it would not answer now: a rate limit or a server's own failure is
+// no verdict on the icon, and the next attempt is not a month away.
 var (
 	errIconStatus = errors.New("no icon")
 	errIconBody   = errors.New("not an image")
+	errIconBusy   = errors.New("the source is busy")
 )
 
 // iconAnswered reports whether err is a source's answer rather than a
-// request that could not be made.
+// request that could not be made, or one that is busy and will answer.
 func iconAnswered(err error) bool {
 	return errors.Is(err, errIconStatus) || errors.Is(err, errIconBody)
 }
@@ -214,6 +356,25 @@ func iconAnswered(err error) bool {
 // logoFetch reads one source, bounded in time and size, and returns the
 // icon as PNG bytes.
 func (s *Service) logoFetch(ctx context.Context, client *http.Client, u string) ([]byte, bool, error) {
+	body, answered, err := s.logoRead(ctx, client, u, "image/png, image/jpeg, image/webp, image/gif, image/x-icon, image/*")
+	if !answered {
+		return nil, false, err
+	}
+	png, err := iconPNG(body)
+	if err != nil {
+		return nil, false, fmt.Errorf("%w: %v", errIconBody, err)
+	}
+	return png, true, nil
+}
+
+// logoJSON reads a source that answers with JSON, bounded as an icon is.
+func (s *Service) logoJSON(ctx context.Context, client *http.Client, u string) ([]byte, bool, error) {
+	return s.logoRead(ctx, client, u, "application/json")
+}
+
+// logoRead reads one source, bounded in time and size, and reports whether
+// it answered.
+func (s *Service) logoRead(ctx context.Context, client *http.Client, u, accept string) ([]byte, bool, error) {
 	reqCtx, cancel := context.WithTimeout(ctx, s.logoRequestTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, u, nil)
@@ -221,13 +382,17 @@ func (s *Service) logoFetch(ctx context.Context, client *http.Client, u string) 
 		return nil, false, err
 	}
 	req.Header.Set("User-Agent", "Shu")
-	req.Header.Set("Accept", "image/png, image/jpeg, image/webp, image/gif, image/x-icon, image/*")
+	req.Header.Set("Accept", accept)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, false, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
+	switch {
+	case resp.StatusCode == http.StatusOK:
+	case resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500:
+		return nil, false, fmt.Errorf("%w: %s", errIconBusy, resp.Status)
+	default:
 		return nil, false, fmt.Errorf("%w: %s", errIconStatus, resp.Status)
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, logoMaxBody+1))
@@ -237,11 +402,7 @@ func (s *Service) logoFetch(ctx context.Context, client *http.Client, u string) 
 	if len(data) == 0 || len(data) > logoMaxBody {
 		return nil, false, errIconBody
 	}
-	png, err := iconPNG(data)
-	if err != nil {
-		return nil, false, fmt.Errorf("%w: %v", errIconBody, err)
-	}
-	return png, true, nil
+	return data, true, nil
 }
 
 // logoHTTPClient is the client the icons are read with: the settings'

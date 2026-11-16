@@ -139,16 +139,18 @@ the message through moves. `Label.Local` says which one a label is.
 ## sender icon
 
 The picture shown for a sender in place of the initials of its name, in a
-list row and in the pane that reads the mail: the
-mark of the address's domain, such as GitHub's for github.com. Only the
-domain is looked up, once, unless the user turned
-`Settings.SenderIcons` off, and the icon is a cache file named by its
-content hash. The icon services' own domains keep their initials.
+list row and in the pane that reads the mail: the account's own picture
+where the address names one at the host its mail comes from, else the
+mark of the address's domain, such as GitHub's for github.com. Each is
+looked up once, unless the user turned `Settings.SenderIcons` off, and is
+a cache file named by its content hash under a key (`domain:<domain>`,
+`profile:<host>/<account>`). The mail services' own domains keep their
+initials.
 `Service.SenderIcon`, `mail.LogoDomain`
 ([mail/avatars.go](../mail/avatars.go)), `sender_icons`
 ([store/sendericons.go](../store/sendericons.go)).
-*Not:* "avatar" (the initials are an avatar too, and neither is a photo
-of the person) or "favicon" in user-facing text.
+*Not:* "avatar" (the initials are an avatar too, and a Gravatar is a
+service of its own) or "favicon" in user-facing text.
 
 ## tombstone
 

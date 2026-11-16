@@ -1195,6 +1195,9 @@ func TestWatchLayoutAtMinimumSize(t *testing.T) {
 				}
 			}
 			click(t, tt, locales.CheckMinutes(30))
+			// The General tab is taller than the smallest window, and it
+			// scrolls: what a switch below the fold takes to reach.
+			showInSettings(t, tt, locales.NotifyDetails())
 			click(t, tt, locales.NotifyDetails())
 			if w.fs.settings.CheckMinutes != 30 || !w.fs.settings.NotifyDetails {
 				t.Errorf("%s: the controls do not work at the smallest size: %+v", name, w.fs.settings)
@@ -1202,6 +1205,24 @@ func TestWatchLayoutAtMinimumSize(t *testing.T) {
 		}
 	}
 	i18n.SetLocaleFunc(func() string { return "en" })
+}
+
+// showInSettings scrolls a settings pane until the control is inside the
+// smallest window: the pane is longer than 640, and glides a moment.
+func showInSettings(t *testing.T, tt *ui.Tester, label string) {
+	t.Helper()
+	for range 8 {
+		at, ok := tt.Find(label)
+		if !ok {
+			return
+		}
+		if at.Y >= 0 && at.Y+at.H <= 640 {
+			return
+		}
+		tt.Wheel(500, 400, 0, at.Y+at.H-600)
+		tt.Advance(time.Second)
+		tt.Frame()
+	}
 }
 
 // The strings of receiving mail exist in Simplified Chinese, and a

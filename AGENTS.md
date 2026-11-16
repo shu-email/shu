@@ -23,6 +23,8 @@ Windows and Linux. It is written in Go with
   in the sense Shu means it, and where it lives.
 - [docs/decisions/](docs/decisions/) records why a design is what it is,
   one file per decision, with its consequences.
+- [docs/roadmap.md](docs/roadmap.md) is where the intent-first work has
+  got: what shipped, what is a preview, and what is next.
 
 ## Architecture
 

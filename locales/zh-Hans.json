@@ -381,7 +381,7 @@
   "checkEveryDetail": "支持推送的邮件服务器会立即送达新邮件。文件夹和未读数，以及不支持推送的服务器，按此间隔检查。",
   "senderIcons": "发件人头像",
   "showSenderIcons": "显示发件人域名的图标",
-  "showSenderIconsDetail": "用发件人自己域名的标志（github.com 就是 GitHub 的标志）代替姓名的首字母。Shu 会先向该域名请求一次图标，没有时间向一个公共图标服务请求，因此离开本设备的只有域名，不含邮箱地址。Gmail、Outlook 等邮箱服务仍显示首字母。",
+  "showSenderIconsDetail": "用以代替姓名首字母：发件人自己域名的标志，或在地址本身就指明站点账户时（如 GitHub、GitLab）该账户的头像。离开本设备的只有该域名，以及地址里携带的账户名。Gmail、Outlook 等邮箱服务仍显示首字母。",
   "notifications": "通知",
   "notifyNewMail": "有新邮件时通知我",
   "notifyNewMailDetail": "以系统通知显示，遵循勿扰模式和专注模式。",

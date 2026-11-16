@@ -102,8 +102,8 @@ type memStore struct {
 	pendingNext int64
 	blocks      map[string][]BlockedSender
 	unsubs      map[string]UnsubscribeRecord
-	// icons is the icon kept for each sender's domain, and iconFiles the
-	// hashes SenderIconRefs reports.
+	// icons is the icon kept for each key, and iconFiles the hashes
+	// SenderIconRefs reports.
 	icons     map[string]StoredIcon
 	iconFiles []string
 }
@@ -157,19 +157,19 @@ func (s *memStore) SaveDiscovery(ctx context.Context, d Discovery) error {
 	return nil
 }
 
-// SenderIcon reads the icon kept for a domain.
-func (s *memStore) SenderIcon(ctx context.Context, domain string) (StoredIcon, bool, error) {
+// SenderIcon reads the icon kept for a key.
+func (s *memStore) SenderIcon(ctx context.Context, key string) (StoredIcon, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	icon, ok := s.icons[domain]
+	icon, ok := s.icons[key]
 	return icon, ok, nil
 }
 
-// SaveSenderIcon keeps what a domain's lookup found.
+// SaveSenderIcon keeps what a key's lookup found.
 func (s *memStore) SaveSenderIcon(ctx context.Context, icon StoredIcon) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.icons[icon.Domain] = icon
+	s.icons[icon.Key] = icon
 	if icon.Found && icon.ContentHash != "" {
 		s.iconFiles = append(s.iconFiles, icon.ContentHash)
 	}

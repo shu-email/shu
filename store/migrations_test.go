@@ -95,6 +95,12 @@ func seedAtVersion(v int) []string {
 		columns += `, security`
 		values += `, '` + encodeJSON(mail.ParseSecurity(baselineHeaders)) + `'`
 	}
+	if v >= 27 {
+		// An icon an installation of v27 kept for a domain; v28 keeps it
+		// under the key that names it.
+		stmts = append(stmts, `INSERT INTO sender_icons (domain, content_hash, found, checked_at)
+			VALUES ('github.com', 'abc123', 1, 1700000000)`)
+	}
 	// An outbox entry sent by an older build, which kept the raw message
 	// it delivered with until v25 dropped it; an installation at v25 or
 	// later holds it without.
@@ -215,6 +221,16 @@ func checkUpgradedData(t *testing.T, s *Store, v int) {
 	}
 	if raw, state := text(rows.Values[0][0]), text(rows.Values[0][1]); raw != "" || state != "sent" {
 		t.Errorf("v%d: sent entry = %q bytes in state %q, want no bytes and its state", v, raw, state)
+	}
+	// An icon kept for a domain is kept for the key that names it.
+	if v >= 27 {
+		rows, err := s.query(ctx, `SELECT key, content_hash FROM sender_icons`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rows.Values) != 1 || text(rows.Values[0][0]) != "domain:github.com" || text(rows.Values[0][1]) != "abc123" {
+			t.Errorf("v%d: sender icons after the migration = %v, want the domain's mark", v, rows.Values)
+		}
 	}
 	// The address book was made from the mail already cached, once.
 	if v < 11 {

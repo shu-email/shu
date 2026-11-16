@@ -591,6 +591,15 @@ var migrations = [][]string{
 			found INTEGER NOT NULL DEFAULT 0,
 			checked_at INTEGER NOT NULL)`,
 	},
+	// v28: an icon is kept for what a sender names, not for a domain: a
+	// sender whose address names a person on the host its mail comes from
+	// has that person's picture, kept beside the host's mark (see
+	// mail/avatars.go). The rows an older build wrote are the domains'
+	// marks, and say so.
+	{
+		`ALTER TABLE sender_icons RENAME COLUMN domain TO key`,
+		`UPDATE sender_icons SET key = 'domain:' || key`,
+	},
 }
 
 // backfills compute, from the rows of the version before, statements a

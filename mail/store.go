@@ -267,10 +267,10 @@ type Store interface {
 	Discovery(ctx context.Context, domain string) (Discovery, bool, error)
 	SaveDiscovery(ctx context.Context, d Discovery) error
 
-	// The icon kept for a sender's domain (see Service.SenderIcon), and the
-	// files they are in, for the sweep that keeps them and removes the
-	// rest. A domain the lookup found no icon for has a row without a hash.
-	SenderIcon(ctx context.Context, domain string) (StoredIcon, bool, error)
+	// The icon kept for what a sender names (see Service.SenderIcon), and
+	// the files they are in, for the sweep that keeps them and removes the
+	// rest. A key the lookup found no icon for has a row without a hash.
+	SenderIcon(ctx context.Context, key string) (StoredIcon, bool, error)
 	SaveSenderIcon(ctx context.Context, icon StoredIcon) error
 	SenderIconRefs(ctx context.Context) ([]string, error)
 

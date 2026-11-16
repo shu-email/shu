@@ -482,12 +482,16 @@ func (a *app) messageRow(row ui.ListRow) {
 	}
 	account, meta := a.rowPlace(m)
 	who, title := a.rowHeading(m)
-	box := ui.Box(c).Padding(11, 16).BorderWidth(0, 0, 1, 0).BorderColor(t.Border.Alpha(0.6))
+	box := ui.Box(c).Padding(11, 16).Background(t.Background).
+		BorderWidth(0, 0, 1, 0).BorderColor(t.Border.Alpha(0.6))
+	// The tints are mixed with the pane's own color rather than left
+	// translucent: a translucent fill would show the window's material
+	// through the list, and the row would take the desktop's color.
 	switch {
 	case chosen:
-		box.Background(t.Accent.Alpha(0.10))
+		box.Background(t.Accent.Alpha(0.10).Over(t.Background))
 	case row.Hovered():
-		box.Background(t.SurfaceHover.Alpha(0.55))
+		box.Background(t.SurfaceHover.Alpha(0.55).Over(t.Background))
 	}
 	a.rows.row(box, a.rowKey(row.Index), chosen, c.Now())
 	box.Children(func() {

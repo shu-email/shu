@@ -10,17 +10,20 @@ import "github.com/egoist/mygo/ui"
 
 // bannerNote is the frame a note or the search bar shares: what it holds
 // is set by the note, and whether it is a row of items or several lines.
-func bannerNote(e ui.Element, key string, bg ui.Color) ui.Element {
-	return e.Key(key).Shrink(0).Padding(8, 14).Background(bg).Transition(bannerMotion)
+// The tint is mixed with the pane's own color rather than left
+// translucent, which would show the window's material through it.
+func bannerNote(c *ui.Context, e ui.Element, key string, bg ui.Color) ui.Element {
+	return e.Key(key).Shrink(0).Padding(8, 14).
+		Background(bg.Over(c.Theme().Background)).Transition(bannerMotion)
 }
 
 // bannerRow frames a note that is one row of items.
 func bannerRow(c *ui.Context, key string, bg ui.Color) ui.Element {
-	return bannerNote(ui.Row(c), key, bg).Gap(8).AlignItems(ui.Center)
+	return bannerNote(c, ui.Row(c), key, bg).Gap(8).AlignItems(ui.Center)
 }
 
 // bannerColumn frames a note of several lines, whose rows set their own
 // gaps.
 func bannerColumn(c *ui.Context, key string, bg ui.Color) ui.Element {
-	return bannerNote(ui.Column(c), key, bg).Gap(6)
+	return bannerNote(c, ui.Column(c), key, bg).Gap(6)
 }

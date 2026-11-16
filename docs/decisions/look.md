@@ -32,6 +32,10 @@ it: the mail window, settings, contacts, rules and compose.
   color, spaced by padding; the stream's band is a line of type
   (`28 need you · 1 with a code · 72 just news`) rather than a row of
   boxes.
+- **Tints are mixed, not translucent.** A background color with alpha
+  lets the window's material through, and a note or a chosen row then
+  takes the desktop's color: the accent's 10% is composited over the
+  pane's background (`Color.Over`) before it is set.
 - **Outlined, not filled, where a row shows its own extras.** A code,
   amount or date is a pill outlined in the border color, on the row's
   background: it belongs to the message's line, not on top of it.

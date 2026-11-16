@@ -187,3 +187,24 @@ no outbox entry names it.
 ([store/drafts.go](../store/drafts.go)).
 *Not:* "cache" (a draft's files survive the cache's sweep), and not
 "uploads" (nothing has been uploaded until the message is sent).
+
+## stream
+
+The default way into the mail: every account's inbox in one list, with a
+band above it counting what the rows read ask of the user. It is not a
+folder of the server, and it does not reorder or hide rows.
+`allInboxes`, `app/stream.go`, `app/nav.go`; the sidebar lists it
+first, and the decision is [navigation.md](decisions/navigation.md).
+*Not:* "inbox" (that is one account's, `Folder.SpecialUse`), and not a
+scope of its own in the engine (`mail.AllInboxes` is).
+
+## extract
+
+One thing a message says that a list shows without the reading pane: a
+one-time code, an amount of money, a due date. Read on the device from
+the preview by rules, never by a model, and shown as a hint that copies
+itself to the clipboard when clicked.
+`mail.Extract`, `mail.Extracted`, `mail.Kind` ([mail/extract.go](../mail/extract.go)),
+shown by `app/stream.go`.
+*Not:* a summary (what a message means, which AI writes) or a fact the
+app acts on.

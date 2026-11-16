@@ -19,6 +19,7 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme, bar ui.TitleBar, head floa
 		if searching {
 			a.searchBar(c, t)
 		}
+		a.streamBand(c, t)
 		a.syncNotice(c, t)
 		if len(a.waiting) > 0 {
 			a.waitingNotice(c, t)
@@ -126,7 +127,6 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme, bar ui.TitleBar, head floa
 		a.list.Header = func(i int) bool { return i >= n }
 		// Rows drag their messages, or the conversations they stand for,
 		// onto a folder in the sidebar (folderDrop).
-		a.list.DragRows = a.dragRows
 		a.list.Selected = &a.selected
 		a.list.Selection = &a.sel
 		// The menu is the list's, after its rows: a right-click on a row
@@ -176,6 +176,9 @@ func (a *app) messageList(c *ui.Context, t *ui.Theme, bar ui.TitleBar, head floa
 func (a *app) listHeader(c *ui.Context, t *ui.Theme) {
 	query := strings.TrimSpace(a.query)
 	title := a.folderLabel(a.folder)
+	if a.streaming() {
+		title = locales.Stream()
+	}
 	chosen := a.sel.Len()
 	smart := a.shownSmart()
 	switch {
@@ -529,10 +532,20 @@ func (a *app) messageRow(row ui.ListRow) {
 						subject.Bold()
 					}
 				}
-				if s, ok := a.suggestion(a.rowKey(row.Index)); ok {
-					a.suggestionLine(c, t, s, chosen)
-				} else {
-					ui.Text(c, m.Preview).FontSize(12).SingleLine().TextColor(muted)
+				switch {
+				case a.copied != "" && a.copied == a.rowKey(row.Index):
+					ui.Text(c, locales.CopiedExtract()).FontSize(12).SingleLine().TextColor(t.Accent)
+				default:
+					if s, ok := a.suggestion(a.rowKey(row.Index)); ok {
+						a.suggestionLine(c, t, s, chosen)
+					} else if len(rowExtracts(m)) > 0 {
+						ui.Row(c).Gap(6).AlignItems(ui.Center).MinWidth(0).Children(func() {
+							ui.Text(c, m.Preview).FontSize(12).SingleLine().TextColor(muted).Grow(1).MinWidth(0)
+							a.extractChips(c, t, m, chosen, a.rowKey(row.Index))
+						})
+					} else {
+						ui.Text(c, m.Preview).FontSize(12).SingleLine().TextColor(muted)
+					}
 				}
 				if reason != "" {
 					ui.Row(c).Gap(4).AlignItems(ui.Center).MinWidth(0).Children(func() {

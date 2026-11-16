@@ -1556,5 +1556,75 @@
   "cacheProblemDraftMissing": "缺失的草稿文件",
   "cacheProblemDraftOrphans": "没有记录引用的草稿文件",
   "cacheProblem": "{title}：{count}",
-  "cacheProblemIDs": "{title}：{count}（{ids}）"
+  "cacheProblemIDs": "{title}：{count}（{ids}）",
+  "stream": "收件流",
+  "@stream": {
+    "description": "侧栏的默认列表：每个账户的收件箱，上方写着每封信要你做什么。"
+  },
+  "pinned": "已钉住",
+  "@pinned": {
+    "description": "侧栏中钉住的搜索：用户问过一次并留下的问题。"
+  },
+  "streamNeeds": "{count} 封等你处理",
+  "@streamNeeds": {
+    "description": "收件流上方的一行，数已经读到的信里要你处理的。",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "streamCodes": "{count} 封有验证码",
+  "@streamCodes": {
+    "description": "收件流上方的一行，数已经读到的信里带验证码可复制的。",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "streamNews": "{count} 封只是通知",
+  "@streamNews": {
+    "description": "收件流上方的一行，数已经读到的信里只是通知的。",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "copyExtract": "复制",
+  "@copyExtract": {
+    "description": "列表行上验证码、金额或日期的提示。"
+  },
+  "copiedExtract": "已复制",
+  "@copiedExtract": {
+    "description": "列表行的值复制后显示一会儿的字。"
+  },
+  "extractCode": "验证码 {code}",
+  "@extractCode": {
+    "description": "列表行上的验证码，读屏所读。",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "extractAmount": "金额 {amount}",
+  "@extractAmount": {
+    "description": "列表行上的金额，读屏所读。",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "extractDate": "截止 {date}",
+  "@extractDate": {
+    "description": "列表行上的截止日期，读屏所读。",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  }
 }

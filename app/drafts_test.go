@@ -292,7 +292,7 @@ func TestDoubleClickOpensDraft(t *testing.T) {
 	}
 	// In another folder a double click opens nothing: mail is read in
 	// the pane.
-	click(t, main, locales.Inbox())
+	click(t, main, locales.Stream())
 	click(t, main, "Design review — Thursday at 10")
 	click(t, main, "Design review — Thursday at 10")
 	if n := len(openComposes(a)); n != 1 {

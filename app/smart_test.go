@@ -96,7 +96,7 @@ func TestSmartMailboxSavedSearch(t *testing.T) {
 	}
 	// Another folder, then the entry: the search field and the rows are
 	// the saved ones again.
-	click(t, tt, locales.Inbox())
+	click(t, tt, locales.Stream())
 	if got := rowKeys(a); slices.Contains(got, "a1/Sent/6") {
 		t.Fatalf("the inbox lists %v", got)
 	}
@@ -232,9 +232,9 @@ func TestSmartMailboxDraftsAndEmptySearch(t *testing.T) {
 	}
 	// An empty search of a folder does not widen to its account, as a
 	// typed one would: saving it keeps the folder's own list.
-	click(t, tt, locales.Inbox())
+	click(t, tt, locales.Stream())
 	inbox := rowKeys(a)
-	if mb := saveSearch(t, a, tt, "", "Inbox only"); mb.Folder != "INBOX" || mb.Scope != mail.SmartScopeHere {
+	if mb := saveSearch(t, a, tt, "", "Inbox only"); mb.Folder != allInboxes || mb.Scope != mail.SmartScopeHere {
 		t.Errorf("saved %+v", mb)
 	}
 	if got := rowKeys(a); !reflect.DeepEqual(got, inbox) {
@@ -246,7 +246,7 @@ func TestSmartMailboxDraftsAndEmptySearch(t *testing.T) {
 // it was: every account's inbox, which the window knows it shows.
 func TestSmartMailboxFromAllInboxes(t *testing.T) {
 	a, _, tt := startTwo(t, false)
-	click(t, tt, locales.AllInboxes())
+	click(t, tt, locales.Stream())
 	all := rowKeys(a)
 	if mb := saveSearch(t, a, tt, "", "Every inbox"); mb.Folder != allInboxes || mb.Scope != mail.SmartScopeHere {
 		t.Errorf("saved %+v", mb)
@@ -257,7 +257,7 @@ func TestSmartMailboxFromAllInboxes(t *testing.T) {
 	if !a.isUnified() {
 		t.Error("the mailbox is not the unified inbox")
 	}
-	click(t, tt, locales.Inbox())
+	click(t, tt, locales.Stream())
 	openSmart(t, tt, "Every inbox")
 	if !a.isUnified() {
 		t.Error("reopened, the mailbox is not the unified inbox")

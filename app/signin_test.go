@@ -737,7 +737,7 @@ func TestNeedsSignInFromAFailedSync(t *testing.T) {
 
 	// So does the unified inbox, of the account that has to.
 	a.err = ""
-	click(t, tt, locales.AllInboxes())
+	click(t, tt, locales.Stream())
 	if !tt.HasText(locales.SignInNeeded("Work")) || tt.HasText(locales.SignInNeeded("Home")) || a.err != "" {
 		t.Errorf("the unified inbox: %q, %q", a.err, tt.Texts())
 	}

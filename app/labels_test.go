@@ -738,7 +738,7 @@ func TestLabelsKeptOnDevice(t *testing.T) {
 	if !a.findLabel("a2", receipts.ID).Local {
 		t.Errorf("a label of Home is synced: %+v", a.findLabel("a2", receipts.ID))
 	}
-	click(t, tt, locales.Inbox())
+	click(t, tt, locales.Stream())
 	click(t, tt, "Your flight confirmation")
 	openPicker(t, a, tt)
 	if box := labelBox(t, tt, "Receipts"); box.Description != locales.LabelLocal() {
@@ -812,7 +812,7 @@ func TestLabelSearch(t *testing.T) {
 // the rows' menu say.
 func TestLabelsSeveralAccounts(t *testing.T) {
 	a, fs, tt := startLabels(t, false)
-	click(t, tt, locales.AllInboxes())
+	click(t, tt, locales.Stream())
 	click(t, tt, "Dinner on Saturday")
 	openPicker(t, a, tt)
 	if _, ok := tt.AccessByRole(ui.RoleCheckBox, "Projects"); ok {

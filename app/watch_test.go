@@ -543,7 +543,7 @@ func TestNoNotificationForTheListOnScreen(t *testing.T) {
 		t.Fatalf("no notification with another folder on screen: %+v", w.notes)
 	}
 	// A search hides the list's new mail.
-	click(t, tt, locales.Inbox())
+	click(t, tt, locales.Stream())
 	a.query = "contract"
 	a.search()
 	w.arrive(t, "a1", newMail(13, "Noor", "While searching"))

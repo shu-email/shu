@@ -223,6 +223,11 @@ type app struct {
 	waiting      []*waitingSend
 	sendNote     string
 	sendNoteWarn bool
+	// copied is the row whose value was just put on the clipboard, and
+	// copiedTimer clears it: a copy made from the list says so where it
+	// happened (stream.go).
+	copied      string
+	copiedTimer *time.Timer
 	// The account editor's signature, saved as it changes, and the form
 	// of an address the account sends from.
 	sigForm    signatureForm
@@ -237,9 +242,8 @@ type app struct {
 	// (smart.go).
 	labels labelState
 	smarts smartState
-	// Folders (folders.go): the create/rename dialog, the delete
-	// confirmation and the note after an action.
-	folderForm folderForm
+	// folderNote is the news of an action on a folder, such as a folder
+	// of the server that a saved attachment was put in (folders.go).
 	folderNote string
 	// networkForm is the Network tab's editable state (network.go).
 	networkForm networkForm
@@ -1297,7 +1301,6 @@ func (a *app) mailView(c *ui.Context) {
 	a.linkDialog(c)
 	a.unsubscribeDialog(c)
 	a.blockSenderDialog(c)
-	a.folderDialog(c)
 	a.reminderDialog(c)
 	a.attachmentPreviewDialog(c)
 }

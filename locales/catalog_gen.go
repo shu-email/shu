@@ -12765,3 +12765,149 @@ func CacheProblemIDs(title string, count int, ids string) string {
 func (msgs Messages) CacheProblemIDs(title string, count int, ids string) string {
 	return Catalog.Format(msgs.locale, "cacheProblemIDs", map[string]any{"title": title, "count": count, "ids": ids})
 }
+
+// Stream says "Stream"
+// in the language the app shows.
+//
+// The sidebar's default list: every account's inbox, with what each message
+// asks of the user above it.
+func Stream() string { return In(i18n.Locale()).Stream() }
+
+// Stream says "Stream"
+// in the language of msgs.
+//
+// The sidebar's default list: every account's inbox, with what each message
+// asks of the user above it.
+func (msgs Messages) Stream() string {
+	return Catalog.Format(msgs.locale, "stream", nil)
+}
+
+// Pinned says "Pinned"
+// in the language the app shows.
+//
+// The sidebar's section of pinned searches: a question the user asked once
+// and kept.
+func Pinned() string { return In(i18n.Locale()).Pinned() }
+
+// Pinned says "Pinned"
+// in the language of msgs.
+//
+// The sidebar's section of pinned searches: a question the user asked once
+// and kept.
+func (msgs Messages) Pinned() string {
+	return Catalog.Format(msgs.locale, "pinned", nil)
+}
+
+// StreamNeeds says "{count} need you"
+// in the language the app shows.
+//
+// The stream's band, counting the messages read that ask something of the
+// user.
+func StreamNeeds(count int) string { return In(i18n.Locale()).StreamNeeds(count) }
+
+// StreamNeeds says "{count} need you"
+// in the language of msgs.
+//
+// The stream's band, counting the messages read that ask something of the
+// user.
+func (msgs Messages) StreamNeeds(count int) string {
+	return Catalog.Format(msgs.locale, "streamNeeds", map[string]any{"count": count})
+}
+
+// StreamCodes says "{count} with a code"
+// in the language the app shows.
+//
+// The stream's band, counting the messages read that carry a code to copy.
+func StreamCodes(count int) string { return In(i18n.Locale()).StreamCodes(count) }
+
+// StreamCodes says "{count} with a code"
+// in the language of msgs.
+//
+// The stream's band, counting the messages read that carry a code to copy.
+func (msgs Messages) StreamCodes(count int) string {
+	return Catalog.Format(msgs.locale, "streamCodes", map[string]any{"count": count})
+}
+
+// StreamNews says "{count} just news"
+// in the language the app shows.
+//
+// The stream's band, counting the messages read that only tell.
+func StreamNews(count int) string { return In(i18n.Locale()).StreamNews(count) }
+
+// StreamNews says "{count} just news"
+// in the language of msgs.
+//
+// The stream's band, counting the messages read that only tell.
+func (msgs Messages) StreamNews(count int) string {
+	return Catalog.Format(msgs.locale, "streamNews", map[string]any{"count": count})
+}
+
+// CopyExtract says "Copy"
+// in the language the app shows.
+//
+// The tooltip of a code, amount or date shown on a list row.
+func CopyExtract() string { return In(i18n.Locale()).CopyExtract() }
+
+// CopyExtract says "Copy"
+// in the language of msgs.
+//
+// The tooltip of a code, amount or date shown on a list row.
+func (msgs Messages) CopyExtract() string {
+	return Catalog.Format(msgs.locale, "copyExtract", nil)
+}
+
+// CopiedExtract says "Copied"
+// in the language the app shows.
+//
+// Said on a list row for a moment after its value was put on the clipboard.
+func CopiedExtract() string { return In(i18n.Locale()).CopiedExtract() }
+
+// CopiedExtract says "Copied"
+// in the language of msgs.
+//
+// Said on a list row for a moment after its value was put on the clipboard.
+func (msgs Messages) CopiedExtract() string {
+	return Catalog.Format(msgs.locale, "copiedExtract", nil)
+}
+
+// ExtractCode says "Code {code}"
+// in the language the app shows.
+//
+// A row's code, read by assistive technology.
+func ExtractCode(code string) string { return In(i18n.Locale()).ExtractCode(code) }
+
+// ExtractCode says "Code {code}"
+// in the language of msgs.
+//
+// A row's code, read by assistive technology.
+func (msgs Messages) ExtractCode(code string) string {
+	return Catalog.Format(msgs.locale, "extractCode", map[string]any{"code": code})
+}
+
+// ExtractAmount says "Amount {amount}"
+// in the language the app shows.
+//
+// A row's amount of money, read by assistive technology.
+func ExtractAmount(amount string) string { return In(i18n.Locale()).ExtractAmount(amount) }
+
+// ExtractAmount says "Amount {amount}"
+// in the language of msgs.
+//
+// A row's amount of money, read by assistive technology.
+func (msgs Messages) ExtractAmount(amount string) string {
+	return Catalog.Format(msgs.locale, "extractAmount", map[string]any{"amount": amount})
+}
+
+// ExtractDate says "Due {date}"
+// in the language the app shows.
+//
+// A row's due date, read by assistive technology.
+func ExtractDate(date string) string { return In(i18n.Locale()).ExtractDate(date) }
+
+// ExtractDate says "Due {date}"
+// in the language of msgs.
+//
+// A row's due date, read by assistive technology.
+func (msgs Messages) ExtractDate(date string) string {
+	return Catalog.Format(msgs.locale, "extractDate", map[string]any{"date": date})
+}

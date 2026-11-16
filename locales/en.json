@@ -4421,5 +4421,75 @@
         "example": "12, 18"
       }
     }
+  },
+  "stream": "Stream",
+  "@stream": {
+    "description": "The sidebar's default list: every account's inbox, with what each message asks of the user above it."
+  },
+  "pinned": "Pinned",
+  "@pinned": {
+    "description": "The sidebar's section of pinned searches: a question the user asked once and kept."
+  },
+  "streamNeeds": "{count} need you",
+  "@streamNeeds": {
+    "description": "The stream's band, counting the messages read that ask something of the user.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "streamCodes": "{count} with a code",
+  "@streamCodes": {
+    "description": "The stream's band, counting the messages read that carry a code to copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "streamNews": "{count} just news",
+  "@streamNews": {
+    "description": "The stream's band, counting the messages read that only tell.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "copyExtract": "Copy",
+  "@copyExtract": {
+    "description": "The tooltip of a code, amount or date shown on a list row."
+  },
+  "copiedExtract": "Copied",
+  "@copiedExtract": {
+    "description": "Said on a list row for a moment after its value was put on the clipboard."
+  },
+  "extractCode": "Code {code}",
+  "@extractCode": {
+    "description": "A row's code, read by assistive technology.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "extractAmount": "Amount {amount}",
+  "@extractAmount": {
+    "description": "A row's amount of money, read by assistive technology.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "extractDate": "Due {date}",
+  "@extractDate": {
+    "description": "A row's due date, read by assistive technology.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
   }
 }

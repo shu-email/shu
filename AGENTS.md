@@ -231,6 +231,15 @@ Windows and Linux. It is written in Go with
   the conversation across folders, each message once and without the
   copies in Drafts, Junk and Trash the list does not show, and each
   expanded message has actions of its own.
+- The window's sidebar lists the ways into the mail, not the account's
+  folders: the stream (every account's inbox, with what its rows ask of
+  the user counted above them, `app/stream.go`, `app/nav.go`), the marks
+  and places mail has of its own, the account's labels, and the pinned
+  searches. A folder is still where mail sits on a server, and rules, a
+  block and a move still name one. A message's code, amount or due date
+  is read on this device from its preview by rules, never a model
+  (`mail/extract.go`), and shown beside it to copy
+  ([docs/decisions/navigation.md](docs/decisions/navigation.md)).
 - Lists read the cache a page at a time. A `mail.Scope` says what a list
   covers: a folder of an account, every folder of one or more accounts,
   or each account's folder of a special use (the unified inbox is every

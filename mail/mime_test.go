@@ -152,7 +152,7 @@ func TestPreviewIsOneLineAndBounded(t *testing.T) {
 	if strings.ContainsAny(p, "\n\t") {
 		t.Errorf("preview has control whitespace: %q", p)
 	}
-	if len([]rune(p)) > 181 {
+	if len([]rune(p)) > previewRunes+1 {
 		t.Errorf("preview is too long: %d runes", len([]rune(p)))
 	}
 	if !strings.HasSuffix(p, "…") {

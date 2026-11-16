@@ -138,7 +138,8 @@ the message through moves. `Label.Local` says which one a label is.
 
 ## sender icon
 
-The picture shown for a sender in place of the initials of its name: the
+The picture shown for a sender in place of the initials of its name, in a
+list row and in the pane that reads the mail: the
 mark of the address's domain, such as GitHub's for github.com. Only the
 domain is looked up, once, unless the user turned
 `Settings.SenderIcons` off, and the icon is a cache file named by its

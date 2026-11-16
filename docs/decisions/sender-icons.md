@@ -14,9 +14,11 @@ to the user.
 
 ## Decision
 
-The icon of a sender is the icon of its domain (`mail/avatars.go`). The
-reading pane, a conversation's message headers, the address book and the
-account switcher draw it in place of the initials (`app/avatars.go`).
+The icon of a sender is the icon of its domain (`mail/avatars.go`). A
+list's rows, the reading pane, a conversation's message headers, the
+address book and the account switcher draw it in place of the initials
+(`app/avatars.go`). A row keeps the height it had: the picture sits inside
+the two lines of text a row already shows.
 Only the domain is looked up, never the address, and only when the user
 leaves `Settings.SenderIcons` on, which is the default and is the
 settings' switch in the General tab.

@@ -307,9 +307,11 @@ Windows and Linux. It is written in Go with
   keeps none and stays unverified, never safe. Nothing looks anything up
   on the network, and nothing unsubscribes without the user's action.
 - A sender's icon is its domain's, not the person's (`mail/avatars.go`,
-  `store/sendericons.go`, `app/avatars.go`): the reading pane, a
-  conversation's message headers, the address book and the account
-  switcher draw it in place of a name's initials. Only the domain leaves
+  `store/sendericons.go`, `app/avatars.go`): a list row, the reading pane,
+  a conversation's message headers, the address book and the account
+  switcher draw it in place of a name's initials. A row is no taller for
+  it: the picture fits inside the lines a row already had, and the unread
+  dot moved beside the name. Only the domain leaves
   the device, once, and only while `Settings.SenderIcons` is on: the
   domain's own `apple-touch-icon.png` or `favicon.ico` first, a public
   icon service for a domain with neither, and never the domains of the

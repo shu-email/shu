@@ -483,12 +483,14 @@ func (a *app) messageRow(row ui.ListRow) {
 	a.rows.row(box, a.rowKey(row.Index), chosen, c.Now())
 	box.Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Start).Children(func() {
-			dot := ui.Box(c).Size(7, 7).Radius(3.5).Shrink(0).Margin(6, 0, 0, 0)
-			if unread {
-				dot.Background(dotColor)
-			}
+			// The sender's icon heads the row, in place of the dot: the
+			// name says who wrote, so the picture needs no name of its own.
+			ui.Avatar(c, who, a.senderAvatar(a.rowAvatar(m))).AccessHidden(true)
 			ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
 				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+					if unread {
+						ui.Box(c).Size(7, 7).Radius(3.5).Shrink(0).Background(dotColor)
+					}
 					name := ui.Text(c, who).FontSize(13).SingleLine().Grow(1)
 					if unread {
 						name.Bold()
@@ -577,6 +579,18 @@ func (a *app) rowHeading(m mail.Summary) (who, title string) {
 		title = locales.NoSubject()
 	}
 	return who, title
+}
+
+// rowAvatar is the address whose icon heads a row: the sender's, or the
+// recipient's where the row names the recipient instead of the sender.
+func (a *app) rowAvatar(m mail.Summary) mail.Address {
+	if a.folder == followUpFolder || a.draftsList() {
+		if len(m.To) > 0 {
+			return m.To[0]
+		}
+		return mail.Address{}
+	}
+	return m.From
 }
 
 // displayName is the sender's name, else address.

@@ -36,24 +36,19 @@ func TestSenderAvatarsAskEachDomainOnce(t *testing.T) {
 	fs.icons = map[string][]byte{"github.com": pngMark(t), "example.com": pngMark(t)}
 	tt := ui.NewTester(a.view, 1220, 800)
 	tt.Frame()
-	if got := countDomains(fs.iconRequests); got["example.com"] != 1 || len(got) != 1 {
-		t.Fatalf("asked %+v, want the sender shown and the account's domain once", got)
+	// The rows' senders and the account's own domain, each once.
+	if got := countDomains(fs.iconRequests); got["example.com"] != 1 || got["github.com"] != 1 || len(got) != 2 {
+		t.Fatalf("asked %+v, want each domain of the window once", got)
 	}
-	if a.icons["example.com"] == nil {
-		t.Error("no icon kept for the sender shown")
+	for _, domain := range []string{"github.com", "example.com"} {
+		if a.icons[domain] == nil {
+			t.Errorf("no icon kept for %s", domain)
+		}
 	}
 
-	// The next sender shown is asked for as it appears, and the frames
-	// after ask nothing: a domain is asked once.
-	a.selected = 1
-	tt.Frame()
-	if got := countDomains(fs.iconRequests); got["github.com"] != 1 {
-		t.Fatalf("asked %+v, want the next sender's domain once", got)
-	}
-	if a.icons["github.com"] == nil {
-		t.Error("no icon kept for the sender shown next")
-	}
+	// The frames after ask nothing: a domain is asked once.
 	asked := len(fs.iconRequests)
+	a.selected = 1
 	tt.Frame()
 	tt.Frame()
 	if n := len(fs.iconRequests); n != asked {
@@ -143,3 +138,55 @@ var errTestIcon = &testIconError{}
 type testIconError struct{}
 
 func (*testIconError) Error() string { return "the network is down" }
+
+// A row names the recipient where it names no sender: the icon is the one
+// of the address the row's first line says.
+func TestRowAvatarNamesTheAddressTheRowDoes(t *testing.T) {
+	a, _ := sampleMessageApp(t)
+	m := mail.Summary{
+		From: mail.Address{Name: "GitHub", Email: "notifications@github.com"},
+		To:   []mail.Address{{Name: "Bob", Email: "bob@stripe.com"}},
+	}
+	if got := a.rowAvatar(m); got.Email != "notifications@github.com" {
+		t.Errorf("a mail row's icon is %q, want the sender's", got.Email)
+	}
+	a.folder = followUpFolder
+	if got := a.rowAvatar(m); got.Email != "bob@stripe.com" {
+		t.Errorf("a follow-up row's icon is %q, want the recipient's", got.Email)
+	}
+	a.folder = draftsFolder
+	if got := a.rowAvatar(m); got.Email != "bob@stripe.com" {
+		t.Errorf("a draft row's icon is %q, want the recipient's", got.Email)
+	}
+	// A draft with no recipient yet has no address, and the initials show.
+	a.folder = draftsFolder
+	if got := a.rowAvatar(mail.Summary{From: m.From}); got.Email != "" {
+		t.Errorf("a draft without a recipient names %q, want none", got.Email)
+	}
+}
+
+// A row's picture costs the list no density: a row with an icon is as tall
+// as one without.
+func TestSenderAvatarsKeepTheRowDensity(t *testing.T) {
+	a, fs := sampleMessageApp(t)
+	fs.icons = map[string][]byte{"github.com": pngMark(t)}
+	const row = "GitHub [shu-email/shu] Pull request #128"
+	tt := ui.NewTester(a.view, 1220, 800)
+	tt.Frame()
+	with, ok := tt.Find(row)
+	if !ok {
+		t.Fatalf("no row %q: %q", row, tt.Texts())
+	}
+	a.mailSet.SenderIcons = false
+	tt.Frame()
+	without, ok := tt.Find(row)
+	if !ok {
+		t.Fatalf("the row went with its icon: %q", tt.Texts())
+	}
+	if with.H != without.H {
+		t.Errorf("a row with an icon is %g high, without one %g", with.H, without.H)
+	}
+	if with.H > 72 {
+		t.Errorf("a row is %g high at 1220 wide", with.H)
+	}
+}

@@ -15,7 +15,7 @@ import (
 
 // view draws the compose window.
 func (cs *composeState) view(c *ui.Context) {
-	t := c.Theme()
+	t := useTheme(c)
 	root := ui.Column(c).Fill().Background(t.Background).Padding(18, 20).Gap(10).
 		OnShortcut(ui.Cmd, ui.KeyEnter, cs.send).
 		OnShortcut(ui.Cmd|ui.Shift, ui.KeyA, cs.pickFiles).

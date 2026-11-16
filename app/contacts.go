@@ -347,7 +347,7 @@ func (a *app) deleteContact(ct mail.Contact) {
 // contactsView is the address book: what it is, its search, the form of a
 // contact added by hand, and the contacts, best first.
 func (a *app) contactsView(c *ui.Context) {
-	t := c.Theme()
+	t := useTheme(c)
 	b := &a.book
 	bar := c.TitleBar()
 	top := max(bar.Bottom, 52)

@@ -66,7 +66,7 @@ func (a *app) sidebarToggleButton(c *ui.Context) ui.Element {
 // sidebar draws the account switcher and the ways into the mail.
 func (a *app) sidebar(c *ui.Context, t *ui.Theme, vibrant bool) {
 	ui.Column(c).Grow(1).MinHeight(0).Children(func() {
-		ui.Row(c).Padding(10, 12, 4, 12).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).Padding(12, 14, 6, 14).Gap(9).AlignItems(ui.Center).Children(func() {
 			acc := a.activeAccount()
 			name, email := "", ""
 			if acc != nil {
@@ -150,7 +150,7 @@ func (a *app) sidebar(c *ui.Context, t *ui.Theme, vibrant bool) {
 // how receiving mail in the background is going.
 func (a *app) sidebarFooter(c *ui.Context, t *ui.Theme) {
 	unread, total := a.sidebarTotals()
-	ui.Column(c).Shrink(0).Padding(10, 12, 10, 12).Gap(4).
+	ui.Column(c).Shrink(0).Padding(10, 14, 12, 14).Gap(4).
 		BorderWidth(1, 0, 0, 0).BorderColor(t.Border).Children(func() {
 		if a.loading {
 			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {

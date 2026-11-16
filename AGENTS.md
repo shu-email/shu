@@ -541,6 +541,12 @@ real clock.
   clock. Use theme values (`c.Theme()`, `t.Space`, `t.Rem`) instead of
   hardcoded colors and sizes, and use `light-dark(...)` for window colors
   that must follow the system appearance.
+- The window's look is `app/theme.go`: every view that draws a window
+  calls `useTheme(c)` first, and widgets take their colors and metrics
+  from the theme. One accent (teal) for what is chosen, focused or asks
+  for an answer; warm neutrals for the surface; a chosen row is tinted,
+  not filled. The reasons are in
+  [docs/decisions/look.md](docs/decisions/look.md).
 - Use `ui.Cmd` for the primary shortcut: it is Command on macOS and Ctrl
   elsewhere. Keep keyboard focus order sensible.
 - Icon-only buttons need a `Label` and a `Tooltip`, and icon names must be

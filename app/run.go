@@ -116,7 +116,7 @@ func Run() {
 			MinHeight:       640,
 			StateKey:        "main",
 			TitleBarStyle:   mygo.TitleBarHiddenInset,
-			BackgroundColor: "light-dark(#ffffff, #18181b)",
+			BackgroundColor: "light-dark(#fcfbf9, #15161a)",
 			// The sidebar's material: AppKit's on macOS, Mica on Windows
 			// 11. The view draws a background where there is none.
 			Vibrancy: mygo.VibrancySidebar,

@@ -93,31 +93,35 @@ func rowHasCode(m mail.Summary) bool {
 }
 
 // streamBand is the line above the stream: what the rows read so far ask
-// of the user, in the words the user would use. It is drawn from the rows
-// on screen, so it counts the newest page rather than the whole inbox,
-// and says so by following the rows as they are read.
+// of the user, in the words the user would use. It counts the newest page
+// rather than the whole inbox, and follows the rows as they are read. One
+// line, in type rather than in boxes: mail is read, so the line says how
+// much of it is left to read and leaves the room to the mail.
 func (a *app) streamBand(c *ui.Context, t *ui.Theme) {
 	if !a.streaming() || a.loading || len(a.all) == 0 {
 		return
 	}
 	n := a.streamCounts()
-	ui.Row(c.Key("stream-band")).Shrink(0).Padding(6, 12, 6, 12).Gap(6).
-		AlignItems(ui.Center).Wrap().BorderWidth(0, 0, 1, 0).BorderColor(t.Border).
+	ui.Row(c.Key("stream-band")).Shrink(0).Padding(8, 16).Gap(7).
+		AlignItems(ui.Center).BorderWidth(0, 0, 1, 0).BorderColor(t.Border.Alpha(0.6)).
 		Children(func() {
-			a.streamPill(c, t, locales.StreamNeeds(n.needs), t.Accent, t.AccentText)
+			ui.Text(c, locales.StreamNeeds(n.needs)).FontSize(11).Bold().TextColor(t.Accent).SingleLine()
 			if n.codes > 0 {
-				a.streamPill(c, t, locales.StreamCodes(n.codes), t.Surface, t.Text)
+				a.bandDot(c, t)
+				// A code is something to use rather than to read, so its
+				// count keeps the text's color where the news' fades.
+				ui.Text(c, locales.StreamCodes(n.codes)).FontSize(11).TextColor(t.Text).SingleLine()
 			}
 			if n.news > 0 {
-				a.streamPill(c, t, locales.StreamNews(n.news), t.Surface, t.TextMuted)
+				a.bandDot(c, t)
+				ui.Text(c, locales.StreamNews(n.news)).FontSize(11).TextColor(t.TextMuted).SingleLine()
 			}
 		})
 }
 
-// streamPill is one count of the band.
-func (a *app) streamPill(c *ui.Context, t *ui.Theme, label string, bg, fg ui.Color) {
-	ui.Text(c, label).FontSize(11).TextColor(fg).SingleLine().
-		Padding(2, 8).Radius(t.Radius).Background(bg)
+// bandDot separates the band's counts.
+func (a *app) bandDot(c *ui.Context, t *ui.Theme) {
+	ui.Text(c, "·").FontSize(11).TextColor(t.TextMuted.Alpha(0.6))
 }
 
 // rowExtracts are the things a row shows of its message without the
@@ -128,27 +132,28 @@ func rowExtracts(m mail.Summary) []mail.Extract {
 
 // extractChips are a row's extracts, each a button that puts its value on
 // the clipboard. A chip is what makes a code usable without opening the
-// message it came in, which is most of what those messages are for.
+// message it came in, which is most of what those messages are for. It is
+// outlined rather than filled: it sits in the preview's line, and the line
+// is the message's, not the chip's.
 func (a *app) extractChips(c *ui.Context, t *ui.Theme, m mail.Summary, chosen bool, key string) {
 	extracts := rowExtracts(m)
 	if len(extracts) == 0 {
 		return
 	}
-	fg, bg := t.TextMuted, t.Surface
-	icon := copyIcon
+	fg, line := t.Text, t.Border
 	if chosen {
-		fg, bg = t.AccentText, t.AccentText.Alpha(0.16)
+		fg, line = t.Accent, t.Accent.Alpha(0.45)
 	}
 	ui.Row(c).Gap(4).AlignItems(ui.Center).Shrink(0).Children(func() {
 		for i, e := range extracts {
 			value := e.Copy
 			ui.ButtonBase(c.Key(fmt.Sprintf("%s/%d", key, i))).Label(extractLabel(e)).
-				Tooltip(locales.CopyExtract()).Padding(1, 5).Radius(t.Radius).
-				Background(bg).OnClick(func() {
+				Tooltip(locales.CopyExtract()).Padding(1, 6).Radius(999).
+				Border(1, line).OnClick(func() {
 				a.copyExtract(key, value)
 			}).Children(func() {
-				ui.Row(c).Gap(3).AlignItems(ui.Center).Children(func() {
-					ui.Icon(c, icon).FontSize(9)
+				ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
+					ui.Icon(c, copyIcon).FontSize(9).TextColor(fg.Alpha(0.7))
 					ui.Text(c, e.Text).FontSize(10).TextColor(fg).SingleLine()
 				})
 			})

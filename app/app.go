@@ -1217,6 +1217,7 @@ func (a *app) searchSoon() {
 // book or the rules, each of them the main view's only where it has no
 // window of its own, or the three panes.
 func (a *app) view(c *ui.Context) {
+	useTheme(c)
 	c.OnShortcut(ui.Cmd, ui.KeySlash, func() { a.shortcutsOpen = true })
 	a.shortcutsDialog(c)
 	switch {

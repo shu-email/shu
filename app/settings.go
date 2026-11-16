@@ -353,7 +353,7 @@ func (a *app) testAI() {
 // settingsView draws the settings window: a title, an icon tab bar as a
 // system settings window has, and the chosen tab below it.
 func (a *app) settingsView(c *ui.Context) {
-	t := c.Theme()
+	t := useTheme(c)
 	bar := c.TitleBar()
 	head := max(bar.Bottom, 34)
 	ui.Column(c).Fill().Background(t.Background).Children(func() {

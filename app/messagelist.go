@@ -190,7 +190,7 @@ func (a *app) listHeader(c *ui.Context, t *ui.Theme) {
 		title = locales.SearchResults()
 	}
 	ui.Row(c).Gap(6).AlignItems(ui.Center).MinWidth(0).Children(func() {
-		ui.Text(c, title).FontSize(17).Bold().SingleLine().Shrink(1).MinWidth(0)
+		ui.Text(c, title).FontSize(18).Bold().SingleLine().Shrink(1).MinWidth(0)
 		switch {
 		case chosen > 1:
 		case query != "" && smart == nil:
@@ -470,19 +470,25 @@ func (a *app) messageRow(row ui.ListRow) {
 	}
 	reason := a.rowReason(row.Index)
 
+	// A chosen row is tinted with the accent rather than filled with it:
+	// mail stays readable while it is chosen, and a mail list is mostly
+	// read rather than acted on.
 	muted := t.TextMuted
 	nameColor := t.Text
 	dotColor := t.Accent
 	starColor := t.Warning
 	if chosen {
-		muted = t.AccentText.Alpha(0.78)
-		nameColor = t.AccentText
-		dotColor = t.AccentText
-		starColor = t.AccentText
+		nameColor = t.Text
 	}
 	account, meta := a.rowPlace(m)
 	who, title := a.rowHeading(m)
-	box := ui.Box(c).Padding(9, 14).BorderWidth(0, 0, 1, 0).BorderColor(t.Border)
+	box := ui.Box(c).Padding(11, 16).BorderWidth(0, 0, 1, 0).BorderColor(t.Border.Alpha(0.6))
+	switch {
+	case chosen:
+		box.Background(t.Accent.Alpha(0.10))
+	case row.Hovered():
+		box.Background(t.SurfaceHover.Alpha(0.55))
+	}
 	a.rows.row(box, a.rowKey(row.Index), chosen, c.Now())
 	box.Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Start).Children(func() {
@@ -524,7 +530,7 @@ func (a *app) messageRow(row ui.ListRow) {
 						if unread {
 							subject.Bold()
 						}
-						a.labelChips(c, t, m.Account, labels, rowLabels, chosen).Shrink(0).MaxWidth(170)
+						a.labelChips(c, t, m.Account, labels, rowLabels, false).Shrink(0).MaxWidth(170)
 					})
 				} else {
 					subject := ui.Text(c, title).FontSize(13).SingleLine()
@@ -541,7 +547,7 @@ func (a *app) messageRow(row ui.ListRow) {
 					} else if len(rowExtracts(m)) > 0 {
 						ui.Row(c).Gap(6).AlignItems(ui.Center).MinWidth(0).Children(func() {
 							ui.Text(c, m.Preview).FontSize(12).SingleLine().TextColor(muted).Grow(1).MinWidth(0)
-							a.extractChips(c, t, m, chosen, a.rowKey(row.Index))
+							a.extractChips(c, t, m, false, a.rowKey(row.Index))
 						})
 					} else {
 						ui.Text(c, m.Preview).FontSize(12).SingleLine().TextColor(muted)

@@ -134,6 +134,18 @@ func Seed(s *IMAP, now time.Time) error {
 		auth: "mx.example.com; spf=pass; dkim=pass; dmarc=pass header.from=example.com",
 	}, long.String()), imap.FlagSeen, imap.FlagFlagged)
 
+	// Two messages whose point is one value: a list reads the code and the
+	// invoice's amount and due date out of them without the reading pane
+	// (mail.Extract), which the seed shows.
+	put("INBOX", plain(header{
+		from: "Acme Accounts <accounts@acme.example>", to: me, subject: "Your sign-in code", date: ago(35 * time.Minute), id: "code-1",
+		auth: "mx.acme.example; spf=pass; dkim=pass; dmarc=pass header.from=acme.example",
+	}, "Your sign-in code is 482913. It expires in 10 minutes.\n\nIf you did not try to sign in, you can ignore this message."))
+	put("INBOX", plain(header{
+		from: "Billing <billing@example.com>", to: me, subject: "Invoice INV-2041 is due", date: ago(5 * time.Hour), id: "invoice-1",
+		auth: "mx.example.com; spf=pass; dkim=pass; dmarc=pass header.from=example.com",
+	}, "Invoice INV-2041 for $1,280.00 is due by 2026-03-14.\n\nThank you."))
+
 	// A draft another mail client saved.
 	put("Drafts", plain(header{
 		from: me, to: mia, subject: "Draft: travel plans", date: ago(2 * time.Hour), id: "draft-1",

@@ -4491,5 +4491,38 @@
         "type": "String"
       }
     }
+  },
+  "askMailPlaceholder": "Ask your mail…",
+  "@askMailPlaceholder": {
+    "description": "The window's one field: it opens the command palette, which lists the ways into the mail and searches what is typed."
+  },
+  "paletteList": "List",
+  "@paletteList": {
+    "description": "The palette's hint for a way into the mail such as Starred or Sent."
+  },
+  "paletteLabel": "Label",
+  "@paletteLabel": {
+    "description": "The palette's hint for one of the account's labels."
+  },
+  "palettePinned": "Pinned",
+  "@palettePinned": {
+    "description": "The palette's hint for a pinned search."
+  },
+  "paletteCommand": "Command",
+  "@paletteCommand": {
+    "description": "The palette's hint for an action such as Compose or Settings."
+  },
+  "paletteNothing": "Nothing matches.",
+  "@paletteNothing": {
+    "description": "The palette says no list, label, pin or command matches what is typed."
+  },
+  "searchFor": "Search for “{query}”",
+  "@searchFor": {
+    "description": "The palette's row that runs what is typed as a search of the list on screen.",
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
   }
 }

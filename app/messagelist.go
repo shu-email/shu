@@ -15,160 +15,168 @@ import (
 func (a *app) messageList(c *ui.Context, t *ui.Theme, bar ui.TitleBar, head float32) {
 	ui.Column(c).Width(384).Shrink(0).MinWidth(0).Background(t.Background).Children(func() {
 		a.listHead(c, t, bar, head)
-		searching := strings.TrimSpace(a.query) != ""
-		if searching {
-			a.searchBar(c, t)
-		}
-		a.streamBand(c, t)
-		a.syncNotice(c, t)
-		if len(a.waiting) > 0 {
-			a.waitingNotice(c, t)
-		}
-		if a.sendNote != "" {
-			a.sendNoteBanner(c, t)
-		}
-		if a.undo != nil {
-			a.undoBanner(c, t)
-		}
-		if a.labels.note != "" {
-			a.labelNoteBanner(c, t)
-		}
-		if a.folderNote != "" {
-			a.folderNoteBanner(c, t)
-		}
-		if a.triage != nil {
-			a.triageBanner(c, t)
-		}
-		if a.err != "" {
-			a.errorBanner(c, t)
-		}
-		a.signInBanners(c, t)
-		if len(a.pending) > 0 && !a.pendingDismissed {
-			a.pendingBanner(c, t)
-		}
-		if msg := a.emptyState(); msg != "" {
-			ui.Column(c.Key("empty")).Grow(1).Center().Gap(8).Padding(24, 20).Children(func() {
-				switch {
-				case a.loading:
-					ui.Spinner(c).Size(18, 18)
-				case labelOf(a.folder) != 0 && !searching:
-					ui.Icon(c, tagIcon).FontSize(30).TextColor(t.TextMuted)
-				default:
-					ui.Icon(c, inboxIcon).FontSize(30).TextColor(t.TextMuted)
-				}
-				ui.Text(c, msg).FontSize(13).TextColor(t.TextMuted).TextAlign(ui.Center)
-				if searching && !a.loading {
-					a.noResults(c, t)
-				}
-				if older := a.emptyOlder(); older != endNone {
-					a.olderControls(c, t, older)
-				}
-				if searching {
-					ui.Button(c, locales.SearchClear()).OnClick(func() {
-						a.query = ""
-						a.sel.Clear()
-						a.search()
-					})
-				}
-			})
-			return
-		}
-		// After the last row comes one that says what follows: the next
-		// page, older mail on the server, or nothing. It is a header,
-		// which the list never chooses. The frame goes on with the rows it
-		// was built with: a page added as it lays out shows in the next.
-		n, end := len(a.all), a.endState()
-		rows := n
-		if end != endNone {
-			rows++
-		}
-		keys := make([]string, n)
-		for i := range keys {
-			keys[i] = a.rowKey(i)
-		}
-		a.rows.update(a.listQuery(), keys, c.Now())
-		a.list.Key = func(i int) any {
-			if i >= n {
-				return endKey
-			}
-			return a.rowKey(i)
-		}
-		a.list.Label = func(i int) string {
-			if i >= n {
-				return a.endText(end)
-			}
-			m := a.all[i]
-			if a.draftsList() {
-				who, title := a.rowHeading(m)
-				return who + " " + title
-			}
-			who := m.From.Name
-			if a.folder == followUpFolder {
-				// A follow-up row is a message the user sent: its name says
-				// whom it waits for, as its heading does.
-				who, _ = a.rowHeading(m)
-			}
-			parts := []string{who + " " + m.Subject}
-			account, folder := a.rowPlace(m)
-			if folder != "" {
-				parts = append(parts, locales.InFolder(folder))
-			}
-			if account != "" {
-				parts = append(parts, locales.InAccount(account))
-			}
-			if labels := a.labelNames(m.Account, a.rowLabelsOf(i)); labels != "" {
-				parts = append(parts, locales.RowLabels(labels))
-			}
-			if reason := a.rowReason(i); reason != "" {
-				parts = append(parts, reason)
-			}
-			return strings.Join(parts, ", ")
-		}
-		a.list.Header = func(i int) bool { return i >= n }
-		// Rows drag their messages, or the conversations they stand for,
-		// onto a folder in the sidebar (folderDrop).
-		a.list.Selected = &a.selected
-		a.list.Selection = &a.sel
-		// The menu is the list's, after its rows: a right-click on a row
-		// chooses it first, and a choice in the menu changes the rows
-		// once they are built.
-		ui.List(c.Key("messages"), &a.list, rows).Grow(1).Transition(listMotion).
-			OnChange(func() {
-				// Choosing mail closes a search field opened and left
-				// empty in a narrow pane.
-				if strings.TrimSpace(a.query) == "" {
-					a.searchOpen = false
-				}
-				if a.sel.Len() == 0 {
-					a.selected = -1
-				}
-				a.details = false
-				a.bodyErr = ""
-				a.reloadBody()
-			}).
-			OnSubmit(a.openSelected).
-			Rows(func(row ui.ListRow) {
-				if row.Index >= n {
-					a.endRow(row.Context, row.Context.Theme(), end)
-					return
-				}
-				a.messageRow(row)
-			}).
-			PopoverMenu(a.rowMenu)
-		// The next page is read as the user nears the end of the rows
-		// read, by scrolling or with the keys, so that it is there when
-		// they get to it.
-		if _, last := a.list.Visible(); last >= len(a.all)-listAhead {
-			a.loadMore()
-		}
-		// Put the keyboard in the list once mail loads, so J/K work
-		// without a first click. A search field that took the focus keeps
-		// it.
-		if a.focusList && len(a.all) > 0 && !a.searchField.Focused(c) {
-			a.focusList = false
-			a.list.Handle.Focus(c)
-		}
+		a.listBody(c, t)
 	})
+}
+
+// listBody draws what the list shows under its head: the search bar, the
+// notes of what just happened, and the rows themselves, one page at a
+// time. The shell draws it as its stream; the three-pane window draws it
+// under its own head.
+func (a *app) listBody(c *ui.Context, t *ui.Theme) {
+	searching := strings.TrimSpace(a.query) != ""
+	if searching {
+		a.searchBar(c, t)
+	}
+	a.streamBand(c, t)
+	a.syncNotice(c, t)
+	if len(a.waiting) > 0 {
+		a.waitingNotice(c, t)
+	}
+	if a.sendNote != "" {
+		a.sendNoteBanner(c, t)
+	}
+	if a.undo != nil {
+		a.undoBanner(c, t)
+	}
+	if a.labels.note != "" {
+		a.labelNoteBanner(c, t)
+	}
+	if a.folderNote != "" {
+		a.folderNoteBanner(c, t)
+	}
+	if a.triage != nil {
+		a.triageBanner(c, t)
+	}
+	if a.err != "" {
+		a.errorBanner(c, t)
+	}
+	a.signInBanners(c, t)
+	if len(a.pending) > 0 && !a.pendingDismissed {
+		a.pendingBanner(c, t)
+	}
+	if msg := a.emptyState(); msg != "" {
+		ui.Column(c.Key("empty")).Grow(1).Center().Gap(8).Padding(24, 20).Children(func() {
+			switch {
+			case a.loading:
+				ui.Spinner(c).Size(18, 18)
+			case labelOf(a.folder) != 0 && !searching:
+				ui.Icon(c, tagIcon).FontSize(30).TextColor(t.TextMuted)
+			default:
+				ui.Icon(c, inboxIcon).FontSize(30).TextColor(t.TextMuted)
+			}
+			ui.Text(c, msg).FontSize(13).TextColor(t.TextMuted).TextAlign(ui.Center)
+			if searching && !a.loading {
+				a.noResults(c, t)
+			}
+			if older := a.emptyOlder(); older != endNone {
+				a.olderControls(c, t, older)
+			}
+			if searching {
+				ui.Button(c, locales.SearchClear()).OnClick(func() {
+					a.query = ""
+					a.sel.Clear()
+					a.search()
+				})
+			}
+		})
+		return
+	}
+	// After the last row comes one that says what follows: the next
+	// page, older mail on the server, or nothing. It is a header,
+	// which the list never chooses. The frame goes on with the rows it
+	// was built with: a page added as it lays out shows in the next.
+	n, end := len(a.all), a.endState()
+	rows := n
+	if end != endNone {
+		rows++
+	}
+	keys := make([]string, n)
+	for i := range keys {
+		keys[i] = a.rowKey(i)
+	}
+	a.rows.update(a.listQuery(), keys, c.Now())
+	a.list.Key = func(i int) any {
+		if i >= n {
+			return endKey
+		}
+		return a.rowKey(i)
+	}
+	a.list.Label = func(i int) string {
+		if i >= n {
+			return a.endText(end)
+		}
+		m := a.all[i]
+		if a.draftsList() {
+			who, title := a.rowHeading(m)
+			return who + " " + title
+		}
+		who := m.From.Name
+		if a.folder == followUpFolder {
+			// A follow-up row is a message the user sent: its name says
+			// whom it waits for, as its heading does.
+			who, _ = a.rowHeading(m)
+		}
+		parts := []string{who + " " + m.Subject}
+		account, folder := a.rowPlace(m)
+		if folder != "" {
+			parts = append(parts, locales.InFolder(folder))
+		}
+		if account != "" {
+			parts = append(parts, locales.InAccount(account))
+		}
+		if labels := a.labelNames(m.Account, a.rowLabelsOf(i)); labels != "" {
+			parts = append(parts, locales.RowLabels(labels))
+		}
+		if reason := a.rowReason(i); reason != "" {
+			parts = append(parts, reason)
+		}
+		return strings.Join(parts, ", ")
+	}
+	a.list.Header = func(i int) bool { return i >= n }
+	// Rows drag their messages, or the conversations they stand for,
+	// onto a folder in the sidebar (folderDrop).
+	a.list.Selected = &a.selected
+	a.list.Selection = &a.sel
+	// The menu is the list's, after its rows: a right-click on a row
+	// chooses it first, and a choice in the menu changes the rows
+	// once they are built.
+	ui.List(c.Key("messages"), &a.list, rows).Grow(1).Transition(listMotion).
+		OnChange(func() {
+			// Choosing mail closes a search field opened and left
+			// empty in a narrow pane.
+			if strings.TrimSpace(a.query) == "" {
+				a.searchOpen = false
+			}
+			if a.sel.Len() == 0 {
+				a.selected = -1
+			}
+			a.details = false
+			a.bodyErr = ""
+			a.reloadBody()
+		}).
+		OnSubmit(a.openSelected).
+		Rows(func(row ui.ListRow) {
+			if row.Index >= n {
+				a.endRow(row.Context, row.Context.Theme(), end)
+				return
+			}
+			a.messageRow(row)
+		}).
+		PopoverMenu(a.rowMenu)
+	// The next page is read as the user nears the end of the rows
+	// read, by scrolling or with the keys, so that it is there when
+	// they get to it.
+	if _, last := a.list.Visible(); last >= len(a.all)-listAhead {
+		a.loadMore()
+	}
+	// Put the keyboard in the list once mail loads, so J/K work
+	// without a first click. A search field that took the focus keeps
+	// it.
+	if a.focusList && len(a.all) > 0 && !a.searchField.Focused(c) {
+		a.focusList = false
+		a.list.Handle.Focus(c)
+	}
 }
 
 // listHeader draws the folder title, its counts and the unread badge, or

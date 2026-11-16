@@ -1626,5 +1626,38 @@
         "type": "String"
       }
     }
+  },
+  "askMailPlaceholder": "问你的邮件…",
+  "@askMailPlaceholder": {
+    "description": "窗口唯一的输入框：打开命令面板，它列出进入邮件的方式，并把输入的内容当作搜索。"
+  },
+  "paletteList": "列表",
+  "@paletteList": {
+    "description": "命令面板对 Starred、Sent 这类入口的说明。"
+  },
+  "paletteLabel": "标签",
+  "@paletteLabel": {
+    "description": "命令面板对账户某个标签的说明。"
+  },
+  "palettePinned": "已钉住",
+  "@palettePinned": {
+    "description": "命令面板对钉住的搜索的说明。"
+  },
+  "paletteCommand": "命令",
+  "@paletteCommand": {
+    "description": "命令面板对写邮件、设置这类动作的说明。"
+  },
+  "paletteNothing": "没有匹配。",
+  "@paletteNothing": {
+    "description": "命令面板说明输入的词没有匹配的列表、标签、钉住或命令。"
+  },
+  "searchFor": "搜索“{query}”",
+  "@searchFor": {
+    "description": "命令面板把输入的内容当作当前列表的搜索来执行的那一行。",
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
   }
 }

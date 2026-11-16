@@ -101,7 +101,10 @@ type app struct {
 	accountOpen   bool
 	sidebarOpen   bool
 	mailboxesOpen bool
-	details       bool
+	// palette is the shell's one field and what it lists (palette.go),
+	// which the preview window draws where the sidebar is.
+	palette paletteState
+	details bool
 	// securityOpen is, by message key, whether its sender-authentication
 	// details are shown; linkOpen and linkURL hold a link the HTML view
 	// asked to open until the user confirms where it goes (security.go).
@@ -1230,6 +1233,10 @@ func (a *app) view(c *ui.Context) {
 	case a.rules.open && a.rulesWin == nil:
 		a.rulesView(c)
 	default:
+		if shellWindow() {
+			a.shellView(c)
+			return
+		}
 		a.mailView(c)
 	}
 }

@@ -12911,3 +12911,105 @@ func ExtractDate(date string) string { return In(i18n.Locale()).ExtractDate(date
 func (msgs Messages) ExtractDate(date string) string {
 	return Catalog.Format(msgs.locale, "extractDate", map[string]any{"date": date})
 }
+
+// AskMailPlaceholder says "Ask your mail…"
+// in the language the app shows.
+//
+// The window's one field: it opens the command palette, which lists the
+// ways into the mail and searches what is typed.
+func AskMailPlaceholder() string { return In(i18n.Locale()).AskMailPlaceholder() }
+
+// AskMailPlaceholder says "Ask your mail…"
+// in the language of msgs.
+//
+// The window's one field: it opens the command palette, which lists the
+// ways into the mail and searches what is typed.
+func (msgs Messages) AskMailPlaceholder() string {
+	return Catalog.Format(msgs.locale, "askMailPlaceholder", nil)
+}
+
+// PaletteList says "List"
+// in the language the app shows.
+//
+// The palette's hint for a way into the mail such as Starred or Sent.
+func PaletteList() string { return In(i18n.Locale()).PaletteList() }
+
+// PaletteList says "List"
+// in the language of msgs.
+//
+// The palette's hint for a way into the mail such as Starred or Sent.
+func (msgs Messages) PaletteList() string {
+	return Catalog.Format(msgs.locale, "paletteList", nil)
+}
+
+// PaletteLabel says "Label"
+// in the language the app shows.
+//
+// The palette's hint for one of the account's labels.
+func PaletteLabel() string { return In(i18n.Locale()).PaletteLabel() }
+
+// PaletteLabel says "Label"
+// in the language of msgs.
+//
+// The palette's hint for one of the account's labels.
+func (msgs Messages) PaletteLabel() string {
+	return Catalog.Format(msgs.locale, "paletteLabel", nil)
+}
+
+// PalettePinned says "Pinned"
+// in the language the app shows.
+//
+// The palette's hint for a pinned search.
+func PalettePinned() string { return In(i18n.Locale()).PalettePinned() }
+
+// PalettePinned says "Pinned"
+// in the language of msgs.
+//
+// The palette's hint for a pinned search.
+func (msgs Messages) PalettePinned() string {
+	return Catalog.Format(msgs.locale, "palettePinned", nil)
+}
+
+// PaletteCommand says "Command"
+// in the language the app shows.
+//
+// The palette's hint for an action such as Compose or Settings.
+func PaletteCommand() string { return In(i18n.Locale()).PaletteCommand() }
+
+// PaletteCommand says "Command"
+// in the language of msgs.
+//
+// The palette's hint for an action such as Compose or Settings.
+func (msgs Messages) PaletteCommand() string {
+	return Catalog.Format(msgs.locale, "paletteCommand", nil)
+}
+
+// PaletteNothing says "Nothing matches."
+// in the language the app shows.
+//
+// The palette says no list, label, pin or command matches what is typed.
+func PaletteNothing() string { return In(i18n.Locale()).PaletteNothing() }
+
+// PaletteNothing says "Nothing matches."
+// in the language of msgs.
+//
+// The palette says no list, label, pin or command matches what is typed.
+func (msgs Messages) PaletteNothing() string {
+	return Catalog.Format(msgs.locale, "paletteNothing", nil)
+}
+
+// SearchFor says "Search for “{query}”"
+// in the language the app shows.
+//
+// The palette's row that runs what is typed as a search of the list on
+// screen.
+func SearchFor(query string) string { return In(i18n.Locale()).SearchFor(query) }
+
+// SearchFor says "Search for “{query}”"
+// in the language of msgs.
+//
+// The palette's row that runs what is typed as a search of the list on
+// screen.
+func (msgs Messages) SearchFor(query string) string {
+	return Catalog.Format(msgs.locale, "searchFor", map[string]any{"query": query})
+}

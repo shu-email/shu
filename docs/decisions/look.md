@@ -58,6 +58,8 @@ it: the mail window, settings, contacts, rules and compose.
 
 ## Open
 
+- The shell ([shell.md](shell.md)) draws the same palette in a window
+  without a sidebar; it is a preview until its tests are migrated.
 - A type scale of its own (a larger base size, a display face for a
   conversation's subject) would make the reading pane read as a page. It
   needs room at 1000×640 first.

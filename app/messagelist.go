@@ -143,31 +143,31 @@ func (a *app) listBody(c *ui.Context, t *ui.Theme) {
 	// once they are built.
 	ui.Box(c.Key("list")).Grow(1).MinHeight(0).Children(func() {
 		ui.List(c.Key("messages"), &a.list, rows).Grow(1).Transition(listMotion).
-		OnChange(func() {
-			// Choosing mail closes a search field opened and left
-			// empty in a narrow pane.
-			if strings.TrimSpace(a.query) == "" {
-				a.searchOpen = false
-			}
-			if a.sel.Len() == 0 {
-				a.selected = -1
-			}
-			a.details = false
-			a.bodyErr = ""
-			a.reloadBody()
-			// In the shell, a chosen row is mail being read: the stream's
-			// column is its own from now (shell.go).
-			a.openReading()
-		}).
-		OnSubmit(a.openSelected).
-		Rows(func(row ui.ListRow) {
-			if row.Index >= n {
-				a.endRow(row.Context, row.Context.Theme(), end)
-				return
-			}
-			a.messageRow(row)
-		}).
-		PopoverMenu(a.rowMenu)
+			OnChange(func() {
+				// Choosing mail closes a search field opened and left
+				// empty in a narrow pane.
+				if strings.TrimSpace(a.query) == "" {
+					a.searchOpen = false
+				}
+				if a.sel.Len() == 0 {
+					a.selected = -1
+				}
+				a.details = false
+				a.bodyErr = ""
+				a.reloadBody()
+				// In the shell, a chosen row is mail being read: the stream's
+				// column is its own from now (shell.go).
+				a.openReading()
+			}).
+			OnSubmit(a.openSelected).
+			Rows(func(row ui.ListRow) {
+				if row.Index >= n {
+					a.endRow(row.Context, row.Context.Theme(), end)
+					return
+				}
+				a.messageRow(row)
+			}).
+			PopoverMenu(a.rowMenu)
 		// The caption of the group the rows on screen belong to stays at the
 		// top as its cards scroll under it: the group's own caption goes with
 		// its first card, and this takes its place from then on.

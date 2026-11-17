@@ -97,6 +97,24 @@ func (a *app) endsGroup(i int, now time.Time) bool {
 	return next != nowGroup
 }
 
+// listInset is the inset the cards and their captions share from the
+// list's own edge: the gutter of a card plus its padding.
+const listInset = 24
+
+// pinnedCaption is the caption the list keeps at its top: that of the
+// group the first row on screen belongs to, once that group's own caption
+// has scrolled away with its first card.
+func (a *app) pinnedCaption(now time.Time) string {
+	first, last := a.list.Visible()
+	if last < 0 || first <= 0 || first >= len(a.all) {
+		return ""
+	}
+	if a.startsGroup(first, now) {
+		return ""
+	}
+	return a.rowGroupName(first, now)
+}
+
 // rowGroupName is the caption row i is drawn under.
 func (a *app) rowGroupName(i int, now time.Time) string {
 	_, name := a.rowGroup(i, now)

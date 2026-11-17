@@ -8,7 +8,7 @@ import (
 )
 
 // The window draws the app's palette rather than MyGo's default, in both
-// appearances: the reading surface is paper in light and ink in dark, and
+// appearances: the reading surface is the card's, light or dark, and
 // a chosen row is tinted instead of filled.
 func TestThemeIsTheApps(t *testing.T) {
 	a, _ := sampleMessageApp(t)
@@ -23,8 +23,8 @@ func TestThemeIsTheApps(t *testing.T) {
 		dark bool
 		want uint32
 	}{
-		{false, 0xfcfbf9},
-		{true, 0x15161a},
+		{false, 0xffffff},
+		{true, 0x1b1c21},
 	} {
 		tt.SetDark(c.dark)
 		tt.Frame()

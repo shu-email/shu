@@ -14,15 +14,19 @@ import (
 // The palette. It is small on purpose: one accent, warm neutrals, and the
 // three colors that say something is wrong, late or done.
 var (
-	paper     = ui.Hex("#fcfbf9")
-	paperSoft = ui.Hex("#f4f2ee")
-	ink       = ui.Hex("#1c1b19")
-	inkSoft   = ui.Hex("#7a756c")
+	// The page is a shade the cards sit on, and the cards are the brighter
+	// of the two: a card is a thing to pick up, and it has to leave the
+	// page to say so. The reading pane is a card too, so a message reads
+	// on the same surface the list does.
+	paper     = ui.Hex("#f6f3ee")
+	paperSoft = ui.Hex("#ffffff")
+	ink       = ui.Hex("#1b1a18")
+	inkSoft   = ui.Hex("#78736b")
 	teal      = ui.Hex("#0f6e63")
-	night     = ui.Hex("#15161a")
-	nightSoft = ui.Hex("#1e1f24")
-	moon      = ui.Hex("#eeede9")
-	moonSoft  = ui.Hex("#9b9a93")
+	night     = ui.Hex("#101115")
+	nightSoft = ui.Hex("#1b1c21")
+	moon      = ui.Hex("#ecebe7")
+	moonSoft  = ui.Hex("#95948d")
 	tealNight = ui.Hex("#16a394")
 )
 
@@ -38,9 +42,9 @@ func appTheme(dark bool) *ui.Theme {
 	if dark {
 		t.Background = night
 		t.Surface = nightSoft
-		t.SurfaceHover = ui.Hex("#26272d")
-		t.SurfacePressed = ui.Hex("#2f3037")
-		t.Border = ui.Hex("#303138")
+		t.SurfaceHover = ui.Hex("#23242a")
+		t.SurfacePressed = ui.Hex("#2b2c33")
+		t.Border = ui.Hex("#2e2f36")
 		t.Text = moon
 		t.TextMuted = moonSoft
 		t.Accent = tealNight
@@ -57,9 +61,9 @@ func appTheme(dark bool) *ui.Theme {
 	}
 	t.Background = paper
 	t.Surface = paperSoft
-	t.SurfaceHover = ui.Hex("#ece9e3")
-	t.SurfacePressed = ui.Hex("#e2ded7")
-	t.Border = ui.Hex("#e4e0d8")
+	t.SurfaceHover = ui.Hex("#f4f1ea")
+	t.SurfacePressed = ui.Hex("#eae6de")
+	t.Border = ui.Hex("#e2ddd3")
 	t.Text = ink
 	t.TextMuted = inkSoft
 	t.Accent = teal

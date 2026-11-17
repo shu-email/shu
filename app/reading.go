@@ -20,7 +20,7 @@ import (
 // readingPane draws the toolbar, the header, attachments and the body.
 func (a *app) readingPane(c *ui.Context, t *ui.Theme, head float32) {
 	a.services = c.Services()
-	ui.Column(c).Grow(1).MinWidth(0).Background(t.Background).Children(func() {
+	ui.Column(c).Grow(1).MinWidth(0).Background(t.Surface).Children(func() {
 		// The toolbar floats on glass over what is read, which scrolls
 		// under it and fades out at its edge.
 		pane := ui.Box(c).Grow(1).MinHeight(0)

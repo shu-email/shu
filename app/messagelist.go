@@ -141,7 +141,8 @@ func (a *app) listBody(c *ui.Context, t *ui.Theme) {
 	// The menu is the list's, after its rows: a right-click on a row
 	// chooses it first, and a choice in the menu changes the rows
 	// once they are built.
-	ui.List(c.Key("messages"), &a.list, rows).Grow(1).Transition(listMotion).
+	ui.Box(c.Key("list")).Grow(1).MinHeight(0).Children(func() {
+		ui.List(c.Key("messages"), &a.list, rows).Grow(1).Transition(listMotion).
 		OnChange(func() {
 			// Choosing mail closes a search field opened and left
 			// empty in a narrow pane.
@@ -167,6 +168,16 @@ func (a *app) listBody(c *ui.Context, t *ui.Theme) {
 			a.messageRow(row)
 		}).
 		PopoverMenu(a.rowMenu)
+		// The caption of the group the rows on screen belong to stays at the
+		// top as its cards scroll under it: the group's own caption goes with
+		// its first card, and this takes its place from then on.
+		if label := a.pinnedCaption(c.Now()); label != "" {
+			ui.Row(c.Key("pinned-caption")).Absolute().Top(0).Left(0).Right(0).
+				Padding(4, 16, 6, listInset).Background(t.Background).Children(func() {
+				ui.Text(c, label).FontSize(11).Bold().TextColor(t.TextMuted).SingleLine()
+			})
+		}
+	})
 	// The next page is read as the user nears the end of the rows
 	// read, by scrolling or with the keys, so that it is there when
 	// they get to it.
@@ -510,7 +521,7 @@ func (a *app) messageRow(row ui.ListRow) {
 	a.rows.row(outer, a.rowKey(row.Index), chosen, now)
 	outer.Children(func() {
 		if first {
-			ui.Row(c).Padding(4, 6, 6, 6).Children(func() {
+			ui.Row(c).Padding(4, 6, 6, 14).Children(func() {
 				ui.Text(c, a.rowGroupName(row.Index, now)).FontSize(11).Bold().
 					TextColor(t.TextMuted).SingleLine()
 			})
@@ -547,18 +558,18 @@ func (a *app) messageCard(c *ui.Context, t *ui.Theme, row ui.ListRow, m mail.Sum
 	// through the list, and the card would take the desktop's color.
 	switch {
 	case chosen:
-		card.Background(t.Accent.Alpha(0.10).Over(t.Background)).BorderColor(t.Accent.Alpha(0.35))
+		card.Background(t.Accent.Alpha(0.10).Over(t.Surface)).BorderColor(t.Accent.Alpha(0.35))
 	case row.Hovered():
 		card.Background(t.SurfaceHover).BorderColor(t.Border)
 	default:
 		card.Background(t.Surface).BorderColor(t.Border.Alpha(0.7))
 	}
 	card.Children(func() {
-		ui.Row(c).Gap(8).AlignItems(ui.Start).Children(func() {
+		ui.Row(c).Gap(10).AlignItems(ui.Start).Children(func() {
 			// The sender's icon heads the row, in place of the dot: the
 			// name says who wrote, so the picture needs no name of its own.
 			ui.Avatar(c, who, a.senderAvatar(a.rowAvatar(m))).AccessHidden(true)
-			ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
+			ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
 				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 					if unread {
 						ui.Box(c).Size(7, 7).Radius(3.5).Shrink(0).Background(dotColor)

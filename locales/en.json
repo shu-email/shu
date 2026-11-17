@@ -4541,5 +4541,38 @@
   "groupEarlier": "Earlier",
   "@groupEarlier": {
     "description": "A caption above the cards of the older mail."
+  },
+  "unsorted": "Ungrouped",
+  "@unsorted": {
+    "description": "The caption above the cards the model could not group."
+  },
+  "aiTopics": "Topics",
+  "@aiTopics": {
+    "description": "The AI capability that groups a list by what its subjects are about."
+  },
+  "aiTopicsDetail": "Groups the list by what its subjects are about. Sends the subjects of up to {count} messages, and nothing else.",
+  "@aiTopicsDetail": {
+    "description": "What the Topics capability does and what it sends.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "groupByTopic": "Group by topic",
+  "@groupByTopic": {
+    "description": "The palette's command that asks the model to group the list by subject."
+  },
+  "aiReviewTopicsSize": "{count} subjects, {chars} characters. Subjects only: no message body leaves the device.",
+  "@aiReviewTopicsSize": {
+    "description": "The review gate's size line for a topic grouping request.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "chars": {
+        "type": "int"
+      }
+    }
   }
 }

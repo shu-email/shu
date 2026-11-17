@@ -53,6 +53,10 @@ type aiService interface {
 	SummarizeConversation(ctx context.Context, c ai.Conversation) (ai.Result, error)
 	TriagePayload(ctx context.Context, items []ai.TriageItem, language string) (ai.Payload, error)
 	Triage(ctx context.Context, items []ai.TriageItem, language string) (ai.TriageResult, error)
+	// Topics groups the listed subjects by what they are about, sending
+	// the subjects alone.
+	TopicsPayload(ctx context.Context, items []ai.TopicItem, language string) (ai.Payload, error)
+	Topics(ctx context.Context, items []ai.TopicItem, language string) ([]ai.Topic, error)
 	TranslatePayload(ctx context.Context, m ai.Message, target string) (ai.Payload, error)
 	Translate(ctx context.Context, m ai.Message, target string) (ai.Translation, error)
 	// TranslateHTML translates a message's HTML without losing its markup.

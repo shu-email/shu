@@ -55,12 +55,17 @@ func groupCaption(g listGroup) string {
 	return locales.GroupEarlier()
 }
 
-// rowGroup is the group of row i, for the card and the caption it draws.
-func (a *app) rowGroup(i int, now time.Time) listGroup {
-	if i < 0 || i >= len(a.all) {
-		return groupEarlier
+// rowGroup is the group of row i, for the card and the caption it draws:
+// the model's topic when the list is grouped, the day's otherwise.
+func (a *app) rowGroup(i int, now time.Time) (int, string) {
+	if g, name, ok := a.topicGroup(i); ok {
+		return g, name
 	}
-	return groupOf(a.all[i].Date, now)
+	if i < 0 || i >= len(a.all) {
+		return int(groupEarlier), groupCaption(groupEarlier)
+	}
+	g := groupOf(a.all[i].Date, now)
+	return int(g), groupCaption(g)
 }
 
 // startsGroup reports that row i opens a new group, so that it draws the
@@ -72,5 +77,13 @@ func (a *app) startsGroup(i int, now time.Time) bool {
 	if i == 0 {
 		return true
 	}
-	return a.rowGroup(i, now) != a.rowGroup(i-1, now)
+	was, _ := a.rowGroup(i-1, now)
+	nowGroup, _ := a.rowGroup(i, now)
+	return nowGroup != was
+}
+
+// rowGroupName is the caption row i is drawn under.
+func (a *app) rowGroupName(i int, now time.Time) string {
+	_, name := a.rowGroup(i, now)
+	return name
 }

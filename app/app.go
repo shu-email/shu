@@ -101,8 +101,8 @@ type app struct {
 	accountOpen   bool
 	sidebarOpen   bool
 	mailboxesOpen bool
-	// palette is the shell's one field and what it lists (palette.go),
-	// which the preview window draws where the sidebar is.
+	// topics is the model's grouping of the rows on screen (topics.go).
+	topics  *topicState
 	palette paletteState
 	// readingOpen says, in the shell, that the stream gave its column to
 	// what a chosen row reads (shell.go).

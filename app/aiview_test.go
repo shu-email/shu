@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -136,6 +137,19 @@ func (p *aiProvider) RoundTrip(r *http.Request) (*http.Response, error) {
 		}
 		b, _ := json.Marshal(rows)
 		answer = string(b)
+	case strings.Contains(system, "sort a mailbox into topics"):
+		var lines []string
+		for i, line := range strings.Split(user, "\n") {
+			topic := "Other"
+			switch {
+			case strings.Contains(line, "Design review"), strings.Contains(line, "Contract"):
+				topic = "Design"
+			case strings.Contains(line, "Pull request"):
+				topic = "Admin"
+			}
+			lines = append(lines, fmt.Sprintf("%d: %s", i+1, topic))
+		}
+		answer = strings.Join(lines, "\n")
 	case strings.Contains(system, "draft a reply"):
 		answer = testDraft
 	case strings.Contains(system, "summarize one email"):

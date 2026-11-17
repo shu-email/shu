@@ -13079,3 +13079,75 @@ func GroupEarlier() string { return In(i18n.Locale()).GroupEarlier() }
 func (msgs Messages) GroupEarlier() string {
 	return Catalog.Format(msgs.locale, "groupEarlier", nil)
 }
+
+// Unsorted says "Ungrouped"
+// in the language the app shows.
+//
+// The caption above the cards the model could not group.
+func Unsorted() string { return In(i18n.Locale()).Unsorted() }
+
+// Unsorted says "Ungrouped"
+// in the language of msgs.
+//
+// The caption above the cards the model could not group.
+func (msgs Messages) Unsorted() string {
+	return Catalog.Format(msgs.locale, "unsorted", nil)
+}
+
+// AiTopics says "Topics"
+// in the language the app shows.
+//
+// The AI capability that groups a list by what its subjects are about.
+func AiTopics() string { return In(i18n.Locale()).AiTopics() }
+
+// AiTopics says "Topics"
+// in the language of msgs.
+//
+// The AI capability that groups a list by what its subjects are about.
+func (msgs Messages) AiTopics() string {
+	return Catalog.Format(msgs.locale, "aiTopics", nil)
+}
+
+// AiTopicsDetail says "Groups the list by what its subjects are about. Sends the subjects of up to {count} messages, and nothing else."
+// in the language the app shows.
+//
+// What the Topics capability does and what it sends.
+func AiTopicsDetail(count int) string { return In(i18n.Locale()).AiTopicsDetail(count) }
+
+// AiTopicsDetail says "Groups the list by what its subjects are about. Sends the subjects of up to {count} messages, and nothing else."
+// in the language of msgs.
+//
+// What the Topics capability does and what it sends.
+func (msgs Messages) AiTopicsDetail(count int) string {
+	return Catalog.Format(msgs.locale, "aiTopicsDetail", map[string]any{"count": count})
+}
+
+// GroupByTopic says "Group by topic"
+// in the language the app shows.
+//
+// The palette's command that asks the model to group the list by subject.
+func GroupByTopic() string { return In(i18n.Locale()).GroupByTopic() }
+
+// GroupByTopic says "Group by topic"
+// in the language of msgs.
+//
+// The palette's command that asks the model to group the list by subject.
+func (msgs Messages) GroupByTopic() string {
+	return Catalog.Format(msgs.locale, "groupByTopic", nil)
+}
+
+// AiReviewTopicsSize says "{count} subjects, {chars} characters. Subjects only: no message body leaves the device."
+// in the language the app shows.
+//
+// The review gate's size line for a topic grouping request.
+func AiReviewTopicsSize(count int, chars int) string {
+	return In(i18n.Locale()).AiReviewTopicsSize(count, chars)
+}
+
+// AiReviewTopicsSize says "{count} subjects, {chars} characters. Subjects only: no message body leaves the device."
+// in the language of msgs.
+//
+// The review gate's size line for a topic grouping request.
+func (msgs Messages) AiReviewTopicsSize(count int, chars int) string {
+	return Catalog.Format(msgs.locale, "aiReviewTopicsSize", map[string]any{"count": count, "chars": chars})
+}

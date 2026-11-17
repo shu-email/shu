@@ -504,7 +504,7 @@ func (a *app) messageRow(row ui.ListRow) {
 	outer.Children(func() {
 		if a.startsGroup(row.Index, c.Now()) {
 			ui.Row(c).Padding(4, 6, 6, 6).Children(func() {
-				ui.Text(c, groupCaption(a.rowGroup(row.Index, c.Now()))).FontSize(11).Bold().
+				ui.Text(c, a.rowGroupName(row.Index, c.Now())).FontSize(11).Bold().
 					TextColor(t.TextMuted).SingleLine()
 			})
 		}

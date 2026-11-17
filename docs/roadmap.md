@@ -82,19 +82,18 @@ window stays the default and the shell is one environment variable away.
 
 ## Next
 
-0. **Cards, grouped by topic.** The list now draws a message as a card on
-   the pane (`app/messagelist.go`, `messageCard`), under a caption its
-   group shares (`app/groups.go`). The caption is the day's for now — the
-   day's mail, yesterday's, the week's, the rest — because grouping by
-   what mail is *about* needs the model, and that is a feature of its own:
-   one more entry in `ai.Features` (its switch, its announce-yes-review
-   gate, its cached answers), a request that sends only `subject` lines
-   and never a body, a group name per subject, and a list that draws the
-   cards in the model's order. It must be an explicit action — the
-   settings' review gate exists so that no subject leaves the device
-   without the user asking for it — and the order it returns must not
-   disturb paging, which keeps its cursor in the store, not in the rows
-   the window shows.
+0. **Cards, grouped by topic — done.** The list draws a message as a
+   card (`messageCard`), under a caption its group shares
+   (`app/groups.go`). The caption is the day's until the user asks for
+   the model's: ⌘K → *Group by topic* (`app/topics.go`) sends the
+   **subjects alone** of up to `ai.TopicLimit` rows, behind the same
+   review gate every capability has (`aiReviewTopicsSize` says how many
+   and how many characters), and the model answers one topic per
+   numbered subject. The cards are ordered by the topics as the model
+   first names them, the selection is kept by key, and the store's
+   cursor is untouched, so paging still reads the same pages. Asking
+   again drops the grouping. A subject the model says nothing about
+   draws last under *Ungrouped*.
 1. **Migrate the tests, then make the shell the default**, and delete
    `mailView` and `app/sidebar.go` (about 600 lines). Mechanical: a
    helper that opens a list through the field, and geometry assertions

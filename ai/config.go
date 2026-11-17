@@ -91,10 +91,11 @@ const (
 	FeatureTriage    Feature = "triage"
 	FeatureDraft     Feature = "draft"
 	FeatureTranslate Feature = "translate"
+	FeatureTopics    Feature = "topics"
 )
 
 // Features lists the capabilities in the order the settings show them.
-var Features = []Feature{FeatureSummary, FeatureTriage, FeatureDraft, FeatureTranslate}
+var Features = []Feature{FeatureSummary, FeatureTriage, FeatureDraft, FeatureTranslate, FeatureTopics}
 
 // Config is the user's AI settings. It holds no secret: keys are in the
 // keychain, under KeyName.

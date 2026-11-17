@@ -1676,5 +1676,38 @@
   "groupEarlier": "更早",
   "@groupEarlier": {
     "description": "更早的邮件卡片上方的分组标题。"
+  },
+  "unsorted": "未分组",
+  "@unsorted": {
+    "description": "模型没能分组的卡片上方的标题。"
+  },
+  "aiTopics": "主题分组",
+  "@aiTopics": {
+    "description": "把列表按其标题所谈的内容分组的 AI 能力。"
+  },
+  "aiTopicsDetail": "按邮件主题的内容把列表分组。最多发送 {count} 封邮件的标题，不发送别的。",
+  "@aiTopicsDetail": {
+    "description": "主题分组这项能力做什么、发出去什么。",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "groupByTopic": "按主题分组",
+  "@groupByTopic": {
+    "description": "命令面板里请模型按标题分组的命令。"
+  },
+  "aiReviewTopicsSize": "{count} 个邮件标题，共 {chars} 个字符。只发送标题，不发送任何正文。",
+  "@aiReviewTopicsSize": {
+    "description": "审阅弹窗对主题分组请求的体量说明。",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "chars": {
+        "type": "int"
+      }
+    }
   }
 }

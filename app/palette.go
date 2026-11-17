@@ -85,6 +85,10 @@ func (a *app) paletteEntries() []paletteEntry {
 		paletteEntry{ID: "threads", Label: locales.GroupByConversation(), Hint: locales.PaletteCommand(), Icon: conversationsIcon,
 			Run: func() { a.toggleThreaded() }},
 	)
+	if a.ai != nil {
+		entries = append(entries, paletteEntry{ID: "topics", Label: locales.GroupByTopic(),
+			Hint: locales.PaletteCommand(), Icon: sparklesIcon, Run: a.groupTopics})
+	}
 	return entries
 }
 

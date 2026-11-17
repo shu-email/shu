@@ -472,6 +472,8 @@ func (a *app) aiSettingsView(c *ui.Context, t *ui.Theme) {
 				return locales.AiDrafts(), locales.AiDraftsDetail()
 			case ai.FeatureTranslate:
 				return locales.AiTranslate(), locales.AiTranslateDetail(ai.TranslateLimit)
+			case ai.FeatureTopics:
+				return locales.AiTopics(), locales.AiTopicsDetail(ai.TopicLimit)
 			}
 			return string(feature), ""
 		}

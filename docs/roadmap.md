@@ -94,28 +94,11 @@ window stays the default and the shell is one environment variable away.
    cursor is untouched, so paging still reads the same pages. Asking
    again drops the grouping. A subject the model says nothing about
    draws last under *Ungrouped*.
-1. **Migrate the tests, then make the shell the default** — started, and its
-   size is now measured: drawing the shell by default fails **197 tests**
-   in `app/`, in four buckets. None is a bug in the shell; each is a test
-   that describes the window that is going away.
-
-   | Bucket | Tests | What it needs |
-   | --- | --- | --- |
-   | `click "Search mail"` | 23 | The reading bar's search field is a magnifier at the shell's pane width; keep it reachable and labelled, or grow the pane |
-   | `click "Edit draft"`, row actions | ~12 | The drafts' actions in the stream head, where the three-pane head kept them |
-   | "ui:" interaction and geometry | ~19 | Rows, banners and the reading pane at the shell's measurements |
-   | Minimum size, both appearances, both languages | ~60 | Coordinates written against the old list pane (`x >= 223 && x <= 607`) |
-   | Sidebar labels | ~60 (done) | An `openList` helper that opens a list through the field, and its call sites |
-
-   **The shell is the default from commit `(this one)` on, and the suite
-   is knowingly red** by the owner's decision: the tests describe the
-   window that is going away, and the product moves first. The buckets
-   above are the migration, to be done in that order; `mailView` and
-   `app/sidebar.go` go once the last bucket is done., and delete
-   `mailView` and `app/sidebar.go` (about 600 lines). Mechanical: a
-   helper that opens a list through the field, and geometry assertions
-   written against the stream's column instead of the old list pane.
-   Every step after this one would otherwise be built twice.
+1. **The three-pane window is gone.** `mailView`, `app/sidebar.go`,
+   `messageList`, `listHead` and `listHeader` were deleted with the shell
+   made the window. Its tests stay red until they are rewritten against
+   the shell: they are the four buckets below, and the migration is a
+   change of its own. Nothing runs the old window any more.
 2. **Land on the stream, and rank it.** The list's cursor is a date and a
    row, so ordering by intent needs a store-side read — a rank column or
    a two-pass read — not a sort in the window, which would break paging

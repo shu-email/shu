@@ -244,9 +244,6 @@ func (a *app) openSelected() {
 		a.editDraft()
 		return
 	}
-	if !shellWindow() {
-		return
-	}
 	a.openReading()
 	a.reloadBody()
 }

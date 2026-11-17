@@ -49,7 +49,7 @@ func (a *app) shellReading() bool {
 // openReading gives the stream's column to what the chosen row reads. It
 // is called wherever mail is chosen, and does nothing but in the shell.
 func (a *app) openReading() {
-	if shellWindow() && a.selected >= 0 && a.selected < len(a.all) {
+	if a.selected >= 0 && a.selected < len(a.all) {
 		a.readingOpen = true
 	}
 }
@@ -75,11 +75,6 @@ func (a *app) shellBack() {
 	a.readingOpen = false
 	a.clearSelection()
 }
-
-// shellWindow reports whether the window draws the shell. It is the window
-// now; the helper stays while the three-pane one, and the tests that
-// describe it, are still in the tree.
-func shellWindow() bool { return true }
 
 // shellView is the window: the bar, the stream, the line under it, and
 // the palette over them.
@@ -159,7 +154,7 @@ func (a *app) shellBar(c *ui.Context, t *ui.Theme, bar ui.TitleBar, head float32
 			OnClick(func() { a.refresh() })
 		a.iconButton(c, composeIcon, locales.Compose(), locales.NewMessage()).
 			OnClick(func() { a.openCompose(nil) })
-		a.moreMenuButton(c)
+		a.overflowMenu(c)
 	})
 }
 
@@ -319,6 +314,51 @@ func (a *app) shellHead(c *ui.Context, t *ui.Theme) {
 	})
 }
 
+// overflowMenu is the window's ⋯: the commands a session reaches for
+// that the bar does not keep, and the accounts, and the app's screens.
+func (a *app) overflowMenu(c *ui.Context) ui.Element {
+	return a.iconButton(c, moreIcon, locales.More(), locales.More()).
+		PopoverMenuButton(func(m *ui.Menu) {
+			if m.Item(locales.SyncMail()).Chosen() {
+				a.refresh()
+			}
+			if m.Item(locales.Compose()).Chosen() {
+				a.openCompose(nil)
+			}
+			m.Separator()
+			if m.Item(locales.Contacts()).Chosen() {
+				a.openContacts()
+			}
+			if m.Item(locales.Rules()).Chosen() {
+				a.openRules(rulesTabList)
+			}
+			if m.Item(locales.Settings()).Chosen() {
+				a.openSettings(settingsTabGeneral)
+			}
+			m.Separator()
+			if acc := a.activeAccount(); acc != nil {
+				for _, other := range a.accounts {
+					if other.ID == a.active {
+						continue
+					}
+					if m.Item(other.Label() + " · " + other.Email).Chosen() {
+						a.aim = nil
+						a.switchAccount(other.ID)
+					}
+				}
+				if m.Item(locales.AddAccount()).Chosen() {
+					a.openAccountForm(nil)
+				}
+				if m.Item(locales.ManageAccounts()).Chosen() {
+					a.openAccountForm(acc)
+				}
+			}
+		})
+}
+
+// mailTotals counts the account's cached folders, without the ones whose
+// mail is already dealt with.
+
 // shellStatus is the line under the stream: how receiving mail and the
 // queue are going, and what the account holds.
 func (a *app) shellStatus(c *ui.Context, t *ui.Theme) {
@@ -328,7 +368,7 @@ func (a *app) shellStatus(c *ui.Context, t *ui.Theme) {
 		a.watchLine(c, t)
 		a.queueLine(c, t)
 		ui.Spacer(c)
-		unread, total := a.sidebarTotals()
+		unread, total := a.mailTotals()
 		ui.Text(c, locales.SidebarSummary(unread, total)).FontSize(10.5).
 			TextColor(t.TextMuted).SingleLine().Shrink(0)
 		if acc := a.activeAccount(); acc != nil {

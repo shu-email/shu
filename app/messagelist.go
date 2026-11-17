@@ -1,7 +1,6 @@
 package app
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -9,15 +8,6 @@ import (
 	"shu/locales"
 	"shu/mail"
 )
-
-// messageList draws the header, the search field, the banners and the
-// virtual message list.
-func (a *app) messageList(c *ui.Context, t *ui.Theme, bar ui.TitleBar, head float32) {
-	ui.Column(c).Width(384).Shrink(0).MinWidth(0).Background(t.Background).Children(func() {
-		a.listHead(c, t, bar, head)
-		a.listBody(c, t)
-	})
-}
 
 // listBody draws what the list shows under its head: the search bar, the
 // notes of what just happened, and the rows themselves, one page at a
@@ -191,118 +181,6 @@ func (a *app) listBody(c *ui.Context, t *ui.Theme) {
 		a.focusList = false
 		a.list.Handle.Focus(c)
 	}
-}
-
-// listHeader draws the folder title, its counts and the unread badge, or
-// the number of results while searching.
-func (a *app) listHeader(c *ui.Context, t *ui.Theme) {
-	query := strings.TrimSpace(a.query)
-	title := a.folderLabel(a.folder)
-	if a.streaming() {
-		title = locales.Stream()
-	}
-	chosen := a.sel.Len()
-	smart := a.shownSmart()
-	switch {
-	case chosen > 1 && a.threaded():
-		title = locales.ConversationsSelected(chosen)
-	case chosen > 1:
-		title = locales.SelectedCount(chosen)
-	case query != "" && smart == nil:
-		title = locales.SearchResults()
-	}
-	ui.Row(c).Gap(6).AlignItems(ui.Center).MinWidth(0).Children(func() {
-		ui.Text(c, title).FontSize(18).Bold().SingleLine().Shrink(1).MinWidth(0)
-		switch {
-		case chosen > 1:
-		case query != "" && smart == nil:
-			found := fmt.Sprint(len(a.all))
-			if a.pager.more {
-				found += "+"
-			}
-			a.countBadge(c, "found", found, len(a.all)).Background(t.Surface).TextColor(t.TextMuted)
-		default:
-			// A folder's badge is its unread count as the server keeps it,
-			// the number the sidebar shows: the rows read so far are only
-			// the newest pages. Other lists count their rows read, and a
-			// smart mailbox what the cache says it finds.
-			n, more := a.unread(), a.pager.more
-			switch {
-			case a.isServerFolder(a.folder):
-				n, more = a.folderUnread(a.folder), false
-			case a.isUnified():
-				n, more = a.unifiedUnread(), false
-			case a.shownLabel() != nil:
-				n, more = a.shownLabel().Unread, false
-			case smart != nil:
-				n, more = smart.Unread, false
-			}
-			if n > 0 {
-				label := fmt.Sprint(n)
-				if more {
-					label += "+"
-				}
-				a.countBadge(c, "unread/"+a.folder, label, n).Background(t.Accent).TextColor(t.AccentText)
-			} else {
-				// A count that shows no badge still went to zero.
-				a.noteCount("unread/"+a.folder, n)
-			}
-		}
-	})
-	ui.Text(c, a.listSummary()).FontSize(11).TextColor(t.TextMuted).SingleLine()
-}
-
-// listHead is the top of the list, under the window controls when the
-// sidebar is hidden: what the list shows, and its own actions on glass,
-// as the mail apps of the system have them. The window drags by it.
-func (a *app) listHead(c *ui.Context, t *ui.Theme, bar ui.TitleBar, head float32) {
-	ui.Themed(c, barTheme(t)).Background(ui.Transparent).Shrink(0).Children(func() {
-		inset := float32(0)
-		if !a.sidebarOpen {
-			inset = max(bar.Left, 0)
-		}
-		row := ui.Row(c.Key("list-head"))
-		inset = row.AnimateTo("inset", inset, paneSpring)
-		chosen := a.sel.Len()
-		row.Height(head).Shrink(0).AlignItems(ui.Center).Gap(8).Padding(0, 12, 0, 14+inset).
-			BorderWidth(0, 0, 1, 0).BorderColor(t.Border).DragWindow().Children(func() {
-			if !a.sidebarOpen {
-				a.sidebarToggle(c)
-			}
-			ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() { a.listHeader(c, t) })
-			if a.loading {
-				ui.Spinner(c).Size(14, 14)
-			}
-			if chosen > 1 {
-				a.glassGroup(c, "", func() {
-					ui.Button(c, locales.ClearSelection()).Padding(barPad, 12).
-						Radius(barButton).OnClick(func() { a.clearSelection() })
-				}).Shrink(0)
-				return
-			}
-			a.glassGroup(c, "", func() {
-				if l := a.shownLabel(); l != nil {
-					a.labelHeaderMenu(c, *l)
-				}
-				if mb := a.shownSmart(); mb != nil {
-					a.smartHeaderMenu(c, *mb)
-				}
-				a.viewToggle(c)
-				if a.ai != nil {
-					// Drafts are the user's own unsent text: there is
-					// nothing in them to triage, and no reason to send
-					// them to a model.
-					ui.Button(c, "").Label(locales.TriageInbox()).Tooltip(locales.TriageInbox()).Padding(barPad, barPad).Radius(barButton).
-						Disabled(len(a.all) == 0 || a.draftsList()).OnClick(a.triageList).
-						Children(func() { ui.Icon(c, sparklesIcon).FontSize(16) })
-				}
-			}).Shrink(0)
-			a.barCapsule(c, func() ui.Element {
-				return a.iconButton(c, composeIcon, locales.Compose(), locales.NewMessage()).
-					OnClick(func() { a.openCompose(nil) })
-			})
-		})
-	})
 }
 
 // isServerFolder reports whether id names one of the account's folders,

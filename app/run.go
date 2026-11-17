@@ -110,10 +110,7 @@ func Run() {
 		}
 		// The shell reads in one column of its own measure, so its window
 		// holds together far below the size the three panes needed.
-		minWidth, minHeight := 1000, 640
-		if shellWindow() {
-			minWidth, minHeight = 720, 520
-		}
+		minWidth, minHeight := 760, 540
 		win := mygo.NewWindow(mygo.WindowOptions{
 			Title:           locales.AppName(),
 			Width:           1220,

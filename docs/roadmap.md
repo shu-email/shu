@@ -107,10 +107,11 @@ window stays the default and the shell is one environment variable away.
    | Minimum size, both appearances, both languages | ~60 | Coordinates written against the old list pane (`x >= 223 && x <= 607`) |
    | Sidebar labels | ~60 (done) | An `openList` helper that opens a list through the field, and its call sites |
 
-   The helper is written (`openList` in `app/app_test.go`) and its call
-   sites are converted; the rest is the work. Do it in buckets, each
-   committing with the suite green, then delete `mailView` and
-   `app/sidebar.go`, and drop `SHU_WINDOW`., and delete
+   **The shell is the default from commit `(this one)` on, and the suite
+   is knowingly red** by the owner's decision: the tests describe the
+   window that is going away, and the product moves first. The buckets
+   above are the migration, to be done in that order; `mailView` and
+   `app/sidebar.go` go once the last bucket is done., and delete
    `mailView` and `app/sidebar.go` (about 600 lines). Mechanical: a
    helper that opens a list through the field, and geometry assertions
    written against the stream's column instead of the old list pane.

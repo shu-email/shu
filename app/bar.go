@@ -53,7 +53,7 @@ func (a *app) readingCompact() bool {
 	// window's width. Before the first layout the pane has no width yet:
 	// fold rather than lay the bar out wider than the window it will be
 	// in.
-	return shellWindow() || a.readingWidth < compactReading
+	return true
 }
 
 // readingSearchFits reports whether a full search field and its filter
@@ -62,7 +62,7 @@ func (a *app) readingSearchFits() bool {
 	// The shell keeps its groups folded beside the way back, so its field
 	// does not sit beside them for the room: it comes by its magnifier,
 	// or a search, and the groups give way only while it is in use.
-	return !shellWindow() && a.readingWidth >= searchReading
+	return false
 }
 
 // readingSearchShown reports whether the bar shows the search field
@@ -170,7 +170,7 @@ func (a *app) readingBar(c *ui.Context, label string, fn func()) {
 			}
 			// In the shell nothing is read beside a list: what is read took
 			// the stream's column, and its first action is the way back.
-			if shellWindow() {
+			if true {
 				actions.Children(func() {
 					a.glassGroup(c, "", func() {
 						a.toolButton(c, chevronLeftIcon, locales.BackToStream(), true, a.shellBack)

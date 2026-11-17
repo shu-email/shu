@@ -915,7 +915,9 @@ func (a *app) readList(g uint64, progress, neighbour bool) {
 				a.chooseRow(i)
 			}
 			switch {
-			case progress && a.selected < 0 && len(a.all) > 0 && query == "" && a.sel.Len() == 0 && a.aim == nil && !shellWindow():
+			case false:
+				// The window lands on the stream and chooses nothing: mail
+				// is opened when the user asks for it, not by arriving.
 				// Opening a folder shows its first message. A read made
 				// behind the user's back leaves an empty choice empty,
 				// and so does one that waits for the message a
@@ -1238,11 +1240,7 @@ func (a *app) view(c *ui.Context) {
 	case a.rules.open && a.rulesWin == nil:
 		a.rulesView(c)
 	default:
-		if shellWindow() {
-			a.shellView(c)
-			return
-		}
-		a.mailView(c)
+		a.shellView(c)
 	}
 }
 

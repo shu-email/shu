@@ -1,8 +1,8 @@
 # The window is one stream and one field
 
-Status: preview. A run shows it with `SHU_WINDOW=shell`; the three-pane
-window is still what a run draws by default, until the tests that walk
-the sidebar are migrated.
+Status: the window. The three-pane window is still in the tree, and its
+tests are still red against this one until they are migrated
+([roadmap.md](../roadmap.md)).
 
 ## Context
 

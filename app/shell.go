@@ -1,7 +1,6 @@
 package app
 
 import (
-	"os"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -38,11 +37,6 @@ const (
 	// mail and the queue are going.
 	shellStatusHeight = 30
 )
-
-// shellWindow reports whether the window draws the new shell: one stream,
-// one field, no sidebar. It is a preview until the tests that walk the
-// sidebar are migrated, so the old window is what a run shows by default.
-func shellWindow() bool { return os.Getenv("SHU_WINDOW") == "shell" }
 
 // shellReading reports whether the stream's column is reading: a row is
 // chosen, and what it opened is still there to read. Anything that takes
@@ -81,6 +75,11 @@ func (a *app) shellBack() {
 	a.readingOpen = false
 	a.clearSelection()
 }
+
+// shellWindow reports whether the window draws the shell. It is the window
+// now; the helper stays while the three-pane one, and the tests that
+// describe it, are still in the tree.
+func shellWindow() bool { return true }
 
 // shellView is the window: the bar, the stream, the line under it, and
 // the palette over them.

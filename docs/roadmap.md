@@ -60,7 +60,10 @@ GOFLAGS=-tags=e2e SHU_SEED=1 SHU_WINDOW=shell go tool mygo dev -lang en
 - A bar: the account's picture, **one field**, the state of receiving
   mail as a dot, sync, compose, the overflow menu.
 - The stream in a readable width in the middle of the window.
-- The reading pane beside it.
+- Reading opens over the stream: what a chosen row reads takes the same
+  column, at the same width, with a way back first among its actions —
+  and going back, or archiving what is open, gives the column back to
+  the stream. The window is one thing at a time.
 - A line at the bottom: the watcher, the queue, the counts, the account.
 
 The field opens a command palette: the ways into the mail (stream,
@@ -79,6 +82,19 @@ window stays the default and the shell is one environment variable away.
 
 ## Next
 
+0. **Cards, grouped by topic.** The list now draws a message as a card on
+   the pane (`app/messagelist.go`, `messageCard`), under a caption its
+   group shares (`app/groups.go`). The caption is the day's for now — the
+   day's mail, yesterday's, the week's, the rest — because grouping by
+   what mail is *about* needs the model, and that is a feature of its own:
+   one more entry in `ai.Features` (its switch, its announce-yes-review
+   gate, its cached answers), a request that sends only `subject` lines
+   and never a body, a group name per subject, and a list that draws the
+   cards in the model's order. It must be an explicit action — the
+   settings' review gate exists so that no subject leaves the device
+   without the user asking for it — and the order it returns must not
+   disturb paging, which keeps its cursor in the store, not in the rows
+   the window shows.
 1. **Migrate the tests, then make the shell the default**, and delete
    `mailView` and `app/sidebar.go` (about 600 lines). Mechanical: a
    helper that opens a list through the field, and geometry assertions
@@ -103,11 +119,14 @@ window stays the default and the shell is one environment variable away.
 
 ## Open
 
-- Whether reading stays beside the stream or opens over it as a sheet.
+- Whether what is read keeps the stream's measure or takes a narrower
+  one of its own: the same width keeps the column still as reading
+  opens, and a measure of its own reads easier.
 - Whether the account's picture earns its place in the bar, or the
   account belongs in the field.
 - Whether the list keeps its hairline once rows are spaced further.
 - A type scale of its own: a larger base and a display face for a
-  conversation's subject, once 1000×640 has the room.
+  conversation's subject, and the shell's window already holds together
+  at 720×520.
 - The dev build's data directory still holds an old `Demo` account whose
   keychain entry is gone, so every run opens with a red sync note.

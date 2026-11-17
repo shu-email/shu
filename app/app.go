@@ -104,7 +104,10 @@ type app struct {
 	// palette is the shell's one field and what it lists (palette.go),
 	// which the preview window draws where the sidebar is.
 	palette paletteState
-	details bool
+	// readingOpen says, in the shell, that the stream gave its column to
+	// what a chosen row reads (shell.go).
+	readingOpen bool
+	details     bool
 	// securityOpen is, by message key, whether its sender-authentication
 	// details are shown; linkOpen and linkURL hold a link the HTML view
 	// asked to open until the user confirms where it goes (security.go).
@@ -912,11 +915,13 @@ func (a *app) readList(g uint64, progress, neighbour bool) {
 				a.chooseRow(i)
 			}
 			switch {
-			case progress && a.selected < 0 && len(a.all) > 0 && query == "" && a.sel.Len() == 0 && a.aim == nil:
+			case progress && a.selected < 0 && len(a.all) > 0 && query == "" && a.sel.Len() == 0 && a.aim == nil && !shellWindow():
 				// Opening a folder shows its first message. A read made
 				// behind the user's back leaves an empty choice empty,
 				// and so does one that waits for the message a
-				// notification asked for.
+				// notification asked for. The shell keeps its stream
+				// unchosen: a row is read when it is asked for, and a
+				// chosen row a click does not change would not open.
 				a.chooseRow(0)
 			case !neighbour && a.selected < 0:
 			case !progress && a.selected < 0 && key != "" && len(a.all) > 0 && a.sel.Len() == 0:

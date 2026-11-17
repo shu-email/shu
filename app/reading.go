@@ -682,6 +682,11 @@ func (a *app) moveSelected(special string) {
 			a.addUnread(m.Account, m.Folder, -1)
 		}
 	}
+	// What is read goes with the move: the shell's column goes back to
+	// the stream (shell.go).
+	if a.shellReading() && chosen[summaryKey(a.all[a.selected])] {
+		a.closeReading()
+	}
 	kept := make([]mail.Summary, 0, len(a.all)-len(targets))
 	for _, m := range a.all {
 		if !chosen[summaryKey(m)] {
@@ -1008,7 +1013,9 @@ func withPrefix(subject, prefix string) string {
 	return prefix + trimmed
 }
 
-// stepMessage moves the choice by delta rows, as J and K do.
+// stepMessage moves the choice by delta rows, as J and K do; in the shell
+// each step opens what it lands on, since there is no pane beside the
+// list to show it in.
 func (a *app) stepMessage(delta int) {
 	if len(a.all) == 0 {
 		return
@@ -1023,6 +1030,7 @@ func (a *app) stepMessage(delta int) {
 	a.list.ScrollTo(next, ui.Center)
 	a.bodyErr = ""
 	a.reloadBody()
+	a.openReading()
 }
 
 // toggleRead marks the chosen messages read or unread, optimistically.

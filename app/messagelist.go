@@ -154,6 +154,9 @@ func (a *app) listBody(c *ui.Context, t *ui.Theme) {
 			a.details = false
 			a.bodyErr = ""
 			a.reloadBody()
+			// In the shell, a chosen row is mail being read: the stream's
+			// column is its own from now (shell.go).
+			a.openReading()
 		}).
 		OnSubmit(a.openSelected).
 		Rows(func(row ui.ListRow) {
@@ -490,19 +493,44 @@ func (a *app) messageRow(row ui.ListRow) {
 	}
 	account, meta := a.rowPlace(m)
 	who, title := a.rowHeading(m)
-	box := ui.Box(c).Padding(11, 16).Background(t.Background).
-		BorderWidth(0, 0, 1, 0).BorderColor(t.Border.Alpha(0.6))
+	// A row is a card on the pane, under the caption of the day it is
+	// from, so that a list reads as a few groups of a few cards rather
+	// than as one ribbon of text.
+	outer := ui.Box(c).Padding(0, 10).Background(t.Background)
+	if a.startsGroup(row.Index, c.Now()) {
+		outer.Padding(14, 10, 0, 10)
+	}
+	a.rows.row(outer, a.rowKey(row.Index), chosen, c.Now())
+	outer.Children(func() {
+		if a.startsGroup(row.Index, c.Now()) {
+			ui.Row(c).Padding(4, 6, 6, 6).Children(func() {
+				ui.Text(c, groupCaption(a.rowGroup(row.Index, c.Now()))).FontSize(11).Bold().
+					TextColor(t.TextMuted).SingleLine()
+			})
+		}
+		a.messageCard(c, t, row, m, chosen, unread, flagged, attached, count, reason, who, title, account, meta, muted, nameColor, dotColor, starColor)
+	})
+}
+
+// messageCard is one message as a card: the sender's picture, who and
+// when, the subject, a preview and what the message offers to copy.
+func (a *app) messageCard(c *ui.Context, t *ui.Theme, row ui.ListRow, m mail.Summary,
+	chosen, unread, flagged, attached bool, count int, reason, who, title, account, meta string,
+	muted, nameColor, dotColor, starColor ui.Color) {
+	card := ui.Box(c).Padding(12, 14).Radius(t.Radius).
+		BorderWidth(1, 1, 1, 1)
 	// The tints are mixed with the pane's own color rather than left
 	// translucent: a translucent fill would show the window's material
-	// through the list, and the row would take the desktop's color.
+	// through the list, and the card would take the desktop's color.
 	switch {
 	case chosen:
-		box.Background(t.Accent.Alpha(0.10).Over(t.Background))
+		card.Background(t.Accent.Alpha(0.10).Over(t.Background)).BorderColor(t.Accent.Alpha(0.35))
 	case row.Hovered():
-		box.Background(t.SurfaceHover.Alpha(0.55).Over(t.Background))
+		card.Background(t.SurfaceHover).BorderColor(t.Border)
+	default:
+		card.Background(t.Surface).BorderColor(t.Border.Alpha(0.7))
 	}
-	a.rows.row(box, a.rowKey(row.Index), chosen, c.Now())
-	box.Children(func() {
+	card.Children(func() {
 		ui.Row(c).Gap(8).AlignItems(ui.Start).Children(func() {
 			// The sender's icon heads the row, in place of the dot: the
 			// name says who wrote, so the picture needs no name of its own.

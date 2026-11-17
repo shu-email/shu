@@ -200,6 +200,7 @@
       }
     }
   },
+  "backToStream": "Back to stream",
   "noMessageSelected": "No message selected",
   "messageActions": "Message actions",
   "mailboxActions": "Mailbox actions",
@@ -4524,5 +4525,21 @@
         "type": "String"
       }
     }
+  },
+  "groupToday": "Today",
+  "@groupToday": {
+    "description": "A caption above the cards of the mail that arrived today."
+  },
+  "groupYesterday": "Yesterday",
+  "@groupYesterday": {
+    "description": "A caption above the cards of yesterday's mail."
+  },
+  "groupThisWeek": "This week",
+  "@groupThisWeek": {
+    "description": "A caption above the cards of the mail of the last week."
+  },
+  "groupEarlier": "Earlier",
+  "@groupEarlier": {
+    "description": "A caption above the cards of the older mail."
   }
 }

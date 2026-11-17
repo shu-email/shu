@@ -17,21 +17,23 @@ import (
 // keep in a rail is a command in the palette, a key, or a line at the
 // bottom.
 //
-// Reading opens over the stream as a sheet rather than beside it: mail is
-// one thing at a time, and a list that keeps its width is a list the user
-// keeps their place in.
+// Reading opens over the stream rather than beside it: the column the
+// stream held is the column what is read takes, and mail is one thing at
+// a time. A list that keeps its width is a list the user keeps their
+// place in, and a conversation that takes the whole column is one worth
+// reading. Choosing a row opens it; going back, and moving, deleting or
+// archiving what is open, gives the column back to the stream.
 
 const (
-	// shellMeasure is the width of the stream's column: a mail list read
-	// at the window's width is a table, and a line of type is easier to
-	// follow the shorter it is.
-	shellMeasure = 720
+	// shellMeasure is the width of the stream's column, and of what is
+	// read. A mail list read at the window's width is a table, but the
+	// rows' previews and chips want room to say what the mail asks of
+	// the user; one measure for both keeps the column still as reading
+	// opens.
+	shellMeasure = 860
 	// shellBarHeight is the top bar's height, and the least the window's
 	// controls need above it.
 	shellBarHeight = 56
-	// readingWidth is the reading pane's width: enough for a message, and
-	// no more, so that the stream keeps the room a list needs.
-	readingWidth = 620
 	// shellStatusHeight is the line at the bottom that says how receiving
 	// mail and the queue are going.
 	shellStatusHeight = 30
@@ -42,34 +44,75 @@ const (
 // sidebar are migrated, so the old window is what a run shows by default.
 func shellWindow() bool { return os.Getenv("SHU_WINDOW") == "shell" }
 
+// shellReading reports whether the stream's column is reading: a row is
+// chosen, and what it opened is still there to read. Anything that takes
+// the choice away — another folder, a row that moved — finds the stream
+// back in the column.
+func (a *app) shellReading() bool {
+	return a.readingOpen && a.selected >= 0 && a.selected < len(a.all)
+}
+
+// openReading gives the stream's column to what the chosen row reads. It
+// is called wherever mail is chosen, and does nothing but in the shell.
+func (a *app) openReading() {
+	if shellWindow() && a.selected >= 0 && a.selected < len(a.all) {
+		a.readingOpen = true
+	}
+}
+
+// closeReading gives the column back to the stream while the choice stays
+// where the shared code left it, as after the open conversation moved.
+func (a *app) closeReading() {
+	a.readingOpen = false
+}
+
+// shellBack is Escape and the toolbar's back button: what is read gives
+// the column back to the stream, and the choice goes with it.
+func (a *app) shellBack() {
+	if !a.shellReading() {
+		return
+	}
+	// The reading toolbar's search field, open and empty, takes Escape
+	// for itself first; the window's Escape is then closing that field,
+	// not the reading.
+	if a.searchOpen && strings.TrimSpace(a.query) == "" {
+		return
+	}
+	a.readingOpen = false
+	a.clearSelection()
+}
+
 // shellView is the window: the bar, the stream, the line under it, and
 // the palette over them.
 func (a *app) shellView(c *ui.Context) {
 	t := c.Theme()
 	bar := c.TitleBar()
 	head := max(bar.Bottom, shellBarHeight)
-	// The window's own keys: the palette, a message, a reply.
+	// The window's keys, at the window: the reading place holds no list
+	// for its focus subtree to lean on, and a window key runs while the
+	// focus is anywhere else, or nowhere. A field the focus is in takes
+	// its keys first, and the palette and the dialogs, over the window,
+	// take them while they show.
 	c.OnShortcut(ui.Cmd, ui.KeyK, a.openPalette)
 	c.OnShortcut(ui.Cmd, ui.KeyComma, func() { a.openSettings(settingsTabGeneral) })
 	c.OnShortcut(ui.Cmd, ui.KeyN, func() { a.openCompose(nil) })
 	c.OnShortcut(ui.Cmd, ui.KeyR, func() { a.refresh() })
 	c.OnShortcut(ui.Cmd|ui.Shift, ui.KeyK, func() { a.showFolder("") })
+	c.OnShortcut(0, ui.KeyJ, func() { a.stepMessage(1) })
+	c.OnShortcut(0, ui.KeyK, func() { a.stepMessage(-1) })
+	c.OnShortcut(0, ui.KeyU, a.toggleRead)
+	c.OnShortcut(0, ui.KeyS, a.toggleStar)
+	c.OnShortcut(0, ui.KeyE, func() { a.moveSelected(mail.SpecialArchive) })
+	c.OnShortcut(0, ui.KeyR, func() { a.reply(a.replyOrder()[0]) })
+	c.OnShortcut(ui.Shift, ui.KeyR, func() { a.reply(a.replyOrder()[1]) })
+	c.OnShortcut(0, ui.KeyF, a.forward)
+	c.OnShortcut(0, ui.KeyDelete, a.deleteSelected)
+	c.OnShortcut(0, ui.KeyL, a.openLabelPicker)
+	c.OnShortcut(0, ui.KeyEscape, a.shellBack)
 	ui.Column(c.Key("shell")).Fill().Background(t.Background).Children(func() {
 		a.shellBar(c, t, bar, head)
 		a.shellStream(c, t)
 		a.shellStatus(c, t)
-		// The keys of the mail, in the stream's focus subtree so that
-		// typing in a field is never taken for a command.
-		c.OnShortcut(0, ui.KeyJ, func() { a.stepMessage(1) })
-		c.OnShortcut(0, ui.KeyK, func() { a.stepMessage(-1) })
-		c.OnShortcut(0, ui.KeyU, a.toggleRead)
-		c.OnShortcut(0, ui.KeyS, a.toggleStar)
-		c.OnShortcut(0, ui.KeyE, func() { a.moveSelected(mail.SpecialArchive) })
-		c.OnShortcut(0, ui.KeyR, func() { a.reply(a.replyOrder()[0]) })
-		c.OnShortcut(ui.Shift, ui.KeyR, func() { a.reply(a.replyOrder()[1]) })
-		c.OnShortcut(0, ui.KeyF, a.forward)
-		c.OnShortcut(0, ui.KeyDelete, a.deleteSelected)
-		c.OnShortcut(0, ui.KeyL, a.openLabelPicker)
 	})
 
 	a.paletteView(c, t)
@@ -199,19 +242,26 @@ func (a *app) mailTotals() (unread, total int) {
 }
 
 // shellStream is the middle of the window: the mail, in a column of a
-// readable width, in the middle of the window.
+// readable width, in the middle of the window. The column is the stream's
+// until a row is chosen to be read, and what is read then takes it whole —
+// the same column, at the same width, so the window keeps its place. The
+// column holds its width and the row centers it: a Grow here would share
+// the window out between the growers, and the column would end a third of
+// the window wide.
 func (a *app) shellStream(c *ui.Context, t *ui.Theme) {
-	ui.Row(c.Key("shell-stream")).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-		ui.Spacer(c)
-		ui.Column(c.Key("stream")).Grow(1).MinWidth(0).MinHeight(0).ClipY().
-			MaxWidth(shellMeasure).Children(func() {
+	ui.Row(c.Key("shell-stream")).Grow(1).MinHeight(0).AlignItems(ui.Stretch).
+		Justify(ui.Center).Children(func() {
+		if a.shellReading() {
+			ui.Column(c.Key("stream-reading")).Width(shellMeasure).MinWidth(0).
+				MinHeight(0).ClipY().Transition(readingMotion).Children(func() {
+				a.readingPane(c, t, shellBarHeight)
+			})
+			return
+		}
+		ui.Column(c.Key("stream-list")).Width(shellMeasure).MinWidth(0).
+			MinHeight(0).ClipY().Transition(readingMotion).Children(func() {
 			a.shellHead(c, t)
 			a.listBody(c, t)
-		})
-		ui.Spacer(c)
-		ui.Box(c).Width(1).Shrink(0).Background(t.Border.Alpha(0.6))
-		ui.Column(c.Key("reading")).Width(readingWidth).Shrink(0).MinWidth(0).MinHeight(0).Children(func() {
-			a.readingPane(c, t, shellBarHeight)
 		})
 	})
 }

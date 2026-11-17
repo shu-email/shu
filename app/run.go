@@ -108,12 +108,18 @@ func Run() {
 		if client, err := svc.HTTPClient(ctx); err == nil {
 			a.ai.SetHTTPClient(client)
 		}
+		// The shell reads in one column of its own measure, so its window
+		// holds together far below the size the three panes needed.
+		minWidth, minHeight := 1000, 640
+		if shellWindow() {
+			minWidth, minHeight = 720, 520
+		}
 		win := mygo.NewWindow(mygo.WindowOptions{
 			Title:           locales.AppName(),
 			Width:           1220,
 			Height:          800,
-			MinWidth:        1000,
-			MinHeight:       640,
+			MinWidth:        minWidth,
+			MinHeight:       minHeight,
 			StateKey:        "main",
 			TitleBarStyle:   mygo.TitleBarHiddenInset,
 			BackgroundColor: "light-dark(#fcfbf9, #15161a)",

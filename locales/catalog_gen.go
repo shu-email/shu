@@ -770,6 +770,16 @@ func (msgs Messages) SearchFolder(folder string) string {
 	return Catalog.Format(msgs.locale, "searchFolder", map[string]any{"folder": folder})
 }
 
+// BackToStream says "Back to stream"
+// in the language the app shows.
+func BackToStream() string { return In(i18n.Locale()).BackToStream() }
+
+// BackToStream says "Back to stream"
+// in the language of msgs.
+func (msgs Messages) BackToStream() string {
+	return Catalog.Format(msgs.locale, "backToStream", nil)
+}
+
 // NoMessageSelected says "No message selected"
 // in the language the app shows.
 func NoMessageSelected() string { return In(i18n.Locale()).NoMessageSelected() }
@@ -13012,4 +13022,60 @@ func SearchFor(query string) string { return In(i18n.Locale()).SearchFor(query) 
 // screen.
 func (msgs Messages) SearchFor(query string) string {
 	return Catalog.Format(msgs.locale, "searchFor", map[string]any{"query": query})
+}
+
+// GroupToday says "Today"
+// in the language the app shows.
+//
+// A caption above the cards of the mail that arrived today.
+func GroupToday() string { return In(i18n.Locale()).GroupToday() }
+
+// GroupToday says "Today"
+// in the language of msgs.
+//
+// A caption above the cards of the mail that arrived today.
+func (msgs Messages) GroupToday() string {
+	return Catalog.Format(msgs.locale, "groupToday", nil)
+}
+
+// GroupYesterday says "Yesterday"
+// in the language the app shows.
+//
+// A caption above the cards of yesterday's mail.
+func GroupYesterday() string { return In(i18n.Locale()).GroupYesterday() }
+
+// GroupYesterday says "Yesterday"
+// in the language of msgs.
+//
+// A caption above the cards of yesterday's mail.
+func (msgs Messages) GroupYesterday() string {
+	return Catalog.Format(msgs.locale, "groupYesterday", nil)
+}
+
+// GroupThisWeek says "This week"
+// in the language the app shows.
+//
+// A caption above the cards of the mail of the last week.
+func GroupThisWeek() string { return In(i18n.Locale()).GroupThisWeek() }
+
+// GroupThisWeek says "This week"
+// in the language of msgs.
+//
+// A caption above the cards of the mail of the last week.
+func (msgs Messages) GroupThisWeek() string {
+	return Catalog.Format(msgs.locale, "groupThisWeek", nil)
+}
+
+// GroupEarlier says "Earlier"
+// in the language the app shows.
+//
+// A caption above the cards of the older mail.
+func GroupEarlier() string { return In(i18n.Locale()).GroupEarlier() }
+
+// GroupEarlier says "Earlier"
+// in the language of msgs.
+//
+// A caption above the cards of the older mail.
+func (msgs Messages) GroupEarlier() string {
+	return Catalog.Format(msgs.locale, "groupEarlier", nil)
 }

@@ -67,6 +67,7 @@
   "more": "更多",
   "moreActions": "更多操作",
   "searchFolder": "搜索{folder}",
+  "backToStream": "返回收件流",
   "noMessageSelected": "未选择邮件",
   "messageActions": "邮件操作",
   "mailboxActions": "邮箱操作",
@@ -1659,5 +1660,21 @@
         "type": "String"
       }
     }
+  },
+  "groupToday": "今天",
+  "@groupToday": {
+    "description": "今天到达的邮件卡片上方的分组标题。"
+  },
+  "groupYesterday": "昨天",
+  "@groupYesterday": {
+    "description": "昨天的邮件卡片上方的分组标题。"
+  },
+  "groupThisWeek": "本周",
+  "@groupThisWeek": {
+    "description": "最近一周的邮件卡片上方的分组标题。"
+  },
+  "groupEarlier": "更早",
+  "@groupEarlier": {
+    "description": "更早的邮件卡片上方的分组标题。"
   }
 }

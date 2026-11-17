@@ -48,15 +48,21 @@ const searchReading float32 = 800
 // readingCompact reports whether the reading pane is too narrow to show
 // every group of actions beside the search.
 func (a *app) readingCompact() bool {
-	// Before the first layout the pane has no width yet: fold rather than
-	// lay the bar out wider than the window it will be in.
-	return a.readingWidth < compactReading
+	// The shell reads at the stream's measure, which the unfolded groups
+	// and the way back overflow: it keeps its groups folded whatever the
+	// window's width. Before the first layout the pane has no width yet:
+	// fold rather than lay the bar out wider than the window it will be
+	// in.
+	return shellWindow() || a.readingWidth < compactReading
 }
 
 // readingSearchFits reports whether a full search field and its filter
 // fit beside every action group.
 func (a *app) readingSearchFits() bool {
-	return a.readingWidth >= searchReading
+	// The shell keeps its groups folded beside the way back, so its field
+	// does not sit beside them for the room: it comes by its magnifier,
+	// or a search, and the groups give way only while it is in use.
+	return !shellWindow() && a.readingWidth >= searchReading
 }
 
 // readingSearchShown reports whether the bar shows the search field
@@ -161,6 +167,15 @@ func (a *app) readingBar(c *ui.Context, label string, fn func()) {
 			actions := ui.Row(c).Gap(6).AlignItems(ui.Center).Shrink(0)
 			if field && !a.readingSearchFits() {
 				actions.Shrink(1).MinWidth(0)
+			}
+			// In the shell nothing is read beside a list: what is read took
+			// the stream's column, and its first action is the way back.
+			if shellWindow() {
+				actions.Children(func() {
+					a.glassGroup(c, "", func() {
+						a.toolButton(c, chevronLeftIcon, locales.BackToStream(), true, a.shellBack)
+					})
+				})
 			}
 			actions.Children(fn)
 			ui.Spacer(c)

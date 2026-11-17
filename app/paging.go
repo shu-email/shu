@@ -35,6 +35,8 @@ type listQuery struct {
 	// smartFolder is the list a smart mailbox on show was saved from,
 	// which its scope reads, "" for any other list.
 	smartFolder string
+	// solo is the account's inbox when the stream is the only account's.
+	solo string
 	// scope is the search's, scopeHere when there is none.
 	scope searchScope
 	// narrowed is set when the search's account: parts keep only some
@@ -46,6 +48,12 @@ type listQuery struct {
 
 func (a *app) listQuery() listQuery {
 	q := listQuery{account: a.active, folder: a.folder, search: strings.TrimSpace(a.query), threaded: a.threaded()}
+	// The stream is every account's inbox. With one account it is that
+	// inbox, and reads as it: its older mail is fetched from the server
+	// as from any folder.
+	if a.folder == allInboxes && len(a.accounts) == 1 {
+		q.solo = a.folderBySpecial(mail.SpecialInbox)
+	}
 	if mb := a.shownSmart(); mb != nil {
 		q.smartFolder = mb.Folder
 	}
@@ -60,9 +68,19 @@ func (a *app) listQuery() listQuery {
 // isFolder reports whether the list is one folder of the server, whose
 // older mail can be fetched.
 func (q listQuery) isFolder() bool {
-	return q.folder != "" && q.folder != "starred" && q.folder != draftsFolder && q.folder != remindersFolder &&
-		q.folder != followUpFolder && q.folder != allInboxes && labelOf(q.folder) == 0 &&
-		smartOf(q.folder) == 0 && q.scope == scopeHere
+	f := q.readFolder()
+	return f != "" && f != "starred" && f != draftsFolder && f != remindersFolder &&
+		f != followUpFolder && f != allInboxes && labelOf(f) == 0 &&
+		smartOf(f) == 0 && q.scope == scopeHere
+}
+
+// readFolder is the folder of the server a list reads, or "": the stream
+// reads every account's inbox, which is the inbox's own with one account.
+func (q listQuery) readFolder() string {
+	if q.solo != "" {
+		return q.solo
+	}
+	return q.folder
 }
 
 // drafts reports whether the list is of the drafts, which their own read
@@ -310,6 +328,12 @@ func (a *app) setRows(q listQuery, got listRows) {
 	p.query, p.next, p.more = q, got.next, got.more
 	p.reading, p.failed = false, ""
 	p.rows++
+	// The stream is read by what asks of the user, not by the clock: the
+	// page the store just read is ranked here, where the window keeps what
+	// it shows, and the cursor that reads the next one is the store's.
+	if q.folder == allInboxes && q.search == "" {
+		a.rankRows()
+	}
 }
 
 // clearRows empties the list for another folder, account or view: a page
@@ -396,7 +420,7 @@ func (a *app) fetchOlder() {
 	if !q.isFolder() {
 		return
 	}
-	o := a.olderOf(q.account, q.folder)
+	o := a.olderOf(q.account, q.readFolder())
 	if o.fetching {
 		return
 	}
@@ -404,7 +428,7 @@ func (a *app) fetchOlder() {
 	a.run(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), olderTimeout)
 		defer cancel()
-		result, err := a.svc.FetchOlder(ctx, q.account, q.folder, 0)
+		result, err := a.svc.FetchOlder(ctx, q.account, q.readFolder(), 0)
 		a.post(func() {
 			o.fetching = false
 			switch {
@@ -488,7 +512,7 @@ func (a *app) endState() listEnd {
 // olderState is where the older mail of a folder stands, once the list
 // has read all the cache holds of it.
 func (a *app) olderState(q listQuery) listEnd {
-	o := a.olderAt(q.account, q.folder)
+	o := a.olderAt(q.account, q.readFolder())
 	switch {
 	case o.fetching:
 		return endFetching
@@ -508,7 +532,7 @@ func (a *app) emptyOlder() listEnd {
 	if a.loading || !q.isFolder() {
 		return endNone
 	}
-	o := a.olderAt(q.account, q.folder)
+	o := a.olderAt(q.account, q.readFolder())
 	switch state := a.olderState(q); {
 	case state == endFetching || state == endFetchFailed:
 		return state
@@ -529,7 +553,7 @@ func (a *app) olderControls(c *ui.Context, t *ui.Theme, state listEnd) {
 		})
 	case endFetchFailed:
 		q := a.listQuery()
-		ui.Text(c, a.olderAt(q.account, q.folder).err).FontSize(12).TextColor(t.Warning).TextAlign(ui.Center).MaxLines(3)
+		ui.Text(c, a.olderAt(q.account, q.readFolder()).err).FontSize(12).TextColor(t.Warning).TextAlign(ui.Center).MaxLines(3)
 		a.retryOlderButton(c, q.account)
 	case endOnServer:
 		ui.Button(c, locales.LoadOlder()).OnClick(a.fetchOlder)
@@ -548,7 +572,7 @@ func (a *app) endText(state listEnd) string {
 	case endFetching:
 		return locales.FetchingOlder()
 	case endFetchFailed:
-		return a.olderAt(q.account, q.folder).err
+		return a.olderAt(q.account, q.readFolder()).err
 	case endComplete:
 		if q.search != "" {
 			return locales.NoMoreResults()

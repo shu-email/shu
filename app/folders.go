@@ -1,40 +1,13 @@
 package app
 
 import (
-	"errors"
 	"slices"
-	"strings"
 
 	"github.com/egoist/mygo/ui"
 
 	"shu/locales"
 	"shu/mail"
 )
-
-// The folder actions: a folder made, renamed, deleted or hidden from the
-// sidebar, and messages moved into one by its menu or by a drag. Each
-// reaches the server first; a failure leaves the folder list as it was
-// and says why.
-
-// folderForm is the dialog of a folder made or renamed. The delete
-// confirmation uses its own dialog and the same state for its target.
-type folderForm struct {
-	open    bool
-	mode    string // "create" or "rename"
-	account string
-	parent  string
-	old     string
-	name    string
-	busy    bool
-	err     string
-
-	// Deleting a folder asks first: target is the folder, and its count
-	// the messages the confirmation names.
-	target     string
-	count      int
-	confirming bool
-	deleting   bool
-}
 
 // folderByName returns the active account's folder of a name.
 func (a *app) folderByName(name string) *mail.Folder {
@@ -44,140 +17,6 @@ func (a *app) folderByName(name string) *mail.Folder {
 		}
 	}
 	return nil
-}
-
-// openNewFolder opens the form for a folder under parent, with the
-// parent's delimiter already typed.
-func (a *app) openNewFolder(parent string) {
-	if a.active == "" {
-		return
-	}
-	name := ""
-	if parent != "" {
-		if f := a.folderByName(parent); f != nil {
-			name = parent + f.Delimiter
-		} else {
-			name = parent + "/"
-		}
-	}
-	a.folderForm = folderForm{open: true, mode: "create", account: a.active, parent: parent, name: name}
-}
-
-// openRenameFolder opens the form for a folder's new name.
-func (a *app) openRenameFolder(name string) {
-	f := a.folderByName(name)
-	if a.active == "" || f == nil || f.IsSystem() {
-		return
-	}
-	a.folderForm = folderForm{open: true, mode: "rename", account: a.active, old: name, name: name}
-}
-
-// submitFolderForm makes or renames the folder the form holds. A failure
-// stays in the dialog, so the name can be corrected without starting
-// over.
-func (a *app) submitFolderForm() {
-	f := &a.folderForm
-	name := strings.TrimSpace(f.name)
-	if !f.open || f.busy || name == "" {
-		return
-	}
-	g, account, mode, old := a.gen, f.account, f.mode, f.old
-	f.busy, f.err = true, ""
-	a.run(func() {
-		ctx, cancel := a.ctx()
-		defer cancel()
-		var err error
-		if mode == "rename" {
-			err = a.svc.RenameFolder(ctx, account, old, name)
-		} else {
-			_, err = a.svc.CreateFolder(ctx, account, name)
-		}
-		a.post(func() {
-			if a.stale(g) {
-				return
-			}
-			f.busy = false
-			if err != nil {
-				f.err = folderErrorText(err)
-				return
-			}
-			f.open = false
-			if mode == "rename" {
-				a.folderNote = locales.FolderRenamed(old, name)
-			} else {
-				a.folderNote = locales.FolderCreated(name)
-			}
-			a.reloadFolders()
-		})
-	})
-}
-
-// askDeleteFolder asks before a folder and the mail in it go. Nothing is
-// deleted without the answer.
-func (a *app) askDeleteFolder(name string) {
-	f := a.folderByName(name)
-	if a.active == "" || f == nil || f.IsSystem() {
-		return
-	}
-	a.folderForm = folderForm{target: name, count: f.Total, confirming: true}
-}
-
-// deleteFolder deletes the folder the confirmation named, and its mail,
-// once the user said so.
-func (a *app) deleteFolder() {
-	f := &a.folderForm
-	if f.deleting || f.target == "" {
-		return
-	}
-	g, account, name := a.gen, a.active, f.target
-	f.deleting = true
-	a.run(func() {
-		ctx, cancel := a.ctx()
-		defer cancel()
-		err := a.svc.DeleteFolder(ctx, account, name)
-		a.post(func() {
-			if a.stale(g) {
-				return
-			}
-			f.deleting = false
-			if err != nil {
-				a.err = locales.FolderActionFailed(folderErrorText(err))
-				return
-			}
-			a.folderNote = locales.FolderDeleted(name)
-			a.reloadFolders()
-		})
-	})
-}
-
-// setFolderSubscribed hides a folder from the sidebar, or shows it
-// again. Its mail and its cursor stay either way.
-func (a *app) setFolderSubscribed(name string, on bool) {
-	account := a.active
-	if account == "" {
-		return
-	}
-	g := a.gen
-	a.run(func() {
-		ctx, cancel := a.ctx()
-		defer cancel()
-		err := a.svc.SetFolderSubscribed(ctx, account, name, on)
-		a.post(func() {
-			if a.stale(g) {
-				return
-			}
-			if err != nil {
-				a.err = locales.FolderActionFailed(folderErrorText(err))
-				return
-			}
-			if on {
-				a.folderNote = locales.FolderShown(name)
-			} else {
-				a.folderNote = locales.FolderHidden(name)
-			}
-			a.reloadFolders()
-		})
-	})
 }
 
 // reloadFolders reads the folder list again after an action, and the
@@ -201,49 +40,9 @@ func (a *app) reloadFolders() {
 	})
 }
 
-// folderErrorText says why a folder action failed, in the user's words.
-func folderErrorText(err error) string {
-	switch {
-	case errors.Is(err, mail.ErrFolderExists):
-		return locales.FolderExists()
-	case errors.Is(err, mail.ErrFolderName):
-		return locales.FolderBadName()
-	case errors.Is(err, mail.ErrFolderSystem):
-		return locales.FolderSystem()
-	case errors.Is(err, mail.ErrNotFound):
-		return locales.FolderGone()
-	}
-	return failureText(err)
-}
-
-// folderMenu is the menu of one of the sidebar's folders.
-func (a *app) folderMenu(m *ui.Menu, name string, system bool) {
-	f := a.folderByName(name)
-	if f == nil {
-		return
-	}
-	if !system {
-		if m.Item(locales.NewSubfolder()).Chosen() {
-			a.openNewFolder(name)
-		}
-		if m.Item(locales.RenameFolder()).Chosen() {
-			a.openRenameFolder(name)
-		}
-		if m.Item(locales.DeleteFolder()).Chosen() {
-			a.askDeleteFolder(name)
-		}
-		m.Separator()
-	}
-	if f.Subscribed {
-		if m.Item(locales.HideFromSidebar()).Chosen() {
-			a.setFolderSubscribed(name, false)
-		}
-	} else if m.Item(locales.ShowInSidebar()).Chosen() {
-		a.setFolderSubscribed(name, true)
-	}
-}
-
-// moveFolderMenu lists the account's folders a move may go to.
+// moveFolderMenu lists the account's folders a move may go to. The
+// folders are still where mail goes on a server, and an action still
+// names one, though the sidebar no longer lists them.
 func (a *app) moveFolderMenu(m *ui.Menu) {
 	added := 0
 	for _, f := range a.folders {
@@ -258,99 +57,6 @@ func (a *app) moveFolderMenu(m *ui.Menu) {
 	if added == 0 {
 		m.Item(locales.NoOtherFolders()).Disabled(true)
 	}
-}
-
-// folderDialog draws the create, rename and delete surfaces.
-func (a *app) folderDialog(c *ui.Context) {
-	f := &a.folderForm
-	t := c.Theme()
-	if f.confirming {
-		title := locales.DeleteFolderTitle(f.target)
-		if ui.AlertDialog(c, &f.confirming, title,
-			locales.DeleteFolderConfirm(f.target, f.count),
-			locales.Cancel(), locales.DeleteFolder()) == 1 {
-			a.deleteFolder()
-		}
-		if !f.confirming {
-			f.target = ""
-		}
-	}
-	if !f.open {
-		return
-	}
-	ui.Modal(c, &f.open, func() {
-		ui.Column(c).Width(420).Gap(14).Children(func() {
-			title, save := locales.NewFolder(), locales.CreateFolder()
-			if f.mode == "rename" {
-				title, save = locales.RenameFolderTitle(f.old), locales.Save()
-			}
-			ui.Text(c, title).FontSize(17).Bold()
-			var name ui.Element
-			ui.Column(c).Gap(4).Children(func() {
-				caption := ui.Text(c, locales.FolderNameLabel()).FontSize(11).Bold().TextColor(t.TextMuted)
-				name = ui.TextInput(c, &f.name).LabelledBy(caption).
-					FillWidth().AutoFocus().Invalid(f.err != "").OnSubmit(a.submitFolderForm)
-			})
-			if f.err != "" {
-				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-					ui.Icon(c, alertIcon).FontSize(14).TextColor(t.Warning)
-					name.ErrorMessage(ui.Text(c, f.err).FontSize(12).Grow(1).MinWidth(0).MaxLines(3).Role(ui.RoleStatus))
-				})
-			}
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				if f.busy {
-					ui.Spinner(c).Size(14, 14)
-				}
-				ui.Spacer(c)
-				ui.Button(c, locales.Cancel()).Label(locales.CancelLabelForm()).OnClick(func() { f.open = false })
-				ui.PrimaryButton(c, save).Disabled(f.busy || strings.TrimSpace(f.name) == "").
-					OnClick(a.submitFolderForm)
-			})
-		})
-	})
-}
-
-// folderDrop is what a drag of rows carries: the messages, or the
-// conversations, and the account whose folders take it.
-type folderDrop struct {
-	account string
-	msgs    []mail.Summary
-	convs   []mail.Conversation
-}
-
-// dragRows is the list's DragRows: the rows the pointer drags, as the
-// messages or conversations they show.
-func (a *app) dragRows(rows []int) any {
-	d := &folderDrop{account: a.active}
-	if a.threaded() {
-		for _, i := range rows {
-			if i >= 0 && i < len(a.convs) {
-				d.convs = append(d.convs, a.convs[i])
-			}
-		}
-	} else {
-		for _, i := range rows {
-			if i >= 0 && i < len(a.all) {
-				d.msgs = append(d.msgs, a.all[i])
-			}
-		}
-	}
-	if len(d.msgs) == 0 && len(d.convs) == 0 {
-		return nil
-	}
-	return d
-}
-
-// dropOnFolder moves what a drag carried to the folder it was let go on.
-func (a *app) dropOnFolder(d *folderDrop, dest string) {
-	if d == nil || d.account != a.active || dest == "" {
-		return
-	}
-	if len(d.convs) > 0 {
-		a.moveConvsToFolder(d.convs, dest)
-		return
-	}
-	a.moveMessagesToFolder(d.msgs, dest)
 }
 
 // moveToFolder moves the chosen messages to one folder of their account,
@@ -516,26 +222,6 @@ func (a *app) folderNoteBanner(c *ui.Context, t *ui.Theme) {
 	})
 }
 
-// folderLeaf is how a folder is written in the sidebar: its own name,
-// indented by its depth under the hierarchy's delimiter.
-func folderLeaf(f mail.Folder) string {
-	delimiter := f.Delimiter
-	if delimiter == "" {
-		return f.Name
-	}
-	depth := strings.Count(f.Name, delimiter)
-	if depth == 0 {
-		return f.Name
-	}
-	leaf := f.Name
-	if i := strings.LastIndex(f.Name, delimiter); i >= 0 {
-		leaf = f.Name[i+len(delimiter):]
-	}
-	return strings.Repeat("  ", depth) + leaf
-}
-
-// moveMessageTo moves one message of an open conversation to a folder,
-// as its other moves do, and offers the undo.
 func (a *app) moveMessageTo(m mail.Summary, dest string) {
 	cv := a.conv
 	if cv == nil || dest == "" || m.Folder == dest {
@@ -605,7 +291,7 @@ func (a *app) ensureFolder() {
 }
 
 func (a *app) folderExists(id string) bool {
-	if id == "starred" || id == draftsFolder || id == remindersFolder || id == followUpFolder || id == allInboxes && len(a.accounts) > 1 {
+	if id == "starred" || id == draftsFolder || id == remindersFolder || id == followUpFolder || id == allInboxes {
 		return true
 	}
 	if smart := smartOf(id); smart != 0 {

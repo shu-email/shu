@@ -200,6 +200,7 @@
       }
     }
   },
+  "backToStream": "Back to stream",
   "noMessageSelected": "No message selected",
   "messageActions": "Message actions",
   "mailboxActions": "Mailbox actions",
@@ -4421,5 +4422,165 @@
         "example": "12, 18"
       }
     }
+  },
+  "stream": "Stream",
+  "@stream": {
+    "description": "The sidebar's default list: every account's inbox, with what each message asks of the user above it."
+  },
+  "pinned": "Pinned",
+  "@pinned": {
+    "description": "The sidebar's section of pinned searches: a question the user asked once and kept."
+  },
+  "streamNeeds": "{count} need you",
+  "@streamNeeds": {
+    "description": "The stream's band, counting the messages read that ask something of the user.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "streamCodes": "{count} with a code",
+  "@streamCodes": {
+    "description": "The stream's band, counting the messages read that carry a code to copy.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "streamNews": "{count} just news",
+  "@streamNews": {
+    "description": "The stream's band, counting the messages read that only tell.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "copyExtract": "Copy",
+  "@copyExtract": {
+    "description": "The tooltip of a code, amount or date shown on a list row."
+  },
+  "copiedExtract": "Copied",
+  "@copiedExtract": {
+    "description": "Said on a list row for a moment after its value was put on the clipboard."
+  },
+  "extractCode": "Code {code}",
+  "@extractCode": {
+    "description": "A row's code, read by assistive technology.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "extractAmount": "Amount {amount}",
+  "@extractAmount": {
+    "description": "A row's amount of money, read by assistive technology.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "extractDate": "Due {date}",
+  "@extractDate": {
+    "description": "A row's due date, read by assistive technology.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "askMailPlaceholder": "Ask your mail…",
+  "@askMailPlaceholder": {
+    "description": "The window's one field: it opens the command palette, which lists the ways into the mail and searches what is typed."
+  },
+  "paletteList": "List",
+  "@paletteList": {
+    "description": "The palette's hint for a way into the mail such as Starred or Sent."
+  },
+  "paletteLabel": "Label",
+  "@paletteLabel": {
+    "description": "The palette's hint for one of the account's labels."
+  },
+  "palettePinned": "Pinned",
+  "@palettePinned": {
+    "description": "The palette's hint for a pinned search."
+  },
+  "paletteCommand": "Command",
+  "@paletteCommand": {
+    "description": "The palette's hint for an action such as Compose or Settings."
+  },
+  "paletteNothing": "Nothing matches.",
+  "@paletteNothing": {
+    "description": "The palette says no list, label, pin or command matches what is typed."
+  },
+  "searchFor": "Search for “{query}”",
+  "@searchFor": {
+    "description": "The palette's row that runs what is typed as a search of the list on screen.",
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "groupToday": "Today",
+  "@groupToday": {
+    "description": "A caption above the cards of the mail that arrived today."
+  },
+  "groupYesterday": "Yesterday",
+  "@groupYesterday": {
+    "description": "A caption above the cards of yesterday's mail."
+  },
+  "groupThisWeek": "This week",
+  "@groupThisWeek": {
+    "description": "A caption above the cards of the mail of the last week."
+  },
+  "groupEarlier": "Earlier",
+  "@groupEarlier": {
+    "description": "A caption above the cards of the older mail."
+  },
+  "unsorted": "Ungrouped",
+  "@unsorted": {
+    "description": "The caption above the cards the model could not group."
+  },
+  "aiTopics": "Topics",
+  "@aiTopics": {
+    "description": "The AI capability that groups a list by what its subjects are about."
+  },
+  "aiTopicsDetail": "Groups the list by what its subjects are about. Sends the subjects of up to {count} messages, and nothing else.",
+  "@aiTopicsDetail": {
+    "description": "What the Topics capability does and what it sends.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "groupByTopic": "Group by topic",
+  "@groupByTopic": {
+    "description": "The palette's command that asks the model to group the list by subject."
+  },
+  "aiReviewTopicsSize": "{count} subjects, {chars} characters. Subjects only: no message body leaves the device.",
+  "@aiReviewTopicsSize": {
+    "description": "The review gate's size line for a topic grouping request.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "chars": {
+        "type": "int"
+      }
+    }
+  },
+  "streamNeedsGroup": "Needs you",
+  "@streamNeedsGroup": {
+    "description": "The caption above the cards of the stream that ask something of the user."
+  },
+  "streamNewsGroup": "Just news",
+  "@streamNewsGroup": {
+    "description": "The caption above the cards of the stream that only tell."
   }
 }

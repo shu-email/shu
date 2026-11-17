@@ -304,7 +304,7 @@ func (a *app) ruleActivity(accountID string) {
 // rulesView is the rules: the editor of one, or the tabs of the list and
 // the log.
 func (a *app) rulesView(c *ui.Context) {
-	t := c.Theme()
+	t := useTheme(c)
 	rs := &a.rules
 	if rs.editor != nil {
 		a.ruleEditorView(c, t)

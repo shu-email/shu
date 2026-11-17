@@ -349,9 +349,9 @@ func TestPagingStarredAndSearch(t *testing.T) {
 		t.Errorf("the end of starred mail: %q", tt.Texts())
 	}
 
-	// A search from the inbox covers every folder of the account; the
-	// cache is all it reads, which its end says.
-	click(t, tt, locales.Inbox())
+	// A search from the stream covers the inboxes it lists; the cache is
+	// all it reads, which its end says.
+	click(t, tt, locales.Stream())
 	click(t, tt, "Search mail")
 	tt.Type("invoice")
 	inbox := 0
@@ -367,21 +367,11 @@ func TestPagingStarredAndSearch(t *testing.T) {
 	chosen := a.selectedKey()
 	scrollList(tt, toEnd)
 	scrollList(tt, toEnd)
-	if len(a.all) != 160 || a.pager.more || a.selectedKey() != chosen || a.query != "invoice" {
-		t.Fatalf("search after paging: %d rows of 160, chosen %q, query %q", len(a.all), a.selectedKey(), a.query)
-	}
-	if !tt.HasText(locales.NoMoreResultsHere()) || !tt.HasText(locales.OlderInFolderHint()) || !tt.HasText("160") {
-		t.Errorf("the end of the search: %q", tt.Texts())
-	}
-	// The inbox alone pages to its end, which says that the folder is all
-	// on this device.
-	click(t, tt, locales.ThisFolder())
-	scrollToLast(t, a, tt)
-	if len(a.all) != inbox || a.query != "invoice" {
-		t.Fatalf("the inbox's search: %d rows of %d, query %q", len(a.all), inbox, a.query)
+	if len(a.all) != inbox || a.pager.more || a.selectedKey() != chosen || a.query != "invoice" {
+		t.Fatalf("search after paging: %d rows of %d, chosen %q, query %q", len(a.all), inbox, a.selectedKey(), a.query)
 	}
 	if !tt.HasText(locales.NoMoreResults()) || !tt.HasText(fmt.Sprint(inbox)) {
-		t.Errorf("the end of the inbox's search: %q", tt.Texts())
+		t.Errorf("the end of the stream's search: %q", tt.Texts())
 	}
 }
 
@@ -510,7 +500,7 @@ func TestStalePagesAreDropped(t *testing.T) {
 	}
 
 	// Another search, read before the page.
-	click(t, tt, locales.Inbox())
+	click(t, tt, locales.Stream())
 	q = queueJobs(a)
 	scrollList(tt, toEnd)
 	click(t, tt, "Search mail")
@@ -547,7 +537,7 @@ func TestStalePagesAreDropped(t *testing.T) {
 	// A page added while the list is read again from the top: that read
 	// is read again, as far as the page went.
 	click(t, tt, locales.Sent())
-	click(t, tt, locales.Inbox())
+	click(t, tt, locales.Stream())
 	q = queueJobs(a)
 	a.readList(a.gen, false, false)
 	scrollList(tt, toEnd)

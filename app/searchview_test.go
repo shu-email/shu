@@ -277,7 +277,7 @@ func TestInWidensTheScope(t *testing.T) {
 		t.Fatalf("back to the inbox: %q %v, scope %q", a.query, rowKeys(a), scopeChosen(tt))
 	}
 
-	click(t, tt, locales.AllInboxes())
+	click(t, tt, locales.Stream())
 	search(a, tt, "in:archive")
 	if !reflectRows(a, "a2/All Mail/5", "a1/Archive/4") || scopeChosen(tt) != locales.AllAccounts() {
 		t.Errorf("the unified inbox, in Archive: %v, scope %q", rowKeys(a), scopeChosen(tt))
@@ -345,7 +345,7 @@ func TestSearchStates(t *testing.T) {
 	// The unified inbox loads, then ends.
 	search(a, tt, "")
 	q := queueJobs(a)
-	click(t, tt, locales.AllInboxes())
+	click(t, tt, locales.Stream())
 	if !tt.HasText(locales.Loading()) {
 		t.Errorf("loading: %q", tt.Texts())
 	}
@@ -418,7 +418,7 @@ func TestSearchAtMinimumSizeAndDark(t *testing.T) {
 				t.Errorf("dark=%v: %q is not in the list: %+v", dark, label, r)
 			}
 		}
-		click(t, tt, locales.AllInboxes())
+		click(t, tt, locales.Stream())
 		inList(locales.AccountUnread("Work", 1) + " · " + locales.AccountUnread("Home", 1))
 		inList(locales.InAccount("Home"))
 		search(a, tt, `"budget review" from:maya is:unread has:attachment after:2026-03-01`)
@@ -448,7 +448,7 @@ func TestSearchStringsInChinese(t *testing.T) {
 	defer i18n.SetLocaleFunc(func() string { return "en" })
 	a, _, tt := startTwo(t, true)
 	tt.SetLocale("zh-Hans")
-	click(t, tt, "所有收件箱")
+	click(t, tt, "收件流")
 	for _, text := range []string{"Work 1 · Home 1", "账户：Home"} {
 		if !tt.HasText(text) {
 			t.Errorf("missing %q in %q", text, tt.Texts())
@@ -462,7 +462,7 @@ func TestSearchStringsInChinese(t *testing.T) {
 		}
 	}
 	search(a, tt, "")
-	click(t, tt, "收件箱")
+	click(t, tt, "已发送")
 	search(a, tt, "nothing from:zed")
 	for _, text := range []string{"此文件夹", "所有文件夹", "已搜索：Work的所有文件夹。", "筛选条件：发件人：zed", "搜索所有账户", "没有匹配“nothing”的邮件。"} {
 		if !tt.HasText(text) {
@@ -486,7 +486,7 @@ func TestSearchStringsInChinese(t *testing.T) {
 	if !tt.HasText("任意账户") {
 		t.Errorf("missing 任意账户 in %q", tt.Texts())
 	}
-	click(t, tt, "所有收件箱")
+	click(t, tt, "收件流")
 	search(a, tt, "account:home")
 	if !tt.HasText("2 个会话 · Home的收件箱") {
 		t.Errorf("the unified inbox of Home: %q", tt.Texts())
@@ -746,7 +746,7 @@ func TestAccountFilterControl(t *testing.T) {
 func TestAccountSearchInTheUnifiedInbox(t *testing.T) {
 	for _, conversations := range []bool{false, true} {
 		a, _, tt := startTwo(t, conversations)
-		click(t, tt, locales.AllInboxes())
+		click(t, tt, locales.Stream())
 		search(a, tt, "account:home")
 		accounts := map[string]bool{}
 		for _, m := range a.all {

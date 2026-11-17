@@ -117,18 +117,18 @@ func countText(tt *ui.Tester, s string) int {
 // one. A row of the second account opens as that account's.
 func TestUnifiedInboxListsEveryAccount(t *testing.T) {
 	one, _ := sampleApp(t)
-	if tt := ui.NewTester(one.view, 1220, 800); tt.HasText(locales.AllInboxes()) {
-		t.Error("one account has a unified inbox")
+	if tt := ui.NewTester(one.view, 1220, 800); !tt.HasText(locales.Stream()) {
+		t.Error("one account has no stream")
 	}
 
 	for _, conversations := range []bool{false, true} {
 		a, fs, tt := startTwo(t, conversations)
 		// Work's inbox opened on its newest message, which is read now:
 		// each account has one unread message, and the entry's badge both.
-		if a.unifiedUnread() != 2 || !slices.Contains(tt.Texts(), "2") || !tt.HasText(locales.AllInboxes()) {
+		if a.unifiedUnread() != 2 || !slices.Contains(tt.Texts(), "2") || !tt.HasText(locales.Stream()) {
 			t.Fatalf("conversations=%v: the entry, want a badge of 2 of %v: %q", conversations, a.inboxes, tt.Texts())
 		}
-		click(t, tt, locales.AllInboxes())
+		click(t, tt, locales.Stream())
 		want := []string{"a1/INBOX/1", "a2/INBOX/1", "a1/INBOX/2", "a2/INBOX/2"}
 		if conversations {
 			want = []string{threadKey("a1", 7), threadKey("a2", a.convs[1].Thread), threadKey("a1", a.convs[2].Thread), threadKey("a2", a.convs[3].Thread)}
@@ -179,7 +179,7 @@ func TestUnifiedInboxListsEveryAccount(t *testing.T) {
 func TestUnifiedActionsReachTheirAccount(t *testing.T) {
 	for _, conversations := range []bool{false, true} {
 		a, fs, tt := startTwo(t, conversations)
-		click(t, tt, locales.AllInboxes())
+		click(t, tt, locales.Stream())
 		click(t, tt, "Your flight confirmation")
 		fs.acts = nil
 		star, archive, unread := locales.UnstarMessage(), locales.ArchiveMessage(), locales.MarkUnread()
@@ -254,7 +254,7 @@ func TestUnifiedActionsReachTheirAccount(t *testing.T) {
 func TestUnifiedMultiSelection(t *testing.T) {
 	for _, conversations := range []bool{false, true} {
 		a, fs, tt := startTwo(t, conversations)
-		click(t, tt, locales.AllInboxes())
+		click(t, tt, locales.Stream())
 		if err := tt.ClickWith(ui.Cmd, "Dinner on Saturday"); err != nil {
 			t.Fatal(err)
 		}
@@ -290,7 +290,7 @@ func TestUnifiedMultiSelection(t *testing.T) {
 func TestUnifiedReplyUsesItsAccount(t *testing.T) {
 	for _, conversations := range []bool{false, true} {
 		a, _, tt := startTwo(t, conversations)
-		click(t, tt, locales.AllInboxes())
+		click(t, tt, locales.Stream())
 		click(t, tt, "Dinner on Saturday")
 		click(t, tt, locales.Reply())
 		if cs := a.composes[len(a.composes)-1]; cs.accountID != "a2" || cs.to != "Sam Lee <sam@example.com>" {
@@ -308,7 +308,7 @@ func TestUnifiedReplyUsesItsAccount(t *testing.T) {
 func TestUnifiedNotificationOpensThere(t *testing.T) {
 	for _, conversations := range []bool{false, true} {
 		a, _, tt := startTwo(t, conversations)
-		click(t, tt, locales.AllInboxes())
+		click(t, tt, locales.Stream())
 		a.showTarget(noteTarget{account: "a2", folder: "INBOX", validity: 7, uid: 2, message: true})
 		tt.Frame()
 		if a.folder != allInboxes || a.active != "a1" || a.aim != nil {

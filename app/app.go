@@ -101,7 +101,13 @@ type app struct {
 	accountOpen   bool
 	sidebarOpen   bool
 	mailboxesOpen bool
-	details       bool
+	// topics is the model's grouping of the rows on screen (topics.go).
+	topics  *topicState
+	palette paletteState
+	// readingOpen says, in the shell, that the stream gave its column to
+	// what a chosen row reads (shell.go).
+	readingOpen bool
+	details     bool
 	// securityOpen is, by message key, whether its sender-authentication
 	// details are shown; linkOpen and linkURL hold a link the HTML view
 	// asked to open until the user confirms where it goes (security.go).
@@ -223,6 +229,11 @@ type app struct {
 	waiting      []*waitingSend
 	sendNote     string
 	sendNoteWarn bool
+	// copied is the row whose value was just put on the clipboard, and
+	// copiedTimer clears it: a copy made from the list says so where it
+	// happened (stream.go).
+	copied      string
+	copiedTimer *time.Timer
 	// The account editor's signature, saved as it changes, and the form
 	// of an address the account sends from.
 	sigForm    signatureForm
@@ -237,9 +248,8 @@ type app struct {
 	// (smart.go).
 	labels labelState
 	smarts smartState
-	// Folders (folders.go): the create/rename dialog, the delete
-	// confirmation and the note after an action.
-	folderForm folderForm
+	// folderNote is the news of an action on a folder, such as a folder
+	// of the server that a saved attachment was put in (folders.go).
 	folderNote string
 	// networkForm is the Network tab's editable state (network.go).
 	networkForm networkForm
@@ -905,11 +915,15 @@ func (a *app) readList(g uint64, progress, neighbour bool) {
 				a.chooseRow(i)
 			}
 			switch {
-			case progress && a.selected < 0 && len(a.all) > 0 && query == "" && a.sel.Len() == 0 && a.aim == nil:
+			case false:
+				// The window lands on the stream and chooses nothing: mail
+				// is opened when the user asks for it, not by arriving.
 				// Opening a folder shows its first message. A read made
 				// behind the user's back leaves an empty choice empty,
 				// and so does one that waits for the message a
-				// notification asked for.
+				// notification asked for. The shell keeps its stream
+				// unchosen: a row is read when it is asked for, and a
+				// chosen row a click does not change would not open.
 				a.chooseRow(0)
 			case !neighbour && a.selected < 0:
 			case !progress && a.selected < 0 && key != "" && len(a.all) > 0 && a.sel.Len() == 0:
@@ -1213,6 +1227,7 @@ func (a *app) searchSoon() {
 // book or the rules, each of them the main view's only where it has no
 // window of its own, or the three panes.
 func (a *app) view(c *ui.Context) {
+	useTheme(c)
 	c.OnShortcut(ui.Cmd, ui.KeySlash, func() { a.shortcutsOpen = true })
 	a.shortcutsDialog(c)
 	switch {
@@ -1225,81 +1240,8 @@ func (a *app) view(c *ui.Context) {
 	case a.rules.open && a.rulesWin == nil:
 		a.rulesView(c)
 	default:
-		a.mailView(c)
+		a.shellView(c)
 	}
-}
-
-// mailView draws the three-pane window.
-func (a *app) mailView(c *ui.Context) {
-	t := c.Theme()
-	bar := c.TitleBar()
-	// There is no bar across the window: each column's top is its own,
-	// as tall as the window controls need, and the window drags by it.
-	head := max(bar.Bottom, headHeight)
-	c.OnShortcut(ui.Cmd, ui.KeyK, a.openSearch)
-	c.OnShortcut(ui.Cmd, ui.KeyComma, func() { a.openSettings(settingsTabGeneral) })
-	c.OnShortcut(ui.Cmd, ui.KeyN, func() { a.openCompose(nil) })
-	c.OnShortcut(ui.Cmd, ui.KeyR, func() { a.refresh() })
-	if s := a.signIn; s != nil && s.account != "" && a.onScreen(s.account) {
-		// Escape stops the sign-in its banner waits for, as its Cancel
-		// does.
-		c.OnShortcut(0, ui.KeyEscape, a.cancelSignIn)
-	}
-	// Where the window shows its material (macOS, Windows 11), the sidebar
-	// lets it through and the panes draw their own background over it.
-	vibrant := c.Vibrancy()
-	if vibrant {
-		c.Root().Background(ui.Transparent)
-	}
-	// Keyed, so that the mail view is new as it first shows, after the
-	// onboarding or the loading, and its sidebar shows at once there
-	// rather than opening as it does when the user shows it.
-	ui.Row(c.Key("mail-view")).Fill().AlignItems(ui.Stretch).Children(func() {
-		// The sidebar runs the window's full height, under the window
-		// controls, as a native sidebar does. The panes are keyed, so that
-		// they keep their identity, and their transitions, as it comes and
-		// goes before them.
-		if a.sidebarOpen {
-			side := ui.Row(c.Key("sidebar")).Shrink(0).AlignItems(ui.Stretch).ClipX().
-				Transition(sidebarMotion)
-			if !vibrant {
-				side.Background(t.Surface)
-			}
-			side.Children(func() {
-				ui.Column(c).Width(222).Shrink(0).Children(func() {
-					a.sidebarHead(c, head)
-					a.sidebar(c, t, vibrant)
-				})
-				ui.Box(c).Width(1).Shrink(0).Background(t.Border)
-			})
-			a.paneShortcuts(side)
-		}
-		ui.Column(c.Key("content")).Grow(1).MinWidth(0).Background(t.Background).
-			Transition(paneMotion).Children(func() {
-			panes := ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-				ui.Row(c.Key("list-pane")).Shrink(0).AlignItems(ui.Stretch).Children(func() {
-					a.messageList(c, t, bar, head)
-					ui.Box(c).Width(1).Shrink(0).Background(t.Border)
-				})
-				ui.Row(c.Key("reading-pane")).Grow(1).MinWidth(0).AlignItems(ui.Stretch).Children(func() {
-					a.readingPane(c, t, head)
-				})
-			})
-			a.paneShortcuts(panes)
-		})
-	})
-	a.accountModal(c)
-	a.labelDialog(c)
-	a.labelAlerts(c)
-	a.smartDialog(c)
-	a.smartAlerts(c)
-	aiReviewModal(c, &a.review)
-	a.linkDialog(c)
-	a.unsubscribeDialog(c)
-	a.blockSenderDialog(c)
-	a.folderDialog(c)
-	a.reminderDialog(c)
-	a.attachmentPreviewDialog(c)
 }
 
 // paneShortcuts gives the sidebar and the panes the unmodified shortcuts.

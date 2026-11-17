@@ -236,12 +236,16 @@ func (a *app) adoptRow(server mail.Summary, d mail.Draft) {
 	}
 }
 
-// openSelected is a double click or Enter on a row. Only a draft has
-// something to open: other mail is read in the pane beside the list.
+// openSelected is a double click or Enter on a row. A draft opens for
+// editing; in the shell, where nothing is read beside the list, other
+// mail opens in the column itself.
 func (a *app) openSelected() {
 	if a.draftsList() {
 		a.editDraft()
+		return
 	}
+	a.openReading()
+	a.reloadBody()
 }
 
 // deleteSelected is the Delete key: it discards drafts of this device and

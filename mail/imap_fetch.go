@@ -31,6 +31,10 @@ func threadSection() *imap.FetchItemBodySection {
 	}
 }
 
+// previewBytes is how much of a message's text a list fetch reads: enough
+// for the preview, and for the code or the amount a list shows of it.
+const previewBytes = 2048
+
 // fetchOptions is the header fetch of the list phase.
 func fetchOptions(withPreview bool) *imap.FetchOptions {
 	opts := &imap.FetchOptions{
@@ -45,7 +49,7 @@ func fetchOptions(withPreview bool) *imap.FetchOptions {
 	if withPreview {
 		opts.BodySection = append(opts.BodySection, &imap.FetchItemBodySection{
 			Specifier: imap.PartSpecifierText,
-			Partial:   &imap.SectionPartial{Offset: 0, Size: 256},
+			Partial:   &imap.SectionPartial{Offset: 0, Size: previewBytes},
 			Peek:      true,
 		})
 	}
@@ -150,7 +154,7 @@ func summaryFromFetch(buf *imapclient.FetchMessageBuffer, withPreview bool) Mess
 	if withPreview {
 		section := &imap.FetchItemBodySection{
 			Specifier: imap.PartSpecifierText,
-			Partial:   &imap.SectionPartial{Offset: 0, Size: 256},
+			Partial:   &imap.SectionPartial{Offset: 0, Size: previewBytes},
 			Peek:      true,
 		}
 		if body := buf.FindBodySection(section); len(body) > 0 {

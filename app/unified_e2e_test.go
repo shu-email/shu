@@ -99,7 +99,7 @@ func TestUnifiedEndToEnd(t *testing.T) {
 	// Work's inbox opened on its newest message, read from here on.
 	workFlags := work.serverFlags(t, "INBOX")
 
-	click(t, tt, locales.AllInboxes())
+	click(t, tt, locales.Stream())
 	if a.err != "" {
 		t.Fatalf("the unified inbox: %s", a.err)
 	}
@@ -165,42 +165,47 @@ func TestUnifiedEndToEnd(t *testing.T) {
 		t.Fatalf("delete undone: %q, Home's Deleted Items %d", a.err, len(home.messages(t, "Deleted Items")))
 	}
 
-	// From Work's inbox, a search of Work finds nothing; of every account,
-	// the quote on Home's server, which says where the word was.
-	click(t, tt, locales.Inbox())
+	// The stream searches the inboxes it lists, so a word in Home's inbox
+	// is found from it; the scope control widens to every account.
+	click(t, tt, locales.Stream())
 	click(t, tt, "Search mail")
 	tt.Type("pergola")
-	if len(a.all) != 0 || !tt.HasText(locales.SearchedWhere(locales.WhereAccount("Work"))) {
-		t.Fatalf("Work alone: %v: %q", subjectsOf(a), tt.Texts())
+	if got := subjectsOf(a); !slices.Equal(got, []string{"a2 Garden pergola quote"}) {
+		t.Fatalf("the inboxes: %v: %q", got, tt.Texts())
 	}
-	click(t, tt, locales.SearchAllAccounts())
+	click(t, tt, locales.AllAccounts())
+	tt.Key(0, ui.KeyEscape)
+	tt.Frame()
 	if got := subjectsOf(a); !slices.Equal(got, []string{"a2 Garden pergola quote"}) {
 		t.Fatalf("every account: %v", got)
 	}
 	if m := a.all[0]; !m.Matched.Has(mail.FieldSubject) || !tt.HasText(matchedLine(m.Matched)) || !tt.HasText(locales.InAccount("Home")) {
 		t.Errorf("the reason: %v: %q", m.Matched, tt.Texts())
 	}
-	click(t, tt, "Garden pergola quote")
-	if !tt.HasText(locales.InAccountFolder("Home", locales.Inbox())) || !tt.HasText("Cedar, as we discussed on site.") {
+	// The row is the list's selection, whose overlay answers the click a
+	// text inside it would: click where its subject is drawn.
+	if r, ok := tt.Find("Garden pergola quote"); ok {
+		tt.ClickAt(r.X+r.W/2, r.Y+r.H/2)
+	}
+	if !tt.HasText("Cedar, as we discussed on site.") || !tt.HasText(locales.InAccount("Home")) {
 		t.Errorf("Home's quote open: %q", tt.Texts())
 	}
 
-	// From Work's inbox opened again, with its own scope, account: names
-	// the account to search: the engine reads the rest, and the scope
-	// widens to cover that account.
+	// The stream's search covers the inboxes it lists, so account: names
+	// the account to read there rather than widening the scope.
 	search(a, tt, "")
 	click(t, tt, locales.Sent())
-	click(t, tt, locales.Inbox())
+	click(t, tt, locales.Stream())
 	search(a, tt, "account:home pergola")
-	if got := subjectsOf(a); !slices.Equal(got, []string{"a2 Garden pergola quote"}) || scopeChosen(tt) != locales.AllAccounts() || a.err != "" {
+	if got := subjectsOf(a); !slices.Equal(got, []string{"a2 Garden pergola quote"}) || scopeChosen(tt) != locales.ScopeInboxes() || a.err != "" {
 		t.Fatalf("account:home: %v, scope %q, %q", got, scopeChosen(tt), a.err)
 	}
-	if !tt.HasText(locales.FilterAccountValue("home")) || !tt.HasText(locales.MessageCount(1)+" · "+locales.WhereAccount("Home")) {
+	if !tt.HasText(locales.FilterAccountValue("home")) || !tt.HasText(locales.MessageCount(1)) {
 		t.Errorf("account:home says: %q", tt.Texts())
 	}
 	search(a, tt, "account:work pergola")
-	if got := subjectsOf(a); len(got) != 0 || scopeChosen(tt) != locales.AllFolders() ||
-		!tt.HasText(locales.SearchedWhere(locales.WhereAccount("Work"))) || a.err != "" {
+	if got := subjectsOf(a); len(got) != 0 || scopeChosen(tt) != locales.ScopeInboxes() ||
+		!tt.HasText(locales.SearchedWhere(locales.WhereInboxesOf("Work"))) || a.err != "" {
 		t.Errorf("account:work: %v, scope %q, %q: %q", got, scopeChosen(tt), a.err, tt.Texts())
 	}
 }

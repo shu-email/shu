@@ -770,6 +770,16 @@ func (msgs Messages) SearchFolder(folder string) string {
 	return Catalog.Format(msgs.locale, "searchFolder", map[string]any{"folder": folder})
 }
 
+// BackToStream says "Back to stream"
+// in the language the app shows.
+func BackToStream() string { return In(i18n.Locale()).BackToStream() }
+
+// BackToStream says "Back to stream"
+// in the language of msgs.
+func (msgs Messages) BackToStream() string {
+	return Catalog.Format(msgs.locale, "backToStream", nil)
+}
+
 // NoMessageSelected says "No message selected"
 // in the language the app shows.
 func NoMessageSelected() string { return In(i18n.Locale()).NoMessageSelected() }
@@ -12764,4 +12774,408 @@ func CacheProblemIDs(title string, count int, ids string) string {
 // their IDs.
 func (msgs Messages) CacheProblemIDs(title string, count int, ids string) string {
 	return Catalog.Format(msgs.locale, "cacheProblemIDs", map[string]any{"title": title, "count": count, "ids": ids})
+}
+
+// Stream says "Stream"
+// in the language the app shows.
+//
+// The sidebar's default list: every account's inbox, with what each message
+// asks of the user above it.
+func Stream() string { return In(i18n.Locale()).Stream() }
+
+// Stream says "Stream"
+// in the language of msgs.
+//
+// The sidebar's default list: every account's inbox, with what each message
+// asks of the user above it.
+func (msgs Messages) Stream() string {
+	return Catalog.Format(msgs.locale, "stream", nil)
+}
+
+// Pinned says "Pinned"
+// in the language the app shows.
+//
+// The sidebar's section of pinned searches: a question the user asked once
+// and kept.
+func Pinned() string { return In(i18n.Locale()).Pinned() }
+
+// Pinned says "Pinned"
+// in the language of msgs.
+//
+// The sidebar's section of pinned searches: a question the user asked once
+// and kept.
+func (msgs Messages) Pinned() string {
+	return Catalog.Format(msgs.locale, "pinned", nil)
+}
+
+// StreamNeeds says "{count} need you"
+// in the language the app shows.
+//
+// The stream's band, counting the messages read that ask something of the
+// user.
+func StreamNeeds(count int) string { return In(i18n.Locale()).StreamNeeds(count) }
+
+// StreamNeeds says "{count} need you"
+// in the language of msgs.
+//
+// The stream's band, counting the messages read that ask something of the
+// user.
+func (msgs Messages) StreamNeeds(count int) string {
+	return Catalog.Format(msgs.locale, "streamNeeds", map[string]any{"count": count})
+}
+
+// StreamCodes says "{count} with a code"
+// in the language the app shows.
+//
+// The stream's band, counting the messages read that carry a code to copy.
+func StreamCodes(count int) string { return In(i18n.Locale()).StreamCodes(count) }
+
+// StreamCodes says "{count} with a code"
+// in the language of msgs.
+//
+// The stream's band, counting the messages read that carry a code to copy.
+func (msgs Messages) StreamCodes(count int) string {
+	return Catalog.Format(msgs.locale, "streamCodes", map[string]any{"count": count})
+}
+
+// StreamNews says "{count} just news"
+// in the language the app shows.
+//
+// The stream's band, counting the messages read that only tell.
+func StreamNews(count int) string { return In(i18n.Locale()).StreamNews(count) }
+
+// StreamNews says "{count} just news"
+// in the language of msgs.
+//
+// The stream's band, counting the messages read that only tell.
+func (msgs Messages) StreamNews(count int) string {
+	return Catalog.Format(msgs.locale, "streamNews", map[string]any{"count": count})
+}
+
+// CopyExtract says "Copy"
+// in the language the app shows.
+//
+// The tooltip of a code, amount or date shown on a list row.
+func CopyExtract() string { return In(i18n.Locale()).CopyExtract() }
+
+// CopyExtract says "Copy"
+// in the language of msgs.
+//
+// The tooltip of a code, amount or date shown on a list row.
+func (msgs Messages) CopyExtract() string {
+	return Catalog.Format(msgs.locale, "copyExtract", nil)
+}
+
+// CopiedExtract says "Copied"
+// in the language the app shows.
+//
+// Said on a list row for a moment after its value was put on the clipboard.
+func CopiedExtract() string { return In(i18n.Locale()).CopiedExtract() }
+
+// CopiedExtract says "Copied"
+// in the language of msgs.
+//
+// Said on a list row for a moment after its value was put on the clipboard.
+func (msgs Messages) CopiedExtract() string {
+	return Catalog.Format(msgs.locale, "copiedExtract", nil)
+}
+
+// ExtractCode says "Code {code}"
+// in the language the app shows.
+//
+// A row's code, read by assistive technology.
+func ExtractCode(code string) string { return In(i18n.Locale()).ExtractCode(code) }
+
+// ExtractCode says "Code {code}"
+// in the language of msgs.
+//
+// A row's code, read by assistive technology.
+func (msgs Messages) ExtractCode(code string) string {
+	return Catalog.Format(msgs.locale, "extractCode", map[string]any{"code": code})
+}
+
+// ExtractAmount says "Amount {amount}"
+// in the language the app shows.
+//
+// A row's amount of money, read by assistive technology.
+func ExtractAmount(amount string) string { return In(i18n.Locale()).ExtractAmount(amount) }
+
+// ExtractAmount says "Amount {amount}"
+// in the language of msgs.
+//
+// A row's amount of money, read by assistive technology.
+func (msgs Messages) ExtractAmount(amount string) string {
+	return Catalog.Format(msgs.locale, "extractAmount", map[string]any{"amount": amount})
+}
+
+// ExtractDate says "Due {date}"
+// in the language the app shows.
+//
+// A row's due date, read by assistive technology.
+func ExtractDate(date string) string { return In(i18n.Locale()).ExtractDate(date) }
+
+// ExtractDate says "Due {date}"
+// in the language of msgs.
+//
+// A row's due date, read by assistive technology.
+func (msgs Messages) ExtractDate(date string) string {
+	return Catalog.Format(msgs.locale, "extractDate", map[string]any{"date": date})
+}
+
+// AskMailPlaceholder says "Ask your mail…"
+// in the language the app shows.
+//
+// The window's one field: it opens the command palette, which lists the
+// ways into the mail and searches what is typed.
+func AskMailPlaceholder() string { return In(i18n.Locale()).AskMailPlaceholder() }
+
+// AskMailPlaceholder says "Ask your mail…"
+// in the language of msgs.
+//
+// The window's one field: it opens the command palette, which lists the
+// ways into the mail and searches what is typed.
+func (msgs Messages) AskMailPlaceholder() string {
+	return Catalog.Format(msgs.locale, "askMailPlaceholder", nil)
+}
+
+// PaletteList says "List"
+// in the language the app shows.
+//
+// The palette's hint for a way into the mail such as Starred or Sent.
+func PaletteList() string { return In(i18n.Locale()).PaletteList() }
+
+// PaletteList says "List"
+// in the language of msgs.
+//
+// The palette's hint for a way into the mail such as Starred or Sent.
+func (msgs Messages) PaletteList() string {
+	return Catalog.Format(msgs.locale, "paletteList", nil)
+}
+
+// PaletteLabel says "Label"
+// in the language the app shows.
+//
+// The palette's hint for one of the account's labels.
+func PaletteLabel() string { return In(i18n.Locale()).PaletteLabel() }
+
+// PaletteLabel says "Label"
+// in the language of msgs.
+//
+// The palette's hint for one of the account's labels.
+func (msgs Messages) PaletteLabel() string {
+	return Catalog.Format(msgs.locale, "paletteLabel", nil)
+}
+
+// PalettePinned says "Pinned"
+// in the language the app shows.
+//
+// The palette's hint for a pinned search.
+func PalettePinned() string { return In(i18n.Locale()).PalettePinned() }
+
+// PalettePinned says "Pinned"
+// in the language of msgs.
+//
+// The palette's hint for a pinned search.
+func (msgs Messages) PalettePinned() string {
+	return Catalog.Format(msgs.locale, "palettePinned", nil)
+}
+
+// PaletteCommand says "Command"
+// in the language the app shows.
+//
+// The palette's hint for an action such as Compose or Settings.
+func PaletteCommand() string { return In(i18n.Locale()).PaletteCommand() }
+
+// PaletteCommand says "Command"
+// in the language of msgs.
+//
+// The palette's hint for an action such as Compose or Settings.
+func (msgs Messages) PaletteCommand() string {
+	return Catalog.Format(msgs.locale, "paletteCommand", nil)
+}
+
+// PaletteNothing says "Nothing matches."
+// in the language the app shows.
+//
+// The palette says no list, label, pin or command matches what is typed.
+func PaletteNothing() string { return In(i18n.Locale()).PaletteNothing() }
+
+// PaletteNothing says "Nothing matches."
+// in the language of msgs.
+//
+// The palette says no list, label, pin or command matches what is typed.
+func (msgs Messages) PaletteNothing() string {
+	return Catalog.Format(msgs.locale, "paletteNothing", nil)
+}
+
+// SearchFor says "Search for “{query}”"
+// in the language the app shows.
+//
+// The palette's row that runs what is typed as a search of the list on
+// screen.
+func SearchFor(query string) string { return In(i18n.Locale()).SearchFor(query) }
+
+// SearchFor says "Search for “{query}”"
+// in the language of msgs.
+//
+// The palette's row that runs what is typed as a search of the list on
+// screen.
+func (msgs Messages) SearchFor(query string) string {
+	return Catalog.Format(msgs.locale, "searchFor", map[string]any{"query": query})
+}
+
+// GroupToday says "Today"
+// in the language the app shows.
+//
+// A caption above the cards of the mail that arrived today.
+func GroupToday() string { return In(i18n.Locale()).GroupToday() }
+
+// GroupToday says "Today"
+// in the language of msgs.
+//
+// A caption above the cards of the mail that arrived today.
+func (msgs Messages) GroupToday() string {
+	return Catalog.Format(msgs.locale, "groupToday", nil)
+}
+
+// GroupYesterday says "Yesterday"
+// in the language the app shows.
+//
+// A caption above the cards of yesterday's mail.
+func GroupYesterday() string { return In(i18n.Locale()).GroupYesterday() }
+
+// GroupYesterday says "Yesterday"
+// in the language of msgs.
+//
+// A caption above the cards of yesterday's mail.
+func (msgs Messages) GroupYesterday() string {
+	return Catalog.Format(msgs.locale, "groupYesterday", nil)
+}
+
+// GroupThisWeek says "This week"
+// in the language the app shows.
+//
+// A caption above the cards of the mail of the last week.
+func GroupThisWeek() string { return In(i18n.Locale()).GroupThisWeek() }
+
+// GroupThisWeek says "This week"
+// in the language of msgs.
+//
+// A caption above the cards of the mail of the last week.
+func (msgs Messages) GroupThisWeek() string {
+	return Catalog.Format(msgs.locale, "groupThisWeek", nil)
+}
+
+// GroupEarlier says "Earlier"
+// in the language the app shows.
+//
+// A caption above the cards of the older mail.
+func GroupEarlier() string { return In(i18n.Locale()).GroupEarlier() }
+
+// GroupEarlier says "Earlier"
+// in the language of msgs.
+//
+// A caption above the cards of the older mail.
+func (msgs Messages) GroupEarlier() string {
+	return Catalog.Format(msgs.locale, "groupEarlier", nil)
+}
+
+// Unsorted says "Ungrouped"
+// in the language the app shows.
+//
+// The caption above the cards the model could not group.
+func Unsorted() string { return In(i18n.Locale()).Unsorted() }
+
+// Unsorted says "Ungrouped"
+// in the language of msgs.
+//
+// The caption above the cards the model could not group.
+func (msgs Messages) Unsorted() string {
+	return Catalog.Format(msgs.locale, "unsorted", nil)
+}
+
+// AiTopics says "Topics"
+// in the language the app shows.
+//
+// The AI capability that groups a list by what its subjects are about.
+func AiTopics() string { return In(i18n.Locale()).AiTopics() }
+
+// AiTopics says "Topics"
+// in the language of msgs.
+//
+// The AI capability that groups a list by what its subjects are about.
+func (msgs Messages) AiTopics() string {
+	return Catalog.Format(msgs.locale, "aiTopics", nil)
+}
+
+// AiTopicsDetail says "Groups the list by what its subjects are about. Sends the subjects of up to {count} messages, and nothing else."
+// in the language the app shows.
+//
+// What the Topics capability does and what it sends.
+func AiTopicsDetail(count int) string { return In(i18n.Locale()).AiTopicsDetail(count) }
+
+// AiTopicsDetail says "Groups the list by what its subjects are about. Sends the subjects of up to {count} messages, and nothing else."
+// in the language of msgs.
+//
+// What the Topics capability does and what it sends.
+func (msgs Messages) AiTopicsDetail(count int) string {
+	return Catalog.Format(msgs.locale, "aiTopicsDetail", map[string]any{"count": count})
+}
+
+// GroupByTopic says "Group by topic"
+// in the language the app shows.
+//
+// The palette's command that asks the model to group the list by subject.
+func GroupByTopic() string { return In(i18n.Locale()).GroupByTopic() }
+
+// GroupByTopic says "Group by topic"
+// in the language of msgs.
+//
+// The palette's command that asks the model to group the list by subject.
+func (msgs Messages) GroupByTopic() string {
+	return Catalog.Format(msgs.locale, "groupByTopic", nil)
+}
+
+// AiReviewTopicsSize says "{count} subjects, {chars} characters. Subjects only: no message body leaves the device."
+// in the language the app shows.
+//
+// The review gate's size line for a topic grouping request.
+func AiReviewTopicsSize(count int, chars int) string {
+	return In(i18n.Locale()).AiReviewTopicsSize(count, chars)
+}
+
+// AiReviewTopicsSize says "{count} subjects, {chars} characters. Subjects only: no message body leaves the device."
+// in the language of msgs.
+//
+// The review gate's size line for a topic grouping request.
+func (msgs Messages) AiReviewTopicsSize(count int, chars int) string {
+	return Catalog.Format(msgs.locale, "aiReviewTopicsSize", map[string]any{"count": count, "chars": chars})
+}
+
+// StreamNeedsGroup says "Needs you"
+// in the language the app shows.
+//
+// The caption above the cards of the stream that ask something of the user.
+func StreamNeedsGroup() string { return In(i18n.Locale()).StreamNeedsGroup() }
+
+// StreamNeedsGroup says "Needs you"
+// in the language of msgs.
+//
+// The caption above the cards of the stream that ask something of the user.
+func (msgs Messages) StreamNeedsGroup() string {
+	return Catalog.Format(msgs.locale, "streamNeedsGroup", nil)
+}
+
+// StreamNewsGroup says "Just news"
+// in the language the app shows.
+//
+// The caption above the cards of the stream that only tell.
+func StreamNewsGroup() string { return In(i18n.Locale()).StreamNewsGroup() }
+
+// StreamNewsGroup says "Just news"
+// in the language of msgs.
+//
+// The caption above the cards of the stream that only tell.
+func (msgs Messages) StreamNewsGroup() string {
+	return Catalog.Format(msgs.locale, "streamNewsGroup", nil)
 }

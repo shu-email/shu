@@ -865,6 +865,8 @@ func aiReviewModal(c *ui.Context, slot **aiReview) {
 				size = locales.AiReviewTriageSize(p.Messages, p.Chars)
 			case p.Feature == ai.FeatureTranslate:
 				size = locales.AiReviewTranslateSize(p.Chars, p.Limit)
+			case p.Feature == ai.FeatureTopics:
+				size = locales.AiReviewTopicsSize(p.Messages, p.Chars)
 			case p.Limit == ai.ConversationLimit:
 				size = locales.AiReviewConversationSize(p.Messages, p.Chars, p.Limit)
 			}

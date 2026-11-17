@@ -23,6 +23,8 @@ Windows and Linux. It is written in Go with
   in the sense Shu means it, and where it lives.
 - [docs/decisions/](docs/decisions/) records why a design is what it is,
   one file per decision, with its consequences.
+- [docs/roadmap.md](docs/roadmap.md) is where the intent-first work has
+  got: what shipped, what is a preview, and what is next.
 
 ## Architecture
 
@@ -231,6 +233,15 @@ Windows and Linux. It is written in Go with
   the conversation across folders, each message once and without the
   copies in Drafts, Junk and Trash the list does not show, and each
   expanded message has actions of its own.
+- The window's sidebar lists the ways into the mail, not the account's
+  folders: the stream (every account's inbox, with what its rows ask of
+  the user counted above them, `app/stream.go`, `app/nav.go`), the marks
+  and places mail has of its own, the account's labels, and the pinned
+  searches. A folder is still where mail sits on a server, and rules, a
+  block and a move still name one. A message's code, amount or due date
+  is read on this device from its preview by rules, never a model
+  (`mail/extract.go`), and shown beside it to copy
+  ([docs/decisions/navigation.md](docs/decisions/navigation.md)).
 - Lists read the cache a page at a time. A `mail.Scope` says what a list
   covers: a folder of an account, every folder of one or more accounts,
   or each account's folder of a special use (the unified inbox is every
@@ -532,6 +543,12 @@ real clock.
   clock. Use theme values (`c.Theme()`, `t.Space`, `t.Rem`) instead of
   hardcoded colors and sizes, and use `light-dark(...)` for window colors
   that must follow the system appearance.
+- The window's look is `app/theme.go`: every view that draws a window
+  calls `useTheme(c)` first, and widgets take their colors and metrics
+  from the theme. One accent (teal) for what is chosen, focused or asks
+  for an answer; warm neutrals for the surface; a chosen row is tinted,
+  not filled. The reasons are in
+  [docs/decisions/look.md](docs/decisions/look.md).
 - Use `ui.Cmd` for the primary shortcut: it is Command on macOS and Ctrl
   elsewhere. Keep keyboard focus order sensible.
 - Icon-only buttons need a `Label` and a `Tooltip`, and icon names must be

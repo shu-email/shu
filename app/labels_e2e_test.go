@@ -206,7 +206,7 @@ func TestLabelsEndToEnd(t *testing.T) {
 				t.Errorf("%s: %s lists %v", when, name, got)
 			}
 		}
-		click(t, tt, locales.Inbox())
+		click(t, tt, locales.Stream())
 		row := slices.IndexFunc(a.all, func(m mail.Summary) bool { return m.Subject == "Quarterly numbers" })
 		if got := a.labelNames("a1", a.rowLabelsOf(row)); got != "Work, To Do" {
 			t.Errorf("%s: the row's labels = %q", when, got)

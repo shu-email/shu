@@ -899,7 +899,7 @@ func TestConversationEmptyAndFailure(t *testing.T) {
 		t.Errorf("empty folder: %q", tt.Texts())
 	}
 	fs.convErr = errFake
-	click(t, tt, locales.Inbox())
+	click(t, tt, locales.Stream())
 	if !tt.HasText(locales.ConversationFailed(errFake.Error())) {
 		t.Fatalf("no failure shown: %q", tt.Texts())
 	}

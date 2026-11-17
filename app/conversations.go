@@ -853,6 +853,9 @@ func (a *app) moveThreads(special string) {
 	}
 	if a.conv != nil && chosen[a.conv.ref()] {
 		a.conv = nil
+		// What is read goes with the move: the shell's column goes back
+		// to the stream (shell.go).
+		a.closeReading()
 	}
 	g, scope := a.gen, a.listScope()
 	label := threadMovedLabel(special, len(targets))

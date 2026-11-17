@@ -274,10 +274,17 @@ func normalizeText(s string) string {
 	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
-// preview makes the one-line list preview.
+// previewRunes is how much of a message's text its preview keeps: more
+// than a row shows, so the code or the amount a row reads out of it
+// (Extracted) is within it.
+const previewRunes = 400
+
+// preview makes the one-line list preview. It keeps more than a row
+// shows, so that the codes, amounts and dates a list reads out of it
+// (Extracted) are within it: a row shows the start of the line anyway.
 func preview(text string) string {
 	text = strings.Join(strings.Fields(text), " ")
-	const max = 180
+	const max = previewRunes
 	if len([]rune(text)) > max {
 		text = string([]rune(text)[:max]) + "…"
 	}

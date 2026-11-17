@@ -245,7 +245,7 @@ func (a *app) smartSection(c *ui.Context, t *ui.Theme) {
 		return
 	}
 	list := a.smarts.list
-	ui.SidebarSection(c, locales.SmartMailboxes(), &a.smarts.open, func() {
+	ui.SidebarSection(c, locales.Pinned(), &a.smarts.open, func() {
 		if a.smarts.loaded && len(list) == 0 {
 			ui.Text(c, locales.NoSmartMailboxesYet()).FontSize(11).TextColor(t.TextMuted).Padding(2, 8, 2, 8)
 		}

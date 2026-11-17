@@ -82,6 +82,21 @@ func (a *app) startsGroup(i int, now time.Time) bool {
 	return nowGroup != was
 }
 
+// endsGroup reports that row i closes its group, so that only its last
+// card rounds its bottom corners.
+func (a *app) endsGroup(i int, now time.Time) bool {
+	n := len(a.all)
+	if i < 0 || i >= n {
+		return false
+	}
+	if i == n-1 {
+		return true
+	}
+	nowGroup, _ := a.rowGroup(i, now)
+	next, _ := a.rowGroup(i+1, now)
+	return next != nowGroup
+}
+
 // rowGroupName is the caption row i is drawn under.
 func (a *app) rowGroupName(i int, now time.Time) string {
 	_, name := a.rowGroup(i, now)

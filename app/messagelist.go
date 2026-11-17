@@ -496,29 +496,52 @@ func (a *app) messageRow(row ui.ListRow) {
 	// A row is a card on the pane, under the caption of the day it is
 	// from, so that a list reads as a few groups of a few cards rather
 	// than as one ribbon of text.
-	outer := ui.Box(c).Padding(0, 10).Background(t.Background)
-	if a.startsGroup(row.Index, c.Now()) {
-		outer.Padding(14, 10, 0, 10)
+	now := c.Now()
+	first, last := a.startsGroup(row.Index, now), a.endsGroup(row.Index, now)
+	// The cards of a group are one block: they touch, and only the block's
+	// own ends are rounded.
+	outer := ui.Box(c).Background(t.Background).Padding(0, 10)
+	switch {
+	case first:
+		outer.Padding(12, 10, 0, 10)
+	case last:
+		outer.Padding(0, 10, 12, 10)
 	}
-	a.rows.row(outer, a.rowKey(row.Index), chosen, c.Now())
+	a.rows.row(outer, a.rowKey(row.Index), chosen, now)
 	outer.Children(func() {
-		if a.startsGroup(row.Index, c.Now()) {
+		if first {
 			ui.Row(c).Padding(4, 6, 6, 6).Children(func() {
-				ui.Text(c, a.rowGroupName(row.Index, c.Now())).FontSize(11).Bold().
+				ui.Text(c, a.rowGroupName(row.Index, now)).FontSize(11).Bold().
 					TextColor(t.TextMuted).SingleLine()
 			})
 		}
-		a.messageCard(c, t, row, m, chosen, unread, flagged, attached, count, reason, who, title, account, meta, muted, nameColor, dotColor, starColor)
+		a.messageCard(c, t, row, m, chosen, unread, flagged, attached, count, first, last,
+			reason, who, title, account, meta, muted, nameColor, dotColor, starColor)
 	})
 }
 
 // messageCard is one message as a card: the sender's picture, who and
 // when, the subject, a preview and what the message offers to copy.
 func (a *app) messageCard(c *ui.Context, t *ui.Theme, row ui.ListRow, m mail.Summary,
-	chosen, unread, flagged, attached bool, count int, reason, who, title, account, meta string,
+	chosen, unread, flagged, attached bool, count int, first, last bool,
+	reason, who, title, account, meta string,
 	muted, nameColor, dotColor, starColor ui.Color) {
-	card := ui.Box(c).Padding(12, 14).Radius(t.Radius).
-		BorderWidth(1, 1, 1, 1)
+	card := ui.Box(c).Padding(12, 14)
+	// The group is one block, so an edge between two of its cards is
+	// drawn once, by the card above it.
+	card.BorderWidth(1, 1, 0, 1)
+	switch {
+	case first && last:
+		card.Radius(t.Radius)
+		card.BorderWidth(1, 1, 1, 1)
+	case first:
+		card.Radius(t.Radius, t.Radius, 0, 0)
+	case last:
+		card.Radius(0, 0, t.Radius, t.Radius)
+		card.BorderWidth(1, 1, 1, 1)
+	default:
+		card.Radius(0)
+	}
 	// The tints are mixed with the pane's own color rather than left
 	// translucent: a translucent fill would show the window's material
 	// through the list, and the card would take the desktop's color.

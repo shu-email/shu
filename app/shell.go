@@ -303,6 +303,13 @@ func (a *app) shellHead(c *ui.Context, t *ui.Theme) {
 			if mb := a.shownSmart(); mb != nil {
 				a.smartHeaderMenu(c, *mb)
 			}
+			// A draft is the user's own text, so the stream's head carries
+			// the way into it: the reading pane's banner is under the sheet
+			// a narrow window may fold away.
+			if a.draftsList() && a.selected >= 0 && a.selected < len(a.all) {
+				ui.Button(c, locales.EditDraft()).Padding(barPad, 10).Radius(barButton).
+					OnClick(a.editDraft)
+			}
 			a.viewToggle(c)
 			if a.ai != nil && !a.draftsList() && len(a.all) > 0 {
 				ui.Button(c, "").Label(locales.TriageInbox()).Tooltip(locales.TriageInbox()).

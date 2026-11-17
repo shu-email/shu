@@ -13151,3 +13151,31 @@ func AiReviewTopicsSize(count int, chars int) string {
 func (msgs Messages) AiReviewTopicsSize(count int, chars int) string {
 	return Catalog.Format(msgs.locale, "aiReviewTopicsSize", map[string]any{"count": count, "chars": chars})
 }
+
+// StreamNeedsGroup says "Needs you"
+// in the language the app shows.
+//
+// The caption above the cards of the stream that ask something of the user.
+func StreamNeedsGroup() string { return In(i18n.Locale()).StreamNeedsGroup() }
+
+// StreamNeedsGroup says "Needs you"
+// in the language of msgs.
+//
+// The caption above the cards of the stream that ask something of the user.
+func (msgs Messages) StreamNeedsGroup() string {
+	return Catalog.Format(msgs.locale, "streamNeedsGroup", nil)
+}
+
+// StreamNewsGroup says "Just news"
+// in the language the app shows.
+//
+// The caption above the cards of the stream that only tell.
+func StreamNewsGroup() string { return In(i18n.Locale()).StreamNewsGroup() }
+
+// StreamNewsGroup says "Just news"
+// in the language of msgs.
+//
+// The caption above the cards of the stream that only tell.
+func (msgs Messages) StreamNewsGroup() string {
+	return Catalog.Format(msgs.locale, "streamNewsGroup", nil)
+}

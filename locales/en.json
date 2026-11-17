@@ -4574,5 +4574,13 @@
         "type": "int"
       }
     }
+  },
+  "streamNeedsGroup": "Needs you",
+  "@streamNeedsGroup": {
+    "description": "The caption above the cards of the stream that ask something of the user."
+  },
+  "streamNewsGroup": "Just news",
+  "@streamNewsGroup": {
+    "description": "The caption above the cards of the stream that only tell."
   }
 }

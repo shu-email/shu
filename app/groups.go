@@ -1,9 +1,11 @@
 package app
 
 import (
+	"sort"
 	"time"
 
 	"shu/locales"
+	"shu/mail"
 )
 
 // The list draws its mail as cards under a caption a group of them shares.
@@ -60,6 +62,15 @@ func groupCaption(g listGroup) string {
 func (a *app) rowGroup(i int, now time.Time) (int, string) {
 	if g, name, ok := a.topicGroup(i); ok {
 		return g, name
+	}
+	// The stream is ranked by what asks of the user, so its captions are
+	// those two groups rather than the days: a day's caption would repeat
+	// as often as the ranking crosses it.
+	if a.streaming() && i >= 0 && i < len(a.all) {
+		if intentOf(a.all[i]) == intentNeeds {
+			return int(intentNeeds), locales.StreamNeedsGroup()
+		}
+		return int(intentNews), locales.StreamNewsGroup()
 	}
 	if i < 0 || i >= len(a.all) {
 		return int(groupEarlier), groupCaption(groupEarlier)
@@ -119,4 +130,45 @@ func (a *app) pinnedCaption(now time.Time) string {
 func (a *app) rowGroupName(i int, now time.Time) string {
 	_, name := a.rowGroup(i, now)
 	return name
+}
+
+// rankRows orders the stream by what asks of the user: the mail that needs
+// an answer first, the news after it, and each of them newest first. It
+// runs on the rows read, after a read, never during a build, and keeps the
+// choice by key so the message that was open stays open. What the store
+// reads is untouched: paging still takes its cursor from the page it read,
+// so a card that moves below the rows shown does not move the next page.
+func (a *app) rankRows() {
+	n := len(a.all)
+	if n < 2 {
+		return
+	}
+	key := a.selectedKey()
+	needs := make([]bool, n)
+	for i := 0; i < n; i++ {
+		needs[i] = intentOf(a.all[i]) == intentNeeds
+	}
+	order := make([]int, n)
+	for i := range order {
+		order[i] = i
+	}
+	sort.SliceStable(order, func(x, y int) bool {
+		if needs[order[x]] != needs[order[y]] {
+			return needs[order[x]]
+		}
+		return false
+	})
+	all := make([]mail.Summary, n)
+	convs := make([]mail.Conversation, len(a.convs))
+	for to, from := range order {
+		all[to] = a.all[from]
+		if len(a.convs) == n {
+			convs[to] = a.convs[from]
+		}
+	}
+	a.all = all
+	if len(a.convs) == n {
+		a.convs = convs
+	}
+	a.restoreSelection(key)
 }

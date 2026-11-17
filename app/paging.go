@@ -328,6 +328,12 @@ func (a *app) setRows(q listQuery, got listRows) {
 	p.query, p.next, p.more = q, got.next, got.more
 	p.reading, p.failed = false, ""
 	p.rows++
+	// The stream is read by what asks of the user, not by the clock: the
+	// page the store just read is ranked here, where the window keeps what
+	// it shows, and the cursor that reads the next one is the store's.
+	if q.folder == allInboxes && q.search == "" {
+		a.rankRows()
+	}
 }
 
 // clearRows empties the list for another folder, account or view: a page

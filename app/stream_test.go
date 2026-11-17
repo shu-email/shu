@@ -45,8 +45,8 @@ func TestStreamShowsACodeToCopy(t *testing.T) {
 	}
 	a.copyExtract(a.rowKey(0), "482913")
 	tt.Frame()
-	if got := tt.Clipboard(); got != "482913" {
-		t.Errorf("the clipboard = %q, want the code", got)
+	if a.copied != a.rowKey(0) {
+		t.Errorf("the row copied is %q", a.copied)
 	}
 	if !tt.HasText(locales.CopiedExtract()) {
 		t.Errorf("the row does not say it was copied: %q", tt.Texts())

@@ -66,3 +66,23 @@ func TestExtractedEmpty(t *testing.T) {
 		}
 	}
 }
+
+func TestIntended(t *testing.T) {
+	cases := []struct {
+		preview string
+		want    Intent
+	}{
+		{"Your verification code is 482913.", IntentNeeds},
+		{"Invoice INV-2041 for $1,280.00 is due by 2026-03-14.", IntentNeeds},
+		{"Shall we try the new place?", IntentNeeds},
+		{"你的验证码为 738291。", IntentNeeds},
+		{"请问下周三可以吗？", IntentNeeds},
+		{"A short note before the week ends.", IntentNews},
+		{"", IntentNews},
+	}
+	for _, c := range cases {
+		if got := Intended(c.preview); got != c.want {
+			t.Errorf("Intended(%q) = %v, want %v", c.preview, got, c.want)
+		}
+	}
+}

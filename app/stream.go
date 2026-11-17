@@ -2,7 +2,6 @@ package app
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -38,27 +37,10 @@ const (
 // it. It is a rule, not a model: no mail leaves the device to be read,
 // and a message it reads wrong only counts in the wrong line.
 func intentOf(m mail.Summary) intent {
-	if len(mail.Extracted(m.Preview)) > 0 || asksQuestion(m.Preview) {
+	if mail.Intended(m.Preview) == mail.IntentNeeds || !m.Seen {
 		return intentNeeds
 	}
-	if m.Seen {
-		return intentNews
-	}
-	return intentNeeds
-}
-
-// asksQuestion reports that a preview asks something: mail that asks is
-// mail the user has to answer.
-func asksQuestion(preview string) bool {
-	if strings.ContainsAny(preview, "?？") {
-		return true
-	}
-	for _, w := range []string{"吗", "请问"} {
-		if strings.Contains(preview, w) {
-			return true
-		}
-	}
-	return false
+	return intentNews
 }
 
 // streamCounts is what the rows read so far come to: those that ask

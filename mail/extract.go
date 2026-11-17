@@ -145,3 +145,35 @@ func isAmountAt(text string, start int) bool {
 	}
 	return false
 }
+
+// An Intent is what a message asks of the reader, as the stream ranks it
+// from the preview the cache keeps. It is a rule, not a model: the order a
+// user sees is explainable, offline, and the same on every device.
+type Intent int
+
+const (
+	// IntentNeeds is mail with something to answer or to use: a code, an
+	// amount or a date to act on, a question.
+	IntentNeeds Intent = iota
+	// IntentNews is mail that only tells.
+	IntentNews
+)
+
+// Intended reads one message's intent from its preview: a code, an amount,
+// a due date or a question asks something; anything else only tells.
+func Intended(preview string) Intent {
+	if len(Extracted(preview)) > 0 || asksQuestion(preview) {
+		return IntentNeeds
+	}
+	return IntentNews
+}
+
+// asksQuestion reports that a preview asks something of the reader.
+func asksQuestion(preview string) bool {
+	for _, w := range []string{"?", "？", "吗", "请问"} {
+		if strings.Contains(preview, w) {
+			return true
+		}
+	}
+	return false
+}

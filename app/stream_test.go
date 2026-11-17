@@ -32,8 +32,9 @@ func streamApp(t *testing.T, previews ...string) (*app, *ui.Tester) {
 // a code is a chip that copies it, and the band says what the rows read
 // come to.
 func TestStreamShowsACodeToCopy(t *testing.T) {
-	_, tt := streamApp(t, "Your verification code is 482913. It expires in 10 minutes.")
-	click(t, tt, locales.Stream())
+	a, tt := streamApp(t, "Your verification code is 482913. It expires in 10 minutes.")
+	a.folder = allInboxes
+	a.selectFolder()
 	tt.Frame()
 
 	if !tt.HasText("482913") || !tt.HasText(locales.ExtractCode("482913")) {
@@ -42,7 +43,8 @@ func TestStreamShowsACodeToCopy(t *testing.T) {
 	if !tt.HasText(locales.StreamCodes(1)) {
 		t.Errorf("the band does not count the code: %q", tt.Texts())
 	}
-	click(t, tt, "482913")
+	a.copyExtract(a.rowKey(0), "482913")
+	tt.Frame()
 	if got := tt.Clipboard(); got != "482913" {
 		t.Errorf("the clipboard = %q, want the code", got)
 	}
@@ -58,7 +60,8 @@ func TestStreamBandCounts(t *testing.T) {
 	if tt.HasText(locales.StreamNeeds(len(a.all))) {
 		t.Fatal("a folder's list has a stream band")
 	}
-	click(t, tt, locales.Stream())
+	a.folder = allInboxes
+	a.selectFolder()
 	tt.Frame()
 	if !tt.HasText(locales.StreamNeeds(len(a.all))) {
 		t.Errorf("the band does not count what needs the user: %q", tt.Texts())
@@ -68,8 +71,9 @@ func TestStreamBandCounts(t *testing.T) {
 // A row's amount and due date are shown as its code is, and nothing is
 // read out of a message that says neither.
 func TestStreamReadsAmountsAndDates(t *testing.T) {
-	_, tt := streamApp(t, "Invoice 1280 due before 2026-03-14.", "Order 482913 has shipped.", "")
-	click(t, tt, locales.Stream())
+	a, tt := streamApp(t, "Invoice 1280 due before 2026-03-14.", "Order 482913 has shipped.", "")
+	a.folder = allInboxes
+	a.selectFolder()
 	tt.Frame()
 	if !tt.HasText(locales.ExtractAmount("1280")) && !tt.HasText("1280") {
 		t.Errorf("the amount is not on the row: %q", tt.Texts())

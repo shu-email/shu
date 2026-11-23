@@ -134,10 +134,12 @@ func (a *app) paletteView(c *ui.Context, t *ui.Theme) {
 				FillWidth().AutoFocus().
 				Label(locales.AskMailPlaceholder()).
 				OnSubmit(func() {
-					if len(p.entries) > 0 {
-						p.entries[p.chosen].Run()
-						p.open = false
+					if len(p.entries) == 0 {
+						a.searchFromPalette(p.query)
+						return
 					}
+					p.entries[p.chosen].Run()
+					a.closePalette()
 				})
 			field.Label(locales.AskMailPlaceholder())
 			ui.Column(c).MaxHeight(420).Shrink(0).Children(func() {
@@ -189,12 +191,7 @@ func (a *app) paletteSearchRow(c *ui.Context, t *ui.Theme) {
 	b := ui.ButtonBase(c.Key("palette/search")).Padding(7, 10).Radius(t.Radius).
 		AlignItems(ui.Center).Gap(10).Justify(ui.Start).
 		Label(locales.SearchFor(q)).
-		OnClick(func() {
-			a.palette.open = false
-			a.query = q
-			a.sel.Clear()
-			a.search()
-		})
+		OnClick(func() { a.searchFromPalette(q) })
 	if b.Hovered() {
 		b.Background(t.SurfaceHover)
 	}
@@ -202,6 +199,17 @@ func (a *app) paletteSearchRow(c *ui.Context, t *ui.Theme) {
 		ui.Icon(c, searchIcon).FontSize(14).TextColor(t.TextMuted)
 		ui.Text(c, locales.SearchFor(q)).FontSize(13).Grow(1).MinWidth(0).SingleLine()
 	})
+}
+
+func (a *app) searchFromPalette(query string) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return
+	}
+	a.closePalette()
+	a.closeReading()
+	a.query = query
+	a.search()
 }
 
 // showFolder shows one of the lists a.folder names, from the palette.

@@ -35,10 +35,18 @@ gh issue view 42 --repo shu-email/shu \
 
 4. 涉及桌面流程时，按 [shu-desktop-check](../shu-desktop-check/SKILL.md) 用 `shu Dev` 的 seeded 邮箱验收。启动前检查是否已有 `shu Dev` 和 automation 会话，避免占用其数据目录或 socket；结束时只关闭本次启动的进程。布局改动检查最小窗口，记录实际覆盖的系统、语言和外观。需要截图时，用临时目录保存能说明结果的画面，例如 `issue-42-search-results.png`。平台、SQLite 模块或 GUI 环境缺失时，记录未覆盖项和当前验证结果。
 
+5. **验收通过后必须提交并执行 `git push`。** 按 `AGENTS.md` 单独提交该 issue 的改动，核对待推内容后推送到 `origin` 的主题分支。以下以 `fix/issue-42` 为例。
+
+   ```sh
+   git push -u origin HEAD:refs/heads/fix/issue-42
+   git ls-remote --heads origin refs/heads/fix/issue-42
+   ```
+
+   确认远端分支包含本次提交后，汇报「已推送」和短 SHA，再处理下一条。这一步也适用于无需创建 PR 的修复。用户指定分支或要求仅本地处理时，按其要求执行。推送失败时先检查远端状态，解决可恢复的问题后重试。仍有阻塞时保留本地提交并报告原因。
+
 ## GitHub 交付与收尾
 
-- 每完成一条 issue 并通过相关验收，就按 `AGENTS.md` 为该 issue 创建独立的 Conventional Commit，核对待推提交后推送到 `origin` 的主题分支。用 `git ls-remote --heads origin` 核对目标分支的远端 SHA 与本地提交一致，确认后汇报「已推送」和短 SHA，再处理下一条。用户指定目标分支或仅本地处理时，按其要求执行。
-- 使用普通推送。遇到远端分叉或推送失败时，保留本地提交并报告原因。需要 PR 时，从已推送的分支向 `main` 开 PR，或使用用户指定的目标分支。完整修复且预期合并时关闭 issue，用 `Fixes #编号`。部分修复或应保留 open 状态时，用 `Refs #编号`。
+- 需要 PR 时，从已推送的分支向 `main` 开 PR，或使用用户指定的目标分支。完整修复且预期合并时关闭 issue，用 `Fixes #编号`。部分修复或应保留 open 状态时，用 `Refs #编号`。
 - 用户授权发 PR 或评论时，说明用户可观察的结果、验证过的场景和未覆盖项。多行正文用 `--body-file`。需要上传验收截图时，按 [gh-cli-attachments](../gh-cli-attachments/SKILL.md) 检查画面并用 `gh --attach` 附到对应 PR 或评论。使用 seeded 数据，截图留在临时目录。上传报错时先检查 GitHub 上是否已经创建 PR 或评论，再补传缺失的附件。
 - 用户要求评论并关闭时，先确认修复已合入或验收条件已满足，再发评论、核对链接和附件并更新 issue 状态。若关联 PR 合并时已自动关闭，核实状态即可。待评审、未完成或验证受阻的 issue 保持 open，标明下一步和已有证据。
 - 汇报每个 issue 的结果、相关提交或 PR 链接、实际通过的检查、截图位置及未覆盖的环境。以 GitHub 实际状态区分「已开 PR」「已合并」和「已关闭」。

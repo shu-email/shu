@@ -86,10 +86,14 @@ func startSample(t *testing.T, fs *fakeService) (*app, *fakeService) {
 func TestView(t *testing.T) {
 	a, _ := sampleApp(t)
 	tt := ui.NewTester(a.view, 1220, 800)
-	for _, text := range []string{"Inbox", "Starred", "Compose", "Design review — Thursday at 10", "Search mail"} {
+	for _, text := range []string{"Inbox", "Compose", "Design review — Thursday at 10", locales.AskMailPlaceholder()} {
 		if !tt.HasText(text) {
 			t.Errorf("missing %q in %q", text, tt.Texts())
 		}
+	}
+	tt.Key(ui.Cmd, ui.KeyK)
+	if !tt.HasText(locales.Starred()) {
+		t.Errorf("the palette is missing Starred: %q", tt.Texts())
 	}
 }
 
@@ -97,6 +101,8 @@ func TestView(t *testing.T) {
 func TestMailboxChoice(t *testing.T) {
 	a, _ := sampleApp(t)
 	tt := ui.NewTester(a.view, 1220, 800)
+	tt.Key(ui.Cmd, ui.KeyK)
+	tt.Type("Sent")
 	if err := tt.Click("Sent"); err != nil {
 		t.Fatal(err)
 	}
@@ -136,14 +142,17 @@ func TestSelectingMessageLoadsBodyAndMarksRead(t *testing.T) {
 	}
 }
 
-// Typing in the search field searches the cache and hides other rows.
+// Choosing the palette's search action filters the current list.
 func TestSearch(t *testing.T) {
 	a, _ := sampleApp(t)
 	tt := ui.NewTester(a.view, 1220, 800)
-	if err := tt.Click("Search mail"); err != nil {
+	if err := tt.Click(locales.AskMailPlaceholder()); err != nil {
 		t.Fatal(err)
 	}
 	tt.Type("GitHub")
+	if err := tt.Click(locales.SearchFor("GitHub")); err != nil {
+		t.Fatal(err)
+	}
 	if !tt.HasText("Search results") {
 		t.Errorf("search title missing: %q", tt.Texts())
 	}
@@ -413,17 +422,19 @@ func TestSettingsLanguage(t *testing.T) {
 func TestMinimumSizeAndDark(t *testing.T) {
 	a, _ := sampleApp(t)
 	for _, dark := range []bool{false, true} {
-		tt := ui.NewTesterWith(a.view, 1000, 640, ui.TesterOptions{Dark: dark})
+		tt := ui.NewTesterWith(a.view, 760, 540, ui.TesterOptions{Dark: dark})
 		for _, text := range []string{"Inbox", "Compose"} {
 			if !tt.HasText(text) {
 				t.Errorf("dark=%v missing %q", dark, text)
 			}
 		}
-		// The search is a button at this width, so its label is not a
-		// text of the window, but it still has one.
-		if r, ok := tt.Find(locales.SearchMailLabel()); !ok || r.W == 0 {
-			t.Errorf("dark=%v missing the search: %v", dark, r)
+		if err := tt.Click(locales.AskMailPlaceholder()); err != nil {
+			t.Fatalf("dark=%v: %v", dark, err)
 		}
+		if !tt.Focused(locales.AskMailPlaceholder()) {
+			t.Errorf("dark=%v: the palette input is not focused", dark)
+		}
+		tt.Key(0, ui.KeyEscape)
 	}
 }
 
@@ -527,7 +538,7 @@ func TestKeyboardNavigation(t *testing.T) {
 	}
 }
 
-// Plain shortcuts do not fire while the search field has the focus.
+// Plain shortcuts do not fire while the palette input has the focus.
 func TestShortcutsDoNotStealTyping(t *testing.T) {
 	a, _ := sampleApp(t)
 	tt := ui.NewTester(a.view, 1220, 800)
@@ -535,12 +546,10 @@ func TestShortcutsDoNotStealTyping(t *testing.T) {
 		t.Fatal(err)
 	}
 	selected := a.selected
-	if err := tt.Click("Search mail"); err != nil {
-		t.Fatal(err)
-	}
+	tt.Key(ui.Cmd, ui.KeyK)
 	tt.Type("de")
-	if a.query != "de" {
-		t.Errorf("query = %q", a.query)
+	if a.palette.query != "de" || a.query != "" {
+		t.Errorf("palette query = %q, list query = %q", a.palette.query, a.query)
 	}
 	if a.selected != selected {
 		t.Errorf("typing moved the selection from %d to %d", selected, a.selected)
@@ -550,7 +559,7 @@ func TestShortcutsDoNotStealTyping(t *testing.T) {
 	}
 }
 
-// Cmd+K focuses the search field from the mail panes.
+// Cmd+K focuses the palette from the reading page, and Enter runs the search.
 func TestCmdKFocusesSearch(t *testing.T) {
 	a, _ := sampleApp(t)
 	tt := ui.NewTester(a.view, 1220, 800)
@@ -558,9 +567,16 @@ func TestCmdKFocusesSearch(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Key(ui.Cmd, ui.KeyK)
+	if !tt.Focused(locales.AskMailPlaceholder()) {
+		t.Fatal("the palette input is not focused")
+	}
 	tt.Type("GitHub")
+	tt.Key(0, ui.KeyEnter)
 	if a.query != "GitHub" {
-		t.Errorf("query = %q after Cmd+K and typing", a.query)
+		t.Errorf("query = %q after pressing Enter", a.query)
+	}
+	if a.palette.open || !tt.HasText(locales.SearchResults()) || !tt.HasText("Pull request #128") {
+		t.Errorf("search results are not visible: %q", tt.Texts())
 	}
 }
 

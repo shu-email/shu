@@ -1,6 +1,6 @@
 # Gmail's IMAP extension is spoken by a client of its own
 
-Status: accepted; the commands it describes land in a later change.
+Status: accepted; the command layer is implemented. Its consumers are separate changes.
 
 ## Context
 
@@ -45,8 +45,8 @@ send another.
 ## Decision
 
 The engine speaks the four commands it needs itself, over a connection
-of its own, in `mail/gmailext.go`: a small reader and writer for the
-IMAP framing it uses (tagged commands, untagged FETCH and SEARCH, quoted
+of its own, through `mail/gmailext_client.go` and `mail/gmailext_wire.go`.
+It reads and writes the IMAP framing it uses (tagged commands, untagged FETCH and SEARCH, quoted
 strings and literals), and nothing else. It is used where Gmail's own
 semantics are the point — reading and writing labels, finding a
 message's Gmail identity and thread, and a search in Gmail's syntax —
@@ -65,8 +65,7 @@ search is not worth a permanent slot.
 
 The label values are modified UTF-7 (RFC 3501 §5.1.3) and are owned
 here, not by go-imap: `gmailLabelEncode` and `gmailLabelDecode`, with
-the RFC's own example and Google's transcript values as tests. The
-commands themselves land in #125.
+the RFC's own example and Google's transcript values as tests.
 
 ### Consequences
 
@@ -76,9 +75,9 @@ commands themselves land in #125.
   UTF-7 in label values, 64-bit decimal IDs. Transcripts from Google's
   documentation are tests, so a change in the shape we expect fails the
   build rather than a mailbox.
-- The fake server's Gmail profile (#118) has to answer `X-GM-*` before
-  the commands can be tested end to end; that is the first task of the
-  implementation change.
+- The fake server's Gmail profile has an extension test mode that answers
+  `X-GM-*` over local TLS. Its normal mode uses go-imap's server for general
+  IMAP commands.
 - A Gmail account spends one connection per operation, not one per
   account. If that proves slow on a large mailbox, the next review can
   keep one beside the watcher, at the cost of a slot.

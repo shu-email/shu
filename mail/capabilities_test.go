@@ -31,6 +31,7 @@ func TestCapabilitiesOf(t *testing.T) {
 		{"list", with(imap.CapListExtended, imap.CapListStatus, imap.CapSpecialUse),
 			Capabilities{ListExtended: true, ListStatus: true, SpecialUse: true}},
 		{"esearch", with(imap.CapESearch), Capabilities{ESearch: true}},
+		{"gmail", with(capGmail), Capabilities{GmailExt: true}},
 		{"utf8", with(imap.CapUTF8Accept), Capabilities{UTF8: true}},
 		{"utf8 only", with(imap.CapUTF8Only), Capabilities{UTF8: true}},
 		{"sort", with(imap.CapSort), Capabilities{Sort: true}},

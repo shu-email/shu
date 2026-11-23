@@ -24,6 +24,9 @@ type GmailProfile struct {
 	// MaxConnections is how many connections the account takes at once.
 	// Zero means Gmail's 15.
 	MaxConnections int
+	// Extensions serves the X-GM-EXT-1 test commands over implicit TLS.
+	// The normal profile uses go-imap's server for general IMAP commands.
+	Extensions bool
 }
 
 // gmailParent is Gmail's system-folder parent, which LIST returns
@@ -301,6 +304,9 @@ func (s *IMAP) AppendLabels(mailboxes []string, raw []byte, o *imap.AppendOption
 		}
 		out = append(out, data.UID)
 	}
+	if s.exts != nil {
+		s.exts.add(mailboxes, out, raw, o.Flags)
+	}
 	return out, nil
 }
 
@@ -310,8 +316,7 @@ func (s *IMAP) saveSent(raw []byte) error {
 	if s.gmail != nil {
 		mailbox = s.gmail.sentMailbox()
 	}
-	_, err := s.User.Append(mailbox, Literal(raw), &imap.AppendOptions{
+	return s.Append(mailbox, raw, &imap.AppendOptions{
 		Flags: []imap.Flag{imap.FlagSeen},
 	})
-	return err
 }

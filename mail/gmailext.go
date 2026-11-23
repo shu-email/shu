@@ -11,9 +11,7 @@ import (
 // Gmail's IMAP extension, X-GM-EXT-1 (see docs/decisions/gmail.md). The
 // engine speaks it over a connection of its own for Gmail's own
 // semantics: labels that are not folders, one identity across folders,
-// Gmail's thread, and its search syntax. Nothing calls this yet; the
-// shapes below and the encoding of label values are what the change that
-// does will start from.
+// Gmail's thread, and its search syntax.
 
 // gmailExt is what the engine asks of Gmail's extension. A service has
 // one only for an account whose server advertises X-GM-EXT-1.

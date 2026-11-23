@@ -6,6 +6,8 @@ import (
 	"github.com/emersion/go-imap/v2"
 )
 
+const capGmail = imap.Cap("X-GM-EXT-1")
+
 // Capabilities is what an IMAP server offers a connection, read once
 // when it is up. Every path on an established connection that can do
 // without something reads it here rather than asking the server again,
@@ -46,6 +48,8 @@ type Capabilities struct {
 	Thread bool
 	// ESearch answers a search with ranges rather than every UID.
 	ESearch bool
+	// GmailExt offers Gmail label, identity and raw search commands.
+	GmailExt bool
 }
 
 // capabilitiesOf reads a server's advertised set as one value.
@@ -61,6 +65,7 @@ func capabilitiesOf(caps imap.CapSet) Capabilities {
 		Sort:         advertisePrefix(caps, "SORT"),
 		Thread:       advertiseThread(caps),
 		ESearch:      caps.Has(imap.CapESearch),
+		GmailExt:     caps.Has(capGmail),
 	}
 }
 

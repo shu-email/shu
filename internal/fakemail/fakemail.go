@@ -151,6 +151,7 @@ type IMAP struct {
 	ln     net.Listener
 	// gmail is the profile served, nil for a plain server.
 	gmail *gmailState
+	exts  *gmailExtServer
 }
 
 // StartIMAP starts an IMAP server on a free port of 127.0.0.1.
@@ -172,6 +173,11 @@ func StartIMAP(o IMAPOptions) (*IMAP, error) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, err
+	}
+	if o.Gmail != nil && o.Gmail.Extensions {
+		exts := newGmailExtServer(ln, user, gmail, o)
+		go exts.serve()
+		return &IMAP{Addr: ln.Addr().String(), User: user, ln: ln, gmail: gmail, exts: exts}, nil
 	}
 	server := imapserver.New(&imapserver.Options{
 		NewSession: func(*imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
@@ -198,12 +204,19 @@ func StartIMAP(o IMAPOptions) (*IMAP, error) {
 
 // Append adds a message to a mailbox.
 func (s *IMAP) Append(mailbox string, raw []byte, o *imap.AppendOptions) error {
+	if s.exts != nil {
+		_, err := s.AppendLabels([]string{mailbox}, raw, o)
+		return err
+	}
 	_, err := s.User.Append(mailbox, Literal(raw), o)
 	return err
 }
 
 // Close stops the server.
 func (s *IMAP) Close() error {
+	if s.exts != nil {
+		return s.exts.close()
+	}
 	err := s.server.Close()
 	_ = s.ln.Close()
 	return err
